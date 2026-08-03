@@ -1,0 +1,3 @@
+{"id": 1, "user": {"name": "Alice", "age": 30}, "score": 0.95, "label": "pos"}
+{"id": 2, "user": {"name": "Bob", "age": 25}, "score": 0.72, "label": "neg"}
+{"id": 3, "user": {"name": "Carol", "age": 35}, "score": 0.88, "label": "pos", "extra": {"source": "web"}}

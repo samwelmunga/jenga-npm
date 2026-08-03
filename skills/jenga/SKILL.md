@@ -1,0 +1,68 @@
+---
+name: jenga
+description: Fully automated board orchestrator. Decomposes any unbroken Epics into Stories, any unbroken Stories into Tasks, queues all unqueued Tasks into todo.md, then executes every eligible item — no user prompts — until the board is fully started.
+keywords:
+  - jenga
+  - orchestrate
+  - auto implement
+  - full board
+  - automated
+examples:
+  - "run jenga to implement everything"
+  - "start the full automation"
+metadata:
+  prefered_agent: scrum-master
+---
+
+# Jenga — Auto-Implementation Orchestrator
+
+## Purpose
+
+`/jenga` is a hands-free "commit to everything on the board" pipeline. It ensures the entire board is fully decomposed, fully queued, and fully executing — without any user interaction. It runs in four phases: **decompose → queue → execute → loop**.
+
+## Instructions
+
+### Phase 1 — Decompose Epics into Stories
+
+Read all files in `project/board/epics/`. For each Epic that has no corresponding story files in `project/board/stories/` (i.e. no files whose name starts with that Epic's ID), invoke `/do` via a **scrum-master sub-agent** to break it down into Stories.
+
+Repeat until every Epic has at least one Story on the board.
+
+### Phase 2 — Decompose Stories into Tasks
+
+Read all files in `project/board/stories/`. For each Story that has no corresponding task files in `project/board/tasks/` (i.e. no files whose name starts with that Story's ID), invoke `/do` via a **scrum-master sub-agent** to break it down into Tasks.
+
+Repeat until every Story has at least one Task on the board.
+
+### Phase 3 — Queue all Tasks into `todo.md`
+
+Read all files in `project/board/tasks/`. For every Task not already listed in `project/todo.md`, append its ID (and title as a comment) to `project/todo.md`.
+
+After this phase, `todo.md` reflects the full set of work on the board.
+
+### Phase 4 — Execute
+
+Loop through `todo.md` and execute all eligible items, running independent ones in parallel:
+
+1. **Collect eligible items** — from `todo.md`, find all items whose board file has `status: Pending` and no unresolved dependencies. A dependency is resolved if the blocking item's status is at least `Running` or `Passed`.
+2. **Group by parallelism** — items with no shared dependencies and no overlapping output files can run concurrently. Items that depend on each other must be sequenced.
+3. **Invoke `/do` in parallel** — launch each independent item as a **background sub-agent** simultaneously. Do not wait for one to finish before starting another if they are independent.
+4. **Mark Running** — update `status: Running` in each launched item's board file (YAML front-matter) immediately after launch.
+5. **Wait and loop** — once all active background agents have completed, return to step 1 of this phase to pick up any newly unblocked items.
+
+### Exit condition
+
+When no eligible candidates remain in Phase 4, exit and output:
+
+```
+✅ Jenga complete. All eligible tasks have been started.
+```
+
+## Edge Cases
+
+- **Epic with no stories after breakdown** — log a warning and continue to the next Epic; do not block the pipeline.
+- **Story with no tasks after breakdown** — log a warning and continue to the next Story.
+- **Task already in `todo.md`** — skip; do not duplicate.
+- **All tasks in `todo.md` already Running/Passed** — exits cleanly with the completion message.
+- **Unresolved dependencies** — item is skipped in Phase 4 until its blockers are at least `Running`.
+- **`/do` failure (background agent)** — treated as a skip; mark the item's status back to `Pending` and continue the loop with remaining candidates.

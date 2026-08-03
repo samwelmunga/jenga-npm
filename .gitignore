@@ -1,0 +1,31 @@
+# Machine-local paths — never commit
+.jenga_paths
+
+# Temp files from distribute-changes.sh
+.jenga_tmp/
+
+# Python temp files
+**/__pycache__
+
+# fine tuning jobs
+jobs/
+
+# macOS
+.DS_Store
+
+# Environment files
+.env
+.env.*
+*.local
+*.pid
+node_modules/
+
+# Jenga runtime files (machine-local, auto-generated)
+mcp/router/.pid
+mcp/router/.session.json
+
+# Worktrees
+**/worktrees/
+
+# Claude/Copilot session artefacts
+agents/.agents/

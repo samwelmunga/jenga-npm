@@ -1,0 +1,15 @@
+# macOS & Windows system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Environment files
+.env
+.env.*
+*.local
+
+# Dependency directories
+node_modules/
+vendor/
+.venv/
+EOF

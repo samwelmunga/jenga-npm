@@ -1,0 +1,233 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://jenga.local/skills/publish/schemas/publish.schema.json",
+  "title": "Publish Skill Configuration",
+  "description": "Schema for project/configs/publish.json used by the /publish skill.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "defaults",
+    "targets"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "enum": [1]
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "history_file",
+        "mandatory_checks"
+      ],
+      "properties": {
+        "history_file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mandatory_checks": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/checkName"
+          }
+        },
+        "optional_checks": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/checkName"
+          }
+        }
+      }
+    },
+    "targets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/target"
+      }
+    }
+  },
+  "definitions": {
+    "checkName": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "envVarRef": {
+      "type": "string",
+      "pattern": "^\\$\\{?[A-Z][A-Z0-9_]*\\}?$"
+    },
+    "gateEntry": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/checkName"
+        },
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "name": { "$ref": "#/definitions/checkName" },
+            "gate": { "$ref": "#/definitions/checkName" },
+            "type": { "$ref": "#/definitions/checkName" }
+          },
+          "anyOf": [
+            { "required": ["name"] },
+            { "required": ["gate"] },
+            { "required": ["type"] }
+          ]
+        }
+      ]
+    },
+    "gateList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/gateEntry"
+      }
+    },
+    "checksObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pre": {
+          "$ref": "#/definitions/gateList"
+        },
+        "post": {
+          "$ref": "#/definitions/gateList"
+        }
+      }
+    },
+    "secretMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "app_store_connect_api_key_id",
+        "app_store_connect_issuer_id",
+        "app_store_connect_private_key_path",
+        "code_sign_identity",
+        "provisioning_profile_uuid"
+      ],
+      "properties": {
+        "app_store_connect_api_key_id": { "$ref": "#/definitions/envVarRef" },
+        "app_store_connect_issuer_id": { "$ref": "#/definitions/envVarRef" },
+        "app_store_connect_private_key_path": { "$ref": "#/definitions/envVarRef" },
+        "code_sign_identity": { "$ref": "#/definitions/envVarRef" },
+        "provisioning_profile_uuid": { "$ref": "#/definitions/envVarRef" }
+      }
+    },
+    "iosSettings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scheme",
+        "configuration",
+        "archive_path",
+        "export_path",
+        "export_method",
+        "bundle_id",
+        "team_id",
+        "app_store_app_id"
+      ],
+      "properties": {
+        "project_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workspace_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scheme": {
+          "type": "string",
+          "minLength": 1
+        },
+        "configuration": {
+          "type": "string",
+          "minLength": 1
+        },
+        "archive_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "export_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "export_method": {
+          "type": "string",
+          "enum": ["ad-hoc", "app-store"]
+        },
+        "bundle_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "team_id": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{6,}$"
+        },
+        "app_store_app_id": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "provider_short_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "destination": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sdk": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        { "required": ["project_path"] },
+        { "required": ["workspace_path"] }
+      ]
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "type",
+        "platform",
+        "checks",
+        "secrets",
+        "ios"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["mobile-ios"]
+        },
+        "platform": {
+          "type": "string",
+          "enum": ["ios-app-store"]
+        },
+        "checks": {
+          "$ref": "#/definitions/checksObject"
+        },
+        "secrets": {
+          "$ref": "#/definitions/secretMap"
+        },
+        "ios": {
+          "$ref": "#/definitions/iosSettings"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

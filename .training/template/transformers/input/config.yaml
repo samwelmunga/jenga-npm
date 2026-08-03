@@ -1,0 +1,38 @@
+# Transformer Fine-Tuning Configuration
+
+model:
+  name: bert-base-uncased       # HuggingFace model hub ID
+  task: text-classification     # Options: text-classification, token-classification, question-answering, seq2seq
+
+data:
+  train_file: input/data/train.jsonl
+  eval_file: input/data/eval.jsonl
+  text_column: text
+  label_column: label
+  max_length: 128
+
+training:
+  output_dir: fine-tuned-models/
+  num_train_epochs: 3
+  per_device_train_batch_size: 16
+  per_device_eval_batch_size: 16
+  learning_rate: 2e-5
+  warmup_steps: 500
+  weight_decay: 0.01
+  logging_dir: training-results/logs
+  evaluation_strategy: epoch
+  save_strategy: epoch
+  load_best_model_at_end: true
+
+checkpoints:
+  dir: checkpoints/
+  save_total_limit: 3
+
+workflow:
+  auto_run: false            # Run training immediately when /train is invoked
+  generate_start_sh: true    # Emit a start.sh script for manual execution
+  confirm_before_run: true   # Prompt for confirmation before executing training
+  auto_summarize: true       # Parse and surface results after training completes
+  auto_iterate: false        # Re-run with adjusted config based on results (reserved)
+
+template_version: "1.0.0"   # Stamped at scaffold time by /train skill

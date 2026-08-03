@@ -1,0 +1,21 @@
+# Default Excludes
+# Paths listed here are never used as analysis sources.
+# One path per line. Supports directory names and file names.
+# Lines starting with # are ignored.
+
+node_modules
+dist
+build
+.git
+.cache
+coverage
+.next
+.nuxt
+out
+tmp
+temp
+*.lock
+*.log
+package-lock.json
+yarn.lock
+pnpm-lock.yaml

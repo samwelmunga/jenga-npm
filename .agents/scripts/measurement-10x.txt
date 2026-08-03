@@ -1,0 +1,4 @@
+Benchmark 1: python3 scripts/e25_s01_extract_board_graph.py project/.synthetic/E25_S01_board_10x >/dev/null
+  Time (mean ± σ):     947.3 ms ±  42.1 ms    [User: 276.4 ms, System: 173.8 ms]
+  Range (min … max):   885.1 ms … 1010.9 ms    10 runs
+ 

@@ -1,0 +1,10 @@
+project/board/epics
+project/board/stories
+project/board/tasks
+project/configs
+project/data
+project/queue
+project/rapports/problems
+project/rapports/analysis
+project/logs
+documentation

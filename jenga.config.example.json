@@ -1,0 +1,7 @@
+{
+  "workflow": "jenga",
+  "workflow_version": "1.0.0",
+  "_workflow_version_note": "DEPRECATED (E26_S01_T03): workflow_version is no longer the authoritative version source. The canonical version is now the 'version' field in package.json. This field is kept for backward compatibility with older consumer configs and will be ignored by active tooling.",
+  "description": "Agentic workflow — agents repo (canonical version source)",
+  "created_at": "2026-04-20"
+}

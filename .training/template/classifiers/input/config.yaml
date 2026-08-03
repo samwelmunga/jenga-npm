@@ -1,0 +1,32 @@
+# Classifier Training Configuration
+
+model:
+  type: random_forest          # Options: random_forest, gradient_boosting, svm, logistic_regression, xgboost
+  params:
+    n_estimators: 100
+    max_depth: null
+    random_state: 42
+
+data:
+  train_file: input/data/train.csv
+  test_file: input/data/test.csv
+  target_column: label
+  test_size: 0.2
+
+training:
+  cross_validation: true
+  cv_folds: 5
+
+output:
+  results_dir: training-results/
+  models_dir: fine-tuned-models/
+  model_filename: model.pkl
+
+workflow:
+  auto_run: false            # Run training immediately when /train is invoked
+  generate_start_sh: true    # Emit a start.sh script for manual execution
+  confirm_before_run: true   # Prompt for confirmation before executing training
+  auto_summarize: true       # Parse and surface results after training completes
+  auto_iterate: false        # Re-run with adjusted config based on results (reserved)
+
+template_version: "1.0.0"   # Stamped at scaffold time by /train skill

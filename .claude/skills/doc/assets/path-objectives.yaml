@@ -1,0 +1,38 @@
+default_target: README.md
+rules:
+  - path: README.md
+    objective: project overview
+    summary: Create or update a high-level project overview.
+    required_sections:
+      - Description
+      - Getting Started
+    optional_sections:
+      - Examples
+  - path: docs/API.md
+    objective: API reference documentation
+    summary: Document the public API surface, endpoints, inputs, outputs, and integration details.
+    required_sections:
+      - Overview
+      - Endpoints or Interfaces
+      - Request and Response Details
+  - path: docs/CLI.md
+    objective: CLI usage guide
+    summary: Explain command usage, arguments, flags, examples, and common workflows.
+    required_sections:
+      - Overview
+      - Commands
+      - Flags
+      - Examples
+  - path: docs/CONTRIBUTING.md
+    objective: contributor guide
+    summary: Explain how contributors should set up, work on, test, and submit changes.
+    required_sections:
+      - Development Setup
+      - Workflow
+      - Contribution Expectations
+  - path: CHANGELOG.md
+    objective: changelog / release notes
+    summary: Record notable changes, releases, and upgrade notes in chronological order.
+    required_sections:
+      - Release Entries
+      - Notable Changes

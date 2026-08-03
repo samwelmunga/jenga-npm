@@ -1,0 +1,12 @@
+{
+  "sender": {
+    "agent": "orchestrator",
+    "session_id": "",
+    "task_id": "",
+    "story_id": "",
+    "epic_id": "",
+    "date": "",
+    "paths": [],
+    "worktree": ""
+  }
+}

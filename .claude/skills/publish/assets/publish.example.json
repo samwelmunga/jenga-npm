@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "defaults": {
+    "history_file": "project/logs/publish-history.json",
+    "mandatory_checks": [
+      "build",
+      "test"
+    ],
+    "optional_checks": [
+      "lint",
+      "type-check",
+      "custom-script",
+      "smoke-test",
+      "ping"
+    ]
+  },
+  "targets": [
+    {
+      "name": "staging-appstore",
+      "type": "mobile-ios",
+      "platform": "ios-app-store",
+      "checks": {
+        "pre": [
+          "lint",
+          "type-check"
+        ],
+        "post": [
+          "smoke-test"
+        ]
+      },
+      "secrets": {
+        "app_store_connect_api_key_id": "$APP_STORE_CONNECT_API_KEY_ID",
+        "app_store_connect_issuer_id": "$APP_STORE_CONNECT_ISSUER_ID",
+        "app_store_connect_private_key_path": "$APP_STORE_CONNECT_PRIVATE_KEY_PATH",
+        "code_sign_identity": "$CODE_SIGN_IDENTITY",
+        "provisioning_profile_uuid": "$PROVISIONING_PROFILE_UUID"
+      },
+      "ios": {
+        "project_path": "ios/ExampleApp.xcodeproj",
+        "scheme": "ExampleApp",
+        "configuration": "Release",
+        "archive_path": "build/ios/staging/ExampleApp.xcarchive",
+        "export_path": "build/ios/staging/export",
+        "export_method": "ad-hoc",
+        "bundle_id": "com.example.myapp.staging",
+        "team_id": "ABCDE12345",
+        "app_store_app_id": "1234567890",
+        "provider_short_name": "exampleco"
+      },
+      "notes": "Scaffold example only. Replace paths and identifiers with your real iOS project values."
+    },
+    {
+      "name": "production-appstore",
+      "type": "mobile-ios",
+      "platform": "ios-app-store",
+      "checks": {
+        "pre": [
+          "lint",
+          "type-check"
+        ],
+        "post": []
+      },
+      "secrets": {
+        "app_store_connect_api_key_id": "$APP_STORE_CONNECT_API_KEY_ID",
+        "app_store_connect_issuer_id": "$APP_STORE_CONNECT_ISSUER_ID",
+        "app_store_connect_private_key_path": "$APP_STORE_CONNECT_PRIVATE_KEY_PATH",
+        "code_sign_identity": "$CODE_SIGN_IDENTITY",
+        "provisioning_profile_uuid": "$PROVISIONING_PROFILE_UUID"
+      },
+      "ios": {
+        "workspace_path": "ios/ExampleApp.xcworkspace",
+        "scheme": "ExampleApp",
+        "configuration": "Release",
+        "archive_path": "build/ios/production/ExampleApp.xcarchive",
+        "export_path": "build/ios/production/export",
+        "export_method": "app-store",
+        "bundle_id": "com.example.myapp",
+        "team_id": "ABCDE12345",
+        "app_store_app_id": "1234567890",
+        "provider_short_name": "exampleco"
+      },
+      "notes": "Production upload example using App Store export mode."
+    }
+  ]
+}

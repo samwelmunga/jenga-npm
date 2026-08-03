@@ -1,0 +1,132 @@
+.board-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.epic-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.epic-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.epic-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.epic-id {
+  color: #6b7280;
+  font-size: 0.85rem;
+}
+
+.stories-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-left: 1rem;
+}
+
+.story-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  padding: 0.75rem;
+}
+
+.story-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.story-title {
+  font-size: 1rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+.story-id {
+  color: #6b7280;
+  font-size: 0.8rem;
+}
+
+.tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-left: 1rem;
+}
+
+.task-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 3px;
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.task-title {
+  font-size: 0.9rem;
+  flex: 1;
+}
+
+.task-id {
+  color: #9ca3af;
+  font-size: 0.75rem;
+}
+
+.task-assigned {
+  color: #6b7280;
+  font-size: 0.8rem;
+}
+
+.status-badge {
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.badge-pending {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.badge-running {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.badge-in-progress {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.badge-passed {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.badge-failed {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.empty-state {
+  padding: 2rem;
+  text-align: center;
+  color: #6b7280;
+}

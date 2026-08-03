@@ -1,0 +1,17 @@
+# .jenga_paths.example
+#
+# Copy this file to .jenga_paths and populate it with absolute paths to directories
+# that should be searched for projects using the Jenga workflow.
+#
+# Rules:
+#   - One absolute path per line
+#   - Lines starting with # are comments
+#   - Blank lines are ignored
+#   - Each listed path is searched one level down (direct children) AND
+#     two levels down (grandchildren) for directories containing jenga.config.json
+#
+# Example:
+#
+# /Users/yourname/Desktop/Projects
+# /Users/yourname/work/clients
+# /Users/yourname/repos

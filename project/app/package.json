@@ -1,0 +1,18 @@
+{
+  "name": "jenga-app",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "api",
+    "ui"
+  ],
+  "scripts": {
+    "install:all": "npm install --workspaces --include-workspace-root",
+    "api:start": "node api/server.js",
+    "api:dev": "node --watch api/server.js",
+    "ui:dev": "npm run dev --workspace=ui",
+    "ui:build": "npm run build --workspace=ui",
+    "dashboard:start": "node ui/scripts/dashboard-start.cjs",
+    "dashboard:open": "node ui/scripts/dashboard-open.cjs"
+  }
+}

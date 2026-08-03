@@ -1,0 +1,11 @@
+{
+  "name": "jenga-router",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "description": "Jenga Router — stdio MCP server for skill-based prompt routing",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.11.1",
+    "zod": "^3.24.4"
+  }
+}

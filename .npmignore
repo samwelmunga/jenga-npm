@@ -1,0 +1,47 @@
+# Internal project management artefacts — not for consumers
+project/
+jobs/
+.jenga_paths
+.jenga_tmp/
+
+# Claude/Copilot session artefacts (hidden directory inside agents/)
+agents/.agents
+agents/.agents/
+agents/.agents/**
+agents/.agents/**/*
+.agents
+.agents/
+**/.agents
+**/.agents/
+**/.agents/**
+
+# Nested node_modules
+node_modules/
+**/node_modules/
+
+# Packed tarballs
+*.tgz
+
+# Copilot / editor config
+.copilot/
+.claude/
+.vscode/
+.idea/
+
+# Logs and temp files
+*.log
+*.pid
+.DS_Store
+
+# Jenga runtime
+mcp/router/.pid
+mcp/router/.session.json
+
+# Python artefacts
+**/__pycache__/
+*.pyc
+
+# Environment files
+.env
+.env.*
+*.local

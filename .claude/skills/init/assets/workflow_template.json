@@ -1,0 +1,30 @@
+{
+  "statuses": ["Pending", "In Progress", "Passed", "Passed with remarks", "Failed", "Rejected", "Blocked"],
+  "rapport_types": ["conflict", "implementation_blocker", "security_concern", "test_failure", "analysis"],
+  "paths": {
+    "board": "project/board",
+    "epics": "project/board/epics",
+    "stories": "project/board/stories",
+    "tasks": "project/board/tasks",
+    "rapports_problems": "project/rapports/problems",
+    "rapports_analysis": "project/rapports/analysis",
+    "queue": "project/queue",
+    "scrum_triggers": "project/queue/scrum_triggers.jsonl",
+    "developer_triggers": "project/queue/developer_triggers.jsonl",
+    "tester_triggers": "project/queue/tester_triggers.jsonl",
+    "session_handoff": "project/queue/.session_handoff.json",
+    "logs": "project/logs",
+    "data": "project/data",
+    "configs": "project/configs",
+    "documentation": "project/documentation",
+    "documentation_plans": "project/documentation/plans",
+    "documentation_summaries": "project/documentation/summaries"
+  },
+  "agents": ["developer", "tester", "scrum-master"],
+  "pipeline": [
+    {"step": 1, "agent": "scrum-master", "phase": "planning",        "on_complete": "write planning_complete handoff → developer_triggers.jsonl"},
+    {"step": 2, "agent": "developer",    "phase": "implementation",  "on_complete": "write implementation_complete handoff → tester_triggers.jsonl"},
+    {"step": 3, "agent": "tester",       "phase": "verification",    "on_complete": "write test status handoff → scrum_triggers.jsonl (+ developer_triggers.jsonl if failed)"},
+    {"step": 4, "agent": "scrum-master", "phase": "rollup_review",   "on_complete": "update board statuses, close epic/story if all done"}
+  ]
+}

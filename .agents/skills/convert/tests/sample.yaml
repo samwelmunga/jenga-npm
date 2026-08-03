@@ -1,0 +1,18 @@
+- id: 1
+  text: "The movie was great"
+  meta:
+    source: twitter
+    lang: en
+  label: positive
+- id: 2
+  text: "Terrible experience"
+  meta:
+    source: reddit
+    lang: en
+  label: negative
+- id: 3
+  text: "Pretty average overall"
+  meta:
+    source: twitter
+    lang: en
+  label: neutral

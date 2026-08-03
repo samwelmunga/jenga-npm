@@ -1,0 +1,15 @@
+the quick brown fox jumps over the lazy dog
+hello world this is a test sequence for transformer training
+attention is all you need to build a language model
+tokens are the basic units of transformer input sequences
+the model learns to predict the next token in a sequence
+deep learning requires large amounts of training data
+natural language processing enables machines to understand text
+self attention mechanisms allow transformers to capture context
+positional encodings provide sequence order information to the model
+feed forward layers process token representations after attention
+layer normalization stabilizes training of deep transformer networks
+embeddings map discrete tokens into continuous vector spaces
+the encoder processes input sequences into contextual representations
+the decoder generates output sequences token by token autoregressively
+pre training on large corpora improves downstream task performance

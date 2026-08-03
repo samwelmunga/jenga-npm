@@ -1,0 +1,25 @@
+The quick brown fox jumps over the lazy dog.
+Natural language processing is a subfield of artificial intelligence.
+Machine learning models learn patterns from data.
+Deep learning uses neural networks with many layers.
+Text classification assigns predefined categories to documents.
+Tokenization splits raw text into individual words or subwords.
+Word embeddings represent words as dense numerical vectors.
+Sentiment analysis determines the emotional tone of a piece of text.
+Named entity recognition identifies and classifies entities in text.
+Part-of-speech tagging assigns grammatical roles to each word.
+The transformer architecture revolutionized natural language processing tasks.
+Transfer learning allows models trained on one task to generalize to others.
+A corpus is a large collection of text used for training language models.
+Stop words are common words that carry little semantic meaning.
+Stemming reduces a word to its base or root form.
+Lemmatization normalizes words to their dictionary form considering context.
+Bag of words represents text as an unordered set of word counts.
+TF-IDF measures the importance of a word in a document relative to a corpus.
+Recurrent neural networks process sequential data like sentences.
+Attention mechanisms help models focus on relevant parts of the input.
+Byte pair encoding is a subword tokenization algorithm widely used today.
+Language models assign probabilities to sequences of words.
+Fine-tuning adapts a pre-trained model to a specific downstream task.
+Data augmentation artificially increases training set size through transformations.
+Cross-entropy loss is commonly used for classification tasks in NLP.

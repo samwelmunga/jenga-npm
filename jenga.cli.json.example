@@ -1,0 +1,6 @@
+{
+  "agentTarget": ["claude", "copilot"],
+  "skillsPath": "skills/",
+  "matchThreshold": 0.75,
+  "sessionTimeout": 300000
+}

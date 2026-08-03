@@ -1,0 +1,33 @@
+# NLP Pipeline Training Configuration
+
+model:
+  name: en_core_web_sm          # spaCy model or HuggingFace model hub ID
+  task: ner                     # Options: ner, text-classification, pos-tagging, dependency-parsing
+
+data:
+  train_file: input/data/train.spacy   # or .jsonl / .conll depending on task
+  eval_file: input/data/eval.spacy
+  label_column: label
+
+training:
+  n_iter: 30
+  batch_size: 32
+  dropout: 0.2
+  learning_rate: 1e-3
+
+output:
+  results_dir: training-results/
+  models_dir: fine-tuned-models/
+
+checkpoints:
+  dir: checkpoints/
+  save_every_n_iter: 10
+
+workflow:
+  auto_run: false            # Run training immediately when /train is invoked
+  generate_start_sh: true    # Emit a start.sh script for manual execution
+  confirm_before_run: true   # Prompt for confirmation before executing training
+  auto_summarize: true       # Parse and surface results after training completes
+  auto_iterate: false        # Re-run with adjusted config based on results (reserved)
+
+template_version: "1.0.0"   # Stamped at scaffold time by /train skill

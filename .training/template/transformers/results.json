@@ -1,0 +1,6 @@
+{
+  "status": "smoke_complete",
+  "epochs": 1,
+  "sequences": 15,
+  "total_tokens": 132
+}

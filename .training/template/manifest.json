@@ -1,0 +1,16 @@
+{
+  "templates": {
+    "classifiers": {
+      "version": "1.0.0",
+      "description": "Scikit-learn / XGBoost classifier training template"
+    },
+    "transformers": {
+      "version": "1.0.0",
+      "description": "HuggingFace Trainer transformer fine-tuning template"
+    },
+    "nlp": {
+      "version": "1.0.0",
+      "description": "spaCy NLP pipeline training template"
+    }
+  }
+}

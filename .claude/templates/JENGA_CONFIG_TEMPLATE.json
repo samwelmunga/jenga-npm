@@ -1,0 +1,25 @@
+{
+  "_schema": "https://github.com/samwelmunga/agents — jenga.config.json v1",
+
+  // Required — must be "jenga"
+  "workflow": "jenga",
+
+  // Workflow version installed in this project.
+  // The distribute script uses this to detect version drift.
+  // Format: MAJOR.MINOR.PATCH — bump when you run the distribute to the latest version.
+  "workflow_version": "1.0.0",
+
+  // Directory inside this project where the workflow files live.
+  // Typical values: ".agents" (default) or ".claude"
+  "target_dir": ".agents",
+
+  // Human-readable name for this project (informational only).
+  "project_name": "your-project-name",
+
+  // ISO 8601 date when the workflow was first installed in this project.
+  "created_at": "YYYY-MM-DD",
+
+  // ISO 8601 date of the last successful workflow distribute to this project.
+  // Updated automatically by hooks/distribute-changes.sh on each sync.
+  "updated_at": "YYYY-MM-DD"
+}
