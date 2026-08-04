@@ -3,8 +3,17 @@
  * postinstall.js — JengaAgent consumer installation hook
  *
  * Runs automatically when a consumer project installs jenga-agent via npm.
- * Copies framework directories (skills/, agents/, hooks/, scripts/, templates/)
- * from the installed package into the consumer project root.
+ * Copies the discovery-bound dirs — `skills/` and `agents/` — into BOTH
+ * `<consumer>/.claude/` (where Claude Code looks) and `<consumer>/.agents/`
+ * (where non-Claude agents like Copilot / custom look, per the framework's
+ * agent-target convention). This duplication is required because each agent
+ * ecosystem has its own fixed discovery path.
+ *
+ * Everything else (`hooks/`, `scripts/`, `templates/`, `mcp/`, `lib/`) stays
+ * in the installed package and is sourced from `node_modules/jenga-agent/…`
+ * at runtime — no duplication.
+ *
+ * The consumer's `project/` directory (if present) is left untouched.
  *
  * Safe upgrade behaviour:
  *   - First-time installs: always copy all files.
@@ -130,26 +139,31 @@ function main() {
     return;
   }
 
-  // Directories to copy from the package into the consumer root
-  const dirs = ['skills', 'agents', 'hooks', 'scripts', 'templates'];
+  // Discovery-bound dirs get mirrored to both .claude/ (Claude Code) and
+  // .agents/ (Copilot / custom). Everything else is sourced from
+  // node_modules/jenga-agent/… at runtime — no duplication.
+  const dirs        = ['skills', 'agents'];
+  const targetRoots = ['.claude', '.agents'];
 
   let totalCopied  = 0;
   let totalSkipped = 0;
 
   for (const dir of dirs) {
-    const src  = path.join(packageRoot, dir);
-    const dest = path.join(consumerRoot, dir);
+    const src = path.join(packageRoot, dir);
 
     if (!fs.existsSync(src)) {
       console.log(`  ⚠  ${dir}/ not found in package — skipped`);
       continue;
     }
 
-    const { copied, skipped } = copyDirSync(src, dest, { overwrite: true });
-    totalCopied  += copied.length;
-    totalSkipped += skipped.length;
+    for (const targetRoot of targetRoots) {
+      const dest = path.join(consumerRoot, targetRoot, dir);
+      const { copied, skipped } = copyDirSync(src, dest, { overwrite: true });
+      totalCopied  += copied.length;
+      totalSkipped += skipped.length;
 
-    console.log(`  ✓ ${dir}/ — ${copied.length} file(s) copied`);
+      console.log(`  ✓ ${targetRoot}/${dir}/ — ${copied.length} file(s) copied`);
+    }
   }
 
   // Write .jenga-version to record the installed version at consumer root

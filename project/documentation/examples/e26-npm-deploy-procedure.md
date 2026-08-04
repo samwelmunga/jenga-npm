@@ -17,7 +17,7 @@ The repo root is a real npm package (`package.json:1`):
 {
   "name": "jenga-agent",
   "publishConfig": { "access": "public" },
-  "files": ["skills/", "agents/", "hooks/", "scripts/", "templates/", "bin/", "README.md", "LICENSE"],
+  "files": ["skills/", "agents/", "hooks/", "scripts/", "templates/", "bin/", "lib/", "mcp/", "README.md", "LICENSE"],
   "scripts": { "postinstall": "node scripts/postinstall.js" }
 }
 ```
@@ -58,7 +58,7 @@ The schema uses `if/then/else` conditionals keyed on `type`, so an npm target do
 When a consumer runs `npm install jenga-agent`, the **postinstall hook** (`scripts/postinstall.js`) fires:
 - Reads `INIT_CWD` (the consumer's project root, not `node_modules/jenga-agent`).
 - Compares package version against `<consumer>/.jenga-version` (a small semver comparator, no `semver` dep).
-- On **first install or upgrade**, recursively copies `skills/`, `agents/`, `hooks/`, `scripts/`, `templates/` into the consumer root.
+- On **first install or upgrade**, recursively copies the two discovery-bound dirs (`skills/`, `agents/`) into **both** `<consumer>/.claude/` (for Claude Code) and `<consumer>/.agents/` (for Copilot / custom agents). This mirror is required because each agent ecosystem has its own fixed discovery path. Everything else (`hooks/`, `scripts/`, `templates/`, `mcp/`, `lib/`) stays in `node_modules/jenga-agent/…` and is sourced from there at runtime — no per-project duplication. The consumer's `project/` directory (the per-project working area) is left untouched.
 - Writes `.jenga-version` so subsequent installs skip when already up-to-date.
 - If the hook runs *inside* the JengaAgent repo itself (`INIT_CWD === packageRoot`), it no-ops — avoids trashing dev work.
 
@@ -94,7 +94,10 @@ Consumer, anywhere:
 ```bash
 mkdir my-project && cd my-project
 npm install jenga-agent
-# postinstall copies skills/, agents/, hooks/, scripts/, templates/ into ./
+# postinstall mirrors skills/ and agents/ into both ./.claude/ (Claude Code)
+# and ./.agents/ (Copilot / custom). hooks/, scripts/, templates/, mcp/, lib/
+# stay in node_modules/jenga-agent/ and are sourced from there. project/ is
+# left alone.
 # writes .jenga-version = 1.0.1
 ```
 

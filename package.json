@@ -25,6 +25,8 @@
     "scripts/",
     "templates/",
     "bin/",
+    "lib/",
+    "mcp/",
     "README.md",
     "LICENSE"
   ],
