@@ -16,6 +16,9 @@ examples:
   - "publish deploy --target staging-appstore --yes --dry-run"
   - "publish deploy --target npm-registry"
   - "publish deploy --target npm-registry --dry-run"
+  - "publish setup --type droplet"
+  - "publish deploy --target my-droplet"
+  - "publish deploy --target my-droplet --dry-run"
   - "publish history --limit 5"
   - "publish release-notes --target staging-appstore"
 metadata:
@@ -25,16 +28,18 @@ metadata:
   supported_target_types:
     - mobile-ios
     - npm
+    - droplet
 ---
 
 # Publish — Deployment Pipeline Orchestrator
 
 `/publish` is the single entry point for release workflows in this repository. It wires configuration validation, setup, gated deployment, release-note drafting, and ledger history into one end-to-end flow, and dispatches the final publish step to a per-type adapter.
 
-Two target types are currently supported:
+Three target types are currently supported:
 
 - **`mobile-ios`** — publishes an iOS build to App Store Connect via the iOS adapter. See the [iOS App Store](#ios-app-store) section for iOS-specific configuration.
 - **`npm`** — publishes a package to an npm registry via the npm adapter. See the npm adapter (`skills/publish/adapters/npm.md`) and the npm wizard (`skills/publish/wizards/npm.md`) for npm-specific configuration.
+- **`droplet`** — deploys a website or app to any SSH-reachable Linux host (including DigitalOcean Droplets) using a generated GitHub Actions workflow. The workflow SSHes into the host, pulls the deploy branch, runs an optional build command, and restarts the service. See [Droplet (GitHub Actions → SSH)](#droplet-github-actions--ssh) for configuration details.
 
 Every sub-command validates the config before doing anything else, so behaviour is identical regardless of which target type a project uses.
 
@@ -67,8 +72,8 @@ If config or env validation fails, the skill exits with code `4` and does not co
 
 | Command | Purpose | Implementation script | Notes |
 |---|---|---|---|
-| `/publish setup` | Prepare or refresh target configuration | `skills/publish/scripts/setup_wizard.sh` | Supported types: `mobile-ios`, `npm` |
-| `/publish deploy` | Run the full 11-step deploy orchestration | `skills/publish/scripts/publish_deploy.sh` | Dispatches to the adapter for the target's `type` (`mobile-ios` or `npm`); `--dry-run` is honoured end-to-end |
+| `/publish setup` | Prepare or refresh target configuration | `skills/publish/scripts/setup_wizard.sh` | Supported types: `mobile-ios`, `npm`, `droplet` |
+| `/publish deploy` | Run the full 11-step deploy orchestration | `skills/publish/scripts/publish_deploy.sh` | Dispatches to the adapter for the target's `type` (`mobile-ios`, `npm`, or `droplet`); `--dry-run` is honoured end-to-end |
 | `/publish history` | Read the canonical publish ledger | `skills/publish/scripts/show_history.sh` | Target-agnostic; filter by `--target <name>` |
 | `/publish release-notes` | Generate release notes without publishing | `skills/publish/scripts/generate_release_notes.sh` | Target-agnostic |
 
@@ -92,14 +97,14 @@ See `skills/publish/assets/ci-contract.md` for the full quality-gate policy.
 ### `/publish setup`
 
 ```text
-/publish setup [<target>] [--type mobile-ios|npm] [--config <path>]
+/publish setup [<target>] [--type mobile-ios|npm|droplet] [--config <path>]
 ```
 
 Implementation: `bash skills/publish/scripts/setup_wizard.sh [<target>] [--type <deployment_type>] [--config <path>]`
 
 Wizard flow:
 1. Resolve or prompt for the target name.
-2. Resolve or prompt for the deployment type. Supported values: `mobile-ios`, `npm`.
+2. Resolve or prompt for the deployment type. Supported values: `mobile-ios`, `npm`, `droplet`.
 3. Print the secrets guide path and the opening warning from `skills/publish/assets/secrets-guide.md`.
 4. Load `skills/publish/wizards/<type>.md` and render each `## Question:` section as a prompt.
 5. Preview the generated target config as JSON.
@@ -115,6 +120,8 @@ Example invocations:
 /publish setup --type mobile-ios            # scaffold an iOS App Store target
 /publish setup --type npm                   # scaffold an npm registry target
 /publish setup npm-registry --type npm      # scaffold a target named "npm-registry"
+/publish setup --type droplet               # scaffold a Droplet SSH deploy target
+/publish setup my-droplet --type droplet    # scaffold a target named "my-droplet"
 ```
 
 ### `/publish deploy`
@@ -211,7 +218,7 @@ The canonical config must validate against `skills/publish/schemas/publish.schem
 
 Every target — regardless of `type` — must define:
 - `name`
-- `type` — one of `mobile-ios`, `npm`
+- `type` — one of `mobile-ios`, `npm`, `droplet`
 - `checks.pre[]` / `checks.post[]`
 - `secrets` — env-var references only, never credential values
 
@@ -250,3 +257,52 @@ The `npm` adapter publishes a Node package to an npm-compatible registry.
 - Wizard template: `skills/publish/wizards/npm.md`
 
 See those files for the required target fields (registry URL, access, tag, `--dry-run` behaviour) and env references. Additional npm-specific schema details are owned by the npm settings block in `skills/publish/schemas/publish.schema.json`.
+
+## Droplet (GitHub Actions → SSH)
+
+The `droplet` adapter deploys a project to any SSH-reachable Linux host by generating a GitHub Actions workflow that SSHes into the host on each trigger.
+
+**Trust boundary**: `publish.json` holds only *references* to GitHub Actions secret names — never the actual SSH key or host credentials. Real secrets live in GitHub Actions secrets.
+
+### Required target fields for `droplet`
+
+- `type: droplet`
+- `platform: droplet-ssh`
+- `droplet.host` — IP address or FQDN of the target host
+- `droplet.ssh_user` — SSH login username
+- `droplet.ssh_port` — SSH port (default 22)
+- `droplet.deploy_path` — absolute path to the app directory on the host
+- `droplet.github_repo` — repository in `owner/name` format
+- `droplet.deploy_branch` — branch to pull on each deploy
+- `droplet.start_cmd` — command to (re)start the service (e.g. `pm2 reload ecosystem.config.js`, `sudo systemctl restart myapp`)
+- `droplet.build_cmd` — optional build step run after `git pull`
+- `secrets.ssh_key_secret` — name of the GH Actions secret holding the SSH private key
+- `secrets.known_hosts_secret` — name of the GH Actions secret holding `ssh-keyscan` output
+
+### Required GitHub Actions secrets
+
+The generated workflow reads these from GitHub Actions secrets:
+- `DROPLET_SSH_HOST` — host IP or FQDN
+- `DROPLET_SSH_USER` — SSH username
+- `DROPLET_SSH_PORT` — SSH port
+- `DROPLET_SSH_KEY` (or value of `ssh_key_secret`) — private key contents
+- `DROPLET_KNOWN_HOSTS` (or value of `known_hosts_secret`) — `ssh-keyscan` output
+
+See `skills/publish/assets/secrets-guide.md` for setup instructions.
+
+### First-run prerequisites (manual)
+
+Before the first deploy, the target host must already have:
+- The deploy path created (`mkdir -p /var/www/myapp`)
+- An initial `git clone` of the repo at the deploy path
+- Any runtime dependencies installed (Node, PM2, etc.)
+
+The adapter does not bootstrap the host — it only drives the continuous-deploy loop.
+
+### Usage examples
+
+```bash
+/publish setup --type droplet
+/publish deploy --target my-droplet --dry-run
+/publish deploy --target my-droplet
+```

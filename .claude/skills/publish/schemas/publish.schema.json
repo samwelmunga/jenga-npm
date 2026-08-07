@@ -240,6 +240,82 @@
         }
       }
     },
+    "dropletSecretMap": {
+      "description": "Secret name references for a droplet SSH target. Values are GitHub Actions secret names, not the secret values themselves.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ssh_key_secret",
+        "known_hosts_secret"
+      ],
+      "properties": {
+        "ssh_key_secret": {
+          "description": "Name of the GitHub Actions secret that holds the SSH private key (e.g. DROPLET_SSH_KEY).",
+          "type": "string",
+          "minLength": 1
+        },
+        "known_hosts_secret": {
+          "description": "Name of the GitHub Actions secret that holds the known_hosts entry for the target host (e.g. DROPLET_KNOWN_HOSTS).",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "dropletSettings": {
+      "description": "Settings for a droplet (or any SSH-reachable Linux host) deploy target. Deployment is orchestrated via a generated GitHub Actions workflow that SSHes into the host.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host",
+        "ssh_user",
+        "deploy_path",
+        "github_repo",
+        "deploy_branch",
+        "start_cmd"
+      ],
+      "properties": {
+        "host": {
+          "description": "IP address or FQDN of the target host.",
+          "type": "string",
+          "minLength": 1
+        },
+        "ssh_user": {
+          "description": "SSH username used to connect to the target host.",
+          "type": "string",
+          "minLength": 1
+        },
+        "ssh_port": {
+          "description": "SSH port on the target host. Defaults to 22 when omitted.",
+          "type": "integer",
+          "default": 22
+        },
+        "deploy_path": {
+          "description": "Absolute path on the remote host where the repository is checked out.",
+          "type": "string",
+          "minLength": 1
+        },
+        "github_repo": {
+          "description": "GitHub repository in owner/name format. Used to trigger the workflow via gh CLI.",
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$"
+        },
+        "deploy_branch": {
+          "description": "Git branch to pull and deploy on the remote host.",
+          "type": "string",
+          "minLength": 1
+        },
+        "build_cmd": {
+          "description": "Optional build command to run on the remote host after pulling (e.g. npm run build). Omit or leave empty to skip the build step.",
+          "type": "string",
+          "minLength": 1
+        },
+        "start_cmd": {
+          "description": "Command to (re)start the service on the remote host after deploy (e.g. pm2 reload ecosystem.config.js, sudo systemctl restart myapp).",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "target": {
       "type": "object",
       "additionalProperties": false,
@@ -257,11 +333,11 @@
         },
         "type": {
           "type": "string",
-          "enum": ["mobile-ios", "npm"]
+          "enum": ["mobile-ios", "npm", "droplet"]
         },
         "platform": {
           "type": "string",
-          "enum": ["ios-app-store", "npm-registry", "github-packages"]
+          "enum": ["ios-app-store", "npm-registry", "github-packages", "droplet-ssh"]
         },
         "checks": {
           "$ref": "#/definitions/checksObject"
@@ -274,6 +350,9 @@
         },
         "npm": {
           "$ref": "#/definitions/npmSettings"
+        },
+        "droplet": {
+          "$ref": "#/definitions/dropletSettings"
         },
         "notes": {
           "type": "string"
@@ -305,6 +384,19 @@
             "properties": {
               "platform": { "enum": ["npm-registry", "github-packages"] },
               "secrets": { "$ref": "#/definitions/npmSecretMap" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "droplet" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["droplet"],
+            "properties": {
+              "platform": { "const": "droplet-ssh" },
+              "secrets": { "$ref": "#/definitions/dropletSecretMap" }
             }
           }
         }

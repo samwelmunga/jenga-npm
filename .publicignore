@@ -45,6 +45,14 @@ project/instructions/
 .claude/worktrees/
 .agents/worktrees/
 
+# --- Private Claude / agent skills ---
+skills/mirror-public/
+.claude/skills/mirror-public/
+.agents/skills/mirror-public/
+skills/self-sync/
+.claude/skills/self-sync/
+.agents/skills/self-sync/
+
 # --- Scratch worktree used by /mirror-public itself ---
 .mirror-worktrees/
 
