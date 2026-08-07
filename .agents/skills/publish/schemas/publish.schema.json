@@ -101,7 +101,7 @@
         }
       }
     },
-    "secretMap": {
+    "iosSecretMap": {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -118,6 +118,18 @@
         "code_sign_identity": { "$ref": "#/definitions/envVarRef" },
         "provisioning_profile_uuid": { "$ref": "#/definitions/envVarRef" }
       }
+    },
+    "npmSecretMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "NPM_TOKEN": { "$ref": "#/definitions/envVarRef" },
+        "NODE_AUTH_TOKEN": { "$ref": "#/definitions/envVarRef" }
+      },
+      "anyOf": [
+        { "required": ["NPM_TOKEN"] },
+        { "required": ["NODE_AUTH_TOKEN"] }
+      ]
     },
     "iosSettings": {
       "type": "object",
@@ -191,6 +203,43 @@
         { "required": ["workspace_path"] }
       ]
     },
+    "npmSettings": {
+      "description": "Settings for an npm publish target. `package_name` and `access` are required; `registry` and `dist_tag` are optional with documented defaults.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "package_name",
+        "access"
+      ],
+      "properties": {
+        "package_name": {
+          "description": "The npm package name as it will appear in the registry. Supports scoped (`@scope/name`) and unscoped names. Must be lowercase, url-safe, and follow npm naming rules.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 214,
+          "pattern": "^(?:@[a-z0-9][a-z0-9._-]*\\/)?[a-z0-9][a-z0-9._-]*$"
+        },
+        "access": {
+          "description": "Registry access level. `public` publishes an openly-installable package; `restricted` publishes a private package (paid npm/GitHub Packages).",
+          "type": "string",
+          "enum": ["public", "restricted"]
+        },
+        "registry": {
+          "description": "Registry URL to publish to. Defaults to the public npm registry when omitted by the pipeline.",
+          "type": "string",
+          "format": "uri",
+          "minLength": 1,
+          "default": "https://registry.npmjs.org"
+        },
+        "dist_tag": {
+          "description": "npm dist-tag applied to this publish (e.g. `latest`, `next`, `beta`). Defaults to `latest` when omitted by the pipeline.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]*$",
+          "default": "latest"
+        }
+      }
+    },
     "target": {
       "type": "object",
       "additionalProperties": false,
@@ -199,8 +248,7 @@
         "type",
         "platform",
         "checks",
-        "secrets",
-        "ios"
+        "secrets"
       ],
       "properties": {
         "name": {
@@ -209,25 +257,58 @@
         },
         "type": {
           "type": "string",
-          "enum": ["mobile-ios"]
+          "enum": ["mobile-ios", "npm"]
         },
         "platform": {
           "type": "string",
-          "enum": ["ios-app-store"]
+          "enum": ["ios-app-store", "npm-registry", "github-packages"]
         },
         "checks": {
           "$ref": "#/definitions/checksObject"
         },
         "secrets": {
-          "$ref": "#/definitions/secretMap"
+          "type": "object"
         },
         "ios": {
           "$ref": "#/definitions/iosSettings"
         },
+        "npm": {
+          "$ref": "#/definitions/npmSettings"
+        },
         "notes": {
           "type": "string"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "mobile-ios" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["ios"],
+            "not": { "required": ["npm"] },
+            "properties": {
+              "platform": { "const": "ios-app-store" },
+              "secrets": { "$ref": "#/definitions/iosSecretMap" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "npm" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["npm"],
+            "not": { "required": ["ios"] },
+            "properties": {
+              "platform": { "enum": ["npm-registry", "github-packages"] },
+              "secrets": { "$ref": "#/definitions/npmSecretMap" }
+            }
+          }
+        }
+      ]
     }
   }
 }

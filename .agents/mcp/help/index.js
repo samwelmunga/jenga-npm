@@ -12,7 +12,7 @@ const server = new McpServer({
 
 server.tool(
   "help",
-  "List all available agent skills by scanning the .agents/skills directory in the given path.",
+  "List all available agent skills by scanning the .claude/skills or .agents/skills directory in the given path.",
   {
     path: z
       .string()
@@ -23,14 +23,20 @@ server.tool(
   },
   async ({ path: inputPath }) => {
     const root = inputPath ? resolve(inputPath) : process.cwd();
-    const skillsDir = join(root, ".agents", "skills");
+    // The jenga-agent postinstall mirrors skills/ into both .claude/ (Claude Code)
+    // and .agents/ (Copilot / custom agents). Prefer .claude/; fall back to .agents/.
+    const candidates = [
+      join(root, ".claude", "skills"),
+      join(root, ".agents", "skills"),
+    ];
+    const skillsDir = candidates.find(existsSync);
 
-    if (!existsSync(skillsDir)) {
+    if (!skillsDir) {
       return {
         content: [
           {
             type: "text",
-            text: `No skills found. The path \`${skillsDir}\` does not exist.`,
+            text: `No skills found. Looked in:\n${candidates.map(p => `  - ${p}`).join("\n")}`,
           },
         ],
       };

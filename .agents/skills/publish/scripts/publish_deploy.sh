@@ -8,11 +8,13 @@ VALIDATE_CONFIG_SCRIPT="$SCRIPT_DIR/validate_config.sh"
 CHECK_TARGET_CONFIG_SCRIPT="$SCRIPT_DIR/check_target_config.sh"
 SETUP_WIZARD_SCRIPT="$SCRIPT_DIR/setup_wizard.sh"
 VALIDATE_IOS_ENV_SCRIPT="$SCRIPT_DIR/validate_ios_env.sh"
+VALIDATE_NPM_ENV_SCRIPT="$SCRIPT_DIR/validate_npm_env.sh"
 RUN_GATES_SCRIPT="$SCRIPT_DIR/run_gates.sh"
 GENERATE_RELEASE_NOTES_SCRIPT="$SCRIPT_DIR/generate_release_notes.sh"
 SUGGEST_SEMVER_SCRIPT="$SCRIPT_DIR/suggest_semver_bump.sh"
 WRITE_LEDGER_ENTRY_SCRIPT="$SCRIPT_DIR/write_ledger_entry.sh"
 IOS_PIPELINE_SCRIPT="$SCRIPT_DIR/ios_pipeline.sh"
+NPM_PIPELINE_SCRIPT="$SCRIPT_DIR/npm_pipeline.sh"
 
 EXIT_ABORTED=1
 EXIT_GATE_FAILURE=2
@@ -199,6 +201,11 @@ validate_target_env() {
         exit "$EXIT_CONFIG_INVALID"
       fi
       ;;
+    npm)
+      if ! bash "$VALIDATE_NPM_ENV_SCRIPT" "$CONFIG_PATH" "$TARGET_NAME"; then
+        exit "$EXIT_CONFIG_INVALID"
+      fi
+      ;;
     *)
       fail_with "$EXIT_CONFIG_INVALID" "Unsupported target type '$TARGET_TYPE'."
       ;;
@@ -354,6 +361,9 @@ run_adapter_pipeline() {
   case "$TARGET_TYPE" in
     mobile-ios)
       cmd=(bash "$IOS_PIPELINE_SCRIPT" "$TARGET_NAME" "$CONFIG_PATH")
+      ;;
+    npm)
+      cmd=(bash "$NPM_PIPELINE_SCRIPT" "$TARGET_NAME" "$CONFIG_PATH")
       ;;
     *)
       fail_with "$EXIT_CONFIG_INVALID" "Unsupported target type '$TARGET_TYPE'."

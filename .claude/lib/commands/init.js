@@ -1,10 +1,17 @@
 import { createInterface } from "readline";
 import { readFileSync, writeFileSync, existsSync, appendFileSync, mkdirSync, readdirSync } from "fs";
-import { join } from "path";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 import { validateConfig } from "../config-schema.js";
 import { injectSettings } from "../inject-settings.js";
 
 const CONFIG_FILE = "jenga.cli.json";
+
+// This file lives at <package>/lib/commands/init.js — two levels up is the
+// installed jenga-agent package root, which holds templates/ and other
+// framework assets sourced directly from node_modules.
+const __dirname    = dirname(fileURLToPath(import.meta.url));
+const PACKAGE_ROOT = join(__dirname, "..", "..");
 
 async function prompt(rl, question, defaultValue) {
   return new Promise(resolve => {
@@ -52,9 +59,21 @@ export async function runInit(args, projectRoot = process.cwd()) {
     } while (!parsedTargets);
     const agentTarget = parsedTargets.length === 1 ? parsedTargets[0] : parsedTargets;
 
-    // 2. Skills path
-    const skillsDefault = existing.skillsPath ?? "skills/";
-    const skillsPath = await prompt(rl, "Skills directory path", skillsDefault);
+    // 2. Skills path — postinstall mirrors skills/ into .claude/skills/ (Claude)
+    // and .agents/skills/ (Copilot / custom). Default reflects the chosen target(s):
+    // a single string for one target, an array for multi-target installs.
+    const skillPathForTarget = (t) => t === "claude" ? ".claude/skills/" : ".agents/skills/";
+    const derivedDefault = (() => {
+      const unique = [...new Set(parsedTargets.map(skillPathForTarget))];
+      return unique.length === 1 ? unique[0] : unique;
+    })();
+    const existingSkillsPath = existing.skillsPath ?? derivedDefault;
+    const skillsDefaultHint = Array.isArray(existingSkillsPath)
+      ? existingSkillsPath.join(", ")
+      : existingSkillsPath;
+    const skillsRaw = await prompt(rl, "Skills directory path(s) (comma-separate for multiple)", skillsDefaultHint);
+    const skillsParsed = skillsRaw.split(",").map(s => s.trim()).filter(Boolean);
+    const skillsPath = skillsParsed.length === 1 ? skillsParsed[0] : skillsParsed;
 
     // 3. Match threshold
     const thresholdDefault = existing.matchThreshold ?? 0.75;
@@ -105,16 +124,27 @@ export async function runInit(args, projectRoot = process.cwd()) {
       console.warn("You can register it manually later by running jenga init again.");
     }
 
-    // Generate .github/copilot-instructions.md from template
+    // Generate .github/copilot-instructions.md from template.
+    // Templates ship inside the jenga-agent package (node_modules/jenga-agent/templates/).
+    // Fall back to a bare `templates/` at the project root only for the dev-repo case.
     try {
-      const tplPath = join(projectRoot, "templates", "copilot-instructions.md.tpl");
-      if (existsSync(tplPath)) {
+      const tplCandidates = [
+        join(PACKAGE_ROOT, "templates", "copilot-instructions.md.tpl"),
+        join(projectRoot, "templates", "copilot-instructions.md.tpl"),
+      ];
+      const tplPath = tplCandidates.find(existsSync);
+      if (tplPath) {
         const tpl = readFileSync(tplPath, "utf8");
 
-        // Build skill list from skillsPath
-        const skillsDir = join(projectRoot, config.skillsPath);
+        // Build skill list from skillsPath. skillsPath may be a string or an
+        // array (multi-target installs); pick the first existing directory —
+        // mirrored copies hold identical content.
+        const skillsPathList = Array.isArray(config.skillsPath) ? config.skillsPath : [config.skillsPath];
+        const skillsDir = skillsPathList
+          .map(p => join(projectRoot, p))
+          .find(existsSync);
         let skillLines = [];
-        if (existsSync(skillsDir)) {
+        if (skillsDir) {
           for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
             if (!entry.isDirectory()) continue;
             const skillMdPath = join(skillsDir, entry.name, "SKILL.md");

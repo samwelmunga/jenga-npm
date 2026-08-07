@@ -42,28 +42,6 @@ export async function runAttach(args) {
   mkdirSync(settingsDir, { recursive: true });
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf8");
 
-  // Mirror the same mcpServers entry into .agents/settings.json
-  const agentsSettingsDir = join(cwd, ".agents");
-  const agentsSettingsPath = join(agentsSettingsDir, "settings.json");
-  let agentsSettings = {};
-  if (existsSync(agentsSettingsPath)) {
-    try {
-      agentsSettings = JSON.parse(readFileSync(agentsSettingsPath, "utf8"));
-    } catch (e) {
-      console.error(`Failed to parse .agents/settings.json: ${e.message}`);
-      process.exit(1);
-    }
-  }
-  if (!agentsSettings.mcpServers) agentsSettings.mcpServers = {};
-  agentsSettings.mcpServers["jenga"] = {
-    type: "stdio",
-    command: "node",
-    args: [routerPath],
-  };
-  mkdirSync(agentsSettingsDir, { recursive: true });
-  writeFileSync(agentsSettingsPath, JSON.stringify(agentsSettings, null, 2) + "\n", "utf8");
-
   console.log("Attached. Open a new session in this project to start routing through Jenga.");
   console.log("  ✓ .claude/settings.json updated");
-  console.log("  ✓ .agents/settings.json updated");
 }

@@ -233,8 +233,7 @@ To exclude specific files per consumer project, add a `.jenga_ignore` at the con
 │   ├── developer.md
 │   └── tester.md
 ├── hooks/
-│   ├── on_session_end.sh
-│   └── distribute-changes.sh
+│   └── on_session_end.sh
 ├── mcp/
 │   ├── help/
 │   └── execute-ticket/

@@ -5,7 +5,15 @@ export const configSchema = {
   type: "object",
   required: ["skillsPath", "matchThreshold", "sessionTimeout", "agentTarget"],
   properties: {
-    skillsPath: { type: "string" },
+    // Single path (string) or multiple discovery paths (array of strings).
+    // Multi-target installs (e.g. claude + copilot) use an array holding
+    // both .claude/skills/ and .agents/skills/.
+    skillsPath: {
+      oneOf: [
+        { type: "string" },
+        { type: "array", items: { type: "string" }, minItems: 1 }
+      ]
+    },
     matchThreshold: { type: "number", minimum: 0, maximum: 1 },
     sessionTimeout: { type: "number", minimum: 0 },
     agentTarget: {
@@ -24,8 +32,12 @@ export function validateConfig(config) {
       return { valid: false, error: `Missing required field: ${field}` };
     }
   }
-  if (typeof config.skillsPath !== "string") {
-    return { valid: false, error: "skillsPath must be a string" };
+  const skillsPathIsString = typeof config.skillsPath === "string";
+  const skillsPathIsArray  = Array.isArray(config.skillsPath)
+    && config.skillsPath.length > 0
+    && config.skillsPath.every(p => typeof p === "string");
+  if (!skillsPathIsString && !skillsPathIsArray) {
+    return { valid: false, error: "skillsPath must be a string or a non-empty array of strings" };
   }
   if (typeof config.matchThreshold !== "number" || config.matchThreshold < 0 || config.matchThreshold > 1) {
     return { valid: false, error: "matchThreshold must be a number between 0 and 1" };

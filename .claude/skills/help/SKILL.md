@@ -20,15 +20,17 @@ List all available skills (from the current skill list) with a short description
 
 ## MCP Tool (Dynamic Discovery)
 
-An MCP server is available at `.agents/mcp/help/` that dynamically discovers skills at runtime.
+An MCP server ships inside the `jenga-agent` package at `mcp/help/` that dynamically discovers skills at runtime.
 
-To install and run:
+To install and run (from a consumer project that has `jenga-agent` installed):
 ```bash
-cd .agents/mcp/help && npm install
+cd node_modules/jenga-agent/mcp/help && npm install
 node index.js
 ```
 
+Or wire it as an MCP server in `.claude/settings.json` — `jenga attach` does this automatically for the router; the help server can be added the same way, pointing `args` at `node_modules/jenga-agent/mcp/help/index.js`.
+
 The `help` tool accepts an optional `path` argument (defaults to `cwd`) and:
-1. Checks for a `.agents/skills` directory at that path.
+1. Looks for a `.claude/skills` directory at that path, falling back to `.agents/skills`.
 2. If found, returns a list of all folder names inside it.
-3. If not found, returns a clear message indicating no skills directory exists.
+3. If neither exists, returns a clear message listing the paths it checked.

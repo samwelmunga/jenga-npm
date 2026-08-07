@@ -6,21 +6,37 @@ keywords:
   - deploy
   - release
   - app store
+  - npm
+  - registry
   - release notes
 examples:
   - "publish setup --target staging-appstore"
+  - "publish setup --type mobile-ios"
+  - "publish setup --type npm"
   - "publish deploy --target staging-appstore --yes --dry-run"
+  - "publish deploy --target npm-registry"
+  - "publish deploy --target npm-registry --dry-run"
   - "publish history --limit 5"
   - "publish release-notes --target staging-appstore"
 metadata:
-  scope: ios-v1-complete
-  primary_target: mobile-ios
-  primary_platform: ios-app-store
+  scope: multi-target-v2
+  primary_target: multi
+  primary_platform: multi
+  supported_target_types:
+    - mobile-ios
+    - npm
 ---
 
 # Publish — Deployment Pipeline Orchestrator
 
-`/publish` is the single entry point for release workflows in this repository. The v1 implementation now wires configuration validation, setup, gated deployment, release-note drafting, ledger history, and the iOS App Store adapter into one end-to-end flow.
+`/publish` is the single entry point for release workflows in this repository. It wires configuration validation, setup, gated deployment, release-note drafting, and ledger history into one end-to-end flow, and dispatches the final publish step to a per-type adapter.
+
+Two target types are currently supported:
+
+- **`mobile-ios`** — publishes an iOS build to App Store Connect via the iOS adapter. See the [iOS App Store](#ios-app-store) section for iOS-specific configuration.
+- **`npm`** — publishes a package to an npm registry via the npm adapter. See the npm adapter (`skills/publish/adapters/npm.md`) and the npm wizard (`skills/publish/wizards/npm.md`) for npm-specific configuration.
+
+Every sub-command validates the config before doing anything else, so behaviour is identical regardless of which target type a project uses.
 
 ## Invocation Contract
 
@@ -42,18 +58,19 @@ bash skills/publish/scripts/check_target_config.sh <target-name> <path-to-publis
 - Secrets guide: `skills/publish/assets/secrets-guide.md`
 - Deploy contract and exit codes: `skills/publish/assets/ci-contract.md`
 - iOS adapter template: `skills/publish/adapters/mobile-ios.md`
+- npm adapter template: `skills/publish/adapters/npm.md`
 - Ownership matrix: `skills/publish/assets/ownership-matrix.md`
 
 If config or env validation fails, the skill exits with code `4` and does not continue.
 
 ## Sub-Commands
 
-| Command | Purpose | Implementation script |
-|---|---|---|
-| `/publish setup` | Prepare or refresh target configuration | `skills/publish/scripts/setup_wizard.sh` |
-| `/publish deploy` | Run the full 11-step deploy orchestration | `skills/publish/scripts/publish_deploy.sh` |
-| `/publish history` | Read the canonical publish ledger | `skills/publish/scripts/show_history.sh` |
-| `/publish release-notes` | Generate release notes without publishing | `skills/publish/scripts/generate_release_notes.sh` |
+| Command | Purpose | Implementation script | Notes |
+|---|---|---|---|
+| `/publish setup` | Prepare or refresh target configuration | `skills/publish/scripts/setup_wizard.sh` | Supported types: `mobile-ios`, `npm` |
+| `/publish deploy` | Run the full 11-step deploy orchestration | `skills/publish/scripts/publish_deploy.sh` | Dispatches to the adapter for the target's `type` (`mobile-ios` or `npm`); `--dry-run` is honoured end-to-end |
+| `/publish history` | Read the canonical publish ledger | `skills/publish/scripts/show_history.sh` | Target-agnostic; filter by `--target <name>` |
+| `/publish release-notes` | Generate release notes without publishing | `skills/publish/scripts/generate_release_notes.sh` | Target-agnostic |
 
 ## Quality Gate Policy
 
@@ -75,14 +92,14 @@ See `skills/publish/assets/ci-contract.md` for the full quality-gate policy.
 ### `/publish setup`
 
 ```text
-/publish setup [<target>] [--type mobile-ios] [--config <path>]
+/publish setup [<target>] [--type mobile-ios|npm] [--config <path>]
 ```
 
 Implementation: `bash skills/publish/scripts/setup_wizard.sh [<target>] [--type <deployment_type>] [--config <path>]`
 
 Wizard flow:
 1. Resolve or prompt for the target name.
-2. Resolve or prompt for the deployment type (currently `mobile-ios`).
+2. Resolve or prompt for the deployment type. Supported values: `mobile-ios`, `npm`.
 3. Print the secrets guide path and the opening warning from `skills/publish/assets/secrets-guide.md`.
 4. Load `skills/publish/wizards/<type>.md` and render each `## Question:` section as a prompt.
 5. Preview the generated target config as JSON.
@@ -90,6 +107,15 @@ Wizard flow:
 7. Validate the saved file with `validate_config.sh`; if validation fails, roll back the write.
 
 During setup, env-var reference answers are checked against the current shell. Missing variables only warn; they do not block save.
+
+Example invocations:
+
+```bash
+/publish setup                              # interactive, prompts for target and type
+/publish setup --type mobile-ios            # scaffold an iOS App Store target
+/publish setup --type npm                   # scaffold an npm registry target
+/publish setup npm-registry --type npm      # scaffold a target named "npm-registry"
+```
 
 ### `/publish deploy`
 
@@ -108,13 +134,29 @@ Deploy flow:
 6. Generate a release-note draft and review it unless `--yes` is set
 7. Suggest and confirm the semver bump (`patch` by default in non-interactive mode unless `--minor` or `--major` is passed)
 8. Print final confirmation: `Deploy v<x.y.z> to <target>? [y/N]`
-9. Execute the adapter pipeline (`ios_pipeline.sh` for `mobile-ios`)
+9. Execute the adapter pipeline for the target's `type` (`ios_pipeline.sh` for `mobile-ios`, `npm_publish.sh` for `npm`)
 10. Run post-deploy gates and downgrade the ledger state to `partial` on failure
 11. Append the publish ledger entry, create the git tag (unless `--dry-run`), and print post-deploy manual steps
 
 Non-interactive rule: when `--yes` is used, deploy must not auto-run setup after a failure. It exits `4` and surfaces the missing fields.
 
-Dry-run rule: `--dry-run` runs the full orchestration, passes `--dry-run` to the adapter, skips the real git tag, and writes a `platform_state: "dry-run"` ledger entry.
+#### `--dry-run`
+
+`--dry-run` runs the full deploy orchestration end-to-end without producing a real release:
+
+- Every step from target selection through gates, release-note generation, and semver bump runs normally.
+- The adapter is invoked with `--dry-run` so it performs its full pipeline but skips the destructive publish step (no App Store upload for `mobile-ios`, no `npm publish` for `npm`).
+- The real git tag is **not** created.
+- A ledger entry is still appended with `platform_state: "dry-run"` so the run is auditable.
+
+Example invocations:
+
+```bash
+/publish deploy --target staging-appstore --dry-run
+/publish deploy --target npm-registry --dry-run
+```
+
+Use `--dry-run` to rehearse a release, validate that gates pass, and confirm the generated release notes without publishing.
 
 ### `/publish history`
 
@@ -165,14 +207,24 @@ The canonical config must validate against `skills/publish/schemas/publish.schem
 - `defaults` — global defaults, including the canonical publish ledger path and mandatory checks
 - `targets[]` — named deployment targets
 
-### Required target structure for `mobile-ios`
+### Common target structure
 
-Each target must define:
+Every target — regardless of `type` — must define:
 - `name`
-- `type: mobile-ios`
-- `platform: ios-app-store`
+- `type` — one of `mobile-ios`, `npm`
 - `checks.pre[]` / `checks.post[]`
 - `secrets` — env-var references only, never credential values
+
+Type-specific fields are documented below.
+
+## iOS App Store
+
+The `mobile-ios` adapter publishes iOS builds to App Store Connect.
+
+### Required target fields for `mobile-ios`
+
+- `type: mobile-ios`
+- `platform: ios-app-store`
 - `ios` — scheme/build/export/upload metadata used by the adapter
 
 ### Required iOS env references
@@ -184,8 +236,17 @@ The `mobile-ios` target must provide env-var references for:
 - `CODE_SIGN_IDENTITY`
 - `PROVISIONING_PROFILE_UUID`
 
-## Scope Guardrails
+### iOS scope guardrails
 
 This story set intentionally does **not** implement automated App Store review submission.
 
-The adapter trust boundary is explicit: publish-side external commands are limited to direct `xcodebuild` and `xcrun` invocations.
+The iOS adapter trust boundary is explicit: publish-side external commands are limited to direct `xcodebuild` and `xcrun` invocations.
+
+## npm Registry
+
+The `npm` adapter publishes a Node package to an npm-compatible registry.
+
+- Adapter template: `skills/publish/adapters/npm.md`
+- Wizard template: `skills/publish/wizards/npm.md`
+
+See those files for the required target fields (registry URL, access, tag, `--dry-run` behaviour) and env references. Additional npm-specific schema details are owned by the npm settings block in `skills/publish/schemas/publish.schema.json`.

@@ -1,0 +1,8 @@
+# Exclude Python bytecode from npm publish
+# (same subdirectory .npmignore technique required due to npm-packlist v8 behaviour
+#  with package.json files field — root .npmignore is nullified when files is present)
+**/__pycache__/
+**/__pycache__/**
+__pycache__/
+*.pyc
+*.pyo

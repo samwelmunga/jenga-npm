@@ -149,6 +149,14 @@ require_target() {
   fi
 }
 
+TARGET_TYPE=""
+
+resolve_target_type() {
+  TARGET_TYPE="$(jq -r --arg target "$TARGET_NAME" "$(jq_target_def) target_obj | .type // empty" "$PUBLISH_JSON" | head -n 1)"
+  # Default to mobile-ios when unset to preserve legacy behaviour.
+  [[ -n "$TARGET_TYPE" ]] || TARGET_TYPE="mobile-ios"
+}
+
 get_gate_entries() {
   jq -c --arg target "$TARGET_NAME" --arg phase "$PHASE" "$(jq_target_def)
     target_obj as \$target_config |
@@ -202,6 +210,25 @@ find_npm_script_command() {
   return 1
 }
 
+# Resolve an npm script from the top-level package.json only (mirrors
+# npm_pipeline.sh, which publishes $REPO_ROOT/package.json). Prints the
+# command form npm uses for the built-in `test` script vs. `npm run <name>`.
+find_npm_script_in_root() {
+  local script_name="$1"
+  local package_file="$REPO_ROOT/package.json"
+
+  [[ -f "$package_file" ]] || return 1
+  jq -e --arg script_name "$script_name" '.scripts[$script_name] // empty' "$package_file" >/dev/null 2>&1 || return 1
+
+  # `npm test` is a first-class alias; everything else uses `npm run <name>`.
+  if [[ "$script_name" == "test" ]]; then
+    printf 'npm test\n'
+  else
+    printf 'npm run %s\n' "$script_name"
+  fi
+  return 0
+}
+
 find_xcodebuild_command() {
   local action="$1"
   if find "$REPO_ROOT" -maxdepth 4 \( -name '*.xcodeproj' -o -name '*.xcworkspace' \) | grep -q .; then
@@ -213,6 +240,27 @@ find_xcodebuild_command() {
 
 resolve_default_command() {
   local gate_name="$1"
+
+  # NPM targets: resolve strictly against $REPO_ROOT/package.json and never
+  # fall through to iOS tooling. Missing scripts are announced with a clear
+  # informational note (on stderr so it does not pollute the captured
+  # command) before the gate is reported as skipped upstream.
+  if [[ "$TARGET_TYPE" == "npm" ]]; then
+    case "$gate_name" in
+      build|test|lint)
+        if find_npm_script_in_root "$gate_name"; then
+          return 0
+        fi
+        printf '→ npm gate %q skipped: no %q script defined in package.json\n' \
+          "$gate_name" "$gate_name" >&2
+        return 0
+        ;;
+      *)
+        return 0
+        ;;
+    esac
+  fi
+
   case "$gate_name" in
     build)
       find_npm_script_command build || find_xcodebuild_command build || true
@@ -512,18 +560,38 @@ run_gate() {
 
 build_gate_list() {
   local gate_json
+  local -a mandatory_pre_gates=()
+
   if [[ "$PHASE" == "pre" ]]; then
-    printf '%s\n' '{"name":"build","config":{},"source":"mandatory"}'
-    printf '%s\n' '{"name":"test","config":{},"source":"mandatory"}'
+    if [[ "$TARGET_TYPE" == "npm" ]]; then
+      # npm-specific mandatory gates: test, build, lint (per E26_S06_T03).
+      mandatory_pre_gates=(test build lint)
+    else
+      mandatory_pre_gates=(build test)
+    fi
+    local gate
+    for gate in "${mandatory_pre_gates[@]}"; do
+      printf '{"name":"%s","config":{},"source":"mandatory"}\n' "$gate"
+    done
   fi
 
   while IFS= read -r gate_json; do
     [[ -z "$gate_json" ]] && continue
     local gate_name
     gate_name="$(printf '%s' "$gate_json" | jq -r '.name')"
-    if [[ "$PHASE" == "pre" && ( "$gate_name" == "build" || "$gate_name" == "test" ) ]]; then
-      log_warn "Ignoring configurable '$gate_name' gate for target '$TARGET_NAME'; mandatory global gates already enforce it."
-      continue
+    if [[ "$PHASE" == "pre" ]]; then
+      local is_mandatory=0
+      local m_gate
+      for m_gate in "${mandatory_pre_gates[@]}"; do
+        if [[ "$gate_name" == "$m_gate" ]]; then
+          is_mandatory=1
+          break
+        fi
+      done
+      if (( is_mandatory )); then
+        log_warn "Ignoring configurable '$gate_name' gate for target '$TARGET_NAME'; mandatory global gates already enforce it."
+        continue
+      fi
     fi
     printf '%s\n' "$gate_json"
   done < <(get_gate_entries)
@@ -533,6 +601,7 @@ main() {
   local gate_json
 
   require_target
+  resolve_target_type
   ensure_publish_history
 
   while IFS= read -r gate_json; do

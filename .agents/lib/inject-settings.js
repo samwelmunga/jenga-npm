@@ -1,9 +1,14 @@
-import { readFileSync, writeFileSync, existsSync } from "fs";
-import { join, resolve } from "path";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { join, resolve, dirname } from "path";
 import { homedir } from "os";
+import { fileURLToPath } from "url";
 
 const HOOK_TYPE = "command";
-const HOOK_SCRIPT = "hooks/prompt_router.sh";
+// This file lives at <package>/lib/inject-settings.js — one level up is the
+// installed jenga-agent package root, which is where hooks/prompt_router.sh
+// ships. Consumers never need a local copy of the hook script.
+const __dirname   = dirname(fileURLToPath(import.meta.url));
+const PACKAGE_ROOT = join(__dirname, "..");
 
 /**
  * Injects the Jenga UserPromptSubmit hook into settings.json.
@@ -13,11 +18,12 @@ const HOOK_SCRIPT = "hooks/prompt_router.sh";
  * @param {boolean} global - if true, target ~/.claude/settings.json instead
  */
 export async function injectSettings(projectRoot = process.cwd(), global = false) {
-  const settingsPath = global
-    ? join(homedir(), ".claude", "settings.json")
-    : join(projectRoot, "settings.json");
+  const settingsDir = global
+    ? join(homedir(), ".claude")
+    : join(projectRoot, ".claude");
+  const settingsPath = join(settingsDir, "settings.json");
 
-  const hookCommand = resolve(projectRoot, HOOK_SCRIPT);
+  const hookCommand = resolve(PACKAGE_ROOT, "hooks", "prompt_router.sh");
 
   // Load or create settings
   let settings = {};
@@ -49,6 +55,7 @@ export async function injectSettings(projectRoot = process.cwd(), global = false
     });
   }
 
+  mkdirSync(settingsDir, { recursive: true });
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf8");
-  console.log("✓ Hook registered in settings.json");
+  console.log(`✓ Hook registered in ${settingsPath}`);
 }

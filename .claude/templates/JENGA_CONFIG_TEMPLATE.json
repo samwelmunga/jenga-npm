@@ -5,8 +5,7 @@
   "workflow": "jenga",
 
   // Workflow version installed in this project.
-  // The distribute script uses this to detect version drift.
-  // Format: MAJOR.MINOR.PATCH — bump when you run the distribute to the latest version.
+  // Format: MAJOR.MINOR.PATCH — bump this when the workflow is updated.
   "workflow_version": "1.0.0",
 
   // Directory inside this project where the workflow files live.
@@ -19,7 +18,6 @@
   // ISO 8601 date when the workflow was first installed in this project.
   "created_at": "YYYY-MM-DD",
 
-  // ISO 8601 date of the last successful workflow distribute to this project.
-  // Updated automatically by hooks/distribute-changes.sh on each sync.
+  // ISO 8601 date of the last workflow sync to this project.
   "updated_at": "YYYY-MM-DD"
 }

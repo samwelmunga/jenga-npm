@@ -19,6 +19,7 @@ command -v jq >/dev/null 2>&1 || fail "jq is required"
 jq -e . "$SCHEMA_PATH" >/dev/null 2>&1 || fail "schema file is not valid JSON"
 jq -e . "$CONFIG_PATH" >/dev/null 2>&1 || fail "config file is not valid JSON"
 
+# shellcheck disable=SC2154  # $t, $cfg, $schema are jq variables inside the single-quoted program below, not shell variables.
 ERRORS="$(
   jq -rn \
     --slurpfile cfg "$CONFIG_PATH" \
@@ -62,7 +63,21 @@ ERRORS="$(
         and (.team_id? | type == "string" and test("^[A-Z0-9]{6,}$"))
         and (.app_store_app_id? | type == "string" and test("^[0-9]+$"))
         and (((.project_path? // empty) | non_empty_string) or ((.workspace_path? // empty) | non_empty_string));
-      def target_valid:
+      def npm_secrets_valid:
+        type == "object"
+        and (
+          (((.NPM_TOKEN? // null) != null) and (.NPM_TOKEN | env_ref))
+          or (((.NODE_AUTH_TOKEN? // null) != null) and (.NODE_AUTH_TOKEN | env_ref))
+        );
+      def npm_valid:
+        type == "object"
+        and (.package_name? | non_empty_string)
+        and (.package_name | test("^(?:@[a-z0-9][a-z0-9._-]*\\/)?[a-z0-9][a-z0-9._-]*$"))
+        and ((.package_name | length) <= 214)
+        and (((.access? // "") == "public") or ((.access? // "") == "restricted"))
+        and (((.registry? // null) == null) or (.registry | non_empty_string))
+        and (((.dist_tag? // null) == null) or (((.dist_tag | type) == "string") and (.dist_tag | test("^[a-z0-9][a-z0-9._-]*$"))));
+      def ios_target_valid:
         type == "object"
         and (.name? | type == "string" and test("^[a-z0-9][a-z0-9-]*$"))
         and (.type? == "mobile-ios")
@@ -70,6 +85,34 @@ ERRORS="$(
         and (.checks? | checks_valid)
         and (.secrets? | secrets_valid)
         and (.ios? | ios_valid);
+      def npm_target_valid:
+        type == "object"
+        and (.name? | type == "string" and test("^[a-z0-9][a-z0-9-]*$"))
+        and (.type? == "npm")
+        and (((.platform? // "") == "npm-registry") or ((.platform? // "") == "github-packages"))
+        and (.checks? | checks_valid)
+        and (.secrets? | npm_secrets_valid)
+        and (.npm? | npm_valid)
+        and ((.ios? // null) == null);
+      def target_valid: ios_target_valid or npm_target_valid;
+      def target_label: (.name? // "<unnamed>");
+      def npm_diagnostics:
+        . as $t
+        | [
+            (if (($t.npm? | type) != "object") then ("target \"" + ($t | target_label) + "\": npm block is required for npm targets") else empty end),
+            (if ((($t.npm?.package_name? // "") | non_empty_string) | not) then ("target \"" + ($t | target_label) + "\": npm.package_name is required and must be a non-empty string") else empty end),
+            (if ((($t.npm?.package_name? // "") | type) == "string" and (($t.npm.package_name | length) > 0) and ((($t.npm.package_name | test("^(?:@[a-z0-9][a-z0-9._-]*\\/)?[a-z0-9][a-z0-9._-]*$"))) | not)) then ("target \"" + ($t | target_label) + "\": npm.package_name must match npm naming rules") else empty end),
+            (if (((($t.npm?.access? // "") == "public") or (($t.npm?.access? // "") == "restricted")) | not) then ("target \"" + ($t | target_label) + "\": npm.access must be \"public\" or \"restricted\"") else empty end),
+            (if (($t.ios? // null) != null) then ("target \"" + ($t | target_label) + "\": ios block is not allowed on npm targets") else empty end),
+            (if (((($t.platform? // "") == "npm-registry") or (($t.platform? // "") == "github-packages")) | not) then ("target \"" + ($t | target_label) + "\": platform must be \"npm-registry\" or \"github-packages\" for npm targets") else empty end),
+            (if (($t.secrets? | npm_secrets_valid) | not) then ("target \"" + ($t | target_label) + "\": secrets must contain NPM_TOKEN or NODE_AUTH_TOKEN as an environment reference") else empty end)
+          ] | .[];
+      def per_target_errors:
+        . as $t
+        | if target_valid then empty
+          elif ($t.type? == "npm") then ($t | npm_diagnostics)
+          elif ($t.type? == "mobile-ios") then ("invalid target: " + ($t | target_label))
+          else ("target \"" + ($t | target_label) + "\": type must be \"mobile-ios\" or \"npm\"") end;
       [
         (if (($schema["$schema"] // "") | contains("draft-07")) then empty else "schema must declare draft-07" end),
         (if (($cfg | type) == "object") then empty else "root config must be an object" end),
@@ -79,7 +122,7 @@ ERRORS="$(
         (if (($cfg.defaults.mandatory_checks? | type) == "array" and (($cfg.defaults.mandatory_checks | length) > 0) and all($cfg.defaults.mandatory_checks[]; string_gate_name)) then empty else "defaults.mandatory_checks must be a non-empty array of gate names" end),
         (if (($cfg.defaults.optional_checks? == null) or (($cfg.defaults.optional_checks | type) == "array" and all($cfg.defaults.optional_checks[]; string_gate_name))) then empty else "defaults.optional_checks must be an array of gate names when provided" end),
         (if (($cfg.targets? | type) == "array" and (($cfg.targets | length) > 0)) then empty else "targets must be a non-empty array" end),
-        (if (($cfg.targets? | type) == "array") then ([$cfg.targets[] | if target_valid then empty else ("invalid target: " + (.name // "<unnamed>")) end] | .[]) else empty end)
+        (if (($cfg.targets? | type) == "array") then ([$cfg.targets[] | per_target_errors] | .[]) else empty end)
       ] | map(select(. != null and . != "")) | .[]
   ' 2>/dev/null || true
 )"

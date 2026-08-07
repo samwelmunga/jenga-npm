@@ -1,0 +1,61 @@
+# .publicignore
+# ---------------------------------------------------------------------------
+# Blocklist consumed by the /mirror-public skill via `rsync --exclude-from=`.
+# Every pattern here is a path (relative to the repo root) that MUST NEVER be
+# copied into the public mirror repo (https://github.com/samwelmunga/jenga-npm).
+#
+# Policy: over-block, don't under-block. Anything missed is a private leak;
+# anything extra is merely an unshipped file. Add new private paths as they
+# appear — this file is the single source of truth for public-mirror scope.
+# ---------------------------------------------------------------------------
+
+# --- Private scrum board (epics, stories, tasks, indices) ---
+project/board/
+
+# --- Inter-agent queues (triggers, handoff files, update proposals) ---
+project/queue/
+
+# --- Runtime event logs ---
+project/logs/
+
+# --- Problem / security / conflict rapports ---
+project/rapports/
+
+# --- Top-level todo (working list of pending missions) ---
+project/todo.md
+
+# --- Private planning + execution artefacts tied to board items ---
+project/documentation/plans/
+project/documentation/summaries/
+project/instructions/
+
+# --- Secrets / environment files ---
+.env
+.env.*
+*.local
+*.pid
+
+# --- Machine-local Jenga runtime state ---
+.jenga_paths
+.jenga_tmp/
+.tmp/
+
+# --- Local Claude / agent session state (never shippable) ---
+.claude/settings.local.json
+.claude/worktrees/
+.agents/worktrees/
+
+# --- Scratch worktree used by /mirror-public itself ---
+.mirror-worktrees/
+
+# --- Dev / package noise ---
+node_modules/
+**/__pycache__/
+*.pyc
+
+# --- OS cruft ---
+.DS_Store
+Thumbs.db
+
+# --- Git internals (rsync would otherwise walk the private .git dir) ---
+.git/

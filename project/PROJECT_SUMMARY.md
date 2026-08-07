@@ -45,6 +45,8 @@ JengaAgent is distributed as a public npm package (`jenga-agent`) via npmjs.com.
 - **E24** — `/doc` Document Synthesis Skill *(Passed)*
 - **E25** — Board Index Substrate
 - **E26** — NPM-Compatible Distribution *(Passed)*
+- **E27** — Repo Self-Sync — Restore Root → .claude/.agents Mirror Automation
+- **E28** — Public Mirror — One-Way Private → Public Repo Sync
 
 ## Conventions
 - Board items use `E##_S##_T##` naming convention

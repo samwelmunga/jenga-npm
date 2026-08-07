@@ -1,0 +1,5 @@
+{
+  "publicRepoUrl": "https://github.com/samwelmunga/jenga-npm.git",
+  "defaultBranch": "main",
+  "worktreePath": ".mirror-worktrees/public"
+}
