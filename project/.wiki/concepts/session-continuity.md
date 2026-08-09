@@ -6,7 +6,7 @@
 
 ## The Core Problem
 
-Every Claude Code session starts fresh. There is no built-in memory of:
+Every AI agent session starts fresh. There is no built-in memory of:
 - What was built last session
 - What was tested and passed
 - What was blocked and why

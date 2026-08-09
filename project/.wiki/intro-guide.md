@@ -87,7 +87,7 @@ The hierarchy isn't overhead. It's the structure that makes every session resuma
 
 ### Session Continuity
 
-Every Claude Code session starts with a blank slate. JengaAgent solves this by storing all project context in files, not in the model's memory. The board, the event log, the trigger queue, and `PROJECT_SUMMARY.md` all persist across sessions.
+Every AI agent session starts with a blank slate. JengaAgent solves this by storing all project context in files, not in the model's memory. The board, the event log, the trigger queue, and `PROJECT_SUMMARY.md` all persist across sessions.
 
 When a session ends, `on_session_end.sh` writes triggers for the Scrum Master. When a new session starts, the Scrum Master processes those triggers before responding to you. It knows what was built, what passed, what failed, and what needs attention — without you saying a word.
 

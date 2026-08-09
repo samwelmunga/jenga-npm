@@ -615,6 +615,24 @@ Release type? → minor
 
 ---
 
+#### `/doc`
+
+**Description:** Generate or update a documentation file by resolving a target path to a clear documentation objective before writing.
+
+**When to use:** When you want to create or refresh a specific doc file — "update the docs", "write docs for X", "the README is stale", "generate documentation for X". Pass an optional target path (e.g. `/doc docs/API.md`); omit it to default to `README.md`.
+
+**Example:**
+```
+/doc docs/CLI.md
+→ Resolved target: docs/CLI.md — objective: CLI usage guide
+→ Reading existing docs/CLI.md...
+→ Gathering evidence: package.json, board items, skill metadata
+→ Regenerating docs/CLI.md with current commands and flags
+→ Written: docs/CLI.md ✅
+```
+
+---
+
 #### `/doc-sync`
 
 **Description:** Compare the current state of a project with its documentation and update any documentation that is stale, incomplete, or missing.

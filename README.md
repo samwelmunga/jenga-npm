@@ -1,6 +1,6 @@
 # JengaAgent
 
-**A structured multi-agent development workflow built on [Claude Code](https://docs.anthropic.com/en/docs/claude-code).** Three specialised AI agents — Scrum Master, Developer, and Tester — collaborate through a shared scrum board, an event-driven trigger queue, and 28 slash-command skills to take a project from idea to verified, committed code — across as many sessions as it takes.
+**A structured multi-agent development workflow that works with any AI agent or AI-native IDE.** Three specialised AI agents — Scrum Master, Developer, and Tester — collaborate through a shared scrum board, an event-driven trigger queue, and 28 slash-command skills to take a project from idea to verified, committed code — across as many sessions as it takes.
 
 > 📖 **Full reference:** [project/.wiki/documentation.md](project/.wiki/documentation.md) | [Intro Guide](project/.wiki/intro-guide.md)
 
@@ -12,7 +12,7 @@ Without a framework like JengaAgent, AI-assisted development has serious structu
 
 | Problem | Reality |
 |---|---|
-| **AI has no session memory** | Each Claude Code session starts from scratch — no awareness of open tasks, past decisions, or what was already tested |
+| **AI has no session memory** | Every AI agent session starts from scratch — no awareness of open tasks, past decisions, or what was already tested |
 | **No role separation** | The AI writes *and* "tests" code in the same context, leading to hallucinated test results and self-affirming bugs |
 | **No structured planning** | Work happens ad-hoc — no Epic → Story → Task hierarchy to organise or track progress |
 | **No handoff protocol** | Switching from implementing to testing means manually re-explaining context every time |
@@ -30,11 +30,11 @@ JengaAgent solves each of these with structure: persistent board state, strict a
 **Without JengaAgent:**
 ```
 You: "Add user authentication"
-Claude: [writes auth code, declares it works, session ends]
+AI agent: [writes auth code, declares it works, session ends]
 
 Next session:
 You: "What's the status of auth?"
-Claude: "I don't have context from the previous session."
+AI agent: "I don't have context from the previous session."
 ```
 
 **With JengaAgent:**
@@ -136,7 +136,11 @@ Each agent is defined in `.agents/agents/`. They communicate exclusively through
 
 ## Getting Started
 
-**Prerequisites:** [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and configured.
+**Prerequisites:** An AI agent or AI-native IDE. Supported platforms include:
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+- GitHub Copilot (VS Code extension or CLI)
+- [Warp](https://www.warp.dev/)
+- Codex CLI
 
 **Install from npm:**
 ```sh
@@ -155,9 +159,24 @@ Run `/status` at any time to see where the project stands.
 
 ---
 
+## Supported Platforms
+
+JengaAgent has been tested with:
+
+| Platform | Type |
+|---|---|
+| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | AI coding agent |
+| [GitHub Copilot](https://github.com/features/copilot) | AI coding assistant |
+| [Warp](https://www.warp.dev/) | AI-native terminal |
+| Codex CLI | AI coding agent |
+
+The framework is platform-agnostic by design — any AI agent that can read Markdown files and execute slash commands can use it.
+
+---
+
 ## Skills (Slash Commands)
 
-Skills live in `.agents/skills/<name>/SKILL.md`. Invoke with `/<name>` in any Claude Code session.
+Skills live in `.agents/skills/<name>/SKILL.md`. Invoke with `/<name>` in your AI agent or IDE's command interface.
 
 ### Setup & Planning
 
