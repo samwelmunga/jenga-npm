@@ -47,6 +47,7 @@ JengaAgent is distributed as a public npm package (`jenga-agent`) via npmjs.com.
 - **E26** — NPM-Compatible Distribution *(Passed)*
 - **E27** — Repo Self-Sync — Restore Root → .claude/.agents Mirror Automation
 - **E28** — Public Mirror — One-Way Private → Public Repo Sync
+- **E29** — npm Trusted Publishers CI Adapter
 
 ## Conventions
 - Board items use `E##_S##_T##` naming convention

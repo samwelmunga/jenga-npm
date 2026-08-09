@@ -10,7 +10,9 @@ SETUP_WIZARD_SCRIPT="$SCRIPT_DIR/setup_wizard.sh"
 VALIDATE_IOS_ENV_SCRIPT="$SCRIPT_DIR/validate_ios_env.sh"
 VALIDATE_NPM_ENV_SCRIPT="$SCRIPT_DIR/validate_npm_env.sh"
 VALIDATE_DROPLET_ENV_SCRIPT="$SCRIPT_DIR/validate_droplet_env.sh"
+VALIDATE_NPM_CI_ENV_SCRIPT="$SCRIPT_DIR/validate_npm_ci_env.sh"
 DROPLET_PIPELINE_SCRIPT="$SCRIPT_DIR/droplet_pipeline.sh"
+NPM_CI_PIPELINE_SCRIPT="$SCRIPT_DIR/npm_ci_pipeline.sh"
 RUN_GATES_SCRIPT="$SCRIPT_DIR/run_gates.sh"
 GENERATE_RELEASE_NOTES_SCRIPT="$SCRIPT_DIR/generate_release_notes.sh"
 SUGGEST_SEMVER_SCRIPT="$SCRIPT_DIR/suggest_semver_bump.sh"
@@ -208,6 +210,11 @@ validate_target_env() {
         exit "$EXIT_CONFIG_INVALID"
       fi
       ;;
+    npm-ci)
+      if ! bash "$VALIDATE_NPM_CI_ENV_SCRIPT" "$CONFIG_PATH" "$TARGET_NAME"; then
+        exit "$EXIT_CONFIG_INVALID"
+      fi
+      ;;
     droplet)
       if ! bash "$VALIDATE_DROPLET_ENV_SCRIPT" "$CONFIG_PATH" "$TARGET_NAME"; then
         exit "$EXIT_CONFIG_INVALID"
@@ -371,6 +378,9 @@ run_adapter_pipeline() {
       ;;
     npm)
       cmd=(bash "$NPM_PIPELINE_SCRIPT" "$TARGET_NAME" "$CONFIG_PATH")
+      ;;
+    npm-ci)
+      cmd=(bash "$NPM_CI_PIPELINE_SCRIPT" --target "$TARGET_NAME" --config "$CONFIG_PATH")
       ;;
     droplet)
       cmd=(bash "$DROPLET_PIPELINE_SCRIPT" --target "$TARGET_NAME" --config "$CONFIG_PATH")

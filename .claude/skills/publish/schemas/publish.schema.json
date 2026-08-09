@@ -323,8 +323,7 @@
         "name",
         "type",
         "platform",
-        "checks",
-        "secrets"
+        "checks"
       ],
       "properties": {
         "name": {
@@ -333,11 +332,11 @@
         },
         "type": {
           "type": "string",
-          "enum": ["mobile-ios", "npm", "droplet"]
+          "enum": ["mobile-ios", "npm", "droplet", "npm-ci"]
         },
         "platform": {
           "type": "string",
-          "enum": ["ios-app-store", "npm-registry", "github-packages", "droplet-ssh"]
+          "enum": ["ios-app-store", "npm-registry", "github-packages", "droplet-ssh", "npm-ci-oidc"]
         },
         "checks": {
           "$ref": "#/definitions/checksObject"
@@ -354,6 +353,17 @@
         "droplet": {
           "$ref": "#/definitions/dropletSettings"
         },
+        "github_repo": {
+          "description": "GitHub repository in owner/name format. Required for npm-ci targets; used to identify the repository that hosts the trusted-publisher workflow.",
+          "type": "string",
+          "pattern": "^[^/]+/[^/]+$"
+        },
+        "workflow_path": {
+          "description": "Path within the repository to the GitHub Actions workflow file that publishes to npm. Defaults to .github/workflows/npm-publish.yml.",
+          "type": "string",
+          "minLength": 1,
+          "default": ".github/workflows/npm-publish.yml"
+        },
         "notes": {
           "type": "string"
         }
@@ -365,7 +375,7 @@
             "required": ["type"]
           },
           "then": {
-            "required": ["ios"],
+            "required": ["ios", "secrets"],
             "not": { "required": ["npm"] },
             "properties": {
               "platform": { "const": "ios-app-store" },
@@ -379,7 +389,7 @@
             "required": ["type"]
           },
           "then": {
-            "required": ["npm"],
+            "required": ["npm", "secrets"],
             "not": { "required": ["ios"] },
             "properties": {
               "platform": { "enum": ["npm-registry", "github-packages"] },
@@ -393,10 +403,22 @@
             "required": ["type"]
           },
           "then": {
-            "required": ["droplet"],
+            "required": ["droplet", "secrets"],
             "properties": {
               "platform": { "const": "droplet-ssh" },
               "secrets": { "$ref": "#/definitions/dropletSecretMap" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "npm-ci" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["npm", "github_repo"],
+            "properties": {
+              "platform": { "const": "npm-ci-oidc" }
             }
           }
         }

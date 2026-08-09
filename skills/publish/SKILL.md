@@ -28,6 +28,7 @@ metadata:
   supported_target_types:
     - mobile-ios
     - npm
+    - npm-ci
     - droplet
 ---
 
@@ -35,10 +36,11 @@ metadata:
 
 `/publish` is the single entry point for release workflows in this repository. It wires configuration validation, setup, gated deployment, release-note drafting, and ledger history into one end-to-end flow, and dispatches the final publish step to a per-type adapter.
 
-Three target types are currently supported:
+Four target types are currently supported:
 
 - **`mobile-ios`** — publishes an iOS build to App Store Connect via the iOS adapter. See the [iOS App Store](#ios-app-store) section for iOS-specific configuration.
 - **`npm`** — publishes a package to an npm registry via the npm adapter. See the npm adapter (`skills/publish/adapters/npm.md`) and the npm wizard (`skills/publish/wizards/npm.md`) for npm-specific configuration.
+- **`npm-ci`** — publishes a package to npmjs.com via GitHub Actions OIDC (Trusted Publishers), with no `NPM_TOKEN` stored. The adapter generates a GitHub Actions workflow, commits it to the repository, and triggers it via `gh workflow run`. See the npm-ci adapter (`skills/publish/adapters/npm-ci.md`) and the npm-ci wizard (`skills/publish/wizards/npm-ci.md`) for configuration details.
 - **`droplet`** — deploys a website or app to any SSH-reachable Linux host (including DigitalOcean Droplets) using a generated GitHub Actions workflow. The workflow SSHes into the host, pulls the deploy branch, runs an optional build command, and restarts the service. See [Droplet (GitHub Actions → SSH)](#droplet-github-actions--ssh) for configuration details.
 
 Every sub-command validates the config before doing anything else, so behaviour is identical regardless of which target type a project uses.
@@ -72,8 +74,8 @@ If config or env validation fails, the skill exits with code `4` and does not co
 
 | Command | Purpose | Implementation script | Notes |
 |---|---|---|---|
-| `/publish setup` | Prepare or refresh target configuration | `skills/publish/scripts/setup_wizard.sh` | Supported types: `mobile-ios`, `npm`, `droplet` |
-| `/publish deploy` | Run the full 11-step deploy orchestration | `skills/publish/scripts/publish_deploy.sh` | Dispatches to the adapter for the target's `type` (`mobile-ios`, `npm`, or `droplet`); `--dry-run` is honoured end-to-end |
+| `/publish setup` | Prepare or refresh target configuration | `skills/publish/scripts/setup_wizard.sh` | Supported types: `mobile-ios`, `npm`, `npm-ci`, `droplet` |
+| `/publish deploy` | Run the full 11-step deploy orchestration | `skills/publish/scripts/publish_deploy.sh` | Dispatches to the adapter for the target's `type` (`mobile-ios`, `npm`, `npm-ci`, or `droplet`); `--dry-run` is honoured end-to-end |
 | `/publish history` | Read the canonical publish ledger | `skills/publish/scripts/show_history.sh` | Target-agnostic; filter by `--target <name>` |
 | `/publish release-notes` | Generate release notes without publishing | `skills/publish/scripts/generate_release_notes.sh` | Target-agnostic |
 
@@ -120,6 +122,8 @@ Example invocations:
 /publish setup --type mobile-ios            # scaffold an iOS App Store target
 /publish setup --type npm                   # scaffold an npm registry target
 /publish setup npm-registry --type npm      # scaffold a target named "npm-registry"
+/publish setup --type npm-ci                   # scaffold an npm CI (Trusted Publisher) target
+/publish setup npm-ci-pkg --type npm-ci        # scaffold a target named "npm-ci-pkg"
 /publish setup --type droplet               # scaffold a Droplet SSH deploy target
 /publish setup my-droplet --type droplet    # scaffold a target named "my-droplet"
 ```
@@ -141,7 +145,7 @@ Deploy flow:
 6. Generate a release-note draft and review it unless `--yes` is set
 7. Suggest and confirm the semver bump (`patch` by default in non-interactive mode unless `--minor` or `--major` is passed)
 8. Print final confirmation: `Deploy v<x.y.z> to <target>? [y/N]`
-9. Execute the adapter pipeline for the target's `type` (`ios_pipeline.sh` for `mobile-ios`, `npm_publish.sh` for `npm`)
+9. Execute the adapter pipeline for the target's `type` (`ios_pipeline.sh` for `mobile-ios`, `npm_pipeline.sh` for `npm`, `npm_ci_pipeline.sh` for `npm-ci`, `droplet_pipeline.sh` for `droplet`)
 10. Run post-deploy gates and downgrade the ledger state to `partial` on failure
 11. Append the publish ledger entry, create the git tag (unless `--dry-run`), and print post-deploy manual steps
 
@@ -161,6 +165,7 @@ Example invocations:
 ```bash
 /publish deploy --target staging-appstore --dry-run
 /publish deploy --target npm-registry --dry-run
+/publish deploy --target npm-ci-pkg --dry-run
 ```
 
 Use `--dry-run` to rehearse a release, validate that gates pass, and confirm the generated release notes without publishing.
@@ -257,6 +262,44 @@ The `npm` adapter publishes a Node package to an npm-compatible registry.
 - Wizard template: `skills/publish/wizards/npm.md`
 
 See those files for the required target fields (registry URL, access, tag, `--dry-run` behaviour) and env references. Additional npm-specific schema details are owned by the npm settings block in `skills/publish/schemas/publish.schema.json`.
+
+## npm CI (OIDC Trusted Publisher)
+
+The `npm-ci` adapter publishes a Node package to npmjs.com via **GitHub Actions OIDC (Trusted Publishers)** — no `NPM_TOKEN` is stored anywhere.
+
+> Use `npm` for local publishes with a token; use `npm-ci` for CI-only publishing with OIDC (no token required).
+
+- Adapter template: `skills/publish/adapters/npm-ci.md`
+- Wizard template: `skills/publish/wizards/npm-ci.md`
+- Example config: `skills/publish/assets/publish.example.npm-ci.json`
+
+### Required target fields for `npm-ci`
+
+- `type: npm-ci`
+- `github_repo` — repository in `owner/name` format (e.g. `acme-org/my-package`)
+- `workflow_path` — path to the workflow file to generate and trigger (default: `.github/workflows/npm-publish.yml`)
+- `npm.package_name`, `npm.access`, `npm.registry`, `npm.dist_tag` — same as the `npm` adapter
+
+No `secrets` block is required. Any `secrets` block present is ignored by this adapter.
+
+### One-time prerequisite (manual)
+
+Before the first deploy, link the package to the repository on npmjs.com:
+
+1. Sign in to npmjs.com → navigate to the package page
+2. Settings → Publishing → Trusted Publishers → Add publisher
+3. Select GitHub Actions; enter `owner/repo` and the workflow file path
+4. Save
+
+Once configured, only the linked workflow can publish this package — local `npm publish` with a token will be rejected by npmjs.com for that package.
+
+### Usage examples
+
+```bash
+/publish setup --type npm-ci
+/publish deploy --target npm-ci-pkg --dry-run
+/publish deploy --target npm-ci-pkg
+```
 
 ## Droplet (GitHub Actions → SSH)
 

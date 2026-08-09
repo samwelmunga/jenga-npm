@@ -57,6 +57,22 @@ case "$TARGET_TYPE" in
       | .[]
     ' 2>/dev/null || true)"
     ;;
+  npm-ci)
+    MISSING="$(printf '%s\n' "$TARGET_JSON" | jq -r '
+      def non_empty($value):
+        ($value | type) == "string" and (($value | length) > 0);
+      def missing_string($path; $value):
+        if non_empty($value // "") then empty else $path end;
+      [
+        (missing_string("github_repo"; .github_repo)),
+        (if (.npm | type) == "object" then empty else "npm" end),
+        (missing_string("npm.package_name"; .npm.package_name)),
+        (if ((.npm.access? // "") == "public" or (.npm.access? // "") == "restricted") then empty else "npm.access" end)
+      ]
+      | map(select(. != null and . != ""))
+      | .[]
+    ' 2>/dev/null || true)"
+    ;;
   *)
     fail "unsupported target type '$TARGET_TYPE' for target '$TARGET_NAME'"
     ;;

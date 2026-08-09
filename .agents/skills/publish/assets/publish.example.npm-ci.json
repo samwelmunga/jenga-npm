@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "defaults": {
+    "history_file": "project/logs/publish-history.json",
+    "mandatory_checks": [
+      "build",
+      "test"
+    ],
+    "optional_checks": [
+      "lint",
+      "type-check",
+      "smoke-test"
+    ]
+  },
+  "targets": [
+    {
+      "name": "npm-ci-jenga-agent",
+      "type": "npm-ci",
+      "platform": "npm-ci-oidc",
+      "github_repo": "samwelmunga/jenga-npm",
+      "workflow_path": ".github/workflows/npm-publish.yml",
+      "checks": {
+        "pre": [
+          "lint",
+          "type-check"
+        ],
+        "post": [
+          "smoke-test"
+        ]
+      },
+      "npm": {
+        "package_name": "jenga-agent",
+        "access": "public",
+        "registry": "https://registry.npmjs.org",
+        "dist_tag": "latest"
+      },
+      "notes": "Scaffold example for a CI-only npm publish via GitHub Actions OIDC (Trusted Publishers). No NPM_TOKEN is required — npmjs.com authenticates the publish using a short-lived OIDC token issued by GitHub's token service. The one-time setup step is: on npmjs.com, go to the package Settings → Publishing → Trusted Publishers → Add publisher → GitHub Actions → enter github_repo and workflow_path → Save. Once configured, only the linked workflow can publish this package — local npm publish with a token will be rejected."
+    }
+  ]
+}

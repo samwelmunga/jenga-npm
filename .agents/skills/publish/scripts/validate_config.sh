@@ -77,6 +77,14 @@ ERRORS="$(
         and (((.access? // "") == "public") or ((.access? // "") == "restricted"))
         and (((.registry? // null) == null) or (.registry | non_empty_string))
         and (((.dist_tag? // null) == null) or (((.dist_tag | type) == "string") and (.dist_tag | test("^[a-z0-9][a-z0-9._-]*$"))));
+      def npm_ci_valid:
+        type == "object"
+        and (.package_name? | non_empty_string)
+        and (.package_name | test("^(?:@[a-z0-9][a-z0-9._-]*\\/)?[a-z0-9][a-z0-9._-]*$"))
+        and ((.package_name | length) <= 214)
+        and (((.access? // "") == "public") or ((.access? // "") == "restricted"))
+        and (((.registry? // null) == null) or (.registry | non_empty_string))
+        and (((.dist_tag? // null) == null) or (((.dist_tag | type) == "string") and (.dist_tag | test("^[a-z0-9][a-z0-9._-]*$"))));
       def ios_target_valid:
         type == "object"
         and (.name? | type == "string" and test("^[a-z0-9][a-z0-9-]*$"))
@@ -94,7 +102,14 @@ ERRORS="$(
         and (.secrets? | npm_secrets_valid)
         and (.npm? | npm_valid)
         and ((.ios? // null) == null);
-      def target_valid: ios_target_valid or npm_target_valid;
+      def npm_ci_target_valid:
+        type == "object"
+        and (.name? | type == "string" and test("^[a-z0-9][a-z0-9-]*$"))
+        and (.type? == "npm-ci")
+        and ((.github_repo? // "") | non_empty_string)
+        and (.npm? | npm_ci_valid)
+        and ((.ios? // null) == null);
+      def target_valid: ios_target_valid or npm_target_valid or npm_ci_target_valid;
       def target_label: (.name? // "<unnamed>");
       def npm_diagnostics:
         . as $t
@@ -107,12 +122,23 @@ ERRORS="$(
             (if (((($t.platform? // "") == "npm-registry") or (($t.platform? // "") == "github-packages")) | not) then ("target \"" + ($t | target_label) + "\": platform must be \"npm-registry\" or \"github-packages\" for npm targets") else empty end),
             (if (($t.secrets? | npm_secrets_valid) | not) then ("target \"" + ($t | target_label) + "\": secrets must contain NPM_TOKEN or NODE_AUTH_TOKEN as an environment reference") else empty end)
           ] | .[];
+      def npm_ci_diagnostics:
+        . as $t
+        | [
+            (if (($t.github_repo? // "") | non_empty_string) then empty else ("target \"" + ($t | target_label) + "\": github_repo is required and must be a non-empty string") end),
+            (if (($t.npm? | type) != "object") then ("target \"" + ($t | target_label) + "\": npm block is required for npm-ci targets") else empty end),
+            (if ((($t.npm?.package_name? // "") | non_empty_string) | not) then ("target \"" + ($t | target_label) + "\": npm.package_name is required and must be a non-empty string") else empty end),
+            (if ((($t.npm?.package_name? // "") | type) == "string" and (($t.npm.package_name | length) > 0) and ((($t.npm.package_name | test("^(?:@[a-z0-9][a-z0-9._-]*\\/)?[a-z0-9][a-z0-9._-]*$"))) | not)) then ("target \"" + ($t | target_label) + "\": npm.package_name must match npm naming rules") else empty end),
+            (if (((($t.npm?.access? // "") == "public") or (($t.npm?.access? // "") == "restricted")) | not) then ("target \"" + ($t | target_label) + "\": npm.access must be \"public\" or \"restricted\"") else empty end),
+            (if (($t.ios? // null) != null) then ("target \"" + ($t | target_label) + "\": ios block is not allowed on npm-ci targets") else empty end)
+          ] | .[];
       def per_target_errors:
         . as $t
         | if target_valid then empty
           elif ($t.type? == "npm") then ($t | npm_diagnostics)
+          elif ($t.type? == "npm-ci") then ($t | npm_ci_diagnostics)
           elif ($t.type? == "mobile-ios") then ("invalid target: " + ($t | target_label))
-          else ("target \"" + ($t | target_label) + "\": type must be \"mobile-ios\" or \"npm\"") end;
+          else ("target \"" + ($t | target_label) + "\": type must be \"mobile-ios\", \"npm\", or \"npm-ci\"") end;
       [
         (if (($schema["$schema"] // "") | contains("draft-07")) then empty else "schema must declare draft-07" end),
         (if (($cfg | type) == "object") then empty else "root config must be an object" end),

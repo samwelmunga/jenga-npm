@@ -63,11 +63,13 @@ prompt_deploy_type() {
   printf 'Available deployment types:\n'
   printf '1. mobile-ios\n'
   printf '2. npm\n'
+  printf '3. npm-ci\n'
   prompt_line 'Choose type [1]: '
   case "${PROMPT_RESULT:-1}" in
     1|mobile-ios|"") DEPLOY_TYPE="mobile-ios" ;;
     2|npm) DEPLOY_TYPE="npm" ;;
-    *) printf 'Unsupported type. Choose mobile-ios or npm.\n' >&2; prompt_deploy_type ;;
+    3|npm-ci) DEPLOY_TYPE="npm-ci" ;;
+    *) printf 'Unsupported type. Choose mobile-ios, npm, or npm-ci.\n' >&2; prompt_deploy_type ;;
   esac
 }
 
@@ -309,7 +311,7 @@ fi
 
 if [[ -z "$DEPLOY_TYPE" ]]; then
   prompt_deploy_type
-elif [[ "$DEPLOY_TYPE" != "mobile-ios" && "$DEPLOY_TYPE" != "npm" ]]; then
+elif [[ "$DEPLOY_TYPE" != "mobile-ios" && "$DEPLOY_TYPE" != "npm" && "$DEPLOY_TYPE" != "npm-ci" ]]; then
   fail "unsupported deployment type '$DEPLOY_TYPE'"
 fi
 
@@ -325,16 +327,23 @@ awk '
 ' "$SECRETS_GUIDE_PATH"
 printf '\nUsing wizard template: %s\n' "$TEMPLATE_PATH"
 
-# The npm wizard (wizards/npm.md) is an agent-driven template: it specifies
-# question prompts, post-collection actions, and JSON assembly rules that the
-# /publish skill agent executes directly. Unlike the iOS wizard, its
-# questions do not map onto a shell-side JSON build loop. Hand off by
-# printing the resolved template path and exiting; the caller reads the
-# template and drives the flow.
+# The npm and npm-ci wizards (wizards/npm.md, wizards/npm-ci.md) are
+# agent-driven templates: they specify question prompts, post-collection
+# actions, and JSON assembly rules that the /publish skill agent executes
+# directly. Unlike the iOS wizard, their questions do not map onto a
+# shell-side JSON build loop. Hand off by printing the resolved template
+# path and exiting; the caller reads the template and drives the flow.
 if [[ "$DEPLOY_TYPE" == "npm" ]]; then
   printf '\nnpm setup: follow the prompts in %s to collect answers,\n' "$TEMPLATE_PATH"
   printf 'then perform the "Post-collection actions" section (write target block\n'
   printf 'to publish.json and generate the NPM_TOKEN instructions file).\n'
+  exit 0
+fi
+
+if [[ "$DEPLOY_TYPE" == "npm-ci" ]]; then
+  printf '\nnpm-ci setup: follow the prompts in %s to collect answers,\n' "$TEMPLATE_PATH"
+  printf 'then perform the "Post-collection actions" section (write target block\n'
+  printf 'to publish.json). No NPM_TOKEN is required — publishing uses OIDC.\n'
   exit 0
 fi
 
