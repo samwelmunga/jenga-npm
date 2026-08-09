@@ -1,13 +1,13 @@
 {
-  "name": "jenga-agent",
-  "version": "1.0.0",
+  "name": "@jenga-ai/agent",
+  "version": "1.0.1",
   "description": "JengaAgent — agentic project management CLI",
   "type": "module",
   "publishConfig": {
     "access": "public"
   },
   "bin": {
-    "jenga": "./bin/jenga.js"
+    "jenga": "bin/jenga.js"
   },
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
@@ -26,7 +26,15 @@
     "templates/",
     "bin/",
     "lib/",
-    "mcp/",
+    "mcp/execute-ticket/",
+    "mcp/help/",
+    "mcp/router/index.js",
+    "mcp/router/matcher.js",
+    "mcp/router/embedder.js",
+    "mcp/router/skill-index.js",
+    "mcp/router/package.json",
+    "mcp/router/package-lock.json",
+    "mcp/router/README.md",
     "README.md",
     "LICENSE"
   ],
