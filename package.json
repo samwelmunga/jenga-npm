@@ -1,5 +1,5 @@
 {
-  "name": "jenga-agent",
+  "name": "@jenga-ai/agent",
   "version": "1.1.0",
   "description": "JengaAgent — agentic project management CLI",
   "type": "module",
