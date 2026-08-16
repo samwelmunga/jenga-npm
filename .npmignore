@@ -18,6 +18,7 @@ agents/.agents/**/*
 # Nested node_modules
 node_modules/
 **/node_modules/
+mcp/router/node_modules/
 
 # Packed tarballs
 *.tgz

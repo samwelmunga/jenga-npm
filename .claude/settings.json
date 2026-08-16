@@ -29,6 +29,12 @@
       "Bash(su *)"
     ]
   },
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Bash(bash .claude/skills/publish/scripts/*)"
+    ]
+  },
   "hooks": {
     "WorktreeCreate": [
       {
