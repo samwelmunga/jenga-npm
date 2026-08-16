@@ -30,6 +30,10 @@
     "README.md",
     "LICENSE"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/samwelmunga/jenga-npm"
+  },
   "keywords": [],
   "author": "",
   "license": "MIT",
