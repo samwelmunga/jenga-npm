@@ -317,9 +317,18 @@ review_release_notes() {
 
 resolve_selected_version() {
   local current_version suggested_version
-  current_version="$(publish_latest_ledger_version "$HISTORY_FILE" 2>/dev/null || true)"
-  [[ -n "$current_version" ]] || current_version='v0.0.0'
-  current_version="$(publish_normalize_version "$current_version")" || current_version='v0.0.0'
+  # For npm/npm-ci targets, package.json is the authoritative version source.
+  # The ledger may lag behind if a previous publish didn't bump package.json.
+  if [[ "$TARGET_TYPE" == "npm" || "$TARGET_TYPE" == "npm-ci" ]]; then
+    local pkg_version
+    pkg_version="$(jq -r '.version // empty' "$PUBLISH_REPO_ROOT/package.json" 2>/dev/null || true)"
+    current_version="$(publish_normalize_version "$pkg_version" 2>/dev/null)" || current_version=''
+  fi
+  if [[ -z "$current_version" ]]; then
+    current_version="$(publish_latest_ledger_version "$HISTORY_FILE" 2>/dev/null || true)"
+    [[ -n "$current_version" ]] || current_version='v0.0.0'
+    current_version="$(publish_normalize_version "$current_version")" || current_version='v0.0.0'
+  fi
 
   suggested_version="$(bash "$SUGGEST_SEMVER_SCRIPT" --yes "$CONFIG_PATH" | tail -n 1 | tr -d '\r')"
   suggested_version="$(publish_normalize_version "$suggested_version")" || fail_with "$EXIT_ADAPTER_FAILURE" "Unable to determine a suggested version."
@@ -380,7 +389,7 @@ run_adapter_pipeline() {
       cmd=(bash "$NPM_PIPELINE_SCRIPT" "$TARGET_NAME" "$CONFIG_PATH")
       ;;
     npm-ci)
-      cmd=(bash "$NPM_CI_PIPELINE_SCRIPT" --target "$TARGET_NAME" --config "$CONFIG_PATH")
+      cmd=(bash "$NPM_CI_PIPELINE_SCRIPT" --target "$TARGET_NAME" --config "$CONFIG_PATH" --version "$SELECTED_VERSION")
       ;;
     droplet)
       cmd=(bash "$DROPLET_PIPELINE_SCRIPT" --target "$TARGET_NAME" --config "$CONFIG_PATH")

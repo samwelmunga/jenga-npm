@@ -38,10 +38,11 @@ source "${SCRIPT_DIR}/publish_common.sh"
 TARGET_NAME=""
 CONFIG_PATH=""
 DRY_RUN=0
+VERSION=""
 
 usage() {
   cat <<'USAGE'
-Usage: npm_ci_pipeline.sh --target <name> --config <path> [--dry-run]
+Usage: npm_ci_pipeline.sh --target <name> --config <path> [--version <vX.Y.Z>] [--dry-run]
 USAGE
 }
 
@@ -73,6 +74,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dry-run)
       DRY_RUN=1
+      shift
+      ;;
+    --version)
+      [[ $# -ge 2 ]] || fail_usage "--version requires a value"
+      VERSION="$2"
+      shift 2
+      ;;
+    --version=*)
+      VERSION="${1#*=}"
+      shift
+      ;;
+    --non-interactive)
       shift
       ;;
     -h|--help)
@@ -183,6 +196,17 @@ if (( DRY_RUN )); then
 fi
 
 # ---------------------------------------------------------------------------
+# Phase: bump-version
+# ---------------------------------------------------------------------------
+if [[ -n "${VERSION}" ]]; then
+  # Strip leading 'v' — npm version expects bare semver (e.g. 1.0.1, not v1.0.1)
+  NPM_VERSION="${VERSION#v}"
+  printf '[bump-version] setting package.json version to %s...\n' "${NPM_VERSION}"
+  npm --prefix "${REPO_ROOT}" version "${NPM_VERSION}" --no-git-tag-version --allow-same-version
+  printf '[bump-version] done\n'
+fi
+
+# ---------------------------------------------------------------------------
 # Phase: commit-workflow
 # ---------------------------------------------------------------------------
 printf '[commit-workflow] writing workflow file...\n'
@@ -190,15 +214,29 @@ printf '[commit-workflow] writing workflow file...\n'
 mkdir -p "${WORKFLOW_DIR}"
 printf '%s\n' "${WORKFLOW_YAML}" > "${WORKFLOW_FILE}"
 
-if git -C "${REPO_ROOT}" diff --quiet -- "${WORKFLOW_FILE_REL}" 2>/dev/null && \
-   git -C "${REPO_ROOT}" diff --cached --quiet -- "${WORKFLOW_FILE_REL}" 2>/dev/null && \
-   git -C "${REPO_ROOT}" ls-files --error-unmatch "${WORKFLOW_FILE_REL}" >/dev/null 2>&1; then
+CHANGED=0
+git -C "${REPO_ROOT}" diff --quiet -- "${WORKFLOW_FILE_REL}" 2>/dev/null || CHANGED=1
+git -C "${REPO_ROOT}" diff --quiet -- package.json package-lock.json 2>/dev/null || CHANGED=1
+if git -C "${REPO_ROOT}" ls-files --error-unmatch "${WORKFLOW_FILE_REL}" >/dev/null 2>&1 && [[ $CHANGED -eq 0 ]]; then
   printf '[commit-workflow] no changes — skipping commit\n'
 else
-  git -C "${REPO_ROOT}" add "${WORKFLOW_FILE_REL}"
-  git -C "${REPO_ROOT}" commit -m "chore(publish): update npm CI workflow for target ${TARGET_NAME}"
+  git -C "${REPO_ROOT}" add "${WORKFLOW_FILE_REL}" package.json
+  [[ -f "${REPO_ROOT}/package-lock.json" ]] && git -C "${REPO_ROOT}" add package-lock.json
+  git -C "${REPO_ROOT}" commit -m "chore(publish): bump to ${VERSION:-unknown} and update npm CI workflow"
   printf '[commit-workflow] committed: %s\n' "${WORKFLOW_FILE}"
 fi
+
+# ---------------------------------------------------------------------------
+# Phase: push-workflow
+# ---------------------------------------------------------------------------
+printf '[push-workflow] pushing workflow commit to origin...\n'
+
+if ! git -C "${REPO_ROOT}" push origin HEAD; then
+  printf '[push-workflow] ERROR: git push failed\n' >&2
+  exit "${EXIT_TRIGGER_FAILED}"
+fi
+
+printf '[push-workflow] pushed successfully\n'
 
 # ---------------------------------------------------------------------------
 # Phase: trigger
