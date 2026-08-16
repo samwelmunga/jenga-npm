@@ -3,6 +3,7 @@
 
 # Project-scoped scratch dir used by ad-hoc helpers (legacy: distribute-changes.sh)
 .jenga_tmp/
+.claude/publish-tmp/
 
 # Ad-hoc smoke-test scratch space (e.g. fake consumer installs)
 .tmp/
