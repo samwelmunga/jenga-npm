@@ -118,6 +118,81 @@ Used for smaller, more technical units of work — typically a sub-item within a
 
 ---
 
+## Execution Scope Assignment
+
+When breaking down a story into tasks, assign `execution_scope` to each task using the heuristics below. Read all numeric thresholds from `project/configs/scope-thresholds.json` at breakdown time — do not embed literal values in these instructions. The relevant fields are `inline_max_files`, `inline_max_lines`, and `story_max_files`.
+
+### `inline` scope
+
+Assign `inline` when **all** of the following are true:
+- The task touches exactly `inline_max_files` file (per `project/configs/scope-thresholds.json`)
+- No new tests are required
+- The change is purely additive or config-level (no logic branches introduced)
+- The estimated diff is `inline_max_lines` lines or fewer (per `project/configs/scope-thresholds.json`)
+
+`needs_docs` for every `inline`-scoped task is always `false`.
+
+### `story` scope
+
+Assign `story` when **all** of the following are true:
+- All tasks in the story operate in the same module or directory
+- No cross-story dependencies exist
+- The total file count across all tasks in the story is fewer than `story_max_files` (per `project/configs/scope-thresholds.json`)
+- The mandatory contention check passes (see below)
+
+**Mandatory contention check (required before assigning `story` scope):** Before assigning `story` scope to any task, confirm that no two tasks in the story write to the same shared infrastructure file (e.g. `package.json`, `settings.json`, `pyproject.toml`, `distribute.config.json`). This check is required — it is not optional.
+
+If contention exists between any two tasks, downgrade **both** conflicting tasks to `task` scope and document the conflict in each task's `scope_rationale` (e.g. `"downgraded from story: contention on package.json with T02"`). Do not assign `story` scope to either conflicting task.
+
+### `task` scope (default)
+
+Use `task` scope when **any** of the following are true:
+- Branching logic or non-trivial architecture is involved
+- Tester validation is sensitive to the implementation approach
+- Shared infrastructure is touched (e.g. `package.json`, `settings.json`)
+- Cross-story dependencies exist
+- The mandatory contention check fails for `story` scope
+- Uncertainty makes a more optimistic scope assignment unjustifiable
+
+When in doubt, default to `task`. `task` is the safe choice and imposes no penalty.
+
+### `epic` scope
+
+**Never assign `epic` scope autonomously.** If a task appears to require epic-level scope, do **not** set `execution_scope: epic` in the frontmatter. Instead:
+1. Assign `execution_scope: task` in the frontmatter.
+2. Add a note in the story description or `scope_rationale` explaining that this task may require epic-level scope and why, directed at the human operator.
+3. The human operator sets `epic_scope_approval: true` when they are ready to authorise it. Never set `epic_scope_approval: true` autonomously.
+
+---
+
+## `needs_docs` Assessment
+
+`needs_docs` is assessed **independently** from `execution_scope`. Do not derive one from the other (except for `inline`, which always sets `needs_docs: false`).
+
+**Assign `needs_docs: false` when:**
+- The task is `inline` scope (always false)
+- The acceptance criteria are binary and self-evident from reading the diff (e.g. "add field X to schema")
+- No non-obvious architectural decision is required
+
+**Assign `needs_docs: true` when:**
+- A non-obvious architectural decision is required
+- Multiple valid implementation approaches exist and the chosen one needs justification
+- The tester cannot verify correctness without understanding the implementation intent
+
+---
+
+## `scope_rationale` Requirement
+
+Every task with `execution_scope` set in frontmatter **must** include a `scope_rationale` string. The rationale must reference at least one measurable or file-count criterion. Generic statements (e.g. "this task is small") are not acceptable.
+
+**Acceptable example:** `"touches 1 file (SCRUM_BOARD_SCHEMA.md); purely additive schema documentation change, estimated under 30 lines"`
+
+**Not acceptable:** `"this is a small change"`
+
+If a measurable rationale cannot be constructed, default to `execution_scope: task` rather than guessing at a more optimistic scope.
+
+---
+
 ## Workflow
 
 ### 1. Intake & Mapping

@@ -235,11 +235,10 @@ Skills live in `.agents/skills/<name>/SKILL.md`. Invoke with `/<name>` in your A
 
 JengaAgent can propagate its workflow files to other projects on your machine via `/distribute`.
 
-1. **Register consumer projects** — place `jenga.config.json` at each consumer root (copy from `templates/JENGA_CONFIG_TEMPLATE.json`).
-2. **Add search paths** — add absolute directory paths to `.jenga_paths` (one per line, git-ignored).
-3. **Run `/distribute`** — choose `major`, `minor`, `patch`, or `amend` release type; the skill handles versioning and syncs all registered projects.
+1. **Register consumer projects** — add each consuming project to `distribute.config.json` at the repo root (or pass a path directly: `/distribute /path/to/project`).
+2. **Run `/distribute`** — choose `major`, `minor`, `patch`, or `amend` release type; the skill handles versioning, dry-run preview, file copy, and a version bump commit.
 
-To exclude specific files per consumer project, add a `.jenga_ignore` at the consumer root (never overwritten by distribute).
+Each consuming project holds a `jenga.config.json` tracking the distributed version, last distribution date, and source. To exclude specific files per consumer project, add a `.jenga_ignore` at the consumer root (never overwritten by distribute).
 
 ---
 

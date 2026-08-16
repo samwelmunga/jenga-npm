@@ -39,7 +39,12 @@ echo '{}' > project/data/baselines.json
 echo "→ Creating events.json..."
 echo '[]' > project/logs/events.json
 
-# ─── 9. Initial commit ───────────────────────────────────────────────────────
+# ─── 9. Create docs/STRATEGY.md ──────────────────────────────────────────────
+echo "→ Creating docs/STRATEGY.md (strategic brief for investors, partners, and the product team)..."
+mkdir -p docs
+cp "$ASSETS_DIR/strategy_stub_template.md" docs/STRATEGY.md
+
+# ─── 10. Initial commit ──────────────────────────────────────────────────────
 echo "→ Staging and committing scaffolded files..."
 git add -A
 git commit -m "init: scaffold project structure and workflow config"

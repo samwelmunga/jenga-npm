@@ -16,7 +16,11 @@ JengaAgent is a meta-framework for agentic software development. It provides a s
 - `/publish` skill — Configures and orchestrates release workflows; `publish.json` at project root stores target configs; `skills/publish/scripts/` contains `validate_config.sh`, `setup_wizard.sh`, `check_target_config.sh`; `skills/publish/assets/` contains the secrets guide used during setup.
 
 ## Distribution
-JengaAgent is distributed as a public npm package (`jenga-agent`) via npmjs.com. Consumer projects install it with `npm install jenga-agent`; a postinstall hook copies `skills/`, `agents/`, `hooks/`, `scripts/`, and `templates/` into the consumer project root. Publishing is handled entirely through the `/publish` skill's `npm` target type (added in E26). The version source is `package.json`; `latest` and `beta` dist-tags are supported, and the npm pipeline honours a `--dry-run` flag. The legacy `/distribute` skill and `.jenga_paths` mechanism were retired in E26.
+JengaAgent supports two distribution paths:
+
+**Public (npm):** JengaAgent is distributed as a public npm package (`jenga-agent`) via npmjs.com. Consumer projects install it with `npm install jenga-agent`; a postinstall hook copies `skills/`, `agents/`, `hooks/`, `scripts/`, and `templates/` into the consumer project root. Publishing is handled entirely through the `/publish` skill's `npm` target type (added in E26). The version source is `package.json`; `latest` and `beta` dist-tags are supported, and the npm pipeline honours a `--dry-run` flag.
+
+**Private (filesystem):** For projects that consume the private monorepo directly, the `/distribute` skill handles local filesystem distribution (restored in E31). The monorepo root holds `distribute.config.json` — a structured JSON registry of consuming project paths with `name`, `path`, and `active` fields, replacing the retired `.jenga_paths` plain-text file. Each consuming project holds a `jenga.config.json` tracking `version`, `last_distributed`, `source: "private"`, and `target_dir`. The skill owns the full version lifecycle: release type selection (`major`/`minor`/`patch`/`amend`), dry-run preview, `npm version` bump, file copy to `.agents/` and `.claude/` in each target (respecting per-project `.jenga_ignore`), atomic `jenga.config.json` update, and a git commit of the version bump. `/distribute` is independent of `/self-sync` and `/mirror-public`.
 
 ## Epics
 - **E01** — Model Training Agentic Workflow
@@ -48,6 +52,12 @@ JengaAgent is distributed as a public npm package (`jenga-agent`) via npmjs.com.
 - **E27** — Repo Self-Sync — Restore Root → .claude/.agents Mirror Automation
 - **E28** — Public Mirror — One-Way Private → Public Repo Sync
 - **E29** — npm Trusted Publishers CI Adapter
+- **E30** — Strategy Brief Convention
+- **E31** — Restore /distribute Skill — Private Filesystem Distribution *(Pending)*
+- **E32** — Adaptive Execution Scope for /jenga + /do *(Pending)*
+
+## Adaptive Execution Scope (E32)
+Tasks carry two new frontmatter fields assigned by the scrum-master at breakdown: `execution_scope` (`task` | `story` | `inline` | `epic`) and `needs_docs` (boolean). These fields allow `/jenga` and `/do` to right-size execution footprint — routing tiny self-contained changes to `inline` (main-session, no subagent), bundling related tasks into a single developer context for `story` scope, and keeping full isolation for `task` scope. Thresholds (1-file/20-line for inline, 5-file for story) are stored in `project/configs/scope-thresholds.json` and read at runtime by both skills. `epic` scope requires explicit human approval (`epic_scope_approval: true`) and is never assigned autonomously by the scrum-master. Additional required fields: `scope_rationale` (measurable criterion), `jenga_assigned` (machine vs human assignment), and `override_justification` (required when `jenga_assigned: false`).
 
 ## Conventions
 - Board items use `E##_S##_T##` naming convention

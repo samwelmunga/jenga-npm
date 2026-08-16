@@ -86,6 +86,7 @@ dates_previously_completed:  # comma-separated list, e.g. 2026-01-15, 2026-03-22
 reopened_on:                 # comma-separated list, e.g. 2026-02-01, 2026-04-10
 reopened_reason:             # comma-separated list, e.g. "Scope expanded", "Bug found post-release"
 docs: []                     # optional list of repo-relative documentation paths, e.g. ["README.md", "docs/API.md"]
+epic_scope_approval: false     # set to true by the human operator only when any task in this epic has execution_scope: epic
 stories:
   - E##_S##
   - E##_S##
@@ -100,6 +101,8 @@ stories:
 - <Concrete, testable criterion>
 - <Concrete, testable criterion>
 ```
+
+> **`epic_scope_approval`** — This field is **set by the human operator only**. Neither the scrum-master nor the developer agent may set it to `true`. It must be `true` before any task with `execution_scope: epic` can be executed. Its absence is equivalent to `false`.
 
 ### Story — `E##_S##_<slug>.md`
 
@@ -150,6 +153,12 @@ reopened_on:                 # comma-separated list, e.g. 2026-02-01, 2026-04-10
 reopened_reason:             # comma-separated list, e.g. "Scope expanded", "Bug found post-release"
 assigned_to: developer | tester | scrum-master
 docs: []                     # optional list of repo-relative documentation paths, e.g. ["README.md", "docs/API.md"]
+execution_scope: task          # task | story | epic | inline; omit for legacy tasks (defaults to task)
+needs_docs: true               # boolean; omit for legacy tasks (defaults to true)
+scope_rationale: ""            # required when execution_scope is set; must contain a numeric/file-count claim
+jenga_assigned: true           # boolean; true = machine-assigned, false = human override
+override_justification: ""     # required when jenga_assigned: false
+epic_scope_approval: false     # required (as true) when execution_scope: epic; set by human operator only
 ---
 
 # Task: <Title>
@@ -163,6 +172,8 @@ docs: []                     # optional list of repo-relative documentation path
 ## Acceptance Criteria
 - [ ] <Verifiable criterion>
 ```
+
+> **Backward compatibility:** Tasks that omit all six new fields (`execution_scope`, `needs_docs`, `scope_rationale`, `jenga_assigned`, `override_justification`, `epic_scope_approval`) are treated as `execution_scope: task` / `needs_docs: true` and are processed without error. Agents must not reject board files that lack these fields.
 
 ---
 
@@ -180,6 +191,44 @@ docs: []                     # optional list of repo-relative documentation path
 - Scope: may appear on epics, stories, or tasks.
 - Optionality: existing board files remain valid when `docs` is omitted.
 - Format: use a YAML list. Inline (`docs: ["README.md"]`) and expanded list styles are both valid.
+
+## Execution Scope Fields (Task)
+
+These six fields control the execution footprint of a task within the `/jenga` and `/do` workflows. They are **optional** — omitting all six is valid and equivalent to `execution_scope: task` / `needs_docs: true`.
+
+**`execution_scope`**
+- Valid values: `task` | `story` | `epic` | `inline`
+- When required: optional; omit for legacy tasks (runtime default: `task`)
+- Description: defines how broadly this task's implementation touches the codebase.
+  - `task` — standard single-task scope (default)
+  - `story` — task may touch files across multiple tasks in the same story
+  - `epic` — task may touch files across stories; requires `epic_scope_approval: true` on the parent epic
+  - `inline` — trivial change (e.g. config tweak, comment, schema doc); no execution plan or summary document is needed
+
+**`needs_docs`**
+- Valid values: `true` | `false`
+- When required: optional; omit for legacy tasks (runtime default: `true`)
+- Description: when `false`, the developer agent skips writing an execution plan and execution summary for this task. Automatically implied as `false` when `execution_scope: inline`.
+
+**`scope_rationale`**
+- Valid values: any non-empty string; must include a measurable claim (e.g. a file count or line count)
+- When required: required when `execution_scope` is explicitly set to any value
+- Description: a brief justification explaining why the chosen scope is appropriate. Validators reject a blank value when `execution_scope` is present.
+
+**`jenga_assigned`**
+- Valid values: `true` | `false`
+- When required: optional; omit for legacy tasks (runtime default: `true`)
+- Description: indicates whether the execution scope was assigned by the `/jenga` orchestrator (`true`) or overridden by a human (`false`). When `false`, `override_justification` is required.
+
+**`override_justification`**
+- Valid values: any non-empty string
+- When required: required when `jenga_assigned: false`
+- Description: explains why the human operator overrode the machine-assigned scope. Must be non-empty when present.
+
+**`epic_scope_approval`**
+- Valid values: `true` | `false`
+- When required: required on the **epic** frontmatter (as `true`) before any task with `execution_scope: epic` may be executed; the task frontmatter carries this field for reference only
+- Description: the authoritative value is always read from the **epic** frontmatter, not the task. This field is **set by the human operator only** — neither the scrum-master nor the developer agent may set it to `true`. Its absence on the epic is equivalent to `false`.
 
 These rules apply to every story file written or amended by the **Scrum Master**. They are enforced at write time by `scripts/validate-story-format.sh`.
 

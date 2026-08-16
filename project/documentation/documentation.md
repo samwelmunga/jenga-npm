@@ -347,6 +347,29 @@ You: "Oh, we should also think about caching strategy"
 
 ---
 
+#### `/strategy`
+
+**Description:** Walk through a guided conversation to capture or update `docs/STRATEGY.md`. The skill asks one focused question per section, shows a summary before writing, and requires explicit confirmation before touching the file.
+
+**When to use:** When starting a project and you want to capture the strategic brief interactively, or when you want to update specific sections of an existing `docs/STRATEGY.md` without rewriting the whole thing.
+
+**Covers:** Vision, Value Proposition, Scope (In/Out), and Target Audience only. Never asks about revenue models, pricing, or competitive positioning.
+
+**Example:**
+```
+/strategy
+→ No existing docs/STRATEGY.md found — starting new capture
+→ "What is the long-term direction for this project?"
+  (user answers)
+→ "What makes this project uniquely valuable?"
+  (user answers)
+→ ... (Value Proposition, Scope, Target Audience)
+→ Summary displayed — "Does this look right? Type yes to write."
+→ Written to docs/STRATEGY.md
+```
+
+---
+
 ### Execution
 
 ---
@@ -630,6 +653,34 @@ Release type? → minor
 → Regenerating docs/CLI.md with current commands and flags
 → Written: docs/CLI.md ✅
 ```
+
+---
+
+#### `docs/STRATEGY.md` Convention
+
+**File:** `docs/STRATEGY.md`
+
+**Intended audience:** Investors and strategic partners.
+
+**Purpose:** A high-level strategy brief that communicates the project's direction clearly to an external, non-technical audience. It is not a technical reference — it is a positioning document.
+
+**Generate or update with:**
+```
+/doc docs/STRATEGY.md
+```
+
+**Required sections:**
+
+| Section | What it covers |
+|---|---|
+| **Vision** | The long-term direction of the project — where it is headed and why |
+| **Value Proposition** | What makes this project uniquely valuable and what problem it solves |
+| **Scope** | What the project covers (In Scope) and what it explicitly does not cover (Out of Scope) |
+| **Target Audience** | Who the project is built for — personas, roles, or use cases |
+
+**Out of scope for this document:** Revenue model, pricing strategy, monetisation plans, competitive analysis, and financial projections must not appear in `docs/STRATEGY.md`. If source files contain this information, it is omitted during generation.
+
+**Sourcing:** Content is drawn from `PROJECT_SUMMARY.md` and existing `docs/`. The generator does not invent facts. If there is insufficient context to fill a section, it produces a stub with a clear TODO note rather than hallucinating content.
 
 ---
 

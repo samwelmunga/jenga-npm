@@ -36,3 +36,16 @@ rules:
     required_sections:
       - Release Entries
       - Notable Changes
+  - path: docs/STRATEGY.md
+    objective: strategy brief
+    summary: Produce a high-level strategy brief suitable for investors and strategic partners. Covers vision, value proposition, scope, and target audience. Does not include revenue model, pricing, or competitive analysis.
+    required_sections:
+      - Vision
+      - Value Proposition
+      - Scope
+      - Target Audience
+    generation_rules:
+      tone: Write for an investor or strategic partner audience. Use clear, confident language. Avoid jargon and internal shorthand. Do not use first-person plural ("we") excessively — prefer direct statements about the project.
+      sourcing: Draw content exclusively from PROJECT_SUMMARY.md and existing docs/. Do not invent facts, figures, or claims not present in the source material.
+      missing_fields: If the project has insufficient context to fill a section, produce a stub with the section header and a clearly marked note — e.g. "<!-- TODO: fill in once product direction is confirmed -->" — rather than erroring or hallucinating content.
+      exclusions: Do not include revenue model, pricing strategy, monetisation plans, competitive analysis, or financial projections. If any of these are present in source files, omit them silently.

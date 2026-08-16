@@ -35,10 +35,11 @@ This script handles all scaffolding in one step:
 6. Creates `project/configs/test-config.json` stub
 7. Creates `project/data/baselines.json`
 8. Creates `project/logs/events.json`
-9. Stages and commits all files with the message `init: scaffold project structure and workflow config`
+9. Creates `docs/STRATEGY.md` — a strategic brief stub intended for investors, partners, and the product team
+10. Stages and commits all files with the message `init: scaffold project structure and workflow config`
 
 If the script fails, check that you are in the project root and that git is available.
 
-### 10. Prompt next step
+### 11. Prompt next step
 
-Inform the user that setup is complete and suggest running `/pi-plan` to define project goals and epics.
+Inform the user that setup is complete. Mention that `docs/STRATEGY.md` was created as a strategic brief stub for investors, partners, and the product team — they can fill it in now or return to it later. Suggest running `/pi-plan` to define project goals and epics.

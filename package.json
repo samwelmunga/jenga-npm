@@ -1,17 +1,13 @@
 {
-  "name": "@jenga-ai/agent",
-  "version": "1.0.1",
+  "name": "jenga-agent",
+  "version": "1.1.0",
   "description": "JengaAgent — agentic project management CLI",
   "type": "module",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/samwelmunga/jenga-npm.git"
-  },
   "publishConfig": {
     "access": "public"
   },
   "bin": {
-    "jenga": "bin/jenga.js"
+    "jenga": "./bin/jenga.js"
   },
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
@@ -30,15 +26,7 @@
     "templates/",
     "bin/",
     "lib/",
-    "mcp/execute-ticket/",
-    "mcp/help/",
-    "mcp/router/index.js",
-    "mcp/router/matcher.js",
-    "mcp/router/embedder.js",
-    "mcp/router/skill-index.js",
-    "mcp/router/package.json",
-    "mcp/router/package-lock.json",
-    "mcp/router/README.md",
+    "mcp/",
     "README.md",
     "LICENSE"
   ],
@@ -46,6 +34,12 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@xenova/transformers": "^2.17.2"
+    "@huggingface/transformers": "^4.2.0"
+  },
+  "overrides": {
+    "sharp": "^0.34.5"
+  },
+  "comments": {
+    "audit": "sharp <0.35.0 and adm-zip <0.6.0 are transitive deps of @huggingface/transformers with no upstream fix available. Not exploitable in this context: only text feature-extraction pipeline is used — no image processing or ZIP handling at application boundary. Review when @huggingface/transformers ships a patched release."
   }
 }

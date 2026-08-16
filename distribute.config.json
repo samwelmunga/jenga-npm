@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "targets": [
+    {
+      "name": "example-project",
+      "path": "/absolute/path/to/consuming-project",
+      "active": false,
+      "note": "Replace with the absolute path to your consuming project. Set active to true to enable distribution."
+    },
+    {
+      "name": "Roxana-Paid-Version",
+      "path": "/Users/samwelmunga/Desktop/Projects/monorepo/apps/roxana-paid-version",
+      "active": true
+    },
+    {
+      "name": "Knappkod-Web",
+      "path": "/Users/samwelmunga/Desktop/Projects/knappkod-web",
+      "active": true
+    },
+    {
+      "name": "Knappkod-Jobo",
+      "path": "/Users/samwelmunga/Desktop/Projects/knappkod-jobo",
+      "active": true
+    },
+    {
+      "name": "Knittpick",
+      "path": "/Users/samwelmunga/Desktop/Projects/knittpick",
+      "active": true
+    },
+    {
+      "name": "Sema",
+      "path": "/Users/samwelmunga/Desktop/Projects/sema",
+      "active": true
+    },
+    {
+      "name": "Plantan",
+      "path": "/Users/samwelmunga/Desktop/Projects/plantan",
+      "active": true
+    }
+  ],
+  "distribute": {
+    "include": ["bin", "lib", "scripts", "agents", "hooks", "mcp", "skills", "templates", "settings.json"],
+    "exclude": ["project", "logs", "queue"]
+  }
+}

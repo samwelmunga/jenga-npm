@@ -3,6 +3,12 @@
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Bash(bash skills/mirror-public/scripts/mirror.sh*)"
+    ]
+  },
   "permissions": {
     "allow": [
       "Bash(*)"
