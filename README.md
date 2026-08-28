@@ -144,7 +144,7 @@ Each agent is defined in `.agents/agents/`. They communicate exclusively through
 
 **Install from npm:**
 ```sh
-npm install -g jenga-agent
+npm install -g @jenga-ai/agent
 ```
 
 Or clone directly:

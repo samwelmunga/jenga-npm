@@ -16,7 +16,14 @@ project/board/
 project/queue/
 
 # --- Runtime event logs ---
-project/logs/
+# publish-history.json is the /publish ledger and MUST ship: publishing runs
+# from the public repo, so the ledger has to live there. Two rsync rules make
+# this work and both are load-bearing: include lines must precede the exclude
+# (first match wins), and the directory itself must be included because rsync
+# will not descend into an excluded directory to reach a file inside it.
++ project/logs/
++ project/logs/publish-history.json
+- project/logs/**
 
 # --- Problem / security / conflict rapports ---
 project/rapports/
