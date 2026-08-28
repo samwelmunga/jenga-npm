@@ -245,7 +245,7 @@ resolve_default_command() {
   # fall through to iOS tooling. Missing scripts are announced with a clear
   # informational note (on stderr so it does not pollute the captured
   # command) before the gate is reported as skipped upstream.
-  if [[ "$TARGET_TYPE" == "npm" || "$TARGET_TYPE" == "npm-ci" ]]; then
+  if [[ "$TARGET_TYPE" == "npm" ]]; then
     case "$gate_name" in
       build|test|lint)
         if find_npm_script_in_root "$gate_name"; then
@@ -563,7 +563,7 @@ build_gate_list() {
   local -a mandatory_pre_gates=()
 
   if [[ "$PHASE" == "pre" ]]; then
-    if [[ "$TARGET_TYPE" == "npm" || "$TARGET_TYPE" == "npm-ci" ]]; then
+    if [[ "$TARGET_TYPE" == "npm" ]]; then
       # npm-specific mandatory gates: test, build, lint (per E26_S06_T03).
       mandatory_pre_gates=(test build lint)
     else

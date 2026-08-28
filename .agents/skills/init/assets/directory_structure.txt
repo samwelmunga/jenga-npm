@@ -1,6 +1,7 @@
 project/board/epics
 project/board/stories
 project/board/tasks
+project/instructions
 project/configs
 project/data
 project/queue

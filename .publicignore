@@ -52,6 +52,15 @@ skills/mirror-public/
 skills/self-sync/
 .claude/skills/self-sync/
 .agents/skills/self-sync/
+skills/train/
+.claude/skills/train/
+.agents/skills/train/
+skills/strategy/
+.claude/skills/strategy/
+.agents/skills/strategy/
+skills/convert/
+.claude/skills/convert/
+.agents/skills/convert/
 
 # --- Scratch worktree used by /mirror-public itself ---
 .mirror-worktrees/

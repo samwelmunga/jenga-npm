@@ -5,7 +5,9 @@
 **Related Epic:** <Epic name or N/A>
 **Related Story:** <Story name or N/A>
 **Related Task:** <Task name or N/A>
-**Type:** `conflict` | `implementation_blocker` | `security_concern` | `test_failure` | `analysis`
+**Type:** `conflict` | `implementation_blocker` | `security_concern` | `test_failure` | `analysis` | `crucial_escalation`
+
+> For `crucial_escalation`: the **Related Epic/Story/Task** field above must name the specific target item's ID (`E##`, `E##_S##`, or `E##_S##_T##`) whose `crucial_level` is being escalated — no separate field is used for this.
 
 ---
 
@@ -44,6 +46,7 @@ A detailed explanation of the issue.
 - **Implementation blocker:** describe what failed and why
 - **Test failure:** describe which tests failed, what was expected, and what was observed
 - **Analysis:** describe the analysis scope, methodology, and findings
+- **Crucial escalation:** describe what was discovered during implementation or testing, why it changes the target item's risk profile enough to warrant raising its `crucial_level`, and the concrete, checkable fact backing that claim (a specific file/path, an exact error message, a reproduction count, or a quantifiable impact — see `templates/SCRUM_BOARD_SCHEMA.md`'s Rapport Types section for the full concrete-reason requirement). A subjective statement alone (e.g. "this seems risky") is not sufficient.
 
 ---
 

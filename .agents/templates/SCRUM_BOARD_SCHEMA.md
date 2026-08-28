@@ -26,7 +26,7 @@ project/
     developer_triggers.jsonl     Trigger queue for developer agent
     tester_triggers.jsonl        Trigger queue for tester agent
     project_summary_updates.jsonl Proposed PROJECT_SUMMARY.md edits
-    .session_handoff.json        Transient inter-session handoff (written by agent, consumed by on_session_end.sh)
+    handoffs/                    Per-session transient handoffs (written by agent, consumed by on_session_end.sh) — see `handoffs/` below
   rapports/
     problems/       Problem rapports from developer and tester
     analysis/       Analysis rapports from tester
@@ -65,6 +65,8 @@ All status fields must use one of the following exact strings:
 | `Failed`             | Tests did not pass                                         |
 | `Rejected`           | Deliberately rejected — not a test failure                 |
 | `Blocked`            | Cannot proceed; human intervention required                |
+| `Backlog`            | Epic-level only; queued but not yet prioritized for work    |
+| `Done`               | Epic-level only; all child stories/tasks closed out          |
 
 Only the **tester agent** may write status values to story and task files. Only the **scrum master** may write status values to epic files and may update story status as part of rollup.
 
@@ -87,6 +89,7 @@ reopened_on:                 # comma-separated list, e.g. 2026-02-01, 2026-04-10
 reopened_reason:             # comma-separated list, e.g. "Scope expanded", "Bug found post-release"
 docs: []                     # optional list of repo-relative documentation paths, e.g. ["README.md", "docs/API.md"]
 epic_scope_approval: false     # set to true by the human operator only when any task in this epic has execution_scope: epic
+provenance:                  # optional; only valid value is `backfilled` (epic reverse-engineered from pre-existing code by `/uncharted onboard`). Omit for normally-authored epics.
 stories:
   - E##_S##
   - E##_S##
@@ -119,6 +122,11 @@ dates_previously_completed:  # comma-separated list, e.g. 2026-01-15, 2026-03-22
 reopened_on:                 # comma-separated list, e.g. 2026-02-01, 2026-04-10
 reopened_reason:             # comma-separated list, e.g. "Scope expanded", "Bug found post-release"
 docs: []                     # optional list of repo-relative documentation paths, e.g. ["README.md", "docs/API.md"]
+crucial_level:                # optional; advisory | gated | locked; absence means no elevated caution
+crucial_set_by:                # required when crucial_level is set; user | scrum-master | <agent>-escalation
+crucial_note:                  # required when crucial_level is set; free-text justification
+crucial_declined:              # optional; true only; absence means no declined proposal is on record
+crucial_declined_note:         # required when crucial_declined: true; free-text: heuristic matched, proposed tier, date declined
 tasks:
   - E##_S##_T##
   - E##_S##_T##
@@ -159,6 +167,11 @@ scope_rationale: ""            # required when execution_scope is set; must cont
 jenga_assigned: true           # boolean; true = machine-assigned, false = human override
 override_justification: ""     # required when jenga_assigned: false
 epic_scope_approval: false     # required (as true) when execution_scope: epic; set by human operator only
+crucial_level:                  # optional; advisory | gated | locked; absence means no elevated caution
+crucial_set_by:                  # required when crucial_level is set; user | scrum-master | <agent>-escalation
+crucial_note:                    # required when crucial_level is set; free-text justification
+crucial_declined:                # optional; true only; absence means no declined proposal is on record
+crucial_declined_note:           # required when crucial_declined: true; free-text: heuristic matched, proposed tier, date declined
 ---
 
 # Task: <Title>
@@ -175,6 +188,21 @@ epic_scope_approval: false     # required (as true) when execution_scope: epic; 
 
 > **Backward compatibility:** Tasks that omit all six new fields (`execution_scope`, `needs_docs`, `scope_rationale`, `jenga_assigned`, `override_justification`, `epic_scope_approval`) are treated as `execution_scope: task` / `needs_docs: true` and are processed without error. Agents must not reject board files that lack these fields.
 
+### Runtime-written task fields
+
+These four fields are **not authored by hand**. They are appended to a task's frontmatter after execution and are absent from any task that has not yet run. They are listed here so that tooling — in particular `scripts/validate-board.sh` — recognises them as valid rather than unknown.
+
+| Field | Written by | Meaning |
+|---|---|---|
+| `actual_files_changed` | `/close-story` | Count of files changed by the task, extracted from its EST-tagged commits |
+| `actual_lines_delta` | `/close-story` | Net line delta for the task, from the same extraction |
+| `scope_divergence_flag` | `/close-story` | Set when actual diff stats exceed the thresholds that justified the assigned `execution_scope` |
+| `divergence_flag` | `/do` | Set to `true` by the intent-vs-diff check when a `needs_docs: false` task touched unregistered files |
+
+All four are advisory and non-blocking — they record evidence for later review and never change a task's Passed/Failed outcome.
+
+> `task_changed_files` is **not** a frontmatter field despite the similar name. It lives in the bundle manifest at `project/queue/bundle-<E##_S##>.json`, keyed by task ID.
+
 ---
 
 ## Story Format Standards
@@ -182,6 +210,14 @@ epic_scope_approval: false     # required (as true) when execution_scope: epic; 
 ## Reopen Tracking Fields
 
 **`dates_previously_completed`, `reopened_on`, `reopened_reason`** — These fields are **only populated when a previously completed item is being reopened and modified**. Leave them blank on first-run items. Each value is a comma-separated list to support multiple reopen cycles.
+
+## Planning Fields
+
+**`priority`** (stories, optional) — Relative planning priority, e.g. `P0`, `P2`, or a range such as `P0-P1`. Advisory only; no agent behaviour keys off it.
+
+**`depends_on`** (stories and tasks, optional) — Board IDs this item depends on, e.g. `E19_S02`. Advisory only.
+
+> **Deprecated spellings.** `epic:`, `story:`, `date_added:`, `dependencies:`, and `reopens:` were used on older board files and are **not** valid. Use `epic_id`, `story_id`, `date_created`, `depends_on`, and the reopen tracking fields respectively. All existing files were normalised on 2026-08-19; `scripts/validate-board.sh` rejects the old spellings so the drift cannot reappear.
 
 ## Documentation Provenance Field
 
@@ -191,6 +227,32 @@ epic_scope_approval: false     # required (as true) when execution_scope: epic; 
 - Scope: may appear on epics, stories, or tasks.
 - Optionality: existing board files remain valid when `docs` is omitted.
 - Format: use a YAML list. Inline (`docs: ["README.md"]`) and expanded list styles are both valid.
+
+## Epic Provenance Field
+
+**`provenance`** (epics only, optional) — Records how the epic came to exist: whether it was
+planned through the normal Jenga workflow or reverse-engineered from code that already existed.
+
+- **Valid values:** `backfilled` — the only recognised value.
+- **`provenance: backfilled`** means the epic was generated by `/uncharted onboard` from a
+  pre-existing codebase, rather than authored through the normal planning flow (`/pi-plan`,
+  `/brainstorm`, `/todo`, or the Scrum Master breaking down a user request).
+- **Absence means normally-authored.** An epic with no `provenance` field was authored through
+  the standard planning flow. There is no explicit value for this — omission *is* the signal.
+- **Optional and backward compatible.** Every existing epic omits `provenance` and remains valid.
+  `scripts/validate-board.sh` accepts the key when present and never requires it.
+- **Scope:** epics only. Stories and tasks do not carry `provenance`; a backfilled epic's children
+  are identified by their parent, not by a marker of their own.
+
+### What `backfilled` implies
+
+A backfilled epic describes **code that already exists**. Its Purpose section documents a
+subsystem that was discovered, not a capability to be built. Consequently its stories and tasks
+describe **understanding and integration work** — documenting behaviour, adding missing tests,
+identifying risk areas, bringing the subsystem under board provenance — and **not original
+construction**. Agents and humans reading the board should not treat a backfilled epic's
+Definition of Done as a build plan, and should not assume that an incomplete-looking backfilled
+epic represents unbuilt functionality.
 
 ## Execution Scope Fields (Task)
 
@@ -232,6 +294,52 @@ These six fields control the execution footprint of a task within the `/jenga` a
 
 These rules apply to every story file written or amended by the **Scrum Master**. They are enforced at write time by `scripts/validate-story-format.sh`.
 
+## Crucial Flag Fields (Story, Task)
+
+These three fields let a story or task declare an elevated caution tier — a signal that the item carries more risk than usual and should be handled with extra care during execution and review. They are **optional** — omitting all three is valid and means no elevated caution applies.
+
+**`crucial_level`**
+- Valid values: `advisory` | `gated` | `locked`
+- When required: optional; absence means no elevated caution (same "absence is the signal" convention used by `provenance` and the execution-scope fields)
+- Description: declares the item's caution tier.
+  - `advisory` — proceed as normal but flag the elevated risk for reviewers
+  - `gated` — requires explicit confirmation before execution proceeds
+  - `locked` — execution is blocked until the tier is downgraded or cleared by an authorised party
+
+**`crucial_set_by`**
+- Valid values: `user` | `scrum-master` | `<agent>-escalation` (e.g. `developer-escalation`, `tester-escalation`)
+- When required: required when `crucial_level` is set
+- Description: records who or what set the caution tier — a human operator, the scrum-master during planning, or an agent escalating mid-execution.
+
+**`crucial_note`**
+- Valid values: any non-empty string
+- When required: required whenever `crucial_level` is set (same required-when-present pattern as `scope_rationale`)
+- Description: a free-text justification explaining why the item was assigned this caution tier. Validators reject a blank value when `crucial_level` is present.
+
+**Scope: stories and tasks only.** Epics do not carry these fields — an epic's risk gating is already handled by `epic_scope_approval` (see Execution Scope Fields above). A story or task's `crucial_level` is independent of any execution-scope value on the same item.
+
+**Backward compatibility.** Existing board files that omit all three fields (`crucial_level`, `crucial_set_by`, `crucial_note`) remain valid, exactly like the `docs` field and the execution-scope fields. Agents must not reject board files that lack them.
+
+## Declined Crucial Proposal Fields (Story, Task)
+
+These two fields record that a scrum-master heuristic proposed a `crucial_level` for this specific item (per the "Crucial Level Heuristic Proposal" step in `agents/scrum-master.md`) and the user explicitly declined it in-session. This is the **authoritative decline-tracking mechanism** — `agents/scrum-master.md`'s breakdown step checks it before evaluating the heuristic list again, so a declined proposal is not silently re-surfaced on a later breakdown pass over the same item. They follow the same "optional field, absence is the signal, backward compatible" convention already used by `docs`, `provenance`, and the execution-scope fields, and the same required-when-present pairing already used by `crucial_level`/`crucial_note`.
+
+**`crucial_declined`**
+- Valid values: `true` (the only recognised value)
+- When required: optional; absence means no declined proposal is on record for this item — same "absence is the signal" convention used by `provenance`. There is no `false` state to write: an item either has a recorded decline or it doesn't.
+- Description: a boolean marker, deliberately separate from free text, so the scrum-master breakdown step can check a single unambiguous field before re-proposing rather than parsing prose for intent.
+
+**`crucial_declined_note`**
+- Valid values: any non-empty string
+- When required: required when `crucial_declined: true` (same required-when-present pattern as `crucial_note`)
+- Description: free-text record of which heuristic(s) matched (from the fixed list in `agents/scrum-master.md`'s "Crucial Level Heuristic Proposal" section), the `crucial_level` tier that was proposed, and the date the user declined it — e.g. `"Declined 2026-08-27: matched 'schema/frontmatter contracts' heuristic, proposed advisory tier; user declined without further reason."` Validators reject a blank value when `crucial_declined` is present.
+
+**Scope: stories and tasks only** — same scope as the Crucial Flag Fields above.
+
+**Relationship to `crucial_level`.** `crucial_declined` and `crucial_level` are mutually exclusive in the normal flow: if the user *confirms* a proposal, the item gets `crucial_level`/`crucial_set_by: scrum-master`/`crucial_note` and no decline is recorded; if the user *declines*, the item gets `crucial_declined: true`/`crucial_declined_note` and none of the three `crucial_level` fields are set. A human operator may still set `crucial_level` directly on an item that also carries a recorded decline (e.g. deciding later, independent of the scrum-master's proposal, that the item should be flagged) — the fields are not validated as exclusive, only documented as normally following one path or the other.
+
+**Backward compatibility.** Existing board files that omit both fields remain valid — no item has ever had a decline recorded before this convention existed, so every pre-existing file is trivially compliant.
+
 ### Acceptance Criteria (`## Acceptance Criteria`)
 
 - **Required** — the section must exist in every story file.
@@ -248,7 +356,7 @@ These rules apply to every story file written or amended by the **Scrum Master**
 
 Run `scripts/validate-story-format.sh <path-to-story-file>` to verify a story file meets these requirements. The script exits 0 on success and non-zero with a descriptive error message on failure.
 
-Run `scripts/validate-board.sh <path-to-board-file>` to validate epic, story, or task frontmatter keys. The helper accepts optional `docs` annotations and remains backward compatible with existing board files that omit `docs`.
+Run `scripts/validate-board.sh <path-to-board-file>` to validate epic, story, or task frontmatter keys. The helper accepts optional `docs` and (on epics) `provenance` annotations, and remains backward compatible with existing board files that omit them.
 
 ---
 
@@ -264,12 +372,28 @@ Run `scripts/validate-board.sh <path-to-board-file>` to validate epic, story, or
 
 ## File Locking (Concurrency Control)
 
-Before writing to any board file, agents must:
+Board file writes (task/story/epic frontmatter updates) are enforced through `scripts/with-lock.sh`, not through agents manually implementing a check-wait-retry convention. The earlier prose-only protocol ("check for a `<filename>.lock` file, wait, retry, then create/delete it yourself") was purely advisory — nothing stopped two writers from both deciding the lock was free at the same instant. `scripts/with-lock.sh` closes that gap with a real mutual-exclusion primitive.
 
-1. Check for a `<filename>.lock` file adjacent to the target file.
-2. If the lock file exists and its modification time is less than 60 seconds ago — wait up to 10 seconds and retry once. If still locked, abort and write a problem rapport.
-3. If no lock exists (or it is stale, older than 60 seconds) — create the lock file, perform the write, then delete the lock file.
-4. Always delete the lock file in success and failure paths. Use a `trap` or equivalent cleanup.
+**Usage:**
+
+```bash
+scripts/with-lock.sh <target-file> -- <command> [args...]
+```
+
+The script acquires an exclusive lock keyed to `<target-file>`, runs `<command> [args...]` only once the lock is held, and always releases the lock afterward — on success, on failure, and on `INT`/`TERM` signals. Agents (scrum-master, tester) MUST wrap every board file write through this script rather than reading/writing a `.lock` file by hand.
+
+**Lock primitive.** The script uses `mkdir "<target-file>.lock.d"` as the exclusivity check, not `flock`. `flock` is a Linux-only (`util-linux`) utility and is not available by default on macOS/BSD — this repo runs on Darwin, so a `flock`-only implementation would silently not work for every contributor on macOS. `mkdir` is atomic on every POSIX platform this project targets: when multiple processes race to create the same directory, exactly one succeeds and every other caller fails immediately (`EEXIST`) — there is no window where two callers can both believe they hold the lock.
+
+**Waiting and failure behavior.** If the lock is already held, the script polls (default every 0.2s, `WITH_LOCK_POLL_SECONDS`) until either the lock is released or a timeout elapses (default 30s, `WITH_LOCK_TIMEOUT_SECONDS`). If the timeout elapses first, the script exits `2` **without ever running the wrapped command** — a fail-safe abort, never a silent overwrite. A lock still held after `WITH_LOCK_STALE_SECONDS` (default 60s) is treated as abandoned (e.g. a crashed holder) and reclaimed; reclamation only clears the lock directory, it does not itself grant the lock, so simultaneous reclaim attempts by multiple waiters still cannot let more than one of them proceed — the next `mkdir` in each waiter's loop remains the sole arbiter.
+
+**Example — a status write wrapped in the lock:**
+
+```bash
+scripts/with-lock.sh project/board/tasks/E01_S02_T03_example.md -- \
+  bash -c 'update_task_status project/board/tasks/E01_S02_T03_example.md Passed'
+```
+
+If a caller cannot acquire the lock within the timeout, treat it the same as the old protocol's "still locked after retry" case: abort the write and write a problem rapport rather than bypassing the script.
 
 ---
 
@@ -282,6 +406,17 @@ Before writing to any board file, agents must:
 | `security_concern`      | developer          | `project/rapports/problems/`                    |
 | `test_failure`          | tester             | `project/rapports/problems/`                    |
 | `analysis`              | tester             | `project/rapports/analysis/`                    |
+| `crucial_escalation`    | developer, tester  | `project/rapports/problems/`                    |
+
+### `crucial_escalation` — concrete-reason requirement
+
+A `crucial_escalation` rapport is filed mid-task when developer or tester discovers something that changes an item's risk profile and warrants raising its `crucial_level` (see E39 — Crucial Flag). It is routed through the same rapport/trigger queue as every other rapport type (`on_session_end.sh` → `scrum_triggers.jsonl`), since no synchronous interrupt exists for a backgrounded subagent.
+
+The rapport's reason **must include at least one concrete, checkable fact** — a specific file/path, an exact error message, a reproduction count, or a quantifiable impact (e.g. "affects 12 downstream tasks", "data loss observed on 2 of 2 reproduction attempts"). A subjective statement alone (e.g. "this seems risky", "this feels important") is **not** acceptable.
+
+This is the same numeric-claim bar already established for `scope_rationale` in `agents/scrum-master.md` (see its "scope_rationale — Mandatory Population Rules" section) — reused here deliberately so the concrete-reason standard is consistent across the codebase rather than a new one-off rule invented for this rapport type. Enforcing this rule (rejecting generic text) is scrum-master's responsibility when it reviews the rapport, not something checked at write time.
+
+A `crucial_escalation` rapport must also name the target item's ID (`E##`, `E##_S##`, or `E##_S##_T##`) whose `crucial_level` is being escalated. No new field is introduced for this — it uses the rapport's existing "Related Epic" / "Related Story" / "Related Task" header fields (see `templates/PROBLEM_RAPPORT_TEMPLATE.md`).
 
 ---
 
@@ -308,9 +443,21 @@ Before writing to any board file, agents must:
 |-------------------|---------------------|-------------------------------------------------|
 | `test_assignment` | on_session_end.sh (from developer handoff) | Implementation complete; run tests against worktree |
 
-### `.session_handoff.json` — transient, consumed by on_session_end.sh
+### `handoffs/` — per-session transient handoffs, consumed by on_session_end.sh
 
-Written by an agent as the **last action** of its session. Consumed and deleted by `on_session_end.sh`. The file must not persist across sessions.
+**Directory:** `project/queue/handoffs/`
+
+Replaces the earlier single-slot `project/queue/.session_handoff.json` file (E37_S01_T01). The single fixed path allowed two sessions ending close together — an in-session tester invocation, or concurrent `/jenga` dispatch running multiple developer/tester pairs at once — to both write the same file before either write was consumed; the second write silently clobbered the first, and the loser's handoff (and, in the worst case, the task it represented) was lost with no error. Live incidents are recorded in `PROJECT_SUMMARY.md`'s E37 section.
+
+**Filename convention:** `project/queue/handoffs/<agent>-<session_id>-<task_id>.json`
+
+- `<agent>` — `scrum-master`, `developer`, or `tester` (matches the handoff body's own `agent` field).
+- `<session_id>` — the writing session's id, verbatim. This alone already makes the path collision-free, since each session has a unique id and writes its terminal handoff exactly once (the "last action of its session").
+- `<task_id>` — the primary task ID (`E##_S##_T##`) this handoff concerns, included for human-readability/debugging. For the scrum-master's batched `task_ids` array, use the first entry, or the literal string `batch` if the array is empty.
+
+Each file is written by an agent as the **last action** of its session, and is single-use: consumed and deleted by `on_session_end.sh` (per-file, immediately after routing — see `hooks/on_session_end.sh` section 4) once that session's `SessionEnd` hook fires. A file must not persist once it has been consumed. `project/queue/handoffs/*.json` is git-ignored (E37_S01_T02) precisely to enforce this structurally — the directory itself is kept via `.gitkeep`, but individual handoff files must never become durable git artifacts, since a committed one can no longer be told apart from a live pending signal by inspection alone.
+
+**Staleness guard (E37_S01_T02):** before routing a `developer` or `tester` handoff, `on_session_end.sh` checks whether the file's `task_id` is already in a terminal board status (`Passed`, `Passed with remarks`, `Rejected`, `Done`, or `Blocked`). If so, the file is deleted without routing — it is treated as a stale leftover (e.g. one that predates this consumer logic, or one that slipped past the git-ignore rule above) rather than a live signal for already-completed work. This closed a real regression found during testing: `project/queue/handoffs/` had accumulated ~25 committed files for already-`Passed` work before this consumer logic existed to clean them up, and a bare generic glob would have resurrected all of them as fresh `test_assignment`/`story_rollup` triggers on the first `SessionEnd` run after this feature landed. The check is not applied to `scrum-master`'s batched `task_ids` handoffs (a `planning_complete` handoff's tasks are freshly created and cannot already be terminal in practice).
 
 | Field         | Required by          | Notes                                    |
 |---------------|----------------------|------------------------------------------|
@@ -337,7 +484,7 @@ Located at `project/configs/workflow.json`. Scaffolded by `/init` and owned by t
 
 ```json
 {
-  "statuses": ["Pending", "In Progress", "Passed", "Passed with remarks", "Failed", "Rejected", "Blocked"],
+  "statuses": ["Pending", "In Progress", "Passed", "Passed with remarks", "Failed", "Rejected", "Blocked", "Backlog", "Done"],
   "rapport_types": ["conflict", "implementation_blocker", "security_concern", "test_failure", "analysis"],
   "paths": {
     "board": "project/board",

@@ -1,0 +1,64 @@
+{
+  "defaultMode": "acceptEdits",
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "autoMode": {
+    "allow": [
+      "$defaults"
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(*)"
+    ],
+    "deny": [
+      "Bash(rm *)",
+      "Bash(rmdir *)",
+      "Bash(dd *)",
+      "Bash(mkfs *)",
+      "Bash(shred *)",
+      "Bash(truncate *)",
+      "Bash(git push *)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean *)",
+      "Bash(chmod *)",
+      "Bash(chown *)",
+      "Bash(sudo *)",
+      "Bash(su *)"
+    ]
+  },
+  "hooks": {
+    "WorktreeCreate": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "NAME=$(jq -r '.name')\n. \"$(git rev-parse --show-toplevel)/lib/resolve-project-dir.sh\"\nDIR=\"$JENGA_PROJECT_DIR/.claude/worktrees/$NAME\"\ngit worktree add \"$DIR\" -b \"$NAME\" 2>&1\necho \"$DIR\"\n"
+          }
+        ]
+      }
+    ],
+    "WorktreeRemove": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel)/scripts/worktree-remove-guard.sh\"\n"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "async": true,
+            "command": ". \"$(git rev-parse --show-toplevel)/lib/resolve-project-dir.sh\" && \"$JENGA_PROJECT_DIR\"/.claude/hooks/on_session_end.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

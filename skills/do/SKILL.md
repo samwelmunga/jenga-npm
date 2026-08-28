@@ -304,7 +304,7 @@ Before starting:
 Before invoking the developer, check whether this task was manually scoped by a human operator.
 
 1. Read `jenga_assigned` from the resolved task's frontmatter.
-2. If `jenga_assigned` is `true` or the field is absent — proceed to step 5 without any further check.
+2. If `jenga_assigned` is `true` or the field is absent — proceed to step 4.2 without any further check.
 3. If `jenga_assigned` is `false`:
    a. Read `override_justification` from the task's frontmatter.
    b. If `override_justification` is absent or its value is an empty string, **halt execution** and emit:
@@ -316,21 +316,58 @@ Before invoking the developer, check whether this task was manually scoped by a 
       ```
       Override acknowledged for <task_id>: <override_justification>
       ```
-      Then proceed to step 5.
+      Then proceed to step 4.2.
 
 ### 4.2. Inline Execution Path (execution_scope: inline)
 
-If the resolved task has `execution_scope: inline` in its frontmatter, execute the task directly in the current session without spawning a developer subagent:
+After resolving the task context (step 4) and passing override validation (step 4.1), read `execution_scope` from the task frontmatter.
 
-1. Read the task file and load its full content (description, acceptance criteria).
+**Locked-task dispatch guard (defense-in-depth).** Before branching on `execution_scope` below, read `crucial_level` from the task frontmatter (per `templates/SCRUM_BOARD_SCHEMA.md`'s Crucial Flag Fields). If `crucial_level: locked`:
+
+- This task MUST be routed through the inline execution path below — no worktree, no developer subagent — regardless of what `execution_scope` currently reads. This guards against a locked task reaching dispatch with a non-`inline` `execution_scope` (a race, a manually edited file, or a task added to a story's `tasks:` list after `skills/jenga/SKILL.md` Phase 0.5's Rule 4 last ran).
+- If `execution_scope` is already `inline`, proceed directly to the inline steps below — no correction needed.
+- If `execution_scope` is anything other than `inline` (absent, `task`, `story`, or `epic`), auto-correct it to `inline` in the task frontmatter now, and record the correction using the **same logged-note convention** as `skills/jenga/SKILL.md` Phase 0.5 Rule 4 (do not invent a second, inconsistent logging mechanism):
+  - Append to the task's `override_justification` frontmatter field:
+    ```
+    override_justification: "/do dispatch guard auto-correction <date>: execution_scope forced from '<previous_value>' to 'inline' because crucial_level: locked."
+    ```
+  - Then emit (non-fatally — do not halt):
+    ```
+    AUTO-CORRECTION [<task_id>]: crucial_level=locked requires execution_scope=inline; corrected from "<previous_value>" to "inline".
+    ```
+  - Then proceed to the inline steps below with the now-corrected `execution_scope: inline`.
+- **Under no circumstance does a `crucial_level: locked` task fall through to step 5** (developer agent invocation / worktree creation) — this applies whether the task was resolved individually or would otherwise have entered the normal per-task worktree-creation flow.
+
+**If `execution_scope: inline`** (including tasks corrected above), execute the task directly in the current session without spawning a developer subagent:
+
+1. Read the task file and load its full content (description, acceptance criteria). Do NOT create a worktree. Do NOT spawn a developer subagent.
 2. Implement the task inline — make the required changes to files directly in the current session.
-3. Commit the changes using the standard commit convention (`task(<task_id>): <short description>`).
-4. Run the **Intent-vs-Diff Check** (see `### 5.1. Intent-vs-Diff Check` below) for this task.
-5. Self-verify the implementation against the acceptance criteria.
-6. Write `status: Passed` and `date_completed: <today>` to the task's frontmatter if verification passes.
-7. Continue to step 6 (documentation verification) and then step 7 (post-completion).
+3. Run the smoke test harness before committing anything:
+   - Run `bash scripts/smoke-harness.sh <changed_file>...`, passing the paths changed in step 2. With no arguments the harness infers them from `git diff --name-only HEAD`. It exits `0` on pass and `1` on failure.
+   - If `scripts/smoke-harness.sh` does not exist, log a warning and treat the result as a pass:
+     ```
+     WARNING [<task_id>]: scripts/smoke-harness.sh not found. Smoke test skipped (stub pass).
+     ```
+4. **If the smoke test exits non-zero**:
+   - Write `status: Failed` to the task's frontmatter.
+   - Emit:
+     ```
+     INLINE TASK FAILED [<task_id>]: smoke test returned non-zero exit code. Task marked Failed. Halting.
+     ```
+   - Do not commit. Do not proceed to the next task.
+5. **If the smoke test passes**:
+   - Commit the changes using the standard commit convention (`task(<task_id>): <short description>`) via `/commit` in inline mode (E32_S04_T03).
+   - Run the **Intent-vs-Diff Check** (see `### 5.1. Intent-vs-Diff Check` below) for this task.
+   - Self-verify the implementation against the acceptance criteria.
+   - Write `status: Passed` and `date_completed: <today>` to the task's frontmatter if verification passes.
+   - Remove the task from `project/todo.md`.
+6. `inline` tasks do not invoke the tester agent — the smoke test and self-verification are the only gates.
+7. `inline` tasks always have `needs_docs: false` — skip plan and summary documentation for the implemented task.
+8. Continue to `### 6. Verify documentation`, then `### 7. After successful completion`.
 
-If the implementation cannot be completed inline (scope is larger than anticipated), abort and re-route to the normal developer path (step 5).
+If the implementation cannot be completed inline (scope is larger than anticipated), abort and re-route to the normal developer path (step 5) — unless `crucial_level: locked`, in which case do not re-route; re-attempt inline or halt and report, per the locked-task dispatch guard above.
+
+**If `execution_scope` is not `inline`** (or is absent / `task` / `story` / `epic`) **and `crucial_level` is not `locked`**, proceed to step 5 (invoke the developer agent) as normal.
 
 ### 5. Invoke the developer agent
 Pass the following to the developer agent:
@@ -392,7 +429,7 @@ If either file is missing, ask the developer to produce it before continuing.
 Additionally, if the completed work introduces user-facing changes, update `README.md` and `WARP.md` accordingly.
 
 ### 7. After successful completion
-- Check for any `_INSTRUCTIONS.md` files in `$(bash scripts/board_resolver.sh)tasks/` whose ID matches the completed task. If found, present them to the user and explain that these actions must be completed before the feature will work correctly.
+- Check for any `_INSTRUCTIONS.md` files in `project/instructions/` whose ID matches the completed task. If found, present them to the user and explain that these actions must be completed before the feature will work correctly.
 - Invoke the `/commit` skill to commit the work (if not already committed by the developer)
 - Run `bash scripts/todo_manager.sh remove '<task title>'` to remove the completed task from `project/todo.md`
 - Run `bash scripts/todo_manager.sh teardown` to delete `project/todo.md` if it is now effectively empty

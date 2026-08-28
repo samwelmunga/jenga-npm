@@ -15,6 +15,7 @@ DROPLET_PIPELINE_SCRIPT="$SCRIPT_DIR/droplet_pipeline.sh"
 NPM_CI_PIPELINE_SCRIPT="$SCRIPT_DIR/npm_ci_pipeline.sh"
 RUN_GATES_SCRIPT="$SCRIPT_DIR/run_gates.sh"
 GENERATE_RELEASE_NOTES_SCRIPT="$SCRIPT_DIR/generate_release_notes.sh"
+FINALIZE_CHANGELOG_SCRIPT="$SCRIPT_DIR/finalize_changelog.sh"
 SUGGEST_SEMVER_SCRIPT="$SCRIPT_DIR/suggest_semver_bump.sh"
 WRITE_LEDGER_ENTRY_SCRIPT="$SCRIPT_DIR/write_ledger_entry.sh"
 IOS_PIPELINE_SCRIPT="$SCRIPT_DIR/ios_pipeline.sh"
@@ -31,6 +32,7 @@ AUTO_YES=0
 DRY_RUN=0
 BUMP_OVERRIDE=""
 RELEASE_NOTES_PATH=""
+RELEASE_NOTES_BYPASSED=0
 PROMPT_INPUT_FD=0
 NON_INTERACTIVE=0
 TARGET_TYPE=""
@@ -41,7 +43,7 @@ SELECTED_VERSION=""
 usage() {
   cat <<'USAGE'
 Usage: publish_deploy.sh [--target <name>] [--config <path>] [--yes] [--dry-run]
-                         [--minor | --major] [--release-notes <path>]
+                         [--minor | --major] [--notes-file <path>]
 USAGE
 }
 
@@ -290,8 +292,7 @@ generate_release_notes() {
     return 0
   fi
 
-  RELEASE_NOTES_PATH="$(publish_temp_release_notes_path)"
-  local cmd=(bash "$GENERATE_RELEASE_NOTES_SCRIPT" --target "$TARGET_NAME" --output "$RELEASE_NOTES_PATH")
+  local cmd=(bash "$GENERATE_RELEASE_NOTES_SCRIPT" --target "$TARGET_NAME")
   if [[ -n "$LAST_TAG" ]]; then
     cmd+=(--from-tag "$LAST_TAG")
   fi
@@ -299,6 +300,8 @@ generate_release_notes() {
   if ! "${cmd[@]}"; then
     fail_with "$EXIT_ADAPTER_FAILURE" "Failed to generate release notes."
   fi
+
+  RELEASE_NOTES_PATH="$PUBLISH_REPO_ROOT/CHANGELOG.md"
 }
 
 review_release_notes() {
@@ -317,18 +320,9 @@ review_release_notes() {
 
 resolve_selected_version() {
   local current_version suggested_version
-  # For npm/npm-ci targets, package.json is the authoritative version source.
-  # The ledger may lag behind if a previous publish didn't bump package.json.
-  if [[ "$TARGET_TYPE" == "npm" || "$TARGET_TYPE" == "npm-ci" ]]; then
-    local pkg_version
-    pkg_version="$(jq -r '.version // empty' "$PUBLISH_REPO_ROOT/package.json" 2>/dev/null || true)"
-    current_version="$(publish_normalize_version "$pkg_version" 2>/dev/null)" || current_version=''
-  fi
-  if [[ -z "$current_version" ]]; then
-    current_version="$(publish_latest_ledger_version "$HISTORY_FILE" 2>/dev/null || true)"
-    [[ -n "$current_version" ]] || current_version='v0.0.0'
-    current_version="$(publish_normalize_version "$current_version")" || current_version='v0.0.0'
-  fi
+  current_version="$(publish_latest_ledger_version "$HISTORY_FILE" 2>/dev/null || true)"
+  [[ -n "$current_version" ]] || current_version='v0.0.0'
+  current_version="$(publish_normalize_version "$current_version")" || current_version='v0.0.0'
 
   suggested_version="$(bash "$SUGGEST_SEMVER_SCRIPT" --yes "$CONFIG_PATH" | tail -n 1 | tr -d '\r')"
   suggested_version="$(publish_normalize_version "$suggested_version")" || fail_with "$EXIT_ADAPTER_FAILURE" "Unable to determine a suggested version."
@@ -389,7 +383,7 @@ run_adapter_pipeline() {
       cmd=(bash "$NPM_PIPELINE_SCRIPT" "$TARGET_NAME" "$CONFIG_PATH")
       ;;
     npm-ci)
-      cmd=(bash "$NPM_CI_PIPELINE_SCRIPT" --target "$TARGET_NAME" --config "$CONFIG_PATH" --version "$SELECTED_VERSION")
+      cmd=(bash "$NPM_CI_PIPELINE_SCRIPT" --target "$TARGET_NAME" --config "$CONFIG_PATH")
       ;;
     droplet)
       cmd=(bash "$DROPLET_PIPELINE_SCRIPT" --target "$TARGET_NAME" --config "$CONFIG_PATH")
@@ -430,6 +424,22 @@ run_post_gates() {
     log_warn "Post-deploy gate runner exited with status $status. The deploy will be recorded as partial."
   fi
   return 1
+}
+
+finalize_changelog() {
+  # Skipped on a dry run — the real tag and ledger entry are not created
+  # either (see write_ledger_entry's own --dry-run handling), and
+  # [Unreleased] content from generate_release_notes was still updated
+  # earlier in the flow, just left unstamped.
+  (( DRY_RUN )) && return 0
+  # Skipped when release notes were supplied via the --notes-file bypass
+  # flag: RELEASE_NOTES_PATH then points at an arbitrary user-supplied file
+  # rather than the standing CHANGELOG.md, so there is no [Unreleased]
+  # section of the standing file to finalize.
+  (( RELEASE_NOTES_BYPASSED )) && return 0
+
+  bash "$FINALIZE_CHANGELOG_SCRIPT" "$SELECTED_VERSION" "$RELEASE_NOTES_PATH" \
+    || fail_with "$EXIT_ADAPTER_FAILURE" "Failed to finalize CHANGELOG.md."
 }
 
 write_ledger_entry() {
@@ -492,9 +502,10 @@ parse_args() {
         BUMP_OVERRIDE="major"
         shift
         ;;
-      --release-notes)
+      --notes-file)
         [[ $# -ge 2 ]] || { usage >&2; exit 1; }
         RELEASE_NOTES_PATH="$2"
+        RELEASE_NOTES_BYPASSED=1
         shift 2
         ;;
       --help|-h)
@@ -540,6 +551,7 @@ main() {
     platform_state="dry-run"
   fi
 
+  finalize_changelog
   write_ledger_entry "$platform_state"
   print_manual_steps
 }

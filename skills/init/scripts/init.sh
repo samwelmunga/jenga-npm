@@ -3,6 +3,25 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ASSETS_DIR="$SCRIPT_DIR/../assets"
+VISIBILITY_SCRIPT="$SCRIPT_DIR/apply-project-visibility.sh"
+
+# ─── 0. Resolve project_files_visibility ─────────────────────────────────────
+# Defaults to `visible` — the only value that touches nothing on disk — so an
+# unattended run can never silently relocate directories or edit .gitignore.
+VISIBILITY="${JENGA_PROJECT_FILES_VISIBILITY:-visible}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --visibility)   VISIBILITY="${2:-}"; shift 2 ;;
+    --visibility=*) VISIBILITY="${1#*=}"; shift ;;
+    *) echo "Unknown argument: $1" >&2
+       echo "Usage: $(basename "$0") [--visibility <visible|ignored>]" >&2
+       exit 1 ;;
+  esac
+done
+
+# Validate before scaffolding so a typo cannot leave a half-initialised project.
+bash "$VISIBILITY_SCRIPT" --check-only "$VISIBILITY"
 
 # ─── 1. Initialize git repository ────────────────────────────────────────────
 echo "→ Initializing git repository..."
@@ -44,7 +63,17 @@ echo "→ Creating docs/STRATEGY.md (strategic brief for investors, partners, an
 mkdir -p docs
 cp "$ASSETS_DIR/strategy_stub_template.md" docs/STRATEGY.md
 
-# ─── 10. Initial commit ──────────────────────────────────────────────────────
+# ─── 10. Create CHANGELOG.md ──────────────────────────────────────────────────
+echo "→ Creating CHANGELOG.md from template..."
+cp "$SCRIPT_DIR/../../../templates/CHANGELOG_TEMPLATE.md" CHANGELOG.md
+
+# ─── 11. Apply project_files_visibility ──────────────────────────────────────
+# Runs before the commit so the .gitignore entry (ignored) is captured in the
+# initial commit.
+echo "→ Applying project files visibility ($VISIBILITY)..."
+bash "$VISIBILITY_SCRIPT" "$VISIBILITY" "$PWD"
+
+# ─── 12. Initial commit ──────────────────────────────────────────────────────
 echo "→ Staging and committing scaffolded files..."
 git add -A
 git commit -m "init: scaffold project structure and workflow config"

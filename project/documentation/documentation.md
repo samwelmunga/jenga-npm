@@ -196,9 +196,9 @@ Skills are slash commands stored in `.agents/skills/<name>/SKILL.md`. Invoke the
 
 #### `/jenga`
 
-**Description:** Fully automated board orchestrator. Decomposes any unbroken Epics into Stories, any unbroken Stories into Tasks, queues all unqueued Tasks into `todo.md`, then executes every eligible item — no user prompts — until the board is fully started.
+**Description:** Interactive-by-default board orchestrator with a fully automated escape hatch. Bare `/jenga` renders a picker and confirmation tree before scoping the run; `/jenga <ids>` resolves an explicit fuzzy-ID scope and confirms it; `/jenga *` reproduces the original zero-prompt behavior — decomposing any unbroken Epics into Stories, any unbroken Stories into Tasks, queuing all unqueued Tasks into `todo.md`, then executing every eligible item with no user prompts — until the board is fully started.
 
-**When to use:** When you want hands-free execution across the whole board. Jenga will read existing epics, decompose anything incomplete, and start executing.
+**When to use:** When you want to review and scope a run before it executes (bare `/jenga` or `/jenga <ids>`), or hands-free execution across the whole board via `/jenga *`. Jenga will read existing epics, decompose anything incomplete, and start executing.
 
 **Delegates to:** Scrum Master (for decomposition), Developer (for execution)
 

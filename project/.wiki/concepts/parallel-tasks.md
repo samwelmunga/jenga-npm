@@ -41,7 +41,7 @@ When tasks have no dependencies on each other, running them in parallel saves re
 
 ## `/jenga` — The Automated Board Orchestrator
 
-`/jenga` is the hands-free alternative when you want to automate the whole board instead of approving each parallel batch yourself. It uses the same background sub-agent mechanism as `/dooo`, but only after its earlier phases have decomposed epics into stories, decomposed stories into tasks, and queued the eligible work.
+`/jenga` is the board-wide alternative to approving each parallel batch yourself: bare `/jenga` or `/jenga <ids>` show a picker/scope plus a confirmation tree before anything executes, while `/jenga *` reproduces the original hands-free, zero-prompt run across the whole board. It uses the same background sub-agent mechanism as `/dooo`, but only after its earlier phases have decomposed epics into stories, decomposed stories into tasks, and queued the eligible work.
 
 In **Phase 4**, `/jenga` executes by:
 
@@ -66,7 +66,7 @@ In **Phase 4**, `/jenga` executes by:
 | Tool | Style | Scope | Prompts | Best when |
 | --- | --- | --- | --- | --- |
 | `/dooo` | Interactive parallel orchestration | A user-selected batch of independent tasks | Asks before starting each additional task | You want to inspect and approve each parallel batch |
-| `/jenga` | Fully automated orchestration | The whole board, across all eligible work | Zero prompts once started | You want hands-free progress across every safe, dependency-free task |
+| `/jenga` | Interactive-by-default orchestration (`*` = fully automated) | The whole board, across all eligible work | Picker + confirmation by default; zero prompts only under `/jenga *` | You want to scope/confirm a board-wide run, or go fully hands-free with `*` |
 
 ---
 

@@ -12,7 +12,7 @@
     "scrum_triggers": "project/queue/scrum_triggers.jsonl",
     "developer_triggers": "project/queue/developer_triggers.jsonl",
     "tester_triggers": "project/queue/tester_triggers.jsonl",
-    "session_handoff": "project/queue/.session_handoff.json",
+    "session_handoff": "project/queue/handoffs/",
     "logs": "project/logs",
     "data": "project/data",
     "configs": "project/configs",

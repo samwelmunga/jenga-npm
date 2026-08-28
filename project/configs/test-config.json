@@ -1,4 +1,39 @@
 {
-  "_note": "Run the tester agent to configure tools for this project.",
-  "tools": []
+  "tools": [
+    {
+      "tool_name": "bats",
+      "type": "unit",
+      "comment": "Bash-script framework (skills/agents/hooks are shell scripts); bats-core covers unit-level script assertions"
+    },
+    {
+      "tool_name": "bats",
+      "type": "integration",
+      "comment": "Same harness as unit, used for multi-script/board-file workflow scenarios (e.g. init.sh + apply-project-visibility.sh end-to-end)"
+    },
+    {
+      "tool_name": "-",
+      "type": "e2e",
+      "comment": "No deployed application surface to exercise end-to-end; skill flows are covered by bats integration tests"
+    },
+    {
+      "tool_name": "shellcheck",
+      "type": "sast",
+      "comment": "Static analysis for all shell scripts under skills/, scripts/, hooks/"
+    },
+    {
+      "tool_name": "-",
+      "type": "vulnerability",
+      "comment": "No dependency/package surface beyond a small package.json; not currently in scope"
+    },
+    {
+      "tool_name": "-",
+      "type": "performance",
+      "comment": "Not applicable at current scale — no runtime service to load-test"
+    },
+    {
+      "tool_name": "-",
+      "type": "coverage",
+      "comment": "Not currently tracked; revisit once bats suite has meaningful breadth"
+    }
+  ]
 }

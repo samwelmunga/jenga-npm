@@ -32,6 +32,8 @@ metadata:
    - None of the above
 
 4. **Update project documentation** — Add the mission to the appropriate files under `project/board/epics/` and `project/board/stories/` if applicable.
+   - If the mission involves implementing or modifying a skill, apply the **Skill Implementation Principle — Scripts Over Inline Logic** (see `CLAUDE.md` / `AGENTS.md`): note in the story/task's acceptance criteria that deterministic, repeatable steps must be offloaded to scripts under `skills/<name>/scripts/` (or `scripts/`) rather than encoded as inline agent instructions in `SKILL.md`.
+   - If the user indicates the mission is high-risk, or explicitly asks to flag it, set an elevated caution tier directly on the story or task frontmatter: `crucial_level` (one of `advisory`, `gated`, `locked` — see `templates/SCRUM_BOARD_SCHEMA.md` for valid values and their meaning), `crucial_set_by: user`, and `crucial_note` capturing the user's stated reason. This user-initiated flag is written immediately — it does not require the confirm-before-write gate, which applies only to scrum-master-*proposed* caution tiers (a separate, heuristic-driven path).
 
 5. **Add to `project/todo.md`** by running:
    ```

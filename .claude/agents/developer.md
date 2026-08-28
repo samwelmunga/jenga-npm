@@ -57,11 +57,15 @@ At the start of every session, before responding to any request:
 
 3. **Report** briefly to the user what was picked up from the queue before proceeding.
 
+**Known Risk — permission-level reset gap:** The session-start permission-level reset (added in E33_S03_T01) lives in the scrum-master agent's instructions only. If this developer session was started directly (bypassing scrum-master — e.g. a worktree session opened straight against this agent definition), an elevated `.jenga-permission-level.json` (level 3/4/5) is **not** automatically reset back to Guarded here. See E33_S03 / E33_S03_T02 for the investigation and recommendation on closing this gap.
+
+**Prohibited — ad-hoc completion-polling loops:** Never background a shell loop (or any other ad-hoc proxy) that polls git state — a branch, a commit SHA, a file's existence — to detect another agent's completion. This is the root cause of a real incident: a polling condition that was unsatisfiable from the start, later orphaned when its worktree was removed. If a wait stays within the current session, call the next agent directly and use its return value — no polling is ever needed. If a wait must cross a session boundary, the only sanctioned mechanism is the E37_S01 handoff: write `project/queue/handoffs/<agent>-<session_id>-<task_id>.json` (see "Session End — Handoff" below and `templates/SCRUM_BOARD_SCHEMA.md`'s `handoffs/` section) plus the relevant trigger queue, and let the next session's queue processing pick it up. This is a doc-only prohibition — nothing structurally blocks writing a bad shell command — so its backstop is E37_S03's worktree-removal liveness check, not this note.
+
 ---
 
 ## Session End — Handoff
 
-Before the session ends, write a handoff file to `project/queue/.session_handoff.json` so that `on_session_end.sh` can route the work to the tester queue. This step is **mandatory** whenever a task has been implemented (regardless of whether the tester was already invoked in-session).
+Before the session ends, write a handoff file to `project/queue/handoffs/developer-<session_id>-<task_id>.json` — a unique path keyed by this session's own `session_id` and `task_id`, not the old shared `project/queue/.session_handoff.json` slot, so that a session ending close to another agent's session (including a tester invoked in-session) can never clobber its handoff — so `on_session_end.sh` can route the work to the tester queue. This step is **mandatory** whenever a task has been implemented (regardless of whether the tester was already invoked in-session).
 
 ```json
 {
@@ -158,6 +162,63 @@ Write clear, descriptive commit messages. Your commit messages serve as a guide 
 
 Use the `/commit` skill to commit.
 
+### Crucial Tier: `advisory`
+
+**Trigger.** The task you are implementing — or its parent story — carries `crucial_level: advisory` in frontmatter, per `templates/SCRUM_BOARD_SCHEMA.md`'s "Crucial Flag Fields (Story, Task)" section.
+
+**Behavior change.** Raise your reporting cadence above default. Under the default flow (above), a status touchpoint happens at milestone commits and at task completion/tester-call time. For an `advisory`-tier item, append a lightweight checkpoint **after every milestone commit** — not only at completion or when a problem occurs. This applies in addition to, not instead of, the normal commit and tester-invocation flow.
+
+**Concrete mechanism.** Do not write a new rapport file per checkpoint — that is heavier-weight than this tier calls for (see Rapport System, which stays reserved for blocking issues, conflicts, and security concerns). Instead, reuse the existing event-log mechanism: immediately after each milestone commit, append one entry to `project/logs/events.json` (the same file already used for session-start events, sender-object logging, and tool approvals) with this shape:
+
+```json
+{
+  "event": "advisory_checkpoint",
+  "agent": "developer",
+  "session_id": "<current session id>",
+  "task_id": "<E##_S##_T##>",
+  "story_id": "<E##_S##>",
+  "epic_id": "<E##>",
+  "commit_sha": "<sha of the milestone commit just made>",
+  "note": "<one-line human-readable description of what this milestone accomplished>",
+  "date": "<ISO 8601 UTC timestamp>"
+}
+```
+
+Append this as a new array entry — never overwrite existing log content. This is the entire mechanism: no separate file, no additional agent invocation, no pause in work.
+
+**No gate.** `advisory` is a reporting-frequency change only. It never blocks, pauses, or requires confirmation before any action — you continue implementing exactly as you would by default. Do not conflate this with the `gated` tier, which requires explicit user confirmation before a defined list of risky actions (deletes, `git push`/`git reset --hard`, credential/secret file writes, board schema/frontmatter contract changes) and is documented separately in this file's `gated`-tier subsection (see E39_S03_T02). An item can never be blocked or paused by `advisory` alone.
+
+### Crucial Tier: `gated`
+
+**Trigger.** The task you are implementing — or its parent story — carries `crucial_level: gated` in frontmatter, per `templates/SCRUM_BOARD_SCHEMA.md`'s "Crucial Flag Fields (Story, Task)" section.
+
+**The fixed risky-action list.** On a `gated` item, the following actions always require explicit user confirmation before proceeding:
+
+1. Deletes
+2. `git push` / `git reset --hard`
+3. Credential/secret file writes
+4. Board schema/frontmatter contract changes
+
+This list is fixed and verbatim across both this file and `agents/tester.md` — do not add to or narrow it per task.
+
+**The confirmation rule.** Before executing any of the four actions above on a `gated` item, you must obtain explicit user confirmation for that specific action, in-session — **regardless of the session's current permission level.** This overrides auto-approval, not just default caution: `templates/permission-levels/level-4-elevated.json` and `level-5-unrestricted.json` both list `Bash(git push *)` and `Bash(git reset --hard *)` in `autoMode.allow`, meaning the harness itself would otherwise silently approve those commands with no prompt at all. A `gated` item must not benefit from that auto-approval. You are responsible for pausing and asking even when the permission system would let the command through without asking you.
+
+**The mechanism.** Concretely, before running the command (or making the write/delete), issue an `AskUserQuestion`-style blocking prompt that names the specific action and target (e.g. "This will run `git reset --hard` on `<branch>`, discarding uncommitted changes — proceed?" or "This will delete `<path>` — proceed?") and wait for an explicit affirmative response before continuing. A harness auto-approval, a lack of objection, or silence does not count as confirmation — only an explicit "yes" (or equivalent) from the user satisfies the rule. If the user declines, do not perform the action; treat it the same as any other blocked step (see Rapport System if it halts the task).
+
+**Distinction from `locked`.** `gated` only requires this specific action to pause for confirmation, wherever you happen to be running — foreground session or a backgrounded subagent launched via the Agent tool. It does **not** force the item into the current foreground/inline session the way `locked` does (`execution_scope: inline`, see E39_S03_T03/T04). A backgrounded subagent working a `gated` item can still emit the blocking confirmation prompt and wait for a response; it is only the `locked` tier that requires the item to run inline in the first place, because `locked` items may need a live pause-and-confirm that a fully backgrounded run architecturally cannot surface. Do not treat `gated` as requiring inline execution — that would conflate the two tiers.
+
+**Scope.** This list covers actions the developer routinely performs: deletes, `git push`/`git reset --hard`, and credential/secret file writes are all things you may do directly during implementation; board schema/frontmatter contract changes apply if your task touches `templates/SCRUM_BOARD_SCHEMA.md` or the frontmatter contract it defines. Any of the four appearing mid-task on a `gated` item triggers the confirmation rule above, even if the rest of the task proceeds normally.
+
+### Crucial Tier: `locked`
+
+**Trigger.** The task you are implementing — or its parent story — carries `crucial_level: locked` in frontmatter, per `templates/SCRUM_BOARD_SCHEMA.md`'s "Crucial Flag Fields (Story, Task)" section.
+
+**Effect — forced inline scope.** `execution_scope` is force-set to `inline` for any `locked` task, overriding whatever scope `/jenga`'s Execution Scope Assignment heuristics would otherwise assign — or auto-correcting a wrong value in place, with a logged `override_justification` note explaining the correction. The concrete mechanism is `skills/jenga/SKILL.md` Phase 0.5's **Rule 4 — `crucial_level: locked` forces `execution_scope: inline`** (added by E39_S03_T03).
+
+**Effect — dispatch-time rejection of backgrounding.** A `locked` task can never be routed to a background subagent, a worktree-isolated session, or a bundled `/jenga` story-batch execution, regardless of what its `execution_scope` value currently reads. This is enforced at two separate points, both added by E39_S03_T04: `skills/jenga/SKILL.md` Phase 3.5 step 5's **Guard: locked-task disqualifier (defense-in-depth)**, which disqualifies any story containing a `locked` task from the bundle path before dispatch, and `skills/do/SKILL.md` Section 4.2's **Locked-task dispatch guard (defense-in-depth)**, which forces the inline execution path (no worktree, no developer subagent) at the point of dispatch even if `execution_scope` somehow still reads something other than `inline`.
+
+**No agent-discretion obligation.** Unlike `advisory` (a reporting-cadence habit you must remember to keep up) and `gated` (a confirmation you must actively pause and perform), `locked` requires no judgment call from you at all. It is fully enforced by pre-flight validation (Rule 4) and dispatch-time guards (the Phase 3.5 and `/do` guards above) before you ever begin work on the task — there is no step in this tier that depends on you noticing or remembering anything. Your only obligation is to recognize that a `locked` task will always run in the current foreground session, and to never manually route around that guarantee — for example, do not spin up your own background subagent or a separate worktree-isolated session to "help" with a `locked` task, even if it seems more efficient. If a locked task ever reaches you already running in a background or worktree-isolated context, treat that as a guard failure worth flagging (see Rapport System), not something to quietly work through.
+
 ---
 
 ## Tester Collaboration
@@ -194,6 +255,25 @@ Write a rapport when:
 - Any other issue blocks you from fulfilling a task
 - A severe security concern prevents implementation
 
+### Escalation rapports (`crucial_escalation`)
+
+**Trigger — non-blocking.** During implementation, you discover something that makes the item riskier than its current `crucial_level` reflects (or riskier than warranted by having no `crucial_level` at all) — e.g. the task unexpectedly touches credentials or secrets, a schema/contract change turns out to have a wider blast radius than scoped, or a destructive operation is now in play that wasn't anticipated at breakdown time. Unlike every other rapport type above, this one does **not** block you: keep implementing. The escalation is filed and runs asynchronously through the existing rapport/trigger queue (`on_session_end.sh` → `scrum_triggers.jsonl`) rather than as a synchronous interrupt — no live pause-and-confirm channel exists for a backgrounded subagent (see E37's ruling out of ad-hoc completion-polling loops, "Prohibited" note above).
+
+**Concrete-reason requirement.** The rapport's reason must include at least one concrete, checkable fact — a specific file/path, an exact error message, a reproduction count, or a quantifiable impact — per `templates/SCRUM_BOARD_SCHEMA.md`'s `crucial_escalation` subsection. A generic statement like "this seems risky" is not acceptable and will be rejected by scrum-master at review time (see `agents/scrum-master.md`); do not file one expecting it to be actioned. This is the same numeric-claim bar already established for `scope_rationale`.
+
+**Never write `crucial_level` yourself.** Regardless of how confident you are that the escalation is warranted, you must never write `crucial_level`, `crucial_set_by`, or `crucial_note` to any board file directly. The rapport is a *request*, not a self-authorization — only scrum-master applies the change to the board, after reviewing the escalation at its next session start. This mirrors the existing `epic_scope_approval` pattern: a subagent may never self-authorize an elevated-risk designation.
+
+**Mechanism.** Use `templates/PROBLEM_RAPPORT_TEMPLATE.md` with `Type: crucial_escalation`, naming the target item's ID (`E##`, `E##_S##`, or `E##_S##_T##`) in the Related Epic/Story/Task header fields, filed at `project/rapports/problems/<E##_S##_T##-crucial-escalation-short-description>.md`. Commit it immediately per "Commit the rapport immediately" below — no new commit convention applies.
+
+### Commit the rapport immediately
+A rapport is the only record of a finding until it is committed — an untracked file does not survive `git clean`, and if the parent story ends up blocked on a human, the exposure window is unbounded rather than the few hours a normal rollup takes.
+
+Immediately after writing the rapport file, commit it yourself, in the same session, before doing anything else with it:
+
+- Stage **only the rapport file itself, by explicit path** — e.g. `git add project/rapports/problems/<file>.md`. Never `git add -A` or `git add .` for this commit. The repository routinely carries unrelated dirty files (permission-level files, generated settings) that have no business riding along in a rapport commit.
+- Commit it as **its own standalone commit** — do not fold it into the task's implementation commit or into a later merge commit. Board and rapport artifacts are not implementation changes; mixing them makes a task's diff unreadable. The rapport's commit message should name the finding, e.g. `chore(<E##_S##_T##>): add rapport — <short description>`.
+- Do this before halting or setting status to `Blocked`, so the rapport is durable the instant it exists on disk.
+
 ### Rapport location
 
 ```
@@ -203,7 +283,7 @@ project/rapports/problems/<E##_S##_T##-short-problem-description>.md
 Create folders if they do not exist.
 
 ### Rapport template
-See `templates/PROBLEM_RAPPORT_TEMPLATE.md` for the required format.
+See `templates/PROBLEM_RAPPORT_TEMPLATE.md` for the required format. Commit the rapport immediately per "Commit the rapport immediately" above.
 
 ---
 

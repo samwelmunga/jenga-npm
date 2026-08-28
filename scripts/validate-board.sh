@@ -27,18 +27,76 @@ STATUS_VALUES = {
     "Done",
 }
 
+# E39 tiered item-level caution/escalation. crucial_level is OPTIONAL — absence means no
+# elevated caution. When present it must be one of these three values (see
+# templates/SCRUM_BOARD_SCHEMA.md). crucial_set_by / crucial_note are free-text fields that are
+# only recognised (not enum-validated) here; their "required when crucial_level is set" rule is
+# an authoring discipline documented in the schema, not mechanically enforced by this script —
+# the same treatment given to scope_rationale's "required when execution_scope is set" rule.
+CRUCIAL_LEVEL_VALUES = {
+    "advisory",
+    "gated",
+    "locked",
+}
+
+# Base keys shared by every item type, plus the E32 adaptive-execution-scope fields.
+#
+# The execution-scope fields are all OPTIONAL — a board file that omits them is valid and is
+# treated as execution_scope: task / needs_docs: true (see the backward-compatibility rule in
+# templates/SCRUM_BOARD_SCHEMA.md). They are listed here so that files which DO carry them are
+# not rejected as unknown.
+#
+# Two groups, distinguished by who writes them:
+#   - assigned at breakdown time by the scrum-master (execution_scope … epic_scope_approval)
+#   - written at runtime by /close-story and /do (actual_files_changed … divergence_flag)
+# Runtime fields appear only after a task has executed, so most task files will lack them.
+# task_changed_files is deliberately absent: it lives in the bundle manifest JSON
+# (project/queue/bundle-<E##_S##>.json), not in task frontmatter.
+EXECUTION_SCOPE_KEYS = {
+    "execution_scope", "needs_docs", "scope_rationale",
+    "jenga_assigned", "override_justification", "epic_scope_approval",
+}
+
+CLOSE_STORY_KEYS = {
+    "actual_files_changed", "actual_lines_delta", "scope_divergence_flag", "divergence_flag",
+}
+
+# E39 tiered item-level caution/escalation fields. OPTIONAL and story/task-only — epics do not
+# carry these; an epic's risk gating is already handled by epic_scope_approval. See
+# templates/SCRUM_BOARD_SCHEMA.md.
+#
+# crucial_declined / crucial_declined_note (E39_S02_T03) are a separate optional pair recording
+# that a scrum-master-proposed crucial_level was explicitly declined by the user for this item —
+# the durable decline-tracking mechanism that stops the breakdown step from re-proposing on a
+# later pass. Like crucial_set_by / crucial_note, they are free-text/recognised-not-enum-validated
+# here; their "required when crucial_declined: true" rule is an authoring discipline documented in
+# the schema, not mechanically enforced by this script.
+CRUCIAL_KEYS = {
+    "crucial_level", "crucial_set_by", "crucial_note",
+    "crucial_declined", "crucial_declined_note",
+}
+
 ALLOWED_KEYS = {
     "epic": {
         "id", "title", "status", "date_created", "date_started", "date_completed",
         "dates_previously_completed", "reopened_on", "reopened_reason", "stories", "docs",
+        "epic_scope_approval",
+        # OPTIONAL. Marks how the epic came to exist; only written by `/uncharted onboard`
+        # (value: backfilled). Absence means the epic was authored normally, so every existing
+        # epic that omits it stays valid. See templates/SCRUM_BOARD_SCHEMA.md.
+        "provenance",
     },
     "story": {
         "id", "epic_id", "title", "status", "date_created", "date_started", "date_completed",
         "dates_previously_completed", "reopened_on", "reopened_reason", "tasks", "docs",
+        "priority", "depends_on",
+        *CRUCIAL_KEYS,
     },
     "task": {
         "id", "story_id", "epic_id", "title", "status", "date_created", "date_started", "date_completed",
         "dates_previously_completed", "reopened_on", "reopened_reason", "assigned_to", "docs",
+        "depends_on",
+        *EXECUTION_SCOPE_KEYS, *CLOSE_STORY_KEYS, *CRUCIAL_KEYS,
     },
 }
 
@@ -151,6 +209,10 @@ def validate_file(source: Path):
     status = data.get("status")
     if status and status not in STATUS_VALUES:
         raise ValueError(f"{source}: invalid status '{status}'")
+
+    crucial_level = data.get("crucial_level")
+    if crucial_level and crucial_level not in CRUCIAL_LEVEL_VALUES:
+        raise ValueError(f"{source}: invalid crucial_level '{crucial_level}'")
 
     docs = data.get("docs", None)
     if docs is not None:

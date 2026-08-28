@@ -77,7 +77,7 @@ If config or env validation fails, the skill exits with code `4` and does not co
 | `/publish setup` | Prepare or refresh target configuration | `skills/publish/scripts/setup_wizard.sh` | Supported types: `mobile-ios`, `npm`, `npm-ci`, `droplet` |
 | `/publish deploy` | Run the full 11-step deploy orchestration | `skills/publish/scripts/publish_deploy.sh` | Dispatches to the adapter for the target's `type` (`mobile-ios`, `npm`, `npm-ci`, or `droplet`); `--dry-run` is honoured end-to-end |
 | `/publish history` | Read the canonical publish ledger | `skills/publish/scripts/show_history.sh` | Target-agnostic; filter by `--target <name>` |
-| `/publish release-notes` | Generate release notes without publishing | `skills/publish/scripts/generate_release_notes.sh` | Target-agnostic |
+| `/publish release-notes` | Merge new release notes into the standing `CHANGELOG.md` (or a standalone draft via `--output`) without publishing | `skills/publish/scripts/generate_release_notes.sh` | Target-agnostic |
 
 ## Quality Gate Policy
 
@@ -131,7 +131,7 @@ Example invocations:
 ### `/publish deploy`
 
 ```text
-/publish deploy [--target <name>] [--config <path>] [--yes] [--dry-run] [--minor | --major] [--release-notes <path>]
+/publish deploy [--target <name>] [--config <path>] [--yes] [--dry-run] [--minor | --major] [--notes-file <path>]
 ```
 
 Implementation: `bash skills/publish/scripts/publish_deploy.sh [flags...]`
@@ -142,12 +142,12 @@ Deploy flow:
 3. Validate target environment variables
 4. Print a best-effort scrum-board summary since the last publish tag
 5. Run pre-deploy gates
-6. Generate a release-note draft and review it unless `--yes` is set
+6. Update the standing `CHANGELOG.md`'s `[Unreleased]` section with new entries since the last publish tag (or use the caller-supplied file instead, when release notes are supplied via the bypass flag), and review it unless `--yes` is set
 7. Suggest and confirm the semver bump (`patch` by default in non-interactive mode unless `--minor` or `--major` is passed)
 8. Print final confirmation: `Deploy v<x.y.z> to <target>? [y/N]`
 9. Execute the adapter pipeline for the target's `type` (`ios_pipeline.sh` for `mobile-ios`, `npm_pipeline.sh` for `npm`, `npm_ci_pipeline.sh` for `npm-ci`, `droplet_pipeline.sh` for `droplet`)
 10. Run post-deploy gates and downgrade the ledger state to `partial` on failure
-11. Append the publish ledger entry, create the git tag (unless `--dry-run`), and print post-deploy manual steps
+11. Finalize `CHANGELOG.md` — stamp `[Unreleased]` to a versioned, dated entry and open a fresh empty `[Unreleased]` above it (skipped on `--dry-run`, and skipped when release notes were supplied via the bypass flag, since there is then no standing-file `[Unreleased]` section to finalize) — then append the publish ledger entry, create the git tag (unless `--dry-run`), and print post-deploy manual steps
 
 Non-interactive rule: when `--yes` is used, deploy must not auto-run setup after a failure. It exits `4` and surfaces the missing fields.
 
@@ -188,8 +188,11 @@ Implementation: `bash skills/publish/scripts/generate_release_notes.sh [--target
 
 Release-note rules:
 - The last publish tag is the highest semver tag on the current branch that also has a matching ledger entry in `project/logs/publish-history.json`.
-- If no prior ledger-backed tag exists, the draft includes `> First release — full history included`.
+- **Default target (no `--output`):** the repo-root `CHANGELOG.md` — created from `templates/CHANGELOG_TEMPLATE.md` first if it doesn't exist yet (backward-compat for projects scaffolded before this convention). New Features/Bug Fixes/Other/Completed-task entries since the last publish tag are appended under the existing `## [Unreleased]` heading's subsections; everything else in the file (prior versioned entries, manual edits) is preserved. Entries already present are deduped (matched by commit short-sha or task id), so re-running with no new commits produces zero diff.
+- **`--output <path>`:** writes a standalone, disposable draft to that path instead (the pre-E36 behavior) — `CHANGELOG.md` is not touched in this mode.
+- If no prior ledger-backed tag exists, a `--output` draft includes `> First release — full history included`; the standing `CHANGELOG.md` merge mode has no equivalent banner (it just merges full history into `[Unreleased]` like any other run).
 - Scrum-board enrichment is best-effort only; missing or unreadable board data never fails the command.
+- **`.publicignore` filtering:** when a repo-root `.publicignore` exists (the blocklist `/mirror-public` also reads), a candidate commit — or a completed task's associated commit(s), matched via the `task(E##_S##_T##):` commit-message convention — is dropped entirely when every changed file it touches is covered by that blocklist. A commit touching a mix of blocked and unblocked files is still logged normally; only full coverage excludes an entry. This exists because `CHANGELOG.md` itself is not blocklisted and ships to the public mirror, so an unfiltered entry referencing a private-only path (e.g. `project/board/`) would leak. Absent `.publicignore`, this is a strict no-op — unchanged from pre-E36_S02_T02 behavior. Matching reuses `skills/mirror-public/scripts/mirror.sh`'s `rsync --exclude-from` evaluation rather than a separate glob implementation, so a path classified "blocked" by `/mirror-public --dry-run` is classified "blocked" here too.
 
 ## Ledger & Tagging
 

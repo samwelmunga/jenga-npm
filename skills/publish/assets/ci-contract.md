@@ -18,7 +18,7 @@ Every `/publish` invocation must perform these steps before command-specific wor
 | Select deploy target | `--target <name>` | `PUBLISH_TARGET` | Yes | Flag takes precedence over env var |
 | Skip confirmation prompts | `--yes` | `PUBLISH_YES` | Yes | Env var truthy values: `1`, `true`, `yes`, `on` |
 | Override config path | `--config <path>` | — | No | Defaults to `project/configs/publish.json` |
-| Reuse prepared release notes | `--release-notes <path>` | — | No | Reserved for later release-note flow |
+| Reuse prepared release notes | `--notes-file <path>` | — | No | Live: bypasses generation entirely and uses the supplied file directly, instead of the standing `CHANGELOG.md` flow |
 | Dry-run execution | `--dry-run` | `PUBLISH_DRY_RUN` | No | Prints allowlisted `xcodebuild` / `xcrun` commands without executing them |
 
 ## Required contract
@@ -58,7 +58,7 @@ These run only after the mandatory global gates succeed.
 These inputs remain optional in non-interactive mode:
 
 - `--config <path>` when the default config exists
-- `--release-notes <path>`
+- `--notes-file <path>`
 - `--from-tag` and `--to-ref` on `/publish release-notes`
 
 ## Exit codes

@@ -5,8 +5,7 @@
   },
   "autoMode": {
     "allow": [
-      "$defaults",
-      "Bash(bash skills/mirror-public/scripts/mirror.sh*)"
+      "$defaults"
     ]
   },
   "permissions": {
@@ -29,19 +28,13 @@
       "Bash(su *)"
     ]
   },
-  "autoMode": {
-    "allow": [
-      "$defaults",
-      "Bash(bash .claude/skills/publish/scripts/*)"
-    ]
-  },
   "hooks": {
     "WorktreeCreate": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "NAME=$(jq -r '.name')\n. \"$(git rev-parse --show-toplevel)/lib/resolve-project-dir.sh\"\nDIR=\"$JENGA_PROJECT_DIR/.claude/worktrees/$NAME\"\ngit worktree add \"$DIR\" -b \"$NAME\" 2>&1\necho \"$DIR\"\n"
+            "command": "NAME=$(jq -r '.name')\n. \"$(git rev-parse --show-toplevel)/lib/resolve-project-dir.sh\"\nDIR=\"$JENGA_PROJECT_DIR/.claude/worktrees/$NAME\"\ngit worktree add \"$DIR\" -b \"$NAME\" 2>&1\n\"$(git rev-parse --show-toplevel)/scripts/install-worktree-commit-guard.sh\" \"$DIR\" \"$NAME\" 1>&2\necho \"$DIR\"\n"
           }
         ]
       }
@@ -51,7 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.worktree_path' | xargs git worktree remove --force\n"
+            "command": "\"$(git rev-parse --show-toplevel)/scripts/worktree-remove-guard.sh\"\n"
           }
         ]
       }

@@ -85,7 +85,7 @@ You: "Actually, let's also add API rate limiting while we're at it"
 
 **Parallel work**
 ```
-/jenga         → fully automated orchestrator: decomposes Epics → Stories → Tasks → executes
+/jenga         → interactive board orchestrator: pick or scope, confirm, then execute (`/jenga *` for the original fully automated, no-prompts run)
 /dooo          → orchestrates E01_S02 and E02_S01 in parallel sub-agents
 /reconcile     → syncs board with actual git history after parallel merges
 ```
@@ -184,10 +184,11 @@ Skills live in `.agents/skills/<name>/SKILL.md`. Invoke with `/<name>` in your A
 |---|---|
 | `/init` | Scaffold project directories, `workflow.json`, `PROJECT_SUMMARY.md`, initial git commit |
 | `/jbp` | Scaffold using the [JengaBasePlate](https://github.com/samwelmunga/JengaBasePlate.git) boilerplate |
-| `/jenga` | Fully automated board orchestrator — decomposes Epics → Stories → Tasks → executes |
+| `/jenga` | Interactive-by-default board orchestrator — bare shows a picker + confirmation tree, `<ids>` scopes and confirms, `*` runs fully automated with no prompts |
 | `/pi-plan` | Define or expand Epics in `PROJECT_SUMMARY.md` — use at start or when adding major new work |
 | `/brainstorm` | Focused planning session with the Scrum Master before committing anything to the board |
 | `/deep-dive` | Multi-phase investigation — gathers info, brainstorms, scrutinises, and produces a refined output |
+| `/uncharted` | Entry point for code with no board provenance — `segment` (a file or directory), `import` (an external source), `onboard` (a whole pre-existing codebase) |
 | `/todo` | Add missions to `project/todo.md` linked to epics and stories |
 | `/btw` | Capture a mid-flow idea, classify it into epic/story structure, implement now or defer |
 | `/spinoff` | Capture a diverging topic without losing your current thread |
@@ -207,6 +208,7 @@ Skills live in `.agents/skills/<name>/SKILL.md`. Invoke with `/<name>` in your A
 | Command | Description |
 |---|---|
 | `/status` | Print a full scrum board overview — epics, stories, tasks, rapports, queue depth |
+| `/jenga-permission-level` | Report or switch the current session's 5-tier permission level (Locked/Guarded/Standard/Elevated/Unrestricted) without hand-editing settings.json |
 | `/continue` | Check project status and pick up the next incomplete item |
 | `/proceed` | Review progress and resume executing the project plan |
 | `/reconcile` | Sync the board with actual git history — fixes drift, merges orphaned worktrees |
@@ -318,6 +320,8 @@ project/                   ← Created by /init inside your software project
 ├── logs/
 │   └── events.json        ← Append-only inter-agent event log
 └── PROJECT_SUMMARY.md     ← Project source of truth (owned by Scrum Master)
+
+CHANGELOG.md                ← Created by /init at the project's repo root; maintained by /publish
 ```
 
 ---

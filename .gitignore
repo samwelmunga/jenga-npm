@@ -3,7 +3,6 @@
 
 # Project-scoped scratch dir used by ad-hoc helpers (legacy: distribute-changes.sh)
 .jenga_tmp/
-.claude/publish-tmp/
 
 # Ad-hoc smoke-test scratch space (e.g. fake consumer installs)
 .tmp/
@@ -36,3 +35,17 @@ mcp/router/.session.json
 
 # Claude/Copilot session artefacts
 agents/.agents/
+
+# Per-session handoff files (project/queue/handoffs/) are transient,
+# single-use signals consumed and deleted by hooks/on_session_end.sh
+# immediately after routing (see templates/SCRUM_BOARD_SCHEMA.md's
+# handoffs/ section: "A file must not persist once it has been
+# consumed."). They must never be durable git artifacts — E37_S01_T02
+# found ~25 of them had been committed anyway (swept up by unrelated
+# `git add -A` commits before the hook ever consumed this directory) and
+# accumulated into a resurrection hazard: a later, correct consumer would
+# treat them as live signals for work already fully shipped. This rule
+# structurally prevents recurrence rather than relying on every agent to
+# remember not to `git add` this directory.
+project/queue/handoffs/*.json
+!project/queue/handoffs/.gitkeep

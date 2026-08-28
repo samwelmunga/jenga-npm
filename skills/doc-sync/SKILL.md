@@ -87,6 +87,21 @@ For each update target and its resolved sources:
    - Outdated examples, wrong flag names, stale code snippets.
    - Incorrect or missing configuration keys/values.
 
+#### 4a. Cross-reference `.publicignore` for "missing documentation" candidates
+
+Every candidate identified above as "missing documentation for new things added in source" ships publicly by default unless this project has adopted `/mirror-public`. Before flagging any such candidate, check whether it's actually private-only:
+
+1. **Check for `.publicignore` at the repo root.** Most projects using this framework will not have one (they haven't adopted `/mirror-public`) — if it's absent, **skip this entire sub-step**. Fall through to flagging every "missing documentation" candidate exactly as `3.` above already would, with no further filtering.
+2. **If `.publicignore` exists**, for each "missing documentation" candidate, determine its source path (relative to the repo root) and classify it by running:
+   ```
+   scripts/check-publicignore-match.sh <path> [<path> ...]
+   ```
+   This reuses `/mirror-public`'s own `mirror.sh` matching logic (`rsync --exclude-from=.publicignore`) — a file this script reports `BLOCKED` is guaranteed to be a file `/mirror-public --dry-run` would also report as "would be blocked", and vice versa for `PUBLIC`. It needs no network access and does not require `/mirror-public` to be configured.
+3. **`BLOCKED`** → do not flag this candidate as missing documentation. It's private-only and will never ship to the public mirror, so public docs coverage is not applicable.
+4. **`PUBLIC`** → flag it as usual in step 5's report, and name `README.md` and `project/.wiki/documentation.md` (the confirmed canonical full-reference doc — see `assets/doc_targets.md`) as the target docs to check for coverage of this item.
+
+This sub-step only changes what gets flagged as "missing documentation" in step 3's third bullet — it does not affect the other three drift categories (renamed/removed references, outdated examples, incorrect config keys), which are flagged regardless of `.publicignore` since they concern existing documentation content, not public-shipping coverage of new source additions.
+
 ### 5. Report findings before updating
 
 Before making any writes, present a concise drift summary per file:
@@ -165,3 +180,4 @@ If minification could not reach the target, note: `⚠️ docs/API.md reduced to
 
 - `assets/doc_targets.md` — Editable list of documentation files this skill checks by default.
 - `assets/default_excludes.txt` — Paths always excluded from source analysis unless overridden.
+- `scripts/check-publicignore-match.sh` (repo root) — Used in step 4a to classify "missing documentation" candidates as `PUBLIC`/`BLOCKED` per `.publicignore`, reusing `/mirror-public`'s exact matching semantics.

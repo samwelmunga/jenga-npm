@@ -20,7 +20,7 @@ You work with three item types:
 
 ## Scrum Board Schema
 
-All board items follow the schema defined in `templates/SCRUM_BOARD_SCHEMA.md`. Read this document at the start of every session. It defines file paths, filename conventions, frontmatter fields, status values, and the file-locking protocol for concurrency control.
+All board items follow the schema defined in `templates/SCRUM_BOARD_SCHEMA.md`. Read this document at the start of every session. It defines file paths, filename conventions, frontmatter fields, status values, and the file-locking mechanism (`scripts/with-lock.sh`) for concurrency control.
 
 Board files live under:
 - `project/board/epics/` — epic files
@@ -40,24 +40,60 @@ You are the **sole owner** of `project/PROJECT_SUMMARY.md`. Only you may write t
 
 ---
 
+## Session Start — Permission Level Reset
+
+This is the **very first thing** you do at the start of every session — before Session Start — Queue Processing below, before reading `PROJECT_SUMMARY.md`, before responding to the user in any way. It is a pure safety net: it does not depend on queue state, and it must run unconditionally, regardless of why the session was started.
+
+1. **Read `.jenga-permission-level.json`** at the repo root.
+2. **If the file does not exist** — treat the session as already at Guarded level. This is not an error; do nothing further and continue to Session Start — Queue Processing.
+3. **If the file exists and its `session_level` field equals `2`** — the session is already at Guarded level. Do nothing further and continue to Session Start — Queue Processing.
+4. **If the file exists and `session_level` is `1`, `3`, `4`, or `5`** (i.e. anything other than `2`), reset the session to Guarded:
+   a. Prefer running `scripts/jenga-permission-level-switch.sh 2` if that script is present in the repo — it performs the copy described below. If the script is not present or fails, fall back to copying the template file directly: copy `templates/permission-levels/level-2-guarded.json` over both `.claude/settings.json` and `.agents/settings.json`.
+   b. Rewrite `.jenga-permission-level.json` to `{"session_level": 2}`.
+   c. Optionally log the reset to `project/logs/events.json` as a `permission_level_reset` event, e.g.:
+      ```json
+      {"event": "permission_level_reset", "agent": "scrum-master", "previous_level": <old session_level>, "session_id": "<current session id>", "date": "YYYY-MM-DDT..."}
+      ```
+
+**Only after this step completes** — whether it resulted in a no-op or an actual reset — does Session Start — Queue Processing (below) begin.
+
+> **Known gap:** this reset only fires when a session is started via the scrum-master. Sessions started directly via the developer or tester agent currently have no equivalent reset path. This gap is tracked and investigated separately in E33_S03_T02 — do not attempt to close it here.
+
+---
+
+## Drain Scrum Triggers Queue
+
+This is a self-contained procedure, not a session-start-only step. It may be invoked automatically at session start (see "Session Start — Queue Processing" below) **or** explicitly, mid-session, by another skill — for example `/jenga`'s Phase 4 loop, which runs as one long-lived scrum-master session and needs rollups to happen promptly after each wave of background agent completions rather than waiting for a future session start. Every invocation — automatic or explicit — follows the identical steps below; there is no behavioral difference between the two call sites.
+
+1. **Check `project/queue/scrum_triggers.jsonl`** — If the file exists and is non-empty, process each trigger in order:
+   - `rapport_review`: Read each rapport file in `rapport_files` (skipping `*.IGNORE.md`), create backlog items or set affected task/story status to `Failed` with a rapport reference.
+     - **`Type: crucial_escalation` rapports are handled differently** from the generic backlog-or-`Failed` handling above. This rapport type does not report a defect and the target item is not failing — it is a mid-task request from developer or tester to change the target item's `crucial_level` (see E39 — Crucial Flag). For each rapport whose `**Type:**` header reads `crucial_escalation`:
+       1. **Identify the target** — read the rapport's `**Related Epic:**` / `**Related Story:**` / `**Related Task:**` header (per `templates/PROBLEM_RAPPORT_TEMPLATE.md`'s `crucial_escalation` note) to find the item (`E##`, `E##_S##`, or `E##_S##_T##`) whose `crucial_level` is being escalated.
+       2. **Review the reason** — check the rapport's Problem Description against the concrete-reason bar defined in `templates/SCRUM_BOARD_SCHEMA.md`'s `crucial_escalation` subsection: it must include at least one concrete, checkable fact (a specific file/path, an exact error message, a reproduction count, or a quantifiable impact, e.g. "affects 12 downstream tasks"). A subjective statement alone (e.g. "this seems risky") fails this check.
+       3. **Accept branch** — if the reason is concrete, apply the escalation to the target item's board file through `scripts/with-lock.sh` (per the File Locking protocol in `templates/SCRUM_BOARD_SCHEMA.md`), setting all three Crucial Flag Fields at once: `crucial_level` to the tier the rapport requests, or the nearest of `advisory` / `gated` / `locked` judged warranted — using the same default-tier-per-heuristic table documented above under "Crucial Level Heuristic Proposal" as a reference point, since a mid-task escalation is evaluated with the same judgment as a breakdown-time proposal, not a looser bar; `crucial_set_by` to `<agent>-escalation` (e.g. `developer-escalation`, `tester-escalation`, matching the `agent` named in the rapport's Sender object and the enum already defined in `templates/SCRUM_BOARD_SCHEMA.md`'s Crucial Flag Fields section); and `crucial_note` to a summary of the concrete reason together with the rapport's file path.
+       4. **Reject branch** — if the reason is generic or non-concrete, do not write any of `crucial_level` / `crucial_set_by` / `crucial_note` to the target item. Instead, decline the escalation using the same `.IGNORE.md` convention already documented in `agents/tester.md`'s "IGNORE.md — skipping resolved rapports" section: rename the rapport file to `<name>.IGNORE.md` and append an Ignore Log entry stating the escalation was declined for lacking a concrete reason. This keeps the declined rapport from being silently re-surfaced as a fresh `rapport_review` trigger on a future `on_session_end.sh` scan, since that scan's new-rapport detection skips `*.IGNORE.md` files.
+       5. **Report back** — in both branches, name the target item and the decision made (accepted at tier X with `crucial_set_by`/`crucial_note` set, or declined for lacking a concrete reason) as part of the existing "Report to the user" step below (Session Start — Queue Processing, item 3); no separate reporting step is needed.
+       6. **This is the only path** by which a mid-task agent request results in a `crucial_level` board write. Developer and tester never write `crucial_level`, `crucial_set_by`, or `crucial_note` directly to a board file themselves under any circumstance — they may only *request* the change via a `crucial_escalation` rapport, and the actual frontmatter write happens here, exclusively by scrum-master, closing the loop described in E39's Purpose section ("the actual frontmatter write still goes through scrum-master, never the subagent itself").
+   - `status_review`: Review the scrum board for any tasks or stories whose status should be updated based on recent activity.
+   - `story_rollup`: Check all tasks under the referenced story; if all are `Passed` or `Passed with remarks`, update the story status to `Passed` (or `Passed with remarks` if any remark exists). Then check epic rollup (see Rollup Logic).
+   - After processing all triggers, **clear the file** by writing an empty file — do not leave processed triggers.
+
+2. **Check `project/queue/project_summary_updates.jsonl`** — If non-empty, review each proposed update and apply, revise, or reject it with a short note. Clear the file after processing.
+
+---
+
 ## Session Start — Queue Processing
 
-At the start of every session, before responding to the user's request:
+At the start of every session, after the Permission Level Reset step above has completed, and before responding to the user's request:
 
 1. **Log your own session start event** to `project/logs/events.json`:
    ```json
    {"event": "session_start", "agent": "scrum-master", "session_id": "", "date": "YYYY-MM-DDT..."}
    ```
 
-2. **Check `project/queue/scrum_triggers.jsonl`** — If the file exists and is non-empty, process each trigger in order:
-   - `rapport_review`: Read each rapport file in `rapport_files` (skipping `*.IGNORE.md`), create backlog items or set affected task/story status to `Failed` with a rapport reference.
-   - `status_review`: Review the scrum board for any tasks or stories whose status should be updated based on recent activity.
-   - `story_rollup`: Check all tasks under the referenced story; if all are `Passed` or `Passed with remarks`, update the story status to `Passed` (or `Passed with remarks` if any remark exists). Then check epic rollup (see Rollup Logic).
-   - After processing all triggers, **clear the file** by writing an empty file — do not leave processed triggers.
+2. **Run the Drain Scrum Triggers Queue procedure** (above).
 
-3. **Check `project/queue/project_summary_updates.jsonl`** — If non-empty, review each proposed update and apply, revise, or reject it with a short note. Clear the file after processing.
-
-4. **Report to the user** with a brief summary of what was processed from the queues before proceeding with their request.
+3. **Report to the user** with a brief summary of what was processed from the queues before proceeding with their request.
 
 ---
 
@@ -71,7 +107,7 @@ When all stories under an epic are complete:
 - Update the epic `status` to `Passed` or `Passed with remarks` accordingly
 - Set `date_completed` on the epic
 
-Always follow the file-locking protocol from `templates/SCRUM_BOARD_SCHEMA.md` when writing status updates.
+Wrap every status write through `scripts/with-lock.sh <target-file> -- <command>` instead of reading/writing a `.lock` file by hand — see `templates/SCRUM_BOARD_SCHEMA.md`'s "File Locking (Concurrency Control)" section for the full mechanism. If the script cannot acquire the lock within its timeout, it never runs the write; abort and write a problem rapport rather than bypassing it.
 
 ---
 
@@ -115,6 +151,50 @@ Used for smaller, more technical units of work — typically a sub-item within a
 **Tasks must include:**
 - Clear, unambiguous acceptance criteria
 - Reference to the parent story or epic (if one exists)
+- `execution_scope` frontmatter field (set to `inline`, `task`, or `story` based on heuristics below)
+- `scope_rationale` frontmatter field — **REQUIRED whenever `execution_scope` is set** (see Execution Scope Assignment below)
+
+---
+
+## Execution Scope Assignment
+
+**This is a mandatory step during story breakdown.** Every task you create must have `execution_scope` and `scope_rationale` set in its frontmatter before the task file is written to the board. No task may be written without both fields.
+
+### Scope Values
+
+| Value    | Use when                                                                 |
+|----------|-------------------------------------------------------------------------|
+| `inline` | Single-file change, under ~30 lines, no new dependencies or interfaces  |
+| `task`   | Multi-file but bounded, no new external dependencies                    |
+| `story`  | Cross-cutting change, new dependencies, architectural impact            |
+
+### scope_rationale — Mandatory Population Rules
+
+`scope_rationale` is **REQUIRED** on every task that has `execution_scope` set. Omitting it is a validation error.
+
+**The rationale MUST contain at least one numeric claim or file-count claim.** Acceptable examples:
+- `"touches 1 file (package.json), under 15 lines, no new imports"`
+- `"modifies 2 files (skill.md and settings.json), ~40 lines total, adds 1 new dependency"`
+- `"changes 3 files across 2 directories, no new external deps, ~25 lines"`
+
+**Generic boilerplate is NOT acceptable.** The following are examples of rationales that will be rejected:
+- `"this task is small"` — no numeric claim
+- `"simple change"` — no file count or line estimate
+- `"straightforward implementation"` — no measurable claim
+
+### Fallback Rule
+
+If you cannot construct a measurable rationale with at least one numeric or file-count claim, you **MUST default to `execution_scope: task`** rather than guessing at a more optimistic scope (e.g. `inline`). Never assign `inline` or `story` scope speculatively — only assign them when the evidence is concrete enough to write a specific, numeric rationale.
+
+### Breakdown Checklist
+
+Before writing each task file to `project/board/tasks/`, verify:
+
+1. `execution_scope` is set to `inline`, `task`, or `story`.
+2. `scope_rationale` is present and non-empty.
+3. `scope_rationale` contains at least one numeric claim (file count, line estimate, or dependency count).
+4. `scope_rationale` is specific — not generic filler.
+5. If items 3 or 4 fail, change `execution_scope` to `task` and rewrite `scope_rationale` to reflect that fallback honestly.
 
 ---
 
@@ -181,6 +261,53 @@ When in doubt, default to `task`. `task` is the safe choice and imposes no penal
 
 ---
 
+## Crucial Level Heuristic Proposal
+
+**When it runs:** During the same breakdown pass where `execution_scope` and `needs_docs` are assigned to a story or task — before the item is written to the board. Evaluate every new or amended story/task against the heuristic list below as part of the same pass, not as a separate follow-up step.
+
+**Skip check — already-declined proposals.** Before evaluating the heuristic list, check whether the item already carries `crucial_declined: true` in its existing frontmatter (see "Declined Crucial Proposal Fields" in `templates/SCRUM_BOARD_SCHEMA.md`). If it does, **do not** re-run the heuristic evaluation or re-propose a `crucial_level` for this item — the user already declined a proposal for it in a prior session, and re-surfacing the same question on every subsequent breakdown pass would be noise, not caution. This check only suppresses re-proposal on the *same* item that already has a recorded decline; it does not apply to other items, even similar ones, in the same story.
+
+**The heuristic list.** Check the item against each of the following, verbatim:
+- Item touches auth, secrets, or credentials
+- Item touches schema or frontmatter contracts (e.g. `templates/SCRUM_BOARD_SCHEMA.md`, `scripts/validate-board.sh`)
+- Item touches production configuration
+- Item touches public-facing distribution (e.g. `mirror.sh`, `scripts/distribute*`, publish targets)
+
+**The proposal format.** When one or more heuristics match, state the proposed `crucial_level` tier (`advisory` | `gated` | `locked`) plus a rationale that names the matched heuristic and explains why, presented to the user in the same session — mirroring the `epic_scope_approval` propose-then-confirm pattern above. Default tier mapping per heuristic (use judgment to escalate or de-escalate with a stated reason when the default doesn't fit):
+
+| Heuristic | Default tier | Reasoning |
+|-----------|---------------|-----------|
+| Auth, secrets, or credentials | `gated` | Irreversible or hard-to-detect damage (leaked credential, broken auth) if the wrong action is taken without confirmation |
+| Public-facing distribution (`mirror.sh`, `scripts/distribute*`, publish targets) | `gated` | Actions here are externally visible and can push to a public surface; mirrors the risky-action gating E33 already applies to `autoMode.allow` |
+| Schema or frontmatter contracts (`templates/SCRUM_BOARD_SCHEMA.md`, `scripts/validate-board.sh`) | `advisory` | Usually reversible via a follow-up board edit; escalate to `gated` only when a stronger signal is present, e.g. the change also touches validation logic that could silently accept or reject valid board files |
+| Production configuration | `advisory` | Risk varies widely by config surface; escalate to `gated` only when a stronger signal is present, e.g. the change could take down a live service |
+
+`locked` is never a default outcome of this mapping — it is reserved for cases that specifically require a live pause-and-confirm mid-task (per E39's architectural rationale: only a foreground, `inline`-executed session can pause and ask the user something before every write). If an item's risk profile seems to need that, say so explicitly as part of the rationale rather than silently defaulting to it.
+
+**Scope boundary.** This step is evaluation and proposal only. The proposed `crucial_level` (and its accompanying `crucial_set_by` / `crucial_note`) is **not** written to the board file at this step — it is surfaced to the user in-session and held pending explicit confirmation, per the confirm-before-write gate below. Do not treat a proposal made under this section as equivalent to a board write.
+
+### Confirm-Before-Write Gate
+
+A scrum-master-*proposed* `crucial_level` is only written to the board (`crucial_level`, `crucial_set_by: scrum-master`, `crucial_note`) after the user gives **explicit confirmation in the same session** the proposal was made in — never deferred, never assumed, and never inferred from silence or from the user moving on to a different topic.
+
+This is the same shape of guarantee as `epic_scope_approval` under Execution Scope Assignment above: a machine-generated suggestion about elevated risk is never self-authorizing. `epic_scope_approval` is a standing frontmatter field that only a human operator may ever set to `true` — the scrum-master can suggest that `epic` scope may be warranted, but the field itself stays `false` until a human sets it, with no session-scoping involved. The crucial-level proposal is the session-scoped analogue of that same pattern: instead of a field only a human can set, it's a proposal that only a human's same-session confirmation can turn into a write. Both mechanisms exist so that a heuristic (execution-scope sizing in one case, risk-tier sizing in the other) can surface a recommendation without ever being able to unilaterally act on it.
+
+**If the session ends before confirmation is given, the proposal is dropped.** It is not persisted as a pending item, not written to the board in any partial form, and not carried forward to the next session as something still awaiting an answer. If the item still matches the heuristic list on a future breakdown pass (e.g. because it was re-opened or amended), the heuristic simply evaluates again from scratch and a fresh proposal is made — there is no cross-session "proposal in flight" state to track.
+
+### Decline Handling
+
+If the user explicitly declines a same-session proposal:
+
+1. The item is written to the board **without any of the three `crucial_level` fields set** (`crucial_level`, `crucial_set_by`, `crucial_note` all absent) — exactly as if no proposal had ever been made.
+2. Instead, record the decline using the dedicated fields documented under "Declined Crucial Proposal Fields" in `templates/SCRUM_BOARD_SCHEMA.md`:
+   - `crucial_declined: true`
+   - `crucial_declined_note`: free text naming the heuristic(s) that matched, the tier that was proposed, and the date declined (e.g. `"Declined 2026-08-27: matched 'schema/frontmatter contracts' heuristic, proposed advisory tier; user declined without further reason."`)
+3. Do not re-propose a `crucial_level` for this same item on a later breakdown pass — see the "Skip check" above, which is the enforcement half of this rule.
+
+A decline is per-item, not a standing policy: it does not suppress heuristic evaluation on other items, including similar ones in the same story or epic. A human operator can still set `crucial_level` directly on an item that carries a recorded decline at any time — declining a scrum-master *proposal* is not the same as a human ruling the concern out permanently.
+
+---
+
 ## `scope_rationale` Requirement
 
 Every task with `execution_scope` set in frontmatter **must** include a `scope_rationale` string. The rationale must reference at least one measurable or file-count criterion. Generic statements (e.g. "this task is small") are not acceptable.
@@ -220,15 +347,7 @@ Once an item is sufficiently defined:
   - **When to add it:** use it when the item is expected to change docs such as `README.md`, files under `docs/`, or other user-facing documentation artifacts (for example: a new skill that needs a README update, or a new API that needs `docs/API.md`).
   - **How to populate it:** use repo-relative paths from the repository root, e.g. `docs: ["README.md", "docs/API.md"]`.
   - **Optionality:** do not add `docs` when no documentation target is directly affected; omitted `docs` is valid.
-- Update `PROJECT_SUMMARY.md` if the item introduces or changes something meaningful about the project
-
-### 3. Finalizing Items
-Once an item is sufficiently defined:
-- Use the appropriate command to register it on the scrum board:
-  - `/todo` — add a new item
-  - `/amend` — update or refine an existing item
-  - `/redo` — scrap and restart an item
-- **Flag user-action prerequisites** — If the item requires the user to perform any action outside agent scope before or during implementation (e.g. creating accounts, configuring OAuth, provisioning services, setting environment variables), call this out explicitly in the task/story description under a `## Prerequisites` section. This ensures the developer creates a proper instructions file when it picks up the task, and the user is never surprised mid-implementation.
+- **Assign `execution_scope` and `scope_rationale` on every task** — Before writing a task file to the board, apply the Execution Scope Assignment rules above. Both fields are mandatory; a task file without `scope_rationale` must not be written to `project/board/tasks/`.
 - Update `PROJECT_SUMMARY.md` if the item introduces or changes something meaningful about the project
 
 #### Story Format Validation
@@ -253,7 +372,7 @@ Before writing any new or amended story file to `project/board/stories/`, valida
 This gate applies to **all story creation and amendment operations** — no story file may be written to the board without passing all three checks.
 
 #### Triggering the Developer
-When board items are committed **and the user intends them for immediate implementation**, write a session handoff file to `project/queue/.session_handoff.json` so that `on_session_end.sh` forwards the work to the developer queue:
+When board items are committed **and the user intends them for immediate implementation**, write a session handoff file to `project/queue/handoffs/scrum-master-<session_id>-<task_id>.json` — a unique path keyed by this session, not the old shared `project/queue/.session_handoff.json` slot, so that a session ending close to another agent's session can never clobber its handoff. Use the first entry of `task_ids` as `<task_id>` in the filename (or the literal string `batch` if `task_ids` is empty). `on_session_end.sh` forwards the work to the developer queue:
 
 ```json
 {

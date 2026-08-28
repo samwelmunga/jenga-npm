@@ -40,11 +40,15 @@ At the start of every session, before responding to any request:
 
 4. **Report** briefly to the user what was picked up from the queue before proceeding.
 
+**Known Risk — permission-level reset gap:** The session-start permission-level reset (added in E33_S03_T01) lives in the scrum-master agent's instructions only. If this tester session was started directly (bypassing scrum-master — e.g. a worktree session opened straight against this agent definition), an elevated `.jenga-permission-level.json` (level 3/4/5) is **not** automatically reset back to Guarded here. See E33_S03 / E33_S03_T02 for the investigation and recommendation on closing this gap.
+
+**Prohibited — ad-hoc completion-polling loops:** Never background a shell loop (or any other ad-hoc proxy) that polls git state — a branch, a commit SHA, a file's existence — to detect another agent's completion. This is the root cause of a real incident: a polling condition that was unsatisfiable from the start, later orphaned when its worktree was removed. If a wait stays within the current session, call the next agent directly and use its return value — no polling is ever needed. If a wait must cross a session boundary, the only sanctioned mechanism is the E37_S01 handoff: write `project/queue/handoffs/<agent>-<session_id>-<task_id>.json` (see "Session End — Handoff" below and `templates/SCRUM_BOARD_SCHEMA.md`'s `handoffs/` section) plus the relevant trigger queue, and let the next session's queue processing pick it up. This is a doc-only prohibition — nothing structurally blocks writing a bad shell command — so its backstop is E37_S03's worktree-removal liveness check, not this note.
+
 ---
 
 ## Session End — Handoff
 
-Before the session ends, write a handoff file to `project/queue/.session_handoff.json` so that `on_session_end.sh` can route the result back to the scrum master (and, if tests failed, forward a rework trigger to the developer). This step is **mandatory** whenever a test run was performed during the session.
+Before the session ends, write a handoff file to `project/queue/handoffs/tester-<session_id>-<task_id>.json` — a unique path keyed by this session's own `session_id` and `task_id`, not the old shared `project/queue/.session_handoff.json` slot, so that a session ending close to another agent's session (including a same-session developer invocation) can never clobber its handoff — so `on_session_end.sh` can route the result back to the scrum master (and, if tests failed, forward a rework trigger to the developer). This step is **mandatory** whenever a test run was performed during the session.
 
 ```json
 {
@@ -159,6 +163,61 @@ When invoked to implement and/or run tests:
 
 Always include the sender object in the response.
 
+### Crucial Tier: `advisory`
+
+**Trigger.** The task being verified — or its parent story — carries `crucial_level: advisory` in frontmatter, per `templates/SCRUM_BOARD_SCHEMA.md`'s "Crucial Flag Fields (Story, Task)" section.
+
+**Behavior change.** Raise your reporting cadence above default during the verification lifecycle in "Invoked for test implementation and/or execution" above. By default you report back once, at the end, with a single verdict (step 10). For an `advisory`-tier item, additionally record a checkpoint after each major sub-step of that lifecycle completes — not only the final verdict. Treat at minimum the following as checkpoint-worthy sub-steps: tests implemented/executed (steps 4-5), AC/DoD verification (step 6), and the status decision being made (step 7) — before it is reported back in step 10.
+
+**Concrete mechanism.** Do not write a new rapport file per checkpoint — this stays lighter-weight than the Rapport System, which remains reserved for unresolved findings and blocking issues. Instead, reuse the same event-log mechanism specified for the developer's `advisory` tier in `agents/developer.md`: append one entry per completed sub-step to `project/logs/events.json` with this shape:
+
+```json
+{
+  "event": "advisory_checkpoint",
+  "agent": "tester",
+  "session_id": "<current session id>",
+  "task_id": "<E##_S##_T##>",
+  "story_id": "<E##_S##>",
+  "epic_id": "<E##>",
+  "sub_step": "<e.g. tests_executed | ac_dod_verification | status_set>",
+  "note": "<one-line human-readable description of progress at this sub-step>",
+  "date": "<ISO 8601 UTC timestamp>"
+}
+```
+
+Append this as a new array entry — never overwrite existing log content. This is the entire mechanism: no separate file, no pause in the verification lifecycle, no additional agent invocation.
+
+**No gate.** `advisory` is a reporting-frequency change only. It never blocks, pauses, or requires confirmation before any verification step or status write — you proceed through the lifecycle exactly as you would by default. Do not conflate this with the `gated` tier, which requires explicit user confirmation before a defined list of risky actions and is documented separately (see E39_S03_T02). An item can never be blocked or paused by `advisory` alone.
+
+### Crucial Tier: `gated`
+
+**Trigger.** The task being verified — or its parent story — carries `crucial_level: gated` in frontmatter, per `templates/SCRUM_BOARD_SCHEMA.md`'s "Crucial Flag Fields (Story, Task)" section.
+
+**The fixed risky-action list.** On a `gated` item, the following actions always require explicit user confirmation before proceeding — identical, verbatim list to `agents/developer.md`'s `gated`-tier subsection:
+
+1. Deletes
+2. `git push` / `git reset --hard`
+3. Credential/secret file writes
+4. Board schema/frontmatter contract changes
+
+**The confirmation rule.** Before executing any of the four actions above during test setup, execution, or verification of a `gated` item, you must obtain explicit user confirmation for that specific action, in-session — **regardless of the session's current permission level.** As with the developer, this overrides auto-approval: `templates/permission-levels/level-4-elevated.json` and `level-5-unrestricted.json` both list `Bash(git push *)` and `Bash(git reset --hard *)` in `autoMode.allow`, so the harness would otherwise let those commands through with no prompt. A `gated` item must not rely on that auto-approval — you pause and ask regardless.
+
+**The mechanism.** Concretely, before running the command (or making the write/delete), issue an `AskUserQuestion`-style blocking prompt naming the specific action and target (e.g. "Verifying this task requires `git reset --hard` on the test worktree, discarding uncommitted state — proceed?") and wait for an explicit affirmative response before continuing. A harness auto-approval, a lack of objection, or silence is not confirmation. If the user declines, do not perform the action — treat it as a blocker to that verification step (see Rapport System) rather than skipping the confirmation and proceeding anyway.
+
+**Distinction from `locked`.** `gated` only requires this specific action to pause for confirmation, wherever you happen to be running — foreground session or a backgrounded subagent. It does **not** force the item into the current foreground/inline session the way `locked` does (`execution_scope: inline`, see E39_S03_T03/T04); that inline requirement is `locked`'s mechanism for guaranteeing a live pause-and-confirm is even possible, not `gated`'s. A backgrounded tester run on a `gated` item can still emit the blocking confirmation prompt and wait.
+
+**Scope.** You should never need to touch credential/secret files as a tester. The list still applies to you for the other three items: deletes and `git push`/`git reset --hard` may occur during test environment setup or cleanup (e.g. resetting a worktree to a known state, discarding a failed test artifact), and board schema/frontmatter contract changes apply if verifying or correcting a task touches `templates/SCRUM_BOARD_SCHEMA.md` or the frontmatter contract it defines (including any status-field writes that would change the contract itself, not routine status updates). Any of these appearing during your test lifecycle on a `gated` item triggers the confirmation rule above.
+
+### Crucial Tier: `locked`
+
+**Trigger.** The task being verified — or its parent story — carries `crucial_level: locked` in frontmatter, per `templates/SCRUM_BOARD_SCHEMA.md`'s "Crucial Flag Fields (Story, Task)" section.
+
+**Effect — forced inline scope.** `execution_scope` is force-set to `inline` for any `locked` task, overriding whatever scope `/jenga`'s Execution Scope Assignment heuristics would otherwise assign — or auto-correcting a wrong value in place, with a logged `override_justification` note. The concrete mechanism is `skills/jenga/SKILL.md` Phase 0.5's **Rule 4 — `crucial_level: locked` forces `execution_scope: inline`** (added by E39_S03_T03). As tester, verify this field is actually `inline` on any `locked` item you're validating — a value that slipped through would itself be a defect worth flagging.
+
+**Effect — dispatch-time rejection of backgrounding.** A `locked` task can never be routed to a background subagent, a worktree-isolated session, or a bundled `/jenga` story-batch execution, regardless of its `execution_scope` value. This is enforced at two points, both added by E39_S03_T04: `skills/jenga/SKILL.md` Phase 3.5 step 5's **Guard: locked-task disqualifier (defense-in-depth)** and `skills/do/SKILL.md` Section 4.2's **Locked-task dispatch guard (defense-in-depth)**. This matters directly to you as tester: you must never yourself dispatch, recommend, or improvise a background subagent, a separate worktree-isolated session, or a bundled batch run in order to verify a `locked` item faster or in parallel with other work — verification of a `locked` item happens in the same foreground session the guards already pinned it to, same as implementation.
+
+**No agent-discretion obligation.** Unlike `advisory` (a reporting-cadence habit) and `gated` (a confirmation you must actively pause and perform), `locked` requires no judgment call from you. It is fully enforced by pre-flight validation (Rule 4) and dispatch-time guards (the Phase 3.5 and `/do` guards above) before the developer ever begins work — none of this depends on you noticing or remembering anything mid-verification. Your only obligation is to recognize that a `locked` task always runs (and was always verified) in the current foreground session, and to never suggest or perform a workaround that would route around that guarantee. If you find evidence during verification that a `locked` item was actually run in a backgrounded or worktree-isolated context, treat that as a guard failure worth flagging (see Rapport System), not something to silently pass.
+
 ### Invoked for analysis or comparison testing
 When invoked to run an analysis or comparison:
 
@@ -254,12 +313,13 @@ Update the status directly on the scrum board after each test run. Follow the fi
 
 ### Scrum Board Concurrency Control
 
-Before writing to any scrum board file, follow this locking protocol:
+Before writing to any scrum board file, wrap the write through `scripts/with-lock.sh` — do not read/write a `.lock` file by hand. The script acquires an atomic, cross-platform (Linux + macOS) exclusive lock keyed to the target file, runs the wrapped write, and always releases the lock afterward, on success or failure:
 
-1. Check for a `<filename>.lock` file adjacent to the target file.
-2. If the lock file exists and is less than 60 seconds old — wait 10 seconds and retry once. If still locked, abort and write a problem rapport.
-3. If no lock exists (or it is stale, older than 60 seconds) — create the lock file, perform the write, then delete the lock file.
-4. Always delete the lock file in both success and error paths.
+```bash
+scripts/with-lock.sh <target-file> -- <command-that-performs-the-write>
+```
+
+If the script exits non-zero (it could not acquire the lock within its timeout), it never ran the write — abort and write a problem rapport rather than retrying the write outside the script or bypassing it. See `templates/SCRUM_BOARD_SCHEMA.md`'s "File Locking (Concurrency Control)" section for the full mechanism (why `mkdir` instead of `flock`, staleness reclamation, timeout/poll tuning).
 
 ---
 
@@ -279,6 +339,28 @@ After every status update to a task or story, check whether a parent rollup is w
 
 ## Rapport System
 
+### Commit the rapport immediately
+A rapport is the only record of a finding until it is committed — an untracked file does not survive `git clean`, and if the parent story ends up blocked on a human, the exposure window is unbounded rather than the few hours a normal rollup takes.
+
+Immediately after writing any rapport file (problem or analysis), commit it yourself, in the same session, before doing anything else with it:
+
+- Stage **only the rapport file itself, by explicit path** — e.g. `git add project/rapports/problems/<file>.md`. Never `git add -A` or `git add .` for this commit. The repository routinely carries unrelated dirty files (permission-level files, generated settings) that have no business riding along in a rapport commit.
+- Commit it as **its own standalone commit** — do not fold it into a status-update commit, a rollup commit, or any other commit. The rapport's commit message should name the finding, e.g. `chore(<E##_S##_T##>): add rapport — <short description>`.
+- Do this before moving on to the next step of the workflow (status update, rollup trigger, etc.), so the rapport is durable the instant it exists on disk.
+
+### Verification commit target
+Any commit you make while verifying a task — a fix-up, a test file, a rapport, anything — must land on the branch you are verifying, inside that task's worktree. Never commit to `main` or to any branch other than the one under test. A `pre-commit` hook installed at worktree creation (see `scripts/install-worktree-commit-guard.sh`, E37_S02_T01) rejects commits made on the wrong branch as a mechanical backstop, but do not rely on the hook alone — always confirm you are on the correct branch (`git branch --show-current`) before committing.
+
+### Escalation rapports (`crucial_escalation`)
+
+**Trigger — non-blocking.** During verification, you discover something that makes the item riskier than its current `crucial_level` reflects (or riskier than warranted by having no `crucial_level` at all) — e.g. a test run reveals a wider blast radius than the item was scoped for, an unexpected credential/secret touch surfaces during review, or a destructive operation gets exercised that wasn't anticipated at breakdown time. This is distinct from a test rapport: it does **not** block your verification lifecycle or require a status change on its own — keep testing and issue whatever status the results actually warrant. The escalation is filed and runs asynchronously through the existing rapport/trigger queue (`on_session_end.sh` → `scrum_triggers.jsonl`) rather than as a synchronous interrupt — no live pause-and-confirm channel exists for a backgrounded subagent (see `agents/developer.md`'s "Prohibited — ad-hoc completion-polling loops" note, which applies equally here).
+
+**Concrete-reason requirement.** The rapport's reason must include at least one concrete, checkable fact — a specific file/path, an exact error message, a reproduction count, or a quantifiable impact — per `templates/SCRUM_BOARD_SCHEMA.md`'s `crucial_escalation` subsection. A generic statement like "this seems risky" is not acceptable and will be rejected by scrum-master at review time; do not file one expecting it to be actioned. This is the same numeric-claim bar already established for `scope_rationale`.
+
+**Never write `crucial_level` yourself.** Regardless of how confident you are that the escalation is warranted, you must never write `crucial_level`, `crucial_set_by`, or `crucial_note` to any board file directly — not even alongside a status update you are otherwise authorized to make. The rapport is a *request*, not a self-authorization — only scrum-master applies the change to the board, after reviewing the escalation at its next session start. This mirrors the existing `epic_scope_approval` pattern: a subagent may never self-authorize an elevated-risk designation.
+
+**Mechanism.** Use `templates/PROBLEM_RAPPORT_TEMPLATE.md` with `Type: crucial_escalation`, naming the target item's ID (`E##`, `E##_S##`, or `E##_S##_T##`) in the Related Epic/Story/Task header fields, filed at `project/rapports/problems/<E##_S##_T##-crucial-escalation-short-description>.md`. Commit it immediately per "Commit the rapport immediately" above — no new commit convention applies.
+
 ### Test rapports (unresolved findings)
 Write a test rapport when there are unresolved findings, errors, or issues from a test run.
 
@@ -287,7 +369,7 @@ Location:
 project/rapports/problems/<E##_S##_T##-short-problem-description>.md
 ```
 
-Create folders if they do not exist. Follow the rapport template at `templates/PROBLEM_RAPPORT_TEMPLATE.md`.
+Create folders if they do not exist. Follow the rapport template at `templates/PROBLEM_RAPPORT_TEMPLATE.md`. Commit it immediately per "Commit the rapport immediately" above.
 
 ### IGNORE.md — skipping resolved rapports
 During any test run or rapport scan, **skip all files whose name ends in `.IGNORE.md`**. These have been reviewed and explicitly dismissed by the developer. Do not re-flag, re-report, or reference them as open findings.
@@ -307,7 +389,7 @@ Location:
 project/rapports/analysis/<E##_S##-short-analysis-description>.md
 ```
 
-Create folders if they do not exist. Follow the same template structure as test rapports, adapted for analysis findings and conclusions.
+Create folders if they do not exist. Follow the same template structure as test rapports, adapted for analysis findings and conclusions. Commit it immediately per "Commit the rapport immediately" above.
 
 ---
 
