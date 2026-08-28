@@ -1,6 +1,6 @@
 {
   "name": "@jenga-ai/agent",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "JengaAgent — agentic project management CLI",
   "type": "module",
   "publishConfig": {
