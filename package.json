@@ -1,7 +1,7 @@
 {
   "name": "@jenga-ai/agent",
   "version": "1.2.1",
-  "description": "JengaAgent — agentic project management CLI",
+  "description": "Structured multi-agent development workflow for AI coding agents — scrum board, role-bounded scrum master / developer / tester agents, and 30+ slash-command skills. Works with Claude Code, GitHub Copilot, and Codex.",
   "type": "module",
   "publishConfig": {
     "access": "public"
@@ -9,8 +9,12 @@
   "bin": {
     "jenga": "./bin/jenga.js"
   },
+  "engines": {
+    "node": ">=14.13.1"
+  },
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
+    "validate:npm-metadata": "bash scripts/validate_npm_metadata.sh",
     "ui:dev": "npm run ui:dev --prefix project/app",
     "ui:build": "npm run ui:build --prefix project/app",
     "api:start": "npm run api:start --prefix project/app",
@@ -32,10 +36,35 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/samwelmunga/jenga-npm"
+    "url": "git+https://github.com/samwelmunga/jenga-npm.git"
   },
-  "keywords": [],
-  "author": "",
+  "homepage": "https://github.com/samwelmunga/jenga-npm#readme",
+  "bugs": {
+    "url": "https://github.com/samwelmunga/jenga-npm/issues"
+  },
+  "keywords": [
+    "ai-agents",
+    "agentic",
+    "agentic-workflow",
+    "multi-agent",
+    "agent-framework",
+    "ai-development",
+    "claude",
+    "claude-code",
+    "agents-md",
+    "copilot",
+    "github-copilot",
+    "codex",
+    "skills",
+    "project-management",
+    "developer-tools",
+    "cli"
+  ],
+  "author": {
+    "name": "Samwel Munga",
+    "email": "samwelmunga88@hotmail.se",
+    "url": "https://knappkod.se/jenga-ai"
+  },
   "license": "MIT",
   "dependencies": {
     "@huggingface/transformers": "^4.2.0"

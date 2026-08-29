@@ -190,7 +190,7 @@ A successful non-dry-run produces:
 - A history entry in `project/logs/publish-history.json` written by
   `publish_deploy.sh` with `platform_state: "triggered"`
 
-## Post-Deploy Manual Steps
+## Post-deploy manual steps
 
 After a successful deploy trigger, the adapter prints the workflow run URL.
 The operator should:

@@ -465,8 +465,17 @@ print_manual_steps() {
     droplet)
       adapter_doc="$PUBLISH_REPO_ROOT/skills/publish/adapters/droplet.md"
       ;;
-    *)
+    npm)
+      adapter_doc="$PUBLISH_REPO_ROOT/skills/publish/adapters/npm.md"
+      ;;
+    npm-ci)
+      adapter_doc="$PUBLISH_REPO_ROOT/skills/publish/adapters/npm-ci.md"
+      ;;
+    mobile-ios)
       adapter_doc="$PUBLISH_REPO_ROOT/skills/publish/adapters/mobile-ios.md"
+      ;;
+    *)
+      return 0
       ;;
   esac
   [[ -f "$adapter_doc" ]] || return 0
