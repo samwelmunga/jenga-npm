@@ -509,8 +509,10 @@ linked_by_board = linked_by_commit = 0
 
 for rec in linkage.get("results", []):
     # Key on the path we ASKED about, not the resolver's `target_relative`. The resolver
-    # realpath()s its target, so a tracked symlink (`AGENTS.md -> AGENT.md`) reports its
-    # destination and would silently overwrite that destination's own record.
+    # realpath()s its target, so a tracked symlink (e.g. this repo's now-retired
+    # `AGENTS.md -> AGENT.md`, before E41_S04_T05 made AGENTS.md a real file) reports its
+    # destination and would silently overwrite that destination's own record. The general
+    # case (any tracked symlink) still applies even though that specific example is gone.
     path = rec.get("argument") or rec.get("target_relative")
     if not path:
         continue

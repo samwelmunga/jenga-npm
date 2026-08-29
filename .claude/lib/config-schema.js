@@ -18,8 +18,8 @@ export const configSchema = {
     sessionTimeout: { type: "number", minimum: 0 },
     agentTarget: {
       oneOf: [
-        { type: "string", enum: ["claude", "copilot", "custom"] },
-        { type: "array", items: { type: "string", enum: ["claude", "copilot", "custom"] }, minItems: 1 }
+        { type: "string", enum: ["claude", "copilot", "custom", "codex"] },
+        { type: "array", items: { type: "string", enum: ["claude", "copilot", "custom", "codex"] }, minItems: 1 }
       ]
     }
   },
@@ -45,10 +45,10 @@ export function validateConfig(config) {
   if (typeof config.sessionTimeout !== "number" || config.sessionTimeout < 0) {
     return { valid: false, error: "sessionTimeout must be a non-negative number" };
   }
-  const validTargets = ["claude", "copilot", "custom"];
+  const validTargets = ["claude", "copilot", "custom", "codex"];
   const targets = Array.isArray(config.agentTarget) ? config.agentTarget : [config.agentTarget];
   if (targets.length === 0 || !targets.every(t => validTargets.includes(t))) {
-    return { valid: false, error: 'agentTarget must be one of: "claude", "copilot", "custom" (or an array of those values)' };
+    return { valid: false, error: 'agentTarget must be one of: "claude", "copilot", "custom", "codex" (or an array of those values)' };
   }
   return { valid: true };
 }

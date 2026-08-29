@@ -49,6 +49,7 @@ project/instructions/
 
 # --- Local Claude / agent session state (never shippable) ---
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
 .claude/worktrees/
 .agents/worktrees/
 

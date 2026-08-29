@@ -13,7 +13,7 @@
 #   2. Reads <project_path>/jenga.config.json for target_dir and project_name.
 #   3. Loads per-project exclusions from <project_path>/.jenga_ignore (warn, not error).
 #   4. Rsyncs each included item to both <target_dir>/ and .claude/ in the project.
-#   5. Copies AGENT.md, CLAUDE.md, WARP.md to the project root.
+#   5. Copies AGENTS.md, CLAUDE.md, WARP.md to the project root.
 #   6. Writes jenga.config.json atomically (temp + mv).
 #
 # Exit codes:
@@ -282,7 +282,7 @@ done
 # Step 6: Copy root-level docs to the consuming project root
 # ---------------------------------------------------------------------------
 
-ROOT_DOCS="AGENT.md CLAUDE.md WARP.md"
+ROOT_DOCS="AGENTS.md CLAUDE.md WARP.md"
 
 for doc in $ROOT_DOCS; do
   src="$REPO_ROOT/$doc"

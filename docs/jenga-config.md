@@ -10,7 +10,7 @@ This document describes all fields supported in `jenga.cli.json` — the runtime
 
 **Type:** `string`  
 **Default:** `"claude"`  
-**Options:** `"claude"` | `"copilot"` | `"custom"`
+**Options:** `"claude"` | `"copilot"` | `"custom"` | `"codex"`
 
 The agent backend that Jenga dispatches skill execution to.
 
@@ -19,6 +19,33 @@ The agent backend that Jenga dispatches skill execution to.
 | `"claude"` | Claude Code (Anthropic) — default |
 | `"copilot"` | GitHub Copilot CLI agent |
 | `"custom"` | User-defined agent; requires additional config in the skill frontmatter |
+| `"codex"` | Codex CLI agent |
+
+`agentTarget` also accepts an array of these values (e.g. `["claude", "codex"]`) for multi-target installs.
+
+---
+
+### Generated Agent Context Files (`CLAUDE.md` / `AGENTS.md`)
+
+`/init` always generates both `CLAUDE.md` and `AGENTS.md` at the project root — this is **unconditional** and does not depend on `agentTarget`. Every agent gets a real, populated root-level context file regardless of which target(s) the project is configured for; there is no `AGENT.md` (singular) file.
+
+Both files are rendered from a single shared template (`templates/agent-context.md.tpl`) so they cannot drift apart the way two hand-maintained copies would. The generated content lives inside a managed block:
+
+```
+<!-- JENGA:START -->
+...
+<!-- JENGA:END -->
+```
+
+On repeat `/init` runs, only the content inside this block is replaced — anything a user added outside it is preserved, and the block itself is idempotent (no duplication).
+
+**Collision rule (`J-<NAME>.md`):** If `CLAUDE.md` or `AGENTS.md` already exists at the project root **and** it isn't a file Jenga itself previously generated (i.e. it has no `JENGA:START` marker), Jenga treats this as a genuine pre-existing user file:
+
+- Jenga's own copy is written instead as `J-CLAUDE.md` / `J-AGENTS.md`.
+- A short, clearly-marked reference block is inserted near the top of the user's existing file, pointing at the `J-<NAME>.md` copy. The user's file is otherwise left untouched.
+- On subsequent runs, the `J-<NAME>.md` file (and its reference in the original file) are updated in place — a collision is never re-derived twice, so a `J-J-CLAUDE.md` can never occur.
+
+If no collision exists, `CLAUDE.md`/`AGENTS.md` are written directly at the project root.
 
 ---
 

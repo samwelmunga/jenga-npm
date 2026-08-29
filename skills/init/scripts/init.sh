@@ -73,7 +73,18 @@ cp "$SCRIPT_DIR/../../../templates/CHANGELOG_TEMPLATE.md" CHANGELOG.md
 echo "→ Applying project files visibility ($VISIBILITY)..."
 bash "$VISIBILITY_SCRIPT" "$VISIBILITY" "$PWD"
 
-# ─── 12. Initial commit ──────────────────────────────────────────────────────
+# ─── 12. Generate CLAUDE.md / AGENTS.md ──────────────────────────────────────
+# Unconditional — never gated on agentTarget (E41_S04). Applies the J-
+# collision rule and idempotent managed-block updates; see
+# lib/generate-agent-context.js (shared with the published `jenga init` CLI).
+echo "→ Generating CLAUDE.md / AGENTS.md..."
+if command -v node >/dev/null 2>&1; then
+  node "$SCRIPT_DIR/../../../lib/generate-agent-context.js" "$PWD"
+else
+  echo "  Warning: node not found — skipped CLAUDE.md/AGENTS.md generation." >&2
+fi
+
+# ─── 13. Initial commit ──────────────────────────────────────────────────────
 echo "→ Staging and committing scaffolded files..."
 git add -A
 git commit -m "init: scaffold project structure and workflow config"
