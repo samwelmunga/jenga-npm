@@ -1,6 +1,6 @@
 {
   "name": "@jenga-ai/agent",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Structured multi-agent development workflow for AI coding agents — scrum board, role-bounded scrum master / developer / tester agents, and 30+ slash-command skills. Works with Claude Code, GitHub Copilot, and Codex.",
   "type": "module",
   "publishConfig": {
