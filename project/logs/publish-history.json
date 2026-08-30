@@ -90,5 +90,17 @@
     "platform_state": "uploaded",
     "git_tag": "v1.2.3",
     "commit_sha": "a544bcfc8b220cf10813ad0073ee00bf7696210b"
+  },
+  {
+    "id": "cc211607-84e8-4799-af70-23ffb673dfad",
+    "version": "v1.2.4",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-08-30T23:54:31Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": "/Users/samwelmunga/Desktop/Projects/agents-public/CHANGELOG.md",
+    "platform_state": "uploaded",
+    "git_tag": "v1.2.4",
+    "commit_sha": "2786eaf22e246f12b4f3dd6eca5b080db2c6a666"
   }
 ]

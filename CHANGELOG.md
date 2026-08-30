@@ -12,6 +12,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Other
 
+## [v1.2.4] — 2026-08-30
+
+### Features
+
+### Bug Fixes
+
+### Other
+- chore(publish): record v1.2.3 release notes and ledger entry (52b1fbf)
+- chore(mirror): sync from private at aa303ac 2026-08-30T23:48:56Z (e4b5dd9)
+
 ## [v1.2.3] — 2026-08-30
 
 ### Features
