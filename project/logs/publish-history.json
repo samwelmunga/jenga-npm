@@ -1,1 +1,94 @@
-[]
+[
+  {
+    "id": "135401d9-6ead-48fe-97d3-37273f767931",
+    "version": "v1.1.1",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-08-28T22:07:16Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": "/Users/samwelmunga/Desktop/Projects/agents-public/CHANGELOG.md",
+    "platform_state": "dry-run",
+    "git_tag": "v1.1.1",
+    "commit_sha": "6c50f8522fb2577dbd88138361140456fbf2c27e"
+  },
+  {
+    "id": "1390f0d6-328d-464a-ac82-d2777045ee61",
+    "version": "v1.1.1",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-08-28T22:12:44Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": "/Users/samwelmunga/Desktop/Projects/agents-public/CHANGELOG.md",
+    "platform_state": "uploaded",
+    "git_tag": "v1.1.1",
+    "commit_sha": "d64563183e8680b21692f1e34792a62099b2286f"
+  },
+  {
+    "id": "fc7b9312-fa37-46b8-ae5a-59a302049242",
+    "version": "v1.2.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-08-28T22:14:42Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": "/Users/samwelmunga/Desktop/Projects/agents-public/CHANGELOG.md",
+    "platform_state": "uploaded",
+    "git_tag": "v1.2.0",
+    "commit_sha": "e9e281bbb8c8e8faea8d8906e4f3708aa60a7140"
+  },
+  {
+    "id": "442b8ea2-5089-4b89-9ad4-1d65bf5f6ea4",
+    "version": "v1.2.1",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-08-29T10:15:03Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": "/Users/samwelmunga/Desktop/Projects/agents-public/CHANGELOG.md",
+    "platform_state": "dry-run",
+    "git_tag": "v1.2.1",
+    "commit_sha": "133314411cbe16eaa6a1d83c0870069f24325ffb"
+  },
+  {
+    "id": "1cfcaee2-d52f-49f0-bb64-0da677a580ac",
+    "version": "v1.2.1",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-08-29T10:49:54Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": "/Users/samwelmunga/Desktop/Projects/agents-public/CHANGELOG.md",
+    "platform_state": "uploaded",
+    "git_tag": "v1.2.1",
+    "commit_sha": "9490d0d2089650bd3d34af8173a83f72e520db56"
+  },
+  {
+    "id": "a3067a11-8340-4a7a-a131-ef1d98de1738",
+    "version": "v1.2.2",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-08-29T19:06:34Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": "/Users/samwelmunga/Desktop/Projects/agents-public/CHANGELOG.md",
+    "platform_state": "uploaded",
+    "git_tag": "v1.2.2",
+    "commit_sha": "f1b7e5194cc275c0ab129afd193e19556ed9a3d4"
+  },
+  {
+    "event": "gate_failure",
+    "gate": "test",
+    "phase": "pre",
+    "target": "npm-jenga",
+    "date": "2026-08-30T21:08:34Z",
+    "exit_code": 2
+  },
+  {
+    "id": "10a67950-9fff-4f43-bed4-f4ab80c4e467",
+    "version": "v1.2.3",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-08-30T21:10:58Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": "/Users/samwelmunga/Desktop/Projects/agents-public/CHANGELOG.md",
+    "platform_state": "uploaded",
+    "git_tag": "v1.2.3",
+    "commit_sha": "a544bcfc8b220cf10813ad0073ee00bf7696210b"
+  }
+]
