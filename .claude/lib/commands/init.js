@@ -1,10 +1,11 @@
 import { createInterface } from "readline";
-import { readFileSync, writeFileSync, existsSync, appendFileSync, mkdirSync, readdirSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, appendFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { validateConfig } from "../config-schema.js";
 import { injectSettings } from "../inject-settings.js";
 import { generateAgentContext } from "../generate-agent-context.js";
+import { generateCopilotInstructions } from "../generate-copilot-instructions.js";
 
 const CONFIG_FILE = "jenga.cli.json";
 
@@ -125,74 +126,28 @@ export async function runInit(args, projectRoot = process.cwd()) {
       console.warn("You can register it manually later by running jenga init again.");
     }
 
-    // Generate .github/copilot-instructions.md from template.
-    // Templates ship inside the jenga-agent package (node_modules/jenga-agent/templates/).
-    // Fall back to a bare `templates/` at the project root only for the dev-repo case.
+    // Generate .github/copilot-instructions.md from template, via the shared generator
+    // (lib/generate-copilot-instructions.js) also used unconditionally by scripts/postinstall.js
+    // at install time (E46_S03_T01). Templates ship inside the jenga-agent package
+    // (node_modules/jenga-agent/templates/), with a bare `templates/` at the project root as a
+    // fallback for the dev-repo case — both handled inside the shared generator.
+    //
+    // skillsPath may be a string or an array (multi-target installs); pick the first existing
+    // directory — mirrored copies hold identical content. This pass uses the user's actual
+    // chosen skillsPath from the wizard, which may differ from postinstall's `.agents/skills`
+    // default and refines whatever postinstall already bootstrapped. The shared generator's
+    // idempotent marker-replace logic means running it again here never duplicates the JENGA
+    // block or corrupts content outside the markers.
     try {
-      const tplCandidates = [
-        join(PACKAGE_ROOT, "templates", "copilot-instructions.md.tpl"),
-        join(projectRoot, "templates", "copilot-instructions.md.tpl"),
-      ];
-      const tplPath = tplCandidates.find(existsSync);
-      if (tplPath) {
-        const tpl = readFileSync(tplPath, "utf8");
+      const skillsPathList = Array.isArray(config.skillsPath) ? config.skillsPath : [config.skillsPath];
+      const skillsDir = skillsPathList
+        .map(p => join(projectRoot, p))
+        .find(existsSync);
 
-        // Build skill list from skillsPath. skillsPath may be a string or an
-        // array (multi-target installs); pick the first existing directory —
-        // mirrored copies hold identical content.
-        const skillsPathList = Array.isArray(config.skillsPath) ? config.skillsPath : [config.skillsPath];
-        const skillsDir = skillsPathList
-          .map(p => join(projectRoot, p))
-          .find(existsSync);
-        let skillLines = [];
-        if (skillsDir) {
-          for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
-            if (!entry.isDirectory()) continue;
-            const skillMdPath = join(skillsDir, entry.name, "SKILL.md");
-            let description = "";
-            if (existsSync(skillMdPath)) {
-              const content = readFileSync(skillMdPath, "utf8");
-              const match = content.match(/^description:\s*(.+)$/m);
-              if (match) description = match[1].trim();
-            }
-            skillLines.push(`- **${entry.name}**${description ? `: ${description}` : ""}`);
-          }
-        }
-        const skillList = skillLines.length > 0 ? skillLines.join("\n") : "_No skills found._";
-        const rendered = tpl.replace("{{SKILL_LIST}}", skillList);
-
-        const githubDir = join(projectRoot, ".github");
-        const copilotInstructionsPath = join(githubDir, "copilot-instructions.md");
-
-        if (!existsSync(githubDir)) mkdirSync(githubDir, { recursive: true });
-
-        if (!existsSync(copilotInstructionsPath)) {
-          writeFileSync(copilotInstructionsPath, rendered, "utf8");
-        } else {
-          // Replace only the JENGA block; preserve content outside the markers
-          const existing = readFileSync(copilotInstructionsPath, "utf8");
-          const startMarker = "<!-- JENGA:START -->";
-          const endMarker = "<!-- JENGA:END -->";
-          const startIdx = existing.indexOf(startMarker);
-          const endIdx = existing.indexOf(endMarker);
-
-          // Extract the new JENGA block from rendered template
-          const renderedStart = rendered.indexOf(startMarker);
-          const renderedEnd = rendered.indexOf(endMarker);
-          const newBlock = rendered.slice(renderedStart, renderedEnd + endMarker.length);
-
-          let updated;
-          if (startIdx !== -1 && endIdx !== -1 && startIdx < endIdx) {
-            updated =
-              existing.slice(0, startIdx) +
-              newBlock +
-              existing.slice(endIdx + endMarker.length);
-          } else {
-            // No existing markers — append the block
-            updated = existing + (existing.endsWith("\n") ? "" : "\n") + newBlock + "\n";
-          }
-          writeFileSync(copilotInstructionsPath, updated, "utf8");
-        }
+      const result = generateCopilotInstructions(projectRoot, PACKAGE_ROOT, skillsDir);
+      if (result.skipped) {
+        console.warn("Warning: templates/copilot-instructions.md.tpl not found — skipped .github/copilot-instructions.md generation.");
+      } else {
         console.log("✓ .github/copilot-instructions.md written");
       }
     } catch (e) {

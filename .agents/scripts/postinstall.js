@@ -32,6 +32,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { mirror } from '../lib/mirror.js';
+import { generateCopilotInstructions } from '../lib/generate-copilot-instructions.js';
 
 // ESM equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -151,6 +152,26 @@ function main() {
 
     totalCopied  += result.added.length + result.overwritten.length;
     totalSkipped += result.skipped.length;
+  }
+
+  // Bootstrap .github/copilot-instructions.md unconditionally, right after the mirror step —
+  // no interactive prompts, since postinstall runs unattended during `npm install`. Without
+  // this, a consumer whose very first action is a Copilot slash command (before ever running
+  // the separate `jenga init` CLI wizard) gets no `/skill-name` routing instructions at all
+  // (E46_S03_T01). `.agents/skills` is passed as the skills directory because that's the
+  // directory the mirror step above just populated, regardless of which agentTarget the user
+  // eventually picks in `jenga init`. The shared generator's idempotent marker-replace logic
+  // (lib/generate-copilot-instructions.js) means a later `jenga init` run — using the user's
+  // actual chosen skillsPath — safely refines this file without duplicating the JENGA block.
+  try {
+    const result = generateCopilotInstructions(consumerRoot, packageRoot, '.agents/skills');
+    if (result.skipped) {
+      console.log('  ⚠  templates/copilot-instructions.md.tpl not found — skipped .github/copilot-instructions.md bootstrap');
+    } else {
+      console.log('  ✓ .github/copilot-instructions.md bootstrapped');
+    }
+  } catch (e) {
+    console.log(`  ⚠  Could not bootstrap .github/copilot-instructions.md — ${e.message}`);
   }
 
   // Write .jenga-version to record the installed version at consumer root
