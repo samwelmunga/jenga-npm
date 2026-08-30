@@ -1,4 +1,4 @@
-# API Contract — JengaAgent Dashboard API
+# API Contract — Jenga AI Dashboard API
 
 ## 1. Resource Naming Conventions
 

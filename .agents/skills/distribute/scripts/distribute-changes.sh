@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# distribute-changes.sh — Copy JengaAgent framework files into a consuming project
+# distribute-changes.sh — Copy Jenga AI framework files into a consuming project
 #
 # Usage:
 #   distribute-changes.sh <project_path> [--dry-run]

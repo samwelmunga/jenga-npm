@@ -1,7 +1,7 @@
 {
   "name": "jenga-dashboard-api",
   "version": "1.0.0",
-  "description": "JengaAgent dashboard API server",
+  "description": "Jenga AI dashboard API server",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

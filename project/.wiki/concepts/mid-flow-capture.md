@@ -8,7 +8,7 @@
 
 You're three tasks into implementing a feature when a better idea surfaces — or a separate concern entirely. If you chase it, you lose the thread of your current work. If you ignore it, you lose the idea.
 
-JengaAgent has two skills designed for exactly this tension: `/btw` and `/spinoff`.
+Jenga AI has two skills designed for exactly this tension: `/btw` and `/spinoff`.
 
 ---
 

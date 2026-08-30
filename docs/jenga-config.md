@@ -1,6 +1,6 @@
 # Jenga CLI Configuration (`jenga.cli.json`)
 
-This document describes all fields supported in `jenga.cli.json` — the runtime configuration file for the JengaAgent CLI. Copy `jenga.cli.json.example` from the project root to get started.
+This document describes all fields supported in `jenga.cli.json` — the runtime configuration file for the Jenga AI CLI. Copy `jenga.cli.json.example` from the project root to get started.
 
 ---
 

@@ -1,7 +1,7 @@
 # How the E26 npm Deploy Procedure Works
 
 ## 1. What it is
-E26 replaced JengaAgent's old device-local `/distribute` + `.jenga_paths` sync with a real **npm publishing pipeline**. The framework (`jenga-agent`) is now published to **npmjs.com** as a public package, and consumer projects pick it up with `npm install jenga-agent`. Publishing is driven end-to-end by the existing `/publish` skill, which learned a new `type: npm` alongside its original `type: mobile-ios`.
+E26 replaced Jenga AI's old device-local `/distribute` + `.jenga_paths` sync with a real **npm publishing pipeline**. The framework (`jenga-agent`) is now published to **npmjs.com** as a public package, and consumer projects pick it up with `npm install jenga-agent`. Publishing is driven end-to-end by the existing `/publish` skill, which learned a new `type: npm` alongside its original `type: mobile-ios`.
 
 ## 2. Why it exists
 The old approach required the framework repo path to be hard-coded on each developer's laptop (in `.jenga_paths`). That doesn't survive a fresh machine, a CI runner, or a second contributor. npm gives you:
@@ -11,7 +11,7 @@ The old approach required the framework repo path to be hard-coded on each devel
 
 ## 3. How it works
 
-### Publisher side (JengaAgent repo)
+### Publisher side (Jenga AI repo)
 The repo root is a real npm package (`package.json:1`):
 ```json
 {
@@ -60,7 +60,7 @@ When a consumer runs `npm install jenga-agent`, the **postinstall hook** (`scrip
 - Compares package version against `<consumer>/.jenga-version` (a small semver comparator, no `semver` dep).
 - On **first install or upgrade**, recursively copies the two discovery-bound dirs (`skills/`, `agents/`) into **both** `<consumer>/.claude/` (for Claude Code) and `<consumer>/.agents/` (for Copilot / custom agents). This mirror is required because each agent ecosystem has its own fixed discovery path. Everything else (`hooks/`, `scripts/`, `templates/`, `mcp/`, `lib/`) stays in `node_modules/jenga-agent/…` and is sourced from there at runtime — no per-project duplication. The consumer's `project/` directory (the per-project working area) is left untouched.
 - Writes `.jenga-version` so subsequent installs skip when already up-to-date.
-- If the hook runs *inside* the JengaAgent repo itself (`INIT_CWD === packageRoot`), it no-ops — avoids trashing dev work.
+- If the hook runs *inside* the Jenga AI repo itself (`INIT_CWD === packageRoot`), it no-ops — avoids trashing dev work.
 
 ## 4. When to use it
 - **Use `/publish deploy --target npm-registry`** for any real release of `jenga-agent`.

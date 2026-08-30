@@ -26,7 +26,7 @@
  * ESM, Node built-ins only — mirrors lib/mirror.js and lib/inject-settings.js.
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, realpathSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -220,7 +220,16 @@ export function generateAgentContext(projectRoot = process.cwd(), packageRoot = 
 // used by skills/init/scripts/init.sh (this repo's own board-scaffolding
 // flow, where node is guaranteed available). The published npm CLI path
 // (lib/commands/init.js) imports generateAgentContext() directly instead.
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+//
+// process.argv[1] is compared via realpath, not as a raw string: Node
+// resolves import.meta.url through symlinks when loading an ES module, but
+// leaves process.argv[1] exactly as the shell passed it. On macOS, TMPDIR
+// and /tmp are themselves symlinks into /private, so any invocation from a
+// path under either (a very ordinary occurrence — every consumer install
+// under a symlinked, mapped, or `npm link`-ed directory hits this) made the
+// two sides disagree and silently skipped generation with no error.
+const invokedPath = process.argv[1] ? realpathSync(process.argv[1]) : null;
+if (invokedPath === fileURLToPath(import.meta.url)) {
   const projectRoot = process.argv[2] || process.cwd();
   const result = generateAgentContext(projectRoot);
   if (result.skipped) {

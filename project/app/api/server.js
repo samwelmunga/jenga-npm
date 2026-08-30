@@ -1,6 +1,6 @@
 /**
  * @file project/app/api/server.js
- * JengaAgent API server entry point.
+ * Jenga AI API server entry point.
  *
  * Usage:
  *   node project/app/api/server.js

@@ -1,6 +1,6 @@
 # Editable Board Design Note (E06_S03_T01)
 
-This document answers the five design questions that must be resolved before implementing inline task editing in the JengaAgent dashboard.
+This document answers the five design questions that must be resolved before implementing inline task editing in the Jenga AI dashboard.
 
 ---
 

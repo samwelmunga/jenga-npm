@@ -8,7 +8,7 @@
 
 On a single-session project, context loss doesn't matter. On anything longer — a real feature, a multi-day sprint, a project you return to after a week — it does. Without structure, the start of every session is a re-orientation exercise.
 
-With JengaAgent, the board, the event log, and the trigger queue hold the context. You just need to read them.
+With Jenga AI, the board, the event log, and the trigger queue hold the context. You just need to read them.
 
 ---
 

@@ -14,6 +14,7 @@
   },
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
+    "test": "bats tests/*.bats",
     "validate:npm-metadata": "bash scripts/validate_npm_metadata.sh",
     "ui:dev": "npm run ui:dev --prefix project/app",
     "ui:build": "npm run ui:build --prefix project/app",
@@ -74,5 +75,8 @@
   },
   "comments": {
     "audit": "sharp <0.35.0 and adm-zip <0.6.0 are transitive deps of @huggingface/transformers with no upstream fix available. Not exploitable in this context: only text feature-extraction pipeline is used — no image processing or ZIP handling at application boundary. Review when @huggingface/transformers ships a patched release."
+  },
+  "devDependencies": {
+    "bats": "^1.13.0"
   }
 }

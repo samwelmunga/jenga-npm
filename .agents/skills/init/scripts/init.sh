@@ -5,6 +5,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ASSETS_DIR="$SCRIPT_DIR/../assets"
 VISIBILITY_SCRIPT="$SCRIPT_DIR/apply-project-visibility.sh"
 
+# ─── Resolve the package root that owns templates/ and lib/ ──────────────────
+# postinstall.js mirrors only skills/ and agents/ into .claude/ and .agents/ —
+# templates/ and lib/ are never copied there, so a script running from a
+# mirrored copy (.claude/skills/init/scripts/ or .agents/skills/init/scripts/)
+# cannot reach its siblings via a fixed ../../../ climb the way it can in this
+# monorepo checkout, where init.sh actually lives at skills/init/scripts/ with
+# templates/ and lib/ three levels up. Consumers instead have them inside the
+# installed npm package.
+if [[ -d "$SCRIPT_DIR/../../../templates" ]]; then
+  PKG_ROOT="$SCRIPT_DIR/../../.."
+elif [[ -d "$PWD/node_modules/@jenga-ai/agent/templates" ]]; then
+  PKG_ROOT="$PWD/node_modules/@jenga-ai/agent"
+else
+  echo "Error: could not locate the jenga-agent package root (templates/ not found via monorepo checkout or node_modules/@jenga-ai/agent)." >&2
+  exit 1
+fi
+
 # ─── 0. Resolve project_files_visibility ─────────────────────────────────────
 # Defaults to `visible` — the only value that touches nothing on disk — so an
 # unattended run can never silently relocate directories or edit .gitignore.
@@ -65,7 +82,7 @@ cp "$ASSETS_DIR/strategy_stub_template.md" docs/STRATEGY.md
 
 # ─── 10. Create CHANGELOG.md ──────────────────────────────────────────────────
 echo "→ Creating CHANGELOG.md from template..."
-cp "$SCRIPT_DIR/../../../templates/CHANGELOG_TEMPLATE.md" CHANGELOG.md
+cp "$PKG_ROOT/templates/CHANGELOG_TEMPLATE.md" CHANGELOG.md
 
 # ─── 11. Apply project_files_visibility ──────────────────────────────────────
 # Runs before the commit so the .gitignore entry (ignored) is captured in the
@@ -79,7 +96,7 @@ bash "$VISIBILITY_SCRIPT" "$VISIBILITY" "$PWD"
 # lib/generate-agent-context.js (shared with the published `jenga init` CLI).
 echo "→ Generating CLAUDE.md / AGENTS.md..."
 if command -v node >/dev/null 2>&1; then
-  node "$SCRIPT_DIR/../../../lib/generate-agent-context.js" "$PWD"
+  node "$PKG_ROOT/lib/generate-agent-context.js" "$PWD"
 else
   echo "  Warning: node not found — skipped CLAUDE.md/AGENTS.md generation." >&2
 fi

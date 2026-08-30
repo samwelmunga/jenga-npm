@@ -1,6 +1,6 @@
 # Role Separation
 
-> **Concept:** Why JengaAgent uses three distinct agents instead of one.
+> **Concept:** Why Jenga AI uses three distinct agents instead of one.
 
 ---
 
@@ -12,9 +12,9 @@ This isn't hypothetical. Ask any AI to "write a function and test it" in one sho
 
 ---
 
-## How JengaAgent Separates Roles
+## How Jenga AI Separates Roles
 
-JengaAgent enforces three non-overlapping roles:
+Jenga AI enforces three non-overlapping roles:
 
 | Agent | Owns | Never does |
 |---|---|---|
@@ -45,7 +45,7 @@ The **file locking protocol** (`.lock` files adjacent to board items) enforces t
 
 You don't instruct the Developer to test, and you don't ask the Tester to fix code. The workflow enforces this for you. If something breaks in a test, the Tester writes a rapport to `project/rapports/problems/` — the Developer picks that up in the next cycle.
 
-This separation is what makes JengaAgent's results trustworthy across sessions: the Tester's verdict is independent.
+This separation is what makes Jenga AI's results trustworthy across sessions: the Tester's verdict is independent.
 
 ---
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# npm_pipeline.sh — Execute the npm publish pipeline for the JengaAgent repo.
+# npm_pipeline.sh — Execute the npm publish pipeline for the Jenga AI repo.
 #
-# Runs from the JengaAgent repo root (where package.json lives) and invokes
+# Runs from the Jenga AI repo root (where package.json lives) and invokes
 # `npm publish --tag <dist_tag>` (or `--dry-run` when requested).
 #
 # Exit codes:

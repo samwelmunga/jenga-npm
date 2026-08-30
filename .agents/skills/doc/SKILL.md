@@ -39,7 +39,7 @@ After target resolution, all generation must operate on a synthesis context obje
 ```yaml
 target_path: README.md
 objective: project overview
-project_name: JengaAgent
+project_name: Jenga AI
 project_description: Structured multi-agent development workflow
 features: []
 getting_started: []

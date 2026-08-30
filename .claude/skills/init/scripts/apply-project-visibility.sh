@@ -41,7 +41,7 @@ usage() {
   exit 1
 }
 
-# Every JengaAgent working file named in E31_S05 — the scrum board, todo.md,
+# Every Jenga AI working file named in E31_S05 — the scrum board, todo.md,
 # queue/, rapports/ and logs/ — nests under this single root, so one entry
 # covers them all. `ignored` consumes this list.
 JENGA_WORKING_PATHS=("project")

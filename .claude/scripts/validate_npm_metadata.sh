@@ -7,7 +7,7 @@
 # (CLAUDE.md), this is a script rather than an agent instruction so that
 # future drift in package.json's publish-facing fields (e.g. keywords
 # accidentally cleared, or repository.url silently re-pointed at the
-# private samwelmunga/JengaAgent repo instead of the public jenga-npm
+# private samwelmunga/Jenga AI repo instead of the public jenga-npm
 # mirror) is caught deterministically instead of relying on an agent
 # noticing during review.
 #
@@ -109,7 +109,7 @@ if (pkg.repository != null) {
   if (!repoUrl || repoUrl.trim().length === 0) {
     fail("repository is present but has no resolvable url.");
   } else if (!repoUrl.includes(PUBLIC_REPO_MARKER)) {
-    fail("repository.url (\"" + repoUrl + "\") does not point at the public " + PUBLIC_REPO_MARKER + " repo — it must not reference a private repo (e.g. samwelmunga/JengaAgent) or any other location.");
+    fail("repository.url (\"" + repoUrl + "\") does not point at the public " + PUBLIC_REPO_MARKER + " repo — it must not reference a private repo (e.g. samwelmunga/Jenga AI) or any other location.");
   } else {
     pass("repository.url points at the public " + PUBLIC_REPO_MARKER + " repo.");
   }

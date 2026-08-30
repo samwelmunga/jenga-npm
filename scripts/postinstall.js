@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * postinstall.js — JengaAgent consumer installation hook
+ * postinstall.js — Jenga AI consumer installation hook
  *
  * Runs automatically when a consumer project installs jenga-agent via npm.
  * Copies the discovery-bound dirs — `skills/` and `agents/` — into BOTH
@@ -65,7 +65,7 @@ function main() {
 
   // Avoid running during development (when INIT_CWD === packageRoot itself)
   if (path.resolve(consumerRoot) === path.resolve(packageRoot)) {
-    console.log('\n  ℹ  JengaAgent postinstall: running inside the package itself — skipping copy.\n');
+    console.log('\n  ℹ  Jenga AI postinstall: running inside the package itself — skipping copy.\n');
     return;
   }
 
@@ -93,7 +93,7 @@ function main() {
   const shouldCopy     = isFirstInstall || isUpgrade;
 
   console.log('\n╔══════════════════════════════════════════════════════╗');
-  console.log('║            JengaAgent — postinstall hook             ║');
+  console.log('║            Jenga AI — postinstall hook             ║');
   console.log('╚══════════════════════════════════════════════════════╝\n');
   console.log(`  Package version  : ${packageVersion}`);
   console.log(`  Installed version: ${installedVersion ?? '(none — first install)'}`);

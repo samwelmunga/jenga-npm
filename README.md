@@ -1,4 +1,4 @@
-# JengaAgent
+# Jenga AI
 
 **A structured multi-agent development workflow that works with any AI agent or AI-native IDE.** Three specialised AI agents — Scrum Master, Developer, and Tester — collaborate through a shared scrum board, an event-driven trigger queue, and 28 slash-command skills to take a project from idea to verified, committed code — across as many sessions as it takes.
 
@@ -34,7 +34,7 @@ npm install @jenga-ai/agent
 
 ## The Problem It Solves
 
-Without a framework like JengaAgent, AI-assisted development has serious structural weaknesses:
+Without a framework like Jenga AI, AI-assisted development has serious structural weaknesses:
 
 | Problem | Reality |
 |---|---|
@@ -45,7 +45,7 @@ Without a framework like JengaAgent, AI-assisted development has serious structu
 | **No audit trail** | You can't replay *why* something was built, by which agent, based on which task |
 | **Sessions just end** | Work-in-progress, unresolved problems, and incomplete stories silently vanish |
 
-JengaAgent solves each of these with structure: persistent board state, strict agent roles, typed inter-agent contracts, and session-end hooks that preserve context between sessions.
+Jenga AI solves each of these with structure: persistent board state, strict agent roles, typed inter-agent contracts, and session-end hooks that preserve context between sessions.
 
 ---
 
@@ -53,7 +53,7 @@ JengaAgent solves each of these with structure: persistent board state, strict a
 
 ### Before / After
 
-**Without JengaAgent:**
+**Without Jenga AI:**
 ```
 You: "Add user authentication"
 AI agent: [writes auth code, declares it works, session ends]
@@ -63,7 +63,7 @@ You: "What's the status of auth?"
 AI agent: "I don't have context from the previous session."
 ```
 
-**With JengaAgent:**
+**With Jenga AI:**
 ```
 /todo → "Add user authentication" → linked to E01_S02
 /do   → Developer creates worktree E01_S02_T01-auth
@@ -81,7 +81,7 @@ Next session:
 
 ### Real-World Scenario: Building a Feature Across Sessions
 
-Imagine you're building a REST API with auth, rate limiting, and an admin dashboard. Each is a separate Epic. Here's how JengaAgent handles that across multiple days:
+Imagine you're building a REST API with auth, rate limiting, and an admin dashboard. Each is a separate Epic. Here's how Jenga AI handles that across multiple days:
 
 **Planning**
 ```
@@ -187,7 +187,7 @@ Run `/status` at any time to see where the project stands.
 
 ## Supported Platforms
 
-JengaAgent has been tested with:
+Jenga AI has been tested with:
 
 | Platform | Type |
 |---|---|
@@ -261,7 +261,7 @@ Skills live in `.agents/skills/<name>/SKILL.md`. Invoke with `/<name>` in your A
 
 ## Distributing the Workflow
 
-JengaAgent can propagate its workflow files to other projects on your machine via `/distribute`.
+Jenga AI can propagate its workflow files to other projects on your machine via `/distribute`.
 
 1. **Register consumer projects** — add each consuming project to `distribute.config.json` at the repo root (or pass a path directly: `/distribute /path/to/project`).
 2. **Run `/distribute`** — choose `major`, `minor`, `patch`, or `amend` release type; the skill handles versioning, dry-run preview, file copy, and a version bump commit.
@@ -375,7 +375,7 @@ All agents log every incoming sender object to `project/logs/events.json` as the
 
 ---
 
-## When to Use JengaAgent
+## When to Use Jenga AI
 
 **Use it when:**
 - You're building a non-trivial project across multiple sessions

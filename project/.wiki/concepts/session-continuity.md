@@ -1,6 +1,6 @@
 # Session Continuity
 
-> **Concept:** Why AI sessions losing context is the core problem — and how JengaAgent solves it structurally.
+> **Concept:** Why AI sessions losing context is the core problem — and how Jenga AI solves it structurally.
 
 ---
 
@@ -16,9 +16,9 @@ Without a framework, you re-orient the AI at the start of every session. You pas
 
 ---
 
-## How JengaAgent Preserves Context
+## How Jenga AI Preserves Context
 
-JengaAgent stores context in **files, not in the model's memory**. Several structures work together:
+Jenga AI stores context in **files, not in the model's memory**. Several structures work together:
 
 | Structure | Location | What it stores |
 |---|---|---|
@@ -59,7 +59,7 @@ Worktree names match the task ID: `E01_S02_T01-jwt-middleware` — so you can al
 
 ## What "Resuming" Looks Like
 
-With JengaAgent, resuming a project is not a re-orientation exercise. It's:
+With Jenga AI, resuming a project is not a re-orientation exercise. It's:
 
 ```
 (New session)

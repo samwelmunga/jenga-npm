@@ -1,6 +1,6 @@
-# JengaAgent — Documentation Reference
+# Jenga AI — Documentation Reference
 
-This document is the full reference for JengaAgent: every skill, every agent, MCP tools, hooks, and the inter-agent communication contract.
+This document is the full reference for Jenga AI: every skill, every agent, MCP tools, hooks, and the inter-agent communication contract.
 
 > For an introduction to the framework, see the [README](../../README.md).
 
@@ -182,7 +182,7 @@ Skills are slash commands stored in `.agents/skills/<name>/SKILL.md`. Invoke the
 
 **Description:** Scaffold the project using the [JengaBasePlate](https://github.com/samwelmunga/JengaBasePlate.git) boilerplate.
 
-**When to use:** When you want a full project starter (not just the workflow scaffold). JBP includes opinionated structure for apps built with JengaAgent from the start.
+**When to use:** When you want a full project starter (not just the workflow scaffold). JBP includes opinionated structure for apps built with Jenga AI from the start.
 
 **Example:**
 ```
@@ -466,7 +466,7 @@ You: "Oh, we should also think about caching strategy"
 
 **Description:** Scaffold and run ML training jobs. Use `new <type> <job-name>` to scaffold from a template, or `run <job-dir>` to execute the validate → train pipeline.
 
-**When to use:** When working on machine learning components within a JengaAgent project.
+**When to use:** When working on machine learning components within a Jenga AI project.
 
 **Subcommands:**
 - `/train new <type> <job-name>` — scaffold a new job from a template (`classifiers`, `transformers`, `nlp`)
@@ -797,13 +797,13 @@ paths: [examples/auth-error.json, examples/rate-limit-error.json]
 
 **Description:** Explain a concept, feature, use case, or pattern with grounded examples — what it is, why it exists, how it works, when to use it, and a concrete example.
 
-**When to use:** When you want to understand something (a pattern, a JengaAgent concept, a piece of code) without digging through docs.
+**When to use:** When you want to understand something (a pattern, a Jenga AI concept, a piece of code) without digging through docs.
 
 **Output:** Saves an explanation to `project/documentation/examples/`.
 
 **Example:**
 ```
-/examplify sender objects in JengaAgent
+/examplify sender objects in Jenga AI
 
 What it is: A typed JSON contract passed between every agent call
 Why it exists: Prevents agents from operating on stale or ambiguous context

@@ -1,6 +1,6 @@
 # project/configs
 
-This directory holds version-controlled configuration files consumed by JengaAgent skills at runtime.
+This directory holds version-controlled configuration files consumed by Jenga AI skills at runtime.
 
 ---
 

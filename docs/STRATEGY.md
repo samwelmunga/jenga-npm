@@ -1,23 +1,23 @@
 # Strategy Brief
 
 > **Audience:** Investors and strategic partners.
-> This document describes the strategic direction of JengaAgent. It does not include revenue models, pricing, or competitive analysis.
+> This document describes the strategic direction of Jenga AI. It does not include revenue models, pricing, or competitive analysis.
 
 ---
 
 ## Vision
 
-JengaAgent's vision is to become the standard meta-framework for structured agentic software development — making it as easy to deploy a disciplined, multi-agent engineering workflow as it is to install a package.
+Jenga AI's vision is to become the standard meta-framework for structured agentic software development — making it as easy to deploy a disciplined, multi-agent engineering workflow as it is to install a package.
 
-We believe that AI-assisted development reaches its full potential only when it is structured: with clear roles, bounded responsibilities, a shared project board, and auditable communication between agents. JengaAgent provides that structure out of the box.
+We believe that AI-assisted development reaches its full potential only when it is structured: with clear roles, bounded responsibilities, a shared project board, and auditable communication between agents. Jenga AI provides that structure out of the box.
 
 ---
 
 ## Value Proposition
 
-JengaAgent gives software teams a production-ready agentic workflow without building one from scratch.
+Jenga AI gives software teams a production-ready agentic workflow without building one from scratch.
 
-Instead of a single AI assistant operating on an ad-hoc basis, JengaAgent provides:
+Instead of a single AI assistant operating on an ad-hoc basis, Jenga AI provides:
 
 - **Role-bounded agents** — scrum master, developer, tester, and AI engineer each with exclusive write permissions and defined responsibilities
 - **A skill library** — over thirty slash-command skills covering planning, execution, review, publishing, documentation, and maintenance
@@ -41,7 +41,7 @@ The result is an engineering team that can delegate complex, multi-step implemen
 
 ### Out of Scope
 
-The following are explicitly outside the scope of this document and of JengaAgent itself:
+The following are explicitly outside the scope of this document and of Jenga AI itself:
 
 - Revenue model, pricing strategy, or monetisation plans
 - Competitive analysis or feature comparison with other tools
@@ -51,9 +51,9 @@ The following are explicitly outside the scope of this document and of JengaAgen
 
 ## Target Audience
 
-JengaAgent is built for:
+Jenga AI is built for:
 
 - **Software engineering teams** who want structured, auditable AI-assisted development workflows without building the scaffolding themselves
 - **AI/ML engineers** who need a disciplined pipeline for model training jobs, evaluation, and iteration alongside a working software project
 - **Claude Code users** who want to move beyond single-assistant sessions into a multi-agent, role-bounded workflow
-- **Developer tooling authors** who want to distribute their own skill libraries or agent configurations via the JengaAgent extension model
+- **Developer tooling authors** who want to distribute their own skill libraries or agent configurations via the Jenga AI extension model

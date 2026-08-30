@@ -1,6 +1,6 @@
 /**
  * @file api/types.js
- * JSDoc type definitions for the JengaAgent API response envelope.
+ * JSDoc type definitions for the Jenga AI API response envelope.
  */
 
 /**

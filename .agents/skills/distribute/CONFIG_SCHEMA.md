@@ -6,7 +6,7 @@ This document is the canonical reference for the `jenga.config.json` file writte
 
 ## Purpose
 
-`jenga.config.json` lives at the root of a consuming project and tracks which version of the JengaAgent framework is currently installed there, where the framework files were placed, and when the last distribution occurred. It is read by the distribution script on subsequent runs to determine the target directory and detect whether an upgrade is needed.
+`jenga.config.json` lives at the root of a consuming project and tracks which version of the Jenga AI framework is currently installed there, where the framework files were placed, and when the last distribution occurred. It is read by the distribution script on subsequent runs to determine the target directory and detect whether an upgrade is needed.
 
 ---
 
@@ -40,17 +40,17 @@ This document is the canonical reference for the `jenga.config.json` file writte
 |---|---|---|---|---|
 | `project_name` | string | yes | — | Human-readable identifier for the consuming project. Must match the `name` field of the corresponding entry in the monorepo's `distribute.config.json`. |
 | `target_dir` | string | yes | `.agents` | The directory under the project root where framework files are copied. `distribute-changes.sh` reads this field to resolve the destination path on every run. Change this only if the consuming project uses a non-standard layout. |
-| `version` | string | yes | — | The JengaAgent semantic version currently installed in this project (e.g. `"2.3.1"`). Compared against the `version` field in the monorepo's `package.json` to determine whether an upgrade is required. |
+| `version` | string | yes | — | The Jenga AI semantic version currently installed in this project (e.g. `"2.3.1"`). Compared against the `version` field in the monorepo's `package.json` to determine whether an upgrade is required. |
 | `updated_at` | string (ISO 8601 date) | yes | — | Date of the last successful distribution, in `YYYY-MM-DD` format. Does **not** include a time component. |
 | `last_distributed` | string (ISO 8601 datetime) | yes | — | Full UTC timestamp of the last successful distribution, in `YYYY-MM-DDTHH:MM:SSZ` format. Provides more precision than `updated_at` and is useful for audit and ordering purposes. |
 | `source` | string | yes | `"private"` | Distribution channel. Always `"private"` for projects that receive updates via the filesystem distribution mechanism. Distinguishes these projects from any future npm-installed consumers. Do not change this value manually. |
-| `project_files_visibility` | string (enum) | no | `"visible"` | How JengaAgent's own working files appear in the consuming project. Exactly one of `visible` or `ignored` — no other value is accepted. Written by `/init`, not by distribution. See [Project files visibility](#project-files-visibility) below. |
+| `project_files_visibility` | string (enum) | no | `"visible"` | How Jenga AI's own working files appear in the consuming project. Exactly one of `visible` or `ignored` — no other value is accepted. Written by `/init`, not by distribution. See [Project files visibility](#project-files-visibility) below. |
 
 ---
 
 ## Project files visibility
 
-`project_files_visibility` controls how JengaAgent's own working files — the `project/` tree containing the scrum board, `todo.md`, `queue/`, `rapports/`, and `logs/` — appear in a consuming project.
+`project_files_visibility` controls how Jenga AI's own working files — the `project/` tree containing the scrum board, `todo.md`, `queue/`, `rapports/`, and `logs/` — appear in a consuming project.
 
 This is distinct from `target_dir`. `target_dir` governs where the **distributed framework files** (skill and agent definitions) land; `project_files_visibility` governs the **working tree** that accumulates as the framework is used.
 

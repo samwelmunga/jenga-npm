@@ -67,11 +67,11 @@ changes nothing on disk, so it is the only safe default.
 Never treat `existing-codebase` as if it were `empty`, and never skip straight to step 2
 on that verdict without the user (or the non-interactive default) choosing to.
 
-### 2. Ask how JengaAgent's working files should appear
+### 2. Ask how Jenga AI's working files should appear
 
 Ask the user this question, verbatim, before running any script:
 
-    How should JengaAgent's own working files (project/ — the scrum board, todo.md,
+    How should Jenga AI's own working files (project/ — the scrum board, todo.md,
     queue/, rapports/, and logs/) appear in this project?
     1. Visible — keep them at `project/`, tracked and visible in directory listings
     2. Ignored — keep them at `project/` but add them to `.gitignore` so they are never committed
@@ -96,10 +96,26 @@ of the mechanical work.
 
 ### 3. Run the scaffold script
 
-Execute the init script from the project root, passing the choice from step 2:
+`init.sh` is not guaranteed to live at a single fixed path: in a project that
+installed Jenga via npm, it was mirrored to `.claude/skills/init/scripts/`
+(Claude Code) and `.agents/skills/init/scripts/` (Copilot/other agents) by
+`postinstall.js`, and neither of those exists yet in this framework's own
+source checkout, where it lives at the bare `skills/init/scripts/` path
+instead. This step runs before `CLAUDE.md`/`AGENTS.md` exist, so it cannot
+rely on either file's routing instructions to resolve the path — it must
+locate its own script directly. Execute the init script from the project
+root, passing the choice from step 2:
 
 ```bash
-chmod +x ./scripts/init.sh && ./scripts/init.sh --visibility <visible|ignored>
+INIT_SCRIPT=""
+for candidate in .claude/skills/init/scripts/init.sh .agents/skills/init/scripts/init.sh skills/init/scripts/init.sh; do
+  [[ -f "$candidate" ]] && { INIT_SCRIPT="$candidate"; break; }
+done
+if [[ -z "$INIT_SCRIPT" ]]; then
+  echo "Error: could not locate init.sh under .claude/skills/, .agents/skills/, or skills/" >&2
+  exit 1
+fi
+chmod +x "$INIT_SCRIPT" && "$INIT_SCRIPT" --visibility <visible|ignored>
 ```
 
 Omitting `--visibility` falls back to the `JENGA_PROJECT_FILES_VISIBILITY`

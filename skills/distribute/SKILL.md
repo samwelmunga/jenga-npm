@@ -1,6 +1,6 @@
 ---
 name: distribute
-description: Distribute JengaAgent framework files from this private monorepo to one or more consuming projects via the local filesystem. Manages release type selection, version bumping, dry-run preview, per-target file copy, and a post-distribution git commit.
+description: Distribute Jenga AI framework files from this private monorepo to one or more consuming projects via the local filesystem. Manages release type selection, version bumping, dry-run preview, per-target file copy, and a post-distribution git commit.
 keywords:
   - distribute
   - private distribution
@@ -16,7 +16,7 @@ examples:
 
 # Distribute
 
-Copies JengaAgent framework files from this monorepo to all active consuming projects registered in `distribute.config.json`. Manages the full version lifecycle: release type selection, `package.json` version bump, dry-run preview, per-target file copy, and a final git commit of the version bump.
+Copies Jenga AI framework files from this monorepo to all active consuming projects registered in `distribute.config.json`. Manages the full version lifecycle: release type selection, `package.json` version bump, dry-run preview, per-target file copy, and a final git commit of the version bump.
 
 Distinct from `/self-sync` (which mirrors root → in-repo `.claude/.agents/`) and `/mirror-public` (which syncs to the public GitHub repo). Do not call either of those skills from within this flow.
 

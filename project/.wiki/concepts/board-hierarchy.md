@@ -37,7 +37,7 @@ The board hierarchy solves all three:
 
 ## How Rollup Works
 
-JengaAgent automatically promotes status up the hierarchy when all children pass:
+Jenga AI automatically promotes status up the hierarchy when all children pass:
 
 ```
 Task T01 → Passed ✅
@@ -67,7 +67,7 @@ This means you don't manually mark a story complete — the Tester writes the tr
 - If only a Developer would say "I need to do X to implement Y" → Task
 
 **The Maintenance Epic pattern:**
-JengaAgent reserves a "Maintenance" epic as the default home for chores, refactors, and housekeeping tasks that don't belong under a feature epic. Use it rather than forcing technical debt into unrelated stories.
+Jenga AI reserves a "Maintenance" epic as the default home for chores, refactors, and housekeeping tasks that don't belong under a feature epic. Use it rather than forcing technical debt into unrelated stories.
 
 ---
 

@@ -1,14 +1,14 @@
-# JengaAgent — Problems It Solves & Advantages
+# Jenga AI — Problems It Solves & Advantages
 
 ## 1. What It Is
 
-**JengaAgent** is a structured, multi-agent software development workflow built on top of Claude Code. It coordinates three specialised AI agents — **Scrum Master**, **Developer**, and **Tester** — through a shared scrum board, a trigger queue, and a set of slash-command skills to take a project from idea → verified, committed code.
+**Jenga AI** is a structured, multi-agent software development workflow built on top of Claude Code. It coordinates three specialised AI agents — **Scrum Master**, **Developer**, and **Tester** — through a shared scrum board, a trigger queue, and a set of slash-command skills to take a project from idea → verified, committed code.
 
 ---
 
 ## 2. Why It Exists — The Problems It Solves
 
-### Without JengaAgent
+### Without Jenga AI
 
 | Problem | Reality |
 |---|---|
@@ -20,7 +20,7 @@
 | **Changes can't propagate to other projects** | Improvements to your workflow stay siloed in one project |
 | **Sessions just... end** | Work-in-progress, unresolved problems, and incomplete stories silently vanish |
 
-### With JengaAgent
+### With Jenga AI
 
 | Problem Solved | Mechanism |
 |---|---|
@@ -62,7 +62,7 @@ Key structures:
 
 ## 4. When to Use It
 
-**Use JengaAgent when:**
+**Use Jenga AI when:**
 - You're building a non-trivial project across multiple sessions
 - You want reliable test separation (the Tester *never* trusts the Developer's self-assessment)
 - You need traceability — who did what, when, on which task
@@ -77,7 +77,7 @@ Key structures:
 
 ## 5. Before / After Example
 
-**Before (without JengaAgent):**
+**Before (without Jenga AI):**
 ```
 You: "Add user authentication"
 Claude: [writes auth code, declares it works, session ends]
@@ -86,7 +86,7 @@ You: "What's the status of auth?"
 Claude: "I don't have context from the previous session."
 ```
 
-**After (with JengaAgent):**
+**After (with Jenga AI):**
 ```
 /todo → "Add user authentication" → linked to E01_S02
 /do   → Developer creates worktree E01_S02_T01-auth

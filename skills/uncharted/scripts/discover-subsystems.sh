@@ -45,10 +45,10 @@
 #                        itself. The epic cap — and the surfacing of anything it drops — is
 #                        applied by a separate layer on top of this script's output.
 #   --include-framework  Do not exclude Jenga scaffolding. Needed to point the script at the
-#                        JengaAgent repo itself, where the scaffolding IS the application.
+#                        Jenga AI repo itself, where the scaffolding IS the application.
 #   --include-training-scaffolding
 #                        Do not exclude .training/ job-template scaffolding. Needed to point the
-#                        script at JengaAgent's own /train subsystem, or at a project that
+#                        script at Jenga AI's own /train subsystem, or at a project that
 #                        genuinely wants job templates catalogued as a candidate.
 #   --with-dependencies  Additionally compute the "cohesion" signal by calling
 #                        detect-dependencies.sh once per candidate. Off by default: it is an

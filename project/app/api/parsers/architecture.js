@@ -100,7 +100,7 @@ async function parseArchitecture() {
   const tech_stack = [];
   if (config) {
     if (config.workflow)         tech_stack.push({ name: config.workflow, description: `Workflow engine (v${(pkg && pkg.version) || 'unknown'})` }); // E26_S01_T03: version from package.json, not deprecated workflow_version
-    if (config.description)      tech_stack.push({ name: 'JengaAgent', description: config.description });
+    if (config.description)      tech_stack.push({ name: 'Jenga AI', description: config.description });
   }
   if (pkg) {
     tech_stack.push({ name: 'Node.js', description: 'JavaScript runtime' });

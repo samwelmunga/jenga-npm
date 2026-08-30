@@ -10,7 +10,7 @@
 /brainstorm → /todo → /do → /status
 ```
 
-This is the core loop. Everything in JengaAgent flows through some version of it.
+This is the core loop. Everything in Jenga AI flows through some version of it.
 
 ---
 

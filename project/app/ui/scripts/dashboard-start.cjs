@@ -5,7 +5,7 @@
  * Usage:
  *   node scripts/dashboard-start.js [--port <number>] [--serve-app]
  *
- * Starts the JengaAgent API server. Accepts:
+ * Starts the Jenga AI API server. Accepts:
  *   --port <number>   Port to listen on (default: 3001). Also respects
  *                     JENGA_API_PORT env var. CLI flag takes precedence.
  *   --serve-app       Also serve the dashboard/dist/ static files from Express.

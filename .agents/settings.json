@@ -5,8 +5,7 @@
   },
   "autoMode": {
     "allow": [
-      "$defaults",
-      "Bash(bash skills/mirror-public/scripts/mirror.sh*)"
+      "$defaults"
     ]
   },
   "permissions": {
@@ -14,10 +13,17 @@
       "Bash(*)"
     ],
     "deny": [
+      "Bash(rm *)",
+      "Bash(rmdir *)",
       "Bash(dd *)",
       "Bash(mkfs *)",
       "Bash(shred *)",
       "Bash(truncate *)",
+      "Bash(git push *)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean *)",
+      "Bash(chmod *)",
+      "Bash(chown *)",
       "Bash(sudo *)",
       "Bash(su *)"
     ]
@@ -28,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "NAME=$(jq -r '.name')\n. \"$(git rev-parse --show-toplevel)/lib/resolve-project-dir.sh\"\nDIR=\"$JENGA_PROJECT_DIR/.claude/worktrees/$NAME\"\ngit worktree add \"$DIR\" -b \"$NAME\" 2>&1\necho \"$DIR\"\n"
+            "command": "NAME=$(jq -r '.name')\n. \"$(git rev-parse --show-toplevel)/lib/resolve-project-dir.sh\"\nDIR=\"$JENGA_PROJECT_DIR/.claude/worktrees/$NAME\"\ngit worktree add \"$DIR\" -b \"$NAME\" 2>&1\n\"$(git rev-parse --show-toplevel)/scripts/install-worktree-commit-guard.sh\" \"$DIR\" \"$NAME\" 1>&2\necho \"$DIR\"\n"
           }
         ]
       }

@@ -1,8 +1,8 @@
-# JengaAgent — Intro Guide
+# Jenga AI — Intro Guide
 
 > **You've run `/init`. Your project directory is scaffolded. Now what?**
 
-This guide answers that question. It covers the philosophy behind JengaAgent, how to think about the system, and four concrete patterns you'll use constantly. It's written for someone at the beginning — not a reference document, but a walkthrough.
+This guide answers that question. It covers the philosophy behind Jenga AI, how to think about the system, and four concrete patterns you'll use constantly. It's written for someone at the beginning — not a reference document, but a walkthrough.
 
 For the full command reference, see [documentation.md](./documentation.md).
 
@@ -47,19 +47,19 @@ project/
 
 The board is empty. The `PROJECT_SUMMARY.md` is a stub. No agents have been invoked yet.
 
-This is intentional. JengaAgent doesn't make assumptions about what you're building — you define that next.
+This is intentional. Jenga AI doesn't make assumptions about what you're building — you define that next.
 
 ---
 
 ## 2. The Three Pillars
 
-Before using JengaAgent effectively, it helps to understand why it works the way it does. There are three core ideas.
+Before using Jenga AI effectively, it helps to understand why it works the way it does. There are three core ideas.
 
 ---
 
 ### Role Separation
 
-JengaAgent uses three agents — **Scrum Master**, **Developer**, and **Tester** — each with a non-overlapping role and exclusive write access to specific files.
+Jenga AI uses three agents — **Scrum Master**, **Developer**, and **Tester** — each with a non-overlapping role and exclusive write access to specific files.
 
 The most important constraint: **the Developer never tests its own work, and the Tester never writes implementation code.** This is what makes the system's results trustworthy. An AI that writes code and verifies it in the same context tends to confirm what it just wrote — not what the spec required.
 
@@ -87,7 +87,7 @@ The hierarchy isn't overhead. It's the structure that makes every session resuma
 
 ### Session Continuity
 
-Every AI agent session starts with a blank slate. JengaAgent solves this by storing all project context in files, not in the model's memory. The board, the event log, the trigger queue, and `PROJECT_SUMMARY.md` all persist across sessions.
+Every AI agent session starts with a blank slate. Jenga AI solves this by storing all project context in files, not in the model's memory. The board, the event log, the trigger queue, and `PROJECT_SUMMARY.md` all persist across sessions.
 
 When a session ends, `on_session_end.sh` writes triggers for the Scrum Master. When a new session starts, the Scrum Master processes those triggers before responding to you. It knows what was built, what passed, what failed, and what needs attention — without you saying a word.
 
@@ -171,7 +171,7 @@ Use `/brainstorm` before every non-trivial feature. It takes a few minutes and p
 
 ### Working Across Sessions
 
-JengaAgent is designed for multi-session projects. At the start of a session:
+Jenga AI is designed for multi-session projects. At the start of a session:
 
 ```
 /continue   ← orient yourself and get a recommendation
