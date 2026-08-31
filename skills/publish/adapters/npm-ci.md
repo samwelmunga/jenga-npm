@@ -190,6 +190,33 @@ A successful non-dry-run produces:
 - A history entry in `project/logs/publish-history.json` written by
   `publish_deploy.sh` with `platform_state: "triggered"`
 
+## Staged Publishing
+
+This target type also supports **staged publishing** via `/publish stage` —
+npm's pre-publish staging area — with an OIDC-specific split between the
+automated and human halves of the flow:
+
+- **Staging can run from CI, unattended.** `npm_stage_pipeline.sh` invokes
+  `npm stage publish ... --provenance` for `npm-ci` targets (the same
+  `--provenance` flag the normal deploy pipeline uses), authorised through
+  the same Trusted Publisher OIDC link described above — no `NPM_TOKEN`
+  is needed to stage, exactly as none is needed to publish. A workflow can
+  run `bash skills/publish/scripts/npm_stage_pipeline.sh <target> <path-to-publish.json> --non-interactive`
+  on every merge to stage a candidate release automatically.
+- **Approval is always a human, out-of-CI step.** `npm stage approve`
+  requires an interactive npm 2FA one-time password — there is no OIDC
+  equivalent for approval. A human runs
+  `bash skills/publish/scripts/npm_stage_inspect.sh test <stage-id>` (or
+  relies on the automated CI-staged test result) and then
+  `bash skills/publish/scripts/npm_stage_inspect.sh approve <stage-id> --otp <otp>`
+  from their own machine. `reject` (same script) is available to either
+  side to discard a staged candidate.
+
+Same registry-existence precondition as a normal `npm-ci` deploy: staged
+publishing only applies to a package that has already had at least one
+non-staged publish (`validate_npm_stage_env.sh` checks this up front, exit
+`4` if not).
+
 ## Post-deploy manual steps
 
 After a successful deploy trigger, the adapter prints the workflow run URL.

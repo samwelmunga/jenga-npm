@@ -167,6 +167,22 @@ publish_history_has_version() {
   jq -e --arg version "$version" 'type == "array" and any(.[]?; (.version? // "") == $version)' "$history_file" >/dev/null 2>&1
 }
 
+# publish_history_has_passing_stage_test <history_file> <stage_id>
+#
+# True (exit 0) when the ledger contains at least one `stage_tested` entry
+# for the exact given stage id with result == "pass". Used by the
+# npm_stage_inspect.sh `approve` interlock. A missing/unreadable history
+# file is treated as "no passing test on record" (exit 1), not an error —
+# the caller decides how to report that.
+publish_history_has_passing_stage_test() {
+  local history_file="$1"
+  local stage_id="$2"
+  [[ -f "$history_file" ]] || return 1
+  jq -e --arg id "$stage_id" \
+    'type == "array" and any(.[]?; (.platform_state? // "") == "stage_tested" and (.stage_id? // "") == $id and (.result? // "") == "pass")' \
+    "$history_file" >/dev/null 2>&1
+}
+
 publish_resolve_last_publish_tag() {
   local history_file="$1"
   local ref="${2:-HEAD}"

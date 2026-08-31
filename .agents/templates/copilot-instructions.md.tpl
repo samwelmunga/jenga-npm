@@ -15,23 +15,33 @@ This project uses **Jenga** — a skill-based AI agent framework. Jenga organise
 
 ### Skill Routing
 
-When a user's message matches a known skill keyword or intent, invoke the skill immediately using the slash-command syntax:
+Unlike Claude Code, GitHub Copilot has **no native slash-command interception** — typing `/skill-name`
+does not automatically load or run anything on its own. Copilot depends entirely on the instructions
+below to know what "invoking a skill" concretely means. Do not improvise a plausible-sounding response
+instead of following these steps — that is the exact failure this section exists to prevent.
 
-```
-/skill-name
-```
+When the user's message is or matches `/skill-name` (or otherwise clearly matches a known skill's
+keyword or intent):
 
-Do **not** answer skill-related requests with free-form prose if a matching skill exists — delegate to the skill instead.
+1. Locate the target file at `.agents/skills/<skill-name>/SKILL.md` (the discovery path from "How
+   Jenga Works" above).
+2. Open and read that file **in full** before doing anything else.
+3. Execute its instructions exactly as written, for the rest of this turn — including running any
+   shell scripts or commands it references (e.g. via a terminal/shell tool).
+4. Do not substitute your own judgment about what "running the skill" should look like, and do not
+   answer with free-form prose describing what the skill would do — the `SKILL.md` file's contents
+   are the authoritative procedure, not a summary or a suggestion.
 
-For free-form questions (architecture, code review, debugging, general Q&A) that do not match a skill, answer directly using your full capabilities.
+For free-form questions (architecture, code review, debugging, general Q&A) that do not match a skill,
+answer directly using your full capabilities.
 
 #### Routing decision table
 
 | Situation | Action |
 |-----------|--------|
-| Message matches a skill keyword or intent | Invoke `/skill-name` |
+| Message matches a skill keyword or intent | Open `.agents/skills/<skill-name>/SKILL.md`, read it fully, execute it as written |
 | Message is a general coding or project question | Answer directly |
-| Ambiguous — could be skill or free-form | Prefer the skill; mention it is being invoked |
+| Ambiguous — could be skill or free-form | Prefer the skill; open and execute its `SKILL.md` rather than describing it |
 
 ### Available Skills
 

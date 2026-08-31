@@ -69,6 +69,7 @@ Skills are stored in `skills/<name>/SKILL.md`. Invoke them with `/<name>` in a C
 | `/btw` | Capture a mid-flow mission, classify into epic/story structure, implement now or defer. |
 | `/todo` | Add missions to `project/todo.md` linked to epics and stories. Loops until done, then optionally runs `/do`. |
 | `/redo` | Rework a previous implementation by commit SHA or Epic/Story number. Includes scope assessment, plan, and doc updates. |
+| `/publish` | Configure, validate, and orchestrate scaffolded release workflows (`setup`, `deploy`, `stage`, `history`, `release-notes`) across `mobile-ios`, `npm`, `npm-ci`, and `droplet` targets. `stage` (`npm`/`npm-ci` only) rehearses and smoke-tests a release before it goes live. |
 | `/uncharted` | Entry point for code with no board provenance — three modes: `segment` (a file or directory), `import` (an external source), `onboard` (a whole pre-existing codebase). |
 | `/do` | Execute tasks from the scrum board. Resolves each entry to full board context and drives the Developer agent. |
 | `/status` | Overview of epics, stories, and tasks with statuses, open rapports, and queue depth. |

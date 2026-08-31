@@ -71,6 +71,33 @@ These inputs remain optional in non-interactive mode:
 | `3` | Deploy failure | Used by the iOS adapter pipeline for build/export/upload failures |
 | `4` | Config or environment invalid | Implemented by validation scripts |
 
+## Staged publishing (`/publish stage`) — exit codes and ledger states
+
+`/publish stage` (npm/npm-ci only) has its own exit-code contract, separate
+from the deploy contract above:
+
+| Code | Meaning |
+|---|---|
+| `0` | Success (staged, or `--dry-run`/`--help` completed cleanly) |
+| `1` | User declined the pack confirmation prompt (or no tty was available) — `npm_stage_pipeline.sh` only |
+| `2` | A mandatory pre-deploy gate failed; nothing was staged — `npm_stage_pipeline.sh` only |
+| `3` | The underlying `npm stage <sub>` command failed, the tarball install failed, or the smoke test failed (`npm_stage_inspect.sh`); or `npm stage publish`/stage-id capture failed (`npm_stage_pipeline.sh`) |
+| `4` | Config/environment validation failure (`validate_npm_stage_env.sh`, or bad args), or (`npm_stage_inspect.sh` only) a usage error, an unknown sub-command, or the `approve` test interlock refusing without a passing test on record and no `--force <reason>` |
+
+`test` (via `npm_stage_inspect.sh`) surfaces a smoke-test failure as a
+non-zero exit — code `3` — distinct from a usage error (`4`).
+
+The publish ledger (`project/logs/publish-history.json`) gains four new
+`platform_state` values alongside the existing `uploaded`/`partial`/
+`dry-run`/`failed`:
+
+| `platform_state` | Written by | Meaning |
+|---|---|---|
+| `staged` | `npm_stage_pipeline.sh` | Version staged to npm's staged-publishing area; not yet visible on the registry |
+| `stage_tested` | `npm_stage_inspect.sh test` | The staged tarball was installed in isolation and smoke-tested; ledger row records `pass`/`fail` |
+| `approved` | `npm_stage_inspect.sh approve` | The staged version was approved (2FA-gated) and is now published |
+| `rejected` | `npm_stage_inspect.sh reject` | The staged version was discarded and will never be published |
+
 ## Precedence rules
 
 1. Command-line flags win over environment variables.

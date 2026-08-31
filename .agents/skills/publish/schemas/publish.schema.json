@@ -237,6 +237,26 @@
           "minLength": 1,
           "pattern": "^[a-z0-9][a-z0-9._-]*$",
           "default": "latest"
+        },
+        "stage": {
+          "$ref": "#/definitions/npmStageSettings"
+        }
+      }
+    },
+    "npmStageSettings": {
+      "description": "Optional settings for `/publish stage` on an npm or npm-ci target. Absent entirely on targets that don't use staged publishing.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "smoke_cmd": {
+          "description": "Command that `stage test` runs against the installed staged tarball. When absent, `stage test` falls back to a documented default.",
+          "type": "string",
+          "minLength": 1
+        },
+        "require_test_before_approve": {
+          "description": "When true, `stage approve` refuses without a recorded successful test for that stage id. Defaults to true.",
+          "type": "boolean",
+          "default": true
         }
       }
     },

@@ -80,6 +80,33 @@
         "provider_short_name": "exampleco"
       },
       "notes": "Production upload example using App Store export mode."
+    },
+    {
+      "name": "npm-ci-example",
+      "type": "npm-ci",
+      "platform": "npm-ci-oidc",
+      "github_repo": "exampleco/example-package",
+      "workflow_path": ".github/workflows/npm-publish.yml",
+      "checks": {
+        "pre": [
+          "lint",
+          "type-check"
+        ],
+        "post": [
+          "smoke-test"
+        ]
+      },
+      "npm": {
+        "package_name": "@exampleco/example-package",
+        "access": "public",
+        "registry": "https://registry.npmjs.org",
+        "dist_tag": "latest",
+        "stage": {
+          "smoke_cmd": "npm run smoke-test",
+          "require_test_before_approve": true
+        }
+      },
+      "notes": "Scaffold example only. Demonstrates the optional npm.stage block used by '/publish stage'. Replace package_name and github_repo with your real values."
     }
   ]
 }

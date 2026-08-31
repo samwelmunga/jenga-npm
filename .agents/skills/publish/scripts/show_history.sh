@@ -87,9 +87,16 @@ if (( JSON_OUTPUT )); then
   exit 0
 fi
 
-printf '%-10s %-20s %-20s %-10s %s\n' 'Version' 'Target' 'Date' 'State' 'Tag'
-printf '%-10s %-20s %-20s %-10s %s\n' '-------' '------' '----' '-----' '---'
-printf '%s\n' "$FILTERED_JSON" | jq -r '.[] | [(.version // "-"), (.target // "-"), (.timestamp // .completed_at // .started_at // "-"), (.platform_state // .state // "-"), (.git_tag // .version // "-")] | @tsv' | \
-while IFS=$'\t' read -r version target date state tag; do
-  printf '%-10s %-20s %-20s %-10s %s\n' "$version" "$target" "$date" "$state" "$tag"
+# Staged-publishing states (`staged`, `stage_tested`) are NOT published — a
+# version sitting there must never read as released. The State column
+# already carries a distinct value for each (vs. `uploaded` for a real
+# release), and the Stage ID column below makes a staged/tested/approved/
+# rejected row visibly distinct at a glance even without reading the State
+# column closely: only staged-publishing entries ever have a non-"-" stage
+# id.
+printf '%-10s %-20s %-20s %-14s %-24s %s\n' 'Version' 'Target' 'Date' 'State' 'Stage ID' 'Tag'
+printf '%-10s %-20s %-20s %-14s %-24s %s\n' '-------' '------' '----' '-----' '--------' '---'
+printf '%s\n' "$FILTERED_JSON" | jq -r '.[] | [(.version // "-"), (.target // "-"), (.timestamp // .completed_at // .started_at // "-"), (.platform_state // .state // "-"), (.stage_id // "-"), (.git_tag // .version // "-")] | @tsv' | \
+while IFS=$'\t' read -r version target date state stage_id tag; do
+  printf '%-10s %-20s %-20s %-14s %-24s %s\n' "$version" "$target" "$date" "$state" "$stage_id" "$tag"
 done

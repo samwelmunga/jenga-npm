@@ -109,6 +109,24 @@ A successful run produces:
 - A local (and optionally pushed) git tag `v<version>` matching the published `version`
 - A history row appended to `project/logs/publish-history.json`
 
+## Staged Publishing
+
+Before a live `deploy`, this target type also supports **staged publishing**
+via `/publish stage` — npm's own pre-publish staging area, which lets a
+release be smoke-tested from the exact tarball that would ship before it
+becomes visible on the registry. See `skills/publish/SKILL.md`'s
+`### /publish stage` section for the full command reference; summary here:
+
+- `bash skills/publish/scripts/npm_stage_pipeline.sh <target> <path-to-publish.json> [--dry-run] [--non-interactive] [--otp <otp>]` runs validate → gates → pack → stage → capture → ledger and writes a `staged` ledger entry.
+- `bash skills/publish/scripts/npm_stage_inspect.sh test <stage-id>` installs the staged tarball into an isolated scratch directory and smoke-tests it, writing a `stage_tested` ledger entry.
+- `bash skills/publish/scripts/npm_stage_inspect.sh approve <stage-id>` requires an npm 2FA one-time password and refuses without a passing `test` on record unless `--force <reason>` is given.
+- `bash skills/publish/scripts/npm_stage_inspect.sh reject <stage-id>` discards the staged version.
+
+Same registry-existence precondition as a normal `npm` publish: staged
+publishing only applies to a package that has already had at least one
+non-staged publish (`validate_npm_stage_env.sh` checks this up front, exit
+`4` if not).
+
 ## Post-deploy manual steps
 
 After a successful publish, the deploy flow must print:

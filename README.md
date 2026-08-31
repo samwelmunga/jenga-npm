@@ -228,6 +228,7 @@ Skills live in `.agents/skills/<name>/SKILL.md`. Invoke with `/<name>` in your A
 | `/do` | Execute tasks from the scrum board, drives the Developer agent through the full loop |
 | `/dooo` | Parallel execution orchestrator — runs multiple tasks simultaneously via sub-agents |
 | `/redo` | Rework a previous implementation by commit SHA or Epic/Story number |
+| `/publish` | Configure, validate, and orchestrate scaffolded release workflows — `setup`, `deploy`, `stage` (npm/npm-ci pre-approval staged publishing), `history`, `release-notes` |
 | `/error` | Guided troubleshooting — gathers context, investigates, and drives a fix |
 | `/train` | Scaffold and run ML training jobs (new job from template or run existing) |
 

@@ -89,6 +89,24 @@ refine_copilot_instructions_as_jenga_init() {
   "
 }
 
+# Renders CLAUDE.md/AGENTS.md into $CONSUMER_DIR via the exact code path both
+# skills/init/scripts/init.sh and lib/commands/init.js call for these files —
+# generateAgentContext(projectRoot, packageRoot) from
+# lib/generate-agent-context.js — modeling a consumer install rather than
+# reimplementing the render logic inline. Mirrors
+# refine_copilot_instructions_as_jenga_init's node -e dynamic-import pattern.
+generate_agent_context_as_consumer() {
+  cd "$CONSUMER_DIR" || return 1
+  node -e "
+    import('$REPO_ROOT/lib/generate-agent-context.js').then((m) => {
+      const result = m.generateAgentContext(process.cwd(), '$REPO_ROOT');
+      if (result.skipped || !result.written || result.written.length === 0) {
+        console.error('generateAgentContext did not write'); process.exit(1);
+      }
+    }).catch((e) => { console.error(e.stack || e.message); process.exit(1); });
+  "
+}
+
 # Every artifact skills/init/scripts/init.sh's 13 steps are documented to produce.
 assert_full_scaffold() {
   local dir="$1"
@@ -182,4 +200,71 @@ assert_full_scaffold() {
   # refinement pass using .claude/skills instead of .agents/skills produces a
   # byte-identical file — content outside (and inside) the markers is unchanged.
   [ "$after" = "$before" ]
+}
+
+# E46_S04_T01 rewrote the "Skill Routing" section in both
+# templates/copilot-instructions.md.tpl and templates/agent-context.md.tpl to
+# spell out a mechanical open-SKILL.md-read-it-execute-it procedure, replacing
+# the old "invoke the skill immediately using the slash-command syntax"
+# wording that told an agent WHEN to route but never HOW. That gap was
+# invisible for Claude Code (native /skill-name interception at the harness
+# level) but load-bearing for GitHub Copilot/Codex, which have no equivalent
+# and depend entirely on this prose — confirmed by a real repro where Copilot
+# read the routing file correctly yet still improvised a response instead of
+# opening .agents/skills/init/SKILL.md.
+#
+# IMPORTANT — coverage floor, not a behavioral guarantee: the two tests below
+# only assert that the new mechanical instruction text renders correctly into
+# the generated output files. They CANNOT assert that a real Copilot or Codex
+# agent actually reads and follows that instruction differently than before —
+# that depends on how reliably an LLM follows a more explicit imperative
+# instruction, which no unit test in this repo can exercise. A future reader
+# should not mistake "these tests pass" for "the underlying Copilot bug is
+# confirmed fixed." Real-agent verification is tracked separately in
+# project/instructions/E46_S04_INSTRUCTIONS.md (E46_S04_T02) and must be
+# performed manually against a live Copilot (and ideally Codex) session.
+@test "rendered .github/copilot-instructions.md contains the mechanical open-read-execute routing instruction, not the old slash-command-only wording (E46_S04_T01)" {
+  mirror_as_npm_consumer
+  local f="$CONSUMER_DIR/.github/copilot-instructions.md"
+  [ -f "$f" ]
+
+  run cat "$f"
+  [ "$status" -eq 0 ]
+  # New mechanical instruction present: open the target SKILL.md, read it in
+  # full, execute it as written.
+  [[ "$output" == *"SKILL.md"* ]]
+  [[ "$output" == *"read it"* ]]
+  [[ "$output" == *"execute its instructions exactly as written"* ]]
+  [[ "$output" == *"Do not substitute your own judgment"* ]]
+  # The old vague wording (route decision without an execution mechanism)
+  # must be gone — asserting its absence is what actually catches a
+  # regression back to the pre-E46_S04_T01 prose.
+  [[ "$output" != *"invoke the skill immediately using the slash-command syntax"* ]]
+}
+
+@test "rendered CLAUDE.md and AGENTS.md contain the mechanical open-read-execute routing instruction with the correct per-target discovery path (E46_S04_T01)" {
+  mirror_as_npm_consumer
+  run generate_agent_context_as_consumer
+  [ "$status" -eq 0 ]
+
+  local claude_md="$CONSUMER_DIR/CLAUDE.md"
+  local agents_md="$CONSUMER_DIR/AGENTS.md"
+  [ -f "$claude_md" ]
+  [ -f "$agents_md" ]
+
+  run cat "$claude_md"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"execute its instructions exactly as written"* ]]
+  [[ "$output" == *"Do not substitute your own judgment"* ]]
+  [[ "$output" != *"invoke the skill immediately using the slash-command syntax"* ]]
+  # CLAUDE.md's discovery path is .claude/skills/ per generate-agent-context.js's TARGETS table
+  [[ "$output" == *".claude/skills/<skill-name>/SKILL.md"* ]]
+
+  run cat "$agents_md"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"execute its instructions exactly as written"* ]]
+  [[ "$output" == *"Do not substitute your own judgment"* ]]
+  [[ "$output" != *"invoke the skill immediately using the slash-command syntax"* ]]
+  # AGENTS.md's discovery path is .agents/skills/ per generate-agent-context.js's TARGETS table
+  [[ "$output" == *".agents/skills/<skill-name>/SKILL.md"* ]]
 }

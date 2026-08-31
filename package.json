@@ -1,7 +1,7 @@
 {
   "name": "@jenga-ai/agent",
   "version": "1.2.4",
-  "description": "Structured multi-agent development workflow for AI coding agents — scrum board, role-bounded scrum master / developer / tester agents, and 30+ slash-command skills. Works with Claude Code, GitHub Copilot, and Codex.",
+  "description": "Structured multi-agent development workflow for AI coding agents \u2014 scrum board, role-bounded scrum master / developer / tester agents, and 30+ slash-command skills. Works with Claude Code, GitHub Copilot, and Codex.",
   "type": "module",
   "publishConfig": {
     "access": "public"
@@ -74,7 +74,7 @@
     "sharp": "^0.34.5"
   },
   "comments": {
-    "audit": "sharp <0.35.0 and adm-zip <0.6.0 are transitive deps of @huggingface/transformers with no upstream fix available. Not exploitable in this context: only text feature-extraction pipeline is used — no image processing or ZIP handling at application boundary. Review when @huggingface/transformers ships a patched release."
+    "audit": "sharp <0.35.0 and adm-zip <0.6.0 are transitive deps of @huggingface/transformers with no upstream fix available. Not exploitable in this context: only text feature-extraction pipeline is used \u2014 no image processing or ZIP handling at application boundary. Review when @huggingface/transformers ships a patched release."
   },
   "devDependencies": {
     "bats": "^1.13.0"

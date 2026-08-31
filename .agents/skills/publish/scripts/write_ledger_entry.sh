@@ -6,8 +6,34 @@ source "$SCRIPT_DIR/publish_common.sh"
 
 usage() {
   cat <<'USAGE'
-Usage: write_ledger_entry.sh <target> <adapter> <platform_state> <notes_path> [--yes] [--dry-run] [--version <vX.Y.Z>] [--config <path>]
+Usage: write_ledger_entry.sh <target> <adapter> <platform_state> <notes_path> [--yes] [--dry-run] [--version <vX.Y.Z>] [--config <path>] [--stage-id <id>] [--dist-tag <tag>] [--result <pass|fail>] [--reason <text>]
+
+platform_state must be one of: uploaded, partial, dry-run, failed, staged,
+stage_tested, approved, rejected.
+
+--result <pass|fail>  Optional. Records a stage_tested smoke-test outcome on
+                       the entry (null when omitted). The npm_stage_inspect.sh
+                       approve interlock reads this field.
+--reason <text>        Optional. Records a free-text reason on the entry —
+                       used by npm_stage_inspect.sh's `approve --force
+                       <reason>` to record why the test interlock was
+                       overridden (null when omitted).
 USAGE
+}
+
+# Full accepted platform_state vocabulary: the three pre-existing states
+# actually written by publish_deploy.sh/reconcile_tags.sh today (uploaded,
+# partial, dry-run) plus `failed`, documented as part of the original
+# ledger-entry format (E22_S05_T02) though not currently emitted by any
+# caller, plus the four staged-publishing states added by E22_S09_T02.
+ALLOWED_PLATFORM_STATES=(uploaded partial dry-run failed staged stage_tested approved rejected)
+
+platform_state_is_valid() {
+  local state="$1" allowed
+  for allowed in "${ALLOWED_PLATFORM_STATES[@]}"; do
+    [[ "$state" == "$allowed" ]] && return 0
+  done
+  return 1
 }
 
 [[ $# -ge 4 ]] || { usage >&2; exit 1; }
@@ -21,6 +47,10 @@ AUTO_ACCEPT=0
 DRY_RUN=0
 SELECTED_VERSION=''
 CONFIG_PATH="${PUBLISH_CONFIG:-}"
+STAGE_ID=''
+DIST_TAG=''
+RESULT=''
+REASON=''
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -42,6 +72,26 @@ while [[ $# -gt 0 ]]; do
       CONFIG_PATH="$2"
       shift 2
       ;;
+    --stage-id)
+      [[ $# -ge 2 ]] || { usage >&2; exit 1; }
+      STAGE_ID="$2"
+      shift 2
+      ;;
+    --dist-tag)
+      [[ $# -ge 2 ]] || { usage >&2; exit 1; }
+      DIST_TAG="$2"
+      shift 2
+      ;;
+    --result)
+      [[ $# -ge 2 ]] || { usage >&2; exit 1; }
+      RESULT="$2"
+      shift 2
+      ;;
+    --reason)
+      [[ $# -ge 2 ]] || { usage >&2; exit 1; }
+      REASON="$2"
+      shift 2
+      ;;
     --help|-h)
       usage
       exit 0
@@ -54,6 +104,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$TARGET_NAME" && -n "$ADAPTER_NAME" && -n "$PLATFORM_STATE" ]] || { usage >&2; exit 1; }
+if ! platform_state_is_valid "$PLATFORM_STATE"; then
+  printf "Unknown platform_state '%s'. Expected one of: %s.\n" "$PLATFORM_STATE" "${ALLOWED_PLATFORM_STATES[*]}" >&2
+  exit 1
+fi
+if [[ -n "$RESULT" && "$RESULT" != "pass" && "$RESULT" != "fail" ]]; then
+  printf "Unknown --result '%s'. Expected 'pass' or 'fail'.\n" "$RESULT" >&2
+  exit 1
+fi
 command -v jq >/dev/null 2>&1 || { echo 'jq is required.' >&2; exit 1; }
 
 HISTORY_FILE="$(publish_resolve_history_file "$CONFIG_PATH")"
@@ -98,6 +156,30 @@ else
   NOTES_JSON="$(jq -Rn --arg path "$NOTES_PATH_RAW" '$path')"
 fi
 
+if [[ -z "$STAGE_ID" ]]; then
+  STAGE_ID_JSON='null'
+else
+  STAGE_ID_JSON="$(jq -Rn --arg id "$STAGE_ID" '$id')"
+fi
+
+if [[ -z "$DIST_TAG" ]]; then
+  DIST_TAG_JSON='null'
+else
+  DIST_TAG_JSON="$(jq -Rn --arg tag "$DIST_TAG" '$tag')"
+fi
+
+if [[ -z "$RESULT" ]]; then
+  RESULT_JSON='null'
+else
+  RESULT_JSON="$(jq -Rn --arg result "$RESULT" '$result')"
+fi
+
+if [[ -z "$REASON" ]]; then
+  REASON_JSON='null'
+else
+  REASON_JSON="$(jq -Rn --arg reason "$REASON" '$reason')"
+fi
+
 ENTRY_JSON="$(jq -cn \
   --arg id "$ENTRY_ID" \
   --arg version "$VERSION" \
@@ -109,6 +191,10 @@ ENTRY_JSON="$(jq -cn \
   --arg git_tag "$GIT_TAG" \
   --arg commit_sha "$COMMIT_SHA" \
   --argjson release_notes_path "$NOTES_JSON" \
+  --argjson stage_id "$STAGE_ID_JSON" \
+  --argjson dist_tag "$DIST_TAG_JSON" \
+  --argjson result "$RESULT_JSON" \
+  --argjson reason "$REASON_JSON" \
   '{
     id: $id,
     version: $version,
@@ -119,7 +205,11 @@ ENTRY_JSON="$(jq -cn \
     release_notes_path: $release_notes_path,
     platform_state: $platform_state,
     git_tag: $git_tag,
-    commit_sha: $commit_sha
+    commit_sha: $commit_sha,
+    stage_id: $stage_id,
+    dist_tag: $dist_tag,
+    result: $result,
+    reason: $reason
   }')"
 
 publish_append_history_entry "$HISTORY_FILE" "$ENTRY_JSON"

@@ -9,6 +9,8 @@ keywords:
   - npm
   - registry
   - release notes
+  - staged publishing
+  - stage
 examples:
   - "publish setup --target staging-appstore"
   - "publish setup --type mobile-ios"
@@ -21,6 +23,9 @@ examples:
   - "publish deploy --target my-droplet --dry-run"
   - "publish history --limit 5"
   - "publish release-notes --target staging-appstore"
+  - "test a release before publishing"
+  - "publish stage --target npm-registry --dry-run"
+  - "approve a staged npm release"
 metadata:
   scope: multi-target-v2
   primary_target: multi
@@ -76,6 +81,7 @@ If config or env validation fails, the skill exits with code `4` and does not co
 |---|---|---|---|
 | `/publish setup` | Prepare or refresh target configuration | `skills/publish/scripts/setup_wizard.sh` | Supported types: `mobile-ios`, `npm`, `npm-ci`, `droplet` |
 | `/publish deploy` | Run the full 11-step deploy orchestration | `skills/publish/scripts/publish_deploy.sh` | Dispatches to the adapter for the target's `type` (`mobile-ios`, `npm`, `npm-ci`, or `droplet`); `--dry-run` is honoured end-to-end |
+| `/publish stage` | Stage an npm release into npm's staged-publishing area, smoke-test it in isolation, then approve or reject it | `skills/publish/scripts/npm_stage_pipeline.sh` (the `publish` sub-command) and `skills/publish/scripts/npm_stage_inspect.sh` (`list`, `view`, `download`, `test`, `approve`, `reject`) | Supported for `npm` and `npm-ci` target types only |
 | `/publish history` | Read the canonical publish ledger | `skills/publish/scripts/show_history.sh` | Target-agnostic; filter by `--target <name>` |
 | `/publish release-notes` | Merge new release notes into the standing `CHANGELOG.md` (or a standalone draft via `--output`) without publishing | `skills/publish/scripts/generate_release_notes.sh` | Target-agnostic |
 
@@ -169,6 +175,66 @@ Example invocations:
 ```
 
 Use `--dry-run` to rehearse a release, validate that gates pass, and confirm the generated release notes without publishing.
+
+### `/publish stage`
+
+Staged publishing for `npm`/`npm-ci` targets only. Not available for
+`mobile-ios` or `droplet` — those adapters have no staging area to dispatch
+to. The lifecycle is **stage → test → approve**, with `reject` as the
+discard path at any point after staging:
+
+```text
+staged ──▶ stage_tested ──▶ approved   (approve requires 2FA; refuses without
+   │             │                      a passing test unless --force <reason>)
+   │             │
+   └─────────────┴──▶ rejected   (discard path — available from any staged state)
+```
+
+Two registry constraints trip people up and are worth stating plainly:
+
+- **The package must already exist on the registry.** npm's staged-publishing
+  workflow only applies to a package that has had at least one normal,
+  non-staged publish already — `validate_npm_stage_env.sh` checks this
+  up front and exits `4` if it doesn't hold.
+- **Approval requires 2FA; staging does not.** `npm stage publish` (the
+  `stage` sub-command below) can run non-interactively in CI. `npm stage
+  approve` cannot — npmjs.com requires an interactive one-time-password
+  step for approval, so it is always a human action even when staging was
+  automated (see the npm-ci adapter's OIDC staging section for the CI-stage,
+  human-approve split).
+
+All seven sub-commands:
+
+```text
+/publish stage publish <target> <path-to-publish.json> [--dry-run] [--non-interactive] [--otp <otp>]
+/publish stage test <stage-id> [--keep] [--config <path>] [--dry-run] [--json]
+/publish stage list [<package-spec>] [--config <path>] [--dry-run] [--json]
+/publish stage view <stage-id> [--config <path>] [--dry-run] [--json]
+/publish stage download <stage-id> [--out <dir>] [--config <path>] [--dry-run] [--json]
+/publish stage approve <stage-id> [--otp <otp>] [--force <reason>] [--config <path>] [--dry-run] [--json]
+/publish stage reject <stage-id> [--config <path>] [--dry-run] [--json]
+```
+
+Implementation:
+
+- `publish` → `bash skills/publish/scripts/npm_stage_pipeline.sh <target> <path-to-publish.json> [--dry-run] [--non-interactive] [--otp <otp>]` — six ordered phases (validate, gates, pack, stage, capture, ledger); writes a `staged` ledger entry on success.
+- `test`, `list`, `view`, `download`, `approve`, `reject` → `bash skills/publish/scripts/npm_stage_inspect.sh <sub> [args] [--config <path>] [--dry-run] [--json]`
+  - `test` downloads the exact staged tarball into an isolated scratch directory outside the repo, installs it, runs the target's `npm.stage.smoke_cmd` (or the documented default check), and writes a `stage_tested` ledger entry (`pass`/`fail`).
+  - `approve` refuses to run unless a passing `test` is on record for that exact stage id, unless `--force <reason>` is given; writes an `approved` ledger entry.
+  - `reject` is the discard path omitted from npm's own staged-publishing docs page — documented here so it stays discoverable; writes a `rejected` ledger entry.
+
+Example invocations:
+
+```bash
+/publish stage publish npm-registry ./publish.json --dry-run
+/publish stage test <stage-id>
+/publish stage approve <stage-id>
+/publish stage reject <stage-id>
+```
+
+Use `/publish stage` to rehearse and smoke-test a release before it goes
+live — the point of staging is that a bad tarball is caught in isolation
+instead of being caught by users after `npm publish`.
 
 ### `/publish history`
 
