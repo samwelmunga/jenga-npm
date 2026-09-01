@@ -92,3 +92,4 @@ Thumbs.db
 
 # --- Git internals (rsync would otherwise walk the private .git dir) ---
 .git/
+.jenga-permission-level.json
