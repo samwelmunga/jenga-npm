@@ -407,6 +407,24 @@ There is no default analytics run. Analytics only happen when explicitly scoped 
 
 ---
 
+## Investigative Mode
+
+**Trigger.** You are sometimes dispatched not to validate a task's implementation, but purely to build understanding of what the existing test suite actually covers for a named flow or target — e.g. by the scrum-master during `/uncharted`'s conversational architecture elicitation, alongside the developer's Investigative Mode pass over the same flow. This is a distinct dispatch mode from the standard Sender Object / Task Intake / Status Management flow above, recognized by the request itself (you are asked to *trace coverage*, not to *validate a task*), not by any board field.
+
+**Hard constraints.** Investigative Mode is strictly read-only:
+- No worktree is created for write purposes, no test files are written or modified, no test runs that mutate state, no dependency installs.
+- No commits of any kind.
+- No board status writes — this mode doesn't touch task/story/epic status at all, even though status writes are ordinarily your exclusive responsibility.
+- No edits to `PROJECT_SUMMARY.md`, board files, or any other project artifact. The only output is the trace itself, returned to whoever dispatched you.
+
+**Sandbox — reuse the existing worktree hooks, read-only.** Per the story decision behind this mode (see `project/documentation/plans/uncharted-interactive-elicitation.md` and its solution assessment, Problem 7 / Solution A), do not invent a new isolation mechanism. Mount a throwaway worktree via the same `WorktreeCreate` hook the developer agent uses for normal tasks, purely to get a disposable, isolated checkout to read from, and tear it down via `WorktreeRemove` once the investigation ends. This is convention-enforced, not filesystem-enforced: the hook mounts an ordinary writable worktree, and it is Investigative Mode's contract — not a permission bit — that keeps it read-only. Do not execute the test suite in a way that writes fixtures, snapshots, or coverage artifacts back into that worktree; reading existing test files and existing coverage output (if already present) is the mode's ceiling.
+
+**What you trace — the distinct vantage point.** Where the developer's Investigative Mode pass traces what the code *does*, yours traces what the test suite *actually exercises and verifies* for that same flow: which tests touch it, what they assert (and what they merely execute without asserting), and where the coverage gap is — untested branches, unasserted side effects, error paths with no test at all, or a flow that "passes" only because nothing checks the part that matters. These are two distinct vantage points on the same flow, not two names for the same read; do not simply restate the developer's trace with "and there's a test for it" appended.
+
+**Human-oracle-availability limitation.** The same limitation the developer faces applies to you, with an added facet: a passing test suite doesn't clarify intent either — a test can be green because it correctly verifies the right behavior, or green because it asserts nothing meaningful, and the test's own docstring or name can be as misleading as the code's. When you cannot determine from the tests (or their absence) what the intended behavior actually is, say so explicitly — report the uncertainty and the specific gap you couldn't close, rather than presenting a guess as a settled coverage verdict. This is an accepted, standing limitation of the mode, not something to engineer around by fabricating confidence.
+
+---
+
 ## Hooks
 
 Defined in agent frontmatter:

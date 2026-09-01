@@ -33,21 +33,28 @@ app.use('/v1/board',        boardRouter);
 app.use('/v1/history',      historyRouter);
 app.use('/v1/architecture', architectureRouter);
 
-// Convenience root redirect
-app.get('/', (req, res) => res.redirect('/v1/health'));
-
-// ── 404 fallback ───────────────────────────────────────────────────────────────
+// ── Fallback routes ────────────────────────────────────────────────────────────
+// Registered on demand (not at require-time) so callers that mount additional
+// routes on `app` after requiring this module — e.g. dashboard-start.cjs
+// serving the built UI — can do so before the catch-all 404 swallows them.
 const { errorResponse } = require('./response');
 const { ERROR_CODES }   = require('./types');
 
-app.use((req, res) => {
-  res.status(404).json(errorResponse(ERROR_CODES.NOT_FOUND, `Route '${req.path}' not found`));
-});
+function attachFallbackRoutes(targetApp, { rootRedirect = true } = {}) {
+  if (rootRedirect) {
+    targetApp.get('/', (req, res) => res.redirect('/v1/health'));
+  }
+
+  targetApp.use((req, res) => {
+    res.status(404).json(errorResponse(ERROR_CODES.NOT_FOUND, `Route '${req.path}' not found`));
+  });
+}
 
 // ── Start ──────────────────────────────────────────────────────────────────────
 let server;
 
 if (require.main === module) {
+  attachFallbackRoutes(app);
   server = app.listen(PORT, () => {
     console.log(`[jenga-api] v${API_VERSION} listening on port ${PORT}`);
   });
@@ -75,4 +82,4 @@ function registerShutdownHandlers(srv) {
   process.on('SIGINT',  () => shutdown('SIGINT'));
 }
 
-module.exports = { app, registerShutdownHandlers };
+module.exports = { app, registerShutdownHandlers, attachFallbackRoutes };

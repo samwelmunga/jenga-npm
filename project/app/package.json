@@ -6,6 +6,9 @@
     "api",
     "ui"
   ],
+  "dependencies": {
+    "express": "^4.18.2"
+  },
   "scripts": {
     "install:all": "npm install --workspaces --include-workspace-root",
     "api:start": "node api/server.js",

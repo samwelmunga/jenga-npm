@@ -160,6 +160,15 @@ WORKFLOW_YAML="$(cat <<EOF
 name: "Publish — ${PACKAGE_NAME}"
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "publish (default) or stage — dispatched by npm_stage_pipeline.sh with mode=stage for /publish stage"
+        required: false
+        default: publish
+        type: choice
+        options:
+          - publish
+          - stage
 
 permissions:
   id-token: write
@@ -167,6 +176,7 @@ permissions:
 
 jobs:
   publish:
+    if: \${{ github.event.inputs.mode == 'publish' || github.event.inputs.mode == '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -183,6 +193,25 @@ jobs:
 
       - name: Publish to npm
         run: npm publish --provenance --access ${NPM_ACCESS} --tag ${DIST_TAG}
+
+  stage:
+    if: \${{ github.event.inputs.mode == 'stage' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Stage to npm
+        run: npm stage publish --provenance --access ${NPM_ACCESS} --tag ${DIST_TAG}
 EOF
 )"
 

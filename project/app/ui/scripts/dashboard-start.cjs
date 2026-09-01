@@ -50,7 +50,7 @@ if (!fs.existsSync(SERVER_PATH)) {
 }
 
 // ── Load the API server ───────────────────────────────────────────────────────
-const { app, registerShutdownHandlers } = require(SERVER_PATH);
+const { app, registerShutdownHandlers, attachFallbackRoutes } = require(SERVER_PATH);
 
 if (serveApp) {
   const express = require('express');
@@ -59,8 +59,9 @@ if (serveApp) {
     console.warn('Run "npm run build" inside the dashboard/ directory first.');
   }
   app.use(express.static(DIST_DIR));
-  // Fallback to index.html for SPA routing
-  app.get('*', (_req, res) => {
+  // Fallback to index.html for SPA routing, but leave /v1/* API routes alone
+  // so unmatched API paths still get a JSON 404 instead of the SPA shell.
+  app.get(/^(?!\/v1\/).*/, (_req, res) => {
     const indexPath = path.join(DIST_DIR, 'index.html');
     if (fs.existsSync(indexPath)) {
       res.sendFile(indexPath);
@@ -68,6 +69,11 @@ if (serveApp) {
       res.status(404).send('Dashboard not built. Run "npm run build" in dashboard/.');
     }
   });
+  // rootRedirect: false — the static middleware above already serves
+  // index.html at '/'; the unconditional /v1/health redirect would shadow it.
+  attachFallbackRoutes(app, { rootRedirect: false });
+} else {
+  attachFallbackRoutes(app);
 }
 
 // ── Start listening ───────────────────────────────────────────────────────────

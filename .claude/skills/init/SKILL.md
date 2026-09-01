@@ -128,12 +128,13 @@ This script handles all scaffolding in one step:
 4. Creates `project/PROJECT_SUMMARY.md` with placeholder content
 5. Creates `project/configs/workflow.json` with shared constants
 6. Creates `project/configs/test-config.json` stub
-7. Creates `project/data/baselines.json`
-8. Creates `project/logs/events.json`
-9. Creates `docs/STRATEGY.md` — a strategic brief stub intended for investors, partners, and the product team
-10. Creates `CHANGELOG.md` from the shared template — a running log of notable changes, seeded with an `[Unreleased]` section
-11. Applies the chosen visibility mode via `scripts/apply-project-visibility.sh`, which records it as `project_files_visibility` in `jenga.config.json` and performs any `.gitignore` change
-12. Stages and commits all files with the message `init: scaffold project structure and workflow config`
+7. Creates `project/configs/scope-thresholds.json` with default execution-scope thresholds (consumed by `/jenga` and `/do`, which halt if it's missing)
+8. Creates `project/data/baselines.json`
+9. Creates `project/logs/events.json`
+10. Creates `docs/STRATEGY.md` — a strategic brief stub intended for investors, partners, and the product team
+11. Creates `CHANGELOG.md` from the shared template — a running log of notable changes, seeded with an `[Unreleased]` section
+12. Applies the chosen visibility mode via `scripts/apply-project-visibility.sh`, which records it as `project_files_visibility` in `jenga.config.json` and performs any `.gitignore` change
+13. Stages and commits all files with the message `init: scaffold project structure and workflow config`
 
 The visibility mode is validated before any scaffolding happens, so an invalid
 value fails fast and leaves nothing behind. It is applied before the commit, so

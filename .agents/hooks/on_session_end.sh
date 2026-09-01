@@ -308,6 +308,33 @@ for HANDOFF_FILE in "$HANDOFF_DIR"/*.json; do
         echo "$TRIGGER" >> "$DEV_QUEUE"
         echo "[on_session_end] scrum-master → developer queue: implementation_assignment"
       fi
+
+      # A conversational architecture elicitation session (/uncharted
+      # onboard's default flow, or segment --mode investigate — E20_S08_T03)
+      # ended mid-run without converging. The session driving it is
+      # responsible for calling skills/uncharted/scripts/elicitation-state.sh
+      # pause and then writing this handoff with status "elicitation_paused"
+      # as its last action (see skills/uncharted/SKILL.md's Multi-Session
+      # Persistence subsection). This routes that pause into a resume
+      # signal for the next scrum-master session, per the existing
+      # SessionEnd/queue pattern rather than a new persistence mechanism
+      # (solution-assessment-uncharted-interactive-elicitation.md, Problem 11).
+      if [ "$HANDOFF_STATUS" = "elicitation_paused" ]; then
+        TRIGGER=$(jq -n \
+          --slurpfile h "$HANDOFF_FILE" \
+          --arg type "elicitation_resume" \
+          --arg date "$TIMESTAMP" \
+          '{
+            type: $type,
+            date: $date,
+            sender: { agent: "scrum-master", session_id: $h[0].session_id, date: $date },
+            elicitation_id: ($h[0].elicitation_id // ""),
+            state_file:     ($h[0].state_file     // ""),
+            message: "A conversational architecture elicitation session paused mid-run. Resume it from the persisted state file."
+          }')
+        echo "$TRIGGER" >> "$QUEUE_FILE"
+        echo "[on_session_end] scrum-master (elicitation_paused) → scrum-master queue: elicitation_resume"
+      fi
       ;;
 
     developer)

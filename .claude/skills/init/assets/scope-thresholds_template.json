@@ -1,0 +1,7 @@
+{
+  "threshold_version": 1,
+  "inline_max_files": 1,
+  "inline_max_lines": 20,
+  "story_max_files": 5,
+  "bundle_lock_ttl_minutes": 30
+}

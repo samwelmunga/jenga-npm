@@ -67,6 +67,12 @@ cp "$ASSETS_DIR/workflow_template.json" project/configs/workflow.json
 echo "→ Copying test-config.json from template..."
 cp "$ASSETS_DIR/test-config_template.json" project/configs/test-config.json
 
+# ─── 6.5. Create project/configs/scope-thresholds.json ───────────────────────
+# Consumed by skills/jenga (Phase 0) and skills/do (Step 0); both halt if it's
+# missing, so it must exist immediately after scaffold.
+echo "→ Copying scope-thresholds.json from template..."
+cp "$ASSETS_DIR/scope-thresholds_template.json" project/configs/scope-thresholds.json
+
 # ─── 7. Create project/data/baselines.json ───────────────────────────────────
 echo "→ Creating baselines.json..."
 echo '{}' > project/data/baselines.json

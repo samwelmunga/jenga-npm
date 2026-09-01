@@ -254,6 +254,62 @@ construction**. Agents and humans reading the board should not treat a backfille
 Definition of Done as a build plan, and should not assume that an incomplete-looking backfilled
 epic represents unbuilt functionality.
 
+## Board Item Tag Conventions
+
+Two bracketed title-tag conventions mark board items whose nature differs from ordinary delivery
+work: `[SPIKE]` (bounded research) and `[ARCH]` (durable architectural inventory). Both are
+**title-text conventions, not frontmatter fields** — there is no `tag:` key; the tag is written
+directly into the item's `title` (e.g. `title: "[SPIKE] Security Section"`) and is not validated or
+enforced by `scripts/validate-board.sh`, which treats `title` as free text. Using either tag is
+advisory: it signals intent to readers of the board, `/status` output, and rollup logic, but nothing
+currently gates on its presence.
+
+### `[SPIKE]` — Bounded Research
+
+**Scope:** story and task level only.
+
+**Meaning:** a time-boxed research or exploration effort whose output is a decision, a design note,
+or an answered question — **not** shippable implementation code. Existing usage (`E06_S03_spike-editable-board.md`,
+`E08_S02_spike-security-section.md`) follows a consistent shape:
+
+- Bracketed title: `title: "[SPIKE] <Topic>"`.
+- A `## Spike Questions to Answer` section (or equivalent) in place of, or alongside, ordinary
+  Acceptance Criteria.
+- A Definition of Done line stating that no implementation code is produced by the spike itself —
+  only findings, a design note, or a recommendation that a follow-up story/task will act on.
+
+`[SPIKE]` predates this document; this section formalizes an existing informal convention rather
+than introducing new behavior.
+
+### `[ARCH]` — Durable Architectural Inventory
+
+**Scope:** epic, story, and task level. This is the **first tag extended to epic level** — `[SPIKE]`
+has never applied above story/task.
+
+**Meaning:** durable architectural-inventory record-keeping — capturing how existing or
+newly-understood code is structured, so the record persists as a lasting reference — as distinct
+from `[SPIKE]`'s bounded, time-boxed research meaning. `[ARCH]`-tagged items are not "temporary
+until answered" the way a spike is; they are the durable output itself (e.g. graph nodes/edges,
+architecture documentation) and are not expected to be superseded by a subsequent non-`[ARCH]` item
+the way a spike's findings feed into a normal follow-up.
+
+Introduced for E20_S08's conversational architecture elicitation flow (`/uncharted` integration),
+where generated board items record architectural understanding of code rather than proposing new
+delivery work, at a scale (potentially a whole investigated subsystem) that can reach epic level.
+
+**Explicitly distinct from `[SPIKE]`:**
+
+| | `[SPIKE]` | `[ARCH]` |
+|---|---|---|
+| Nature | Bounded, time-boxed research | Durable architectural record |
+| Valid levels | Story, task | Epic, story, task |
+| Typical DoD | "No implementation code produced" | Graph nodes/edges written, or architecture documented |
+| Lifecycle | Findings feed a follow-up item | The record itself is the lasting artifact |
+
+Do not use `[ARCH]` and `[SPIKE]` interchangeably or on the same item — pick whichever meaning
+actually applies. An epic can only ever be `[ARCH]` (or untagged); `[SPIKE]` is not valid at epic
+level.
+
 ## Execution Scope Fields (Task)
 
 These six fields control the execution footprint of a task within the `/jenga` and `/do` workflows. They are **optional** — omitting all six is valid and equivalent to `execution_scope: task` / `needs_docs: true`.
@@ -429,6 +485,7 @@ A `crucial_escalation` rapport must also name the target item's ID (`E##`, `E##_
 | `rapport_review` | on_session_end.sh | New problem rapport(s) detected; create backlog items or mark Failed |
 | `status_review`  | on_session_end.sh | Session ended; review board for stale statuses        |
 | `story_rollup`   | tester / on_session_end.sh | All tasks under story complete; check rollup |
+| `elicitation_resume` | on_session_end.sh (from a scrum-master `elicitation_paused` handoff) | A `/uncharted` conversational architecture elicitation (E20_S08_T03) paused mid-run; resume it from the state file persisted by `skills/uncharted/scripts/elicitation-state.sh` |
 
 ### `developer_triggers.jsonl` — processed by developer at session start
 

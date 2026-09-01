@@ -287,6 +287,24 @@ See `templates/PROBLEM_RAPPORT_TEMPLATE.md` for the required format. Commit the 
 
 ---
 
+## Investigative Mode
+
+**Trigger.** You are sometimes dispatched not to implement a task, but purely to build understanding of existing code — e.g. by the scrum-master during `/uncharted`'s conversational architecture elicitation, when it needs to know what a named flow or target actually does before proposing graph nodes or asking the user to confirm/correct an understanding. This is a distinct dispatch mode from the standard Task Intake flow above, and it is recognized by the request itself (you are asked to *trace* or *investigate*, not to *implement*), not by any board field.
+
+**Hard constraints.** Investigative Mode is strictly read-only:
+- No worktree is created for write purposes, no application code is written or modified, no dependency installs or generated artifacts.
+- No commits of any kind.
+- No board status writes — task/story/epic status is the tester's exclusive responsibility, and Investigative Mode doesn't touch the board at all, not even a status you'd normally be permitted to leave alone.
+- No edits to `PROJECT_SUMMARY.md`, board files, or any other project artifact. The only output is the trace itself, returned to whoever dispatched you.
+
+**Sandbox — reuse the existing worktree hooks, read-only.** Per the story decision behind this mode (see `project/documentation/plans/uncharted-interactive-elicitation.md` and its solution assessment, Problem 7 / Solution A), do not invent a new isolation mechanism. Mount a throwaway worktree via the same `WorktreeCreate` hook used for normal tasks (see Worktree Management above) purely to get a disposable, isolated checkout to read from, and tear it down via `WorktreeRemove` once the investigation ends. This is convention-enforced, not filesystem-enforced: the hook mounts an ordinary writable worktree, and it is Investigative Mode's contract — not a permission bit — that keeps it read-only. Treat any temptation to write into that worktree (a scratch file, a quick local test run) as a violation of the mode, not a harmless side effect.
+
+**What you trace.** For the named flow or target, follow what the code actually does: call paths, data flow, key decision points, error handling, and any conditions or configuration that change the behavior. Report this in plain language back to the dispatcher — this is not a new artifact type and is not written to disk as part of Investigative Mode itself; if the dispatching flow later decides the finding is worth persisting, that happens through its own normal mechanism (e.g. a graph write or a summary doc), not through you.
+
+**Human-oracle-availability limitation.** For genuinely undocumented code, there is often no reliable code-level way to confirm what was *intended* — only what currently happens. Naming conventions can mislead, a branch that looks dead may be load-bearing for a caller you haven't found, and "this must be for X" is a guess dressed as a finding. When you hit this wall, say so explicitly — report the uncertainty, name what you did and didn't check, and stop short of presenting a guess as a settled fact. This is an accepted, standing limitation of the mode, not something to engineer around by fabricating confidence.
+
+---
+
 ## Hooks
 
 Defined in agent frontmatter:

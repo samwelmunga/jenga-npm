@@ -47,9 +47,9 @@ Every mode runs the same shared investigative engine and emits the same understa
 
 | Mode | Scale | What it does | Implemented by |
 |---|---|---|---|
-| `segment` | one file, directory, or feature | Analyses a target that is already in the repo (or has just been imported), then proposes a standard epic/story/task so the segment gains normal board provenance. | E40_S02 |
+| `segment` | one file, directory, or feature | Two explicit modes since E20_S08_T03: `--mode delivery` (default, unchanged) analyses a target already in the repo and proposes a standard epic/story/task; `--mode investigate` opens a conversational architecture-investigation flow instead. See **`segment`** below for the mode choice. | E40_S02 / E20_S08_T03 |
 | `import` | an external source | Acquires a git URL, an out-of-repo path, or a pasted snippet into the repo at a user-confirmed location, then hands off to `segment`. | E40_S03 |
-| `onboard` | the whole codebase | Coarse-first pass over an existing project at framework-adoption time. Produces a capped set of **backfilled** epics. Board-only — never touches application code. | E40_S04 |
+| `onboard` | the whole codebase | Conversational by default since E20_S08_T03: discovery scripts seed a human-in-the-loop elicitation that writes `[ARCH]`-tagged board items and coarse graph nodes. `--legacy` reproduces the original fully-automated, zero-prompt, capped-**backfilled**-epic pass unchanged. Board/graph-only — never touches application code, in either mode. | E40_S04 / E20_S08_T03 |
 
 **Dispatch rules:**
 
@@ -146,6 +146,111 @@ A document whose judgement sections are generic enough to apply to any codebase 
 
 ---
 
+## Conversational Elicitation
+
+Since **E20_S08_T03**, `onboard`'s default behavior and `segment --mode investigate` both run a human-in-the-loop **conversational elicitation** instead of (or, for `onboard`, in addition to keeping available) a one-shot deterministic pass. This section defines the mechanics shared by both; each mode's own subsection below only describes what is specific to it.
+
+**What conversational elicitation produces, and how that differs from the Understanding Document above:** the **primary** output is coarse-tier graph nodes/edges — written directly to `project/knowledge-graph/graph.json`, conforming to the stub schema at `project/knowledge-graph/STUB_SCHEMA.md` (E20_S08_T01; this is a throwaway pilot schema, swapped wholesale once E20_S01's real schema lands — do not extend it expecting stability). Every node this flow writes carries `source: "human"`, since it comes from a person confirming or correcting a proposed understanding, not from mechanical extraction. Board representation is a `[ARCH]`-tagged epic, story, or task at whichever level fits the investigated scope (see `templates/SCRUM_BOARD_SCHEMA.md`'s `[ARCH]` — Durable Architectural Inventory convention) — **not** the delivery-shaped epic/story/task proposal `segment --mode delivery` and legacy `onboard` produce, and not the fixed 7-heading Understanding Document either. A written summary is produced only when warranted, filed as the resulting board item's ordinary `-summary.md` — there is no new artifact type or separate "Understanding Document" for conversational output.
+
+### Human-Oracle-Availability Limitation
+
+**Read this before running a conversational elicitation on code nobody currently understands.** This is `/uncharted`'s own documented, standing, accepted limitation — not only `agents/developer.md`'s and `agents/tester.md`'s (E20_S08_T02 covers those; this is the skill's own copy of the same limitation, since the person driving `/uncharted` may never open either agent file directly).
+
+For genuinely undocumented code, there is often no reliable human oracle to confirm or correct a proposed understanding — the person answering may not know either, or may confidently confirm a wrong answer. Per the parent story's own scrutiny (scored 3/10 on this exact point) and its solution assessment's disposition ("Accept and Descope" on Problem 1): **conversational elicitation does not solve this, and does not claim to.** It is a complementary path for codebases where *some* human context exists, not a fix for the hardest, genuinely zero-oracle case.
+
+- **The deterministic pipeline remains the tool of record for zero-oracle codebases.** `onboard --legacy` and `segment --mode delivery` never depend on anyone confirming intent — they ground everything in mechanical evidence (file structure, dependencies, test coverage) and say so explicitly under `Open Questions` when the evidence doesn't support a conclusion. When there is no one left who understands the code, reach for one of those, not the conversational flow.
+- **When running the conversational flow, do not manufacture confidence.** If the user's answer is uncertain, hedged, or contradicts what discovery/Investigative Mode found, write the node honestly — do not round an uncertain answer up to a confirmed one. There is no schema field yet to tag confidence (the stub schema is intentionally minimal); until one exists, say so in the node's `description` text itself (e.g. "per the user, this module retries failed charges — unconfirmed against the code, which shows only a single retry attempt") rather than silently dropping the caveat.
+- **A confidently wrong answer is not detectable by this flow.** Corroboration against a second signal (commit history, existing docs, a second person) is the only mitigation, and it is not built here — this is the accepted residual risk, not a gap to engineer around mid-conversation.
+
+### Directory Triage
+
+Runs once per elicitation, between discovery and the first Investigative Mode dispatch — never skipped, and never silently absorbed into the convergence loop below, because triaging noise out is exactly what keeps that loop from wasting turns (and the user's attention) on vendor/generated directories nobody wants a graph node for.
+
+**Step 1 — deterministic pass.** Feed the candidate directories (from `discover-subsystems.sh`'s output for `onboard`, or the target's immediate subdirectories for `segment --mode investigate`) to:
+
+```bash
+discover-subsystems.sh <root> | jq -r '.candidates[].path' \
+  | bash skills/uncharted/scripts/directory-triage.sh <root>
+```
+
+Read `ignored` (already excluded by `.gitignore`, or matching the fixed vendor/generated pattern list — see the script's own header for the full list) and `remaining`. This is a mechanical classification; do not second-guess it or re-run judgement over an `ignored` entry.
+
+**Step 2 — judgement pass over `remaining`.** This is the generalize-list the deterministic pattern list can never catch: content-based cases where a directory is legitimately noise or a single coarse unit for reasons a pattern match cannot see — the task's own example is "this directory is SOAP request mock-ups for a test suite." Skim `remaining` (directory names, a shallow listing, README/comment hints) and propose, for each one that looks like a generalize candidate, a single-sentence rationale and the disposition: **exclude** (like `ignored`, zero graph nodes) or **generalize** (one coarse-tier node covering the whole directory, no per-file drill-down, no Investigative Mode dispatch into it). Everything not proposed for either disposition proceeds to full investigation.
+
+**Step 3 — one confirmation gate, both lists together.** Per the task's own acceptance criterion, both the deterministic ignore-list and the judgement-based generalize-list are confirmed with the user **before any developer/tester Investigative Mode dispatch** — not after, and not as two separate gates:
+
+```
+Directory triage for <target>:
+
+Excluded (pattern/gitignore match) — N directories:
+<path> — <reason>
+...
+
+Proposed for exclusion or generalization (judgement) — M directories:
+<path> — exclude|generalize — <one-line rationale>
+...
+
+Everything else (K directories) proceeds to investigation.
+
+How should this be applied?
+1. Accept as proposed
+2. Revise — change a disposition before proceeding
+3. Show me the full excluded/generalize lists in detail
+4. Other (describe below)
+```
+
+Silence, a counter-question, or an ambiguous reply is not consent — re-ask, the same convention used at every other confirmation gate in this skill. Option 3 does not count as a decision; re-present the same choice after showing the detail. Checkpoint the confirmed triage result immediately via `elicitation-state.sh checkpoint` (see Multi-Session Persistence below) so a paused-and-resumed session never re-asks a question the user already answered.
+
+### Convergence Loop
+
+Runs once per surviving candidate (a subsystem, a named flow, a directory) after Directory Triage. This is the "propose understanding, ask the user to confirm or correct" cycle at the center of the redesign — and the one the scrutiny flagged as having no termination bound and no defense against confirmation fatigue. Both gaps are closed mechanically, not by agent discipline alone:
+
+1. **Dispatch Investigative Mode.** Per `agents/developer.md`'s and `agents/tester.md`'s Investigative Mode sections (E20_S08_T02), dispatch the developer to trace what the code actually does for the candidate, and the tester to trace what the test suite actually exercises and verifies for the same candidate — two distinct vantage points, not two names for the same read. Both are read-only, worktree-sandboxed, no commits, no board writes.
+2. **Propose understanding.** From both traces, draft the candidate's coarse graph node(s)/edge(s) (per the stub schema) and a plain-language summary of what they represent.
+3. **Risk-weighted gating — not every finding gets a prompt.** This is the fix for confirmation fatigue (solution assessment, Problem 6, Solution B — RECOMMENDED): force an explicit confirmation only for **high-uncertainty or high-impact** findings — a node whose description depends on an inference the traces don't fully support, a node with many outgoing edges (structurally central), or one the Human-Oracle-Availability Limitation above already flagged as uncertain. **Auto-accept** low-risk, high-confidence findings — the traces agree, the finding is narrow in scope, nothing about it is surprising — without a prompt, but **log every auto-accepted node** in the elicitation state's checkpoint data (see below) so the decision is auditable later, per that solution's own mitigation for "the scoring mechanism itself misjudges impact."
+4. **Confirm/correct, one round per call to `elicitation-state.sh turn`.** For a node requiring confirmation, present the draft and ask the user to confirm or correct it (per the Interaction Pattern in `CLAUDE.md` — confirm / correct-with-detail / defer as "unconfirmed" / other). Each round, call:
+
+   ```bash
+   bash skills/uncharted/scripts/elicitation-state.sh turn --id <elicitation-id> --node <node-id>
+   ```
+
+   Exit `0` means keep looping (cap not yet reached) if the user corrected rather than confirmed. Exit `3` means **the hard turn cap has been reached** — the node is now marked `flagged` in the state file. **Do not loop again on that node.** Instead present it as unresolved and offer an explicit choice rather than looping indefinitely (solution assessment, Problem 10, Solution A — RECOMMENDED):
+
+   ```
+   <node> has reached the confirmation round limit without converging.
+   1. Accept the current best draft as-is (flagged low-confidence)
+   2. Defer — skip this node for now, continue with the rest
+   3. Continue past the limit (explicit override)
+   4. Other (describe below)
+   ```
+
+   Option 3 is the only way past the cap, and it is a per-node, explicit, one-time override — it does not raise the cap for the rest of the run.
+5. **On convergence** (confirmed, corrected-and-accepted, or resolved via the cap choice above), call:
+
+   ```bash
+   bash skills/uncharted/scripts/elicitation-state.sh converge --id <elicitation-id> --node <node-id> --note "<one-line summary of what was confirmed>"
+   ```
+
+   then write the node/edge to `project/knowledge-graph/graph.json` per the stub schema, and checkpoint the elicitation state (next section) — **after every converged node**, not only at the end of the whole run.
+
+### Multi-Session Persistence
+
+A whole-codebase `onboard` conversation, or an investigation of a large directory, can span more sessions than fit in one sitting. State persists via the existing `SessionEnd`/queue infrastructure — no new persistence mechanism (solution assessment, Problem 11, Solution A — RECOMMENDED).
+
+- **`init` once, at the start of an elicitation:**
+
+  ```bash
+  bash skills/uncharted/scripts/elicitation-state.sh init --id <elicitation-id> --target "<path or description>" --cap 5
+  ```
+
+  Idempotent — safe to call again on a resumed `<elicitation-id>` without resetting progress. Choose `<elicitation-id>` so it is stable and re-derivable across sessions (e.g. `onboard-<root-slug>-<date>`, or `segment-investigate-<target-slug>`), since a resuming session must be able to reconstruct it to call `init` again.
+- **`checkpoint` after every converged node and after the Directory Triage confirmation gate** — never only at the end. This is what makes a mid-run pause lossless: `checkpoint --id <id> --json <file>` merges arbitrary progress data (triage results, draft nodes not yet converged, anything else worth surviving a pause) into the state file.
+- **`pause` when a session must end before the elicitation has converged.** Immediately after calling `elicitation-state.sh pause --id <elicitation-id>`, write the scrum-master's own `SessionEnd` handoff (per `templates/SCRUM_BOARD_SCHEMA.md`'s `handoffs/` convention) with `status: "elicitation_paused"` and both `elicitation_id` and `state_file` set — `hooks/on_session_end.sh` routes that into an `elicitation_resume` trigger on `scrum_triggers.jsonl`, which the next scrum-master session's Drain Scrum Triggers Queue procedure picks up (`agents/scrum-master.md`).
+- **On resume**, read `state_file` directly — every converged node, every flagged node, and the checkpoint data (including the confirmed directory-triage lists) are already there. Do not re-run Directory Triage or re-ask about an already-converged node; resume the Convergence Loop only for nodes still `pending` or explicitly deferred.
+- **`complete` when every candidate has converged, been deferred, or been explicitly accepted past the cap.** The state file is left on disk afterward as an audit trail — nothing currently prunes a completed elicitation's state file.
+
+---
+
 ## Modes
 
 <!--
@@ -158,7 +263,27 @@ A document whose judgement sections are generic enough to apply to any codebase 
 
 ### `segment`
 
-Analyse a specific file, directory, or feature that has no board provenance, then give it standard board representation.
+Analyse a specific file, directory, or feature that has no board provenance. Since **E20_S08_T03**, `segment` has two explicit modes — it no longer silently always runs one:
+
+| Flag | Mode | What it produces |
+|---|---|---|
+| `--mode delivery` (default when explicit) | Delivery-shaped proposal — today's unchanged flow | A standard epic/story/task proposal, per the Understanding Document |
+| `--mode investigate` | Conversational architecture investigation (new, E20_S08_T03) | Coarse graph nodes/edges plus a `[ARCH]`-tagged board item |
+
+**Step 0 — choose a mode.** If `--mode` is given, skip straight to that mode's subsection below. If it is missing, do **not** default silently — present the choice, per the Interaction Pattern in `CLAUDE.md`:
+
+```
+/uncharted segment <target> — which mode?
+1. Delivery-shaped proposal (produces an epic/story/task to build on this target)
+2. Conversational architecture investigation (produces graph nodes explaining what this target does)
+3. Other (describe below)
+```
+
+Silence, a counter-question, or an ambiguous reply is not consent — re-ask. This choice is the entire mechanism by which existing callers keep getting exactly today's behavior (option 1, or `--mode delivery` passed explicitly) while new callers can reach the conversational path deliberately, per the parent story's own acceptance criterion that this split must be explicit, not a silent behavior change.
+
+#### Delivery-shaped proposal (`--mode delivery`)
+
+Unchanged from before E20_S08_T03 — every step below is exactly what `segment` has always done.
 
 **Step 1 — Resolve the target.** Deterministic; do not eyeball it.
 
@@ -258,6 +383,24 @@ On success, tell the user exactly which files were created, with their IDs.
 **Step 8 — Hand off to the standard path.** Queue each new task with the canonical todo owner — `scripts/todo_manager.sh add "<entry>"`, one call per task, referencing the task ID — and the work then proceeds through the ordinary `/todo` → `/do` → developer → tester path, with no special casing anywhere along it. Point the tasks' Description at the understanding document from Step 2; it is the context the developer picking one up would otherwise lack.
 
 **`/uncharted` writes board files and stops there.** It does not adapt the segment to project conventions, edit or move the code it just analysed, open a worktree, or write an execution plan. That is ordinary developer work, driven by ordinary task files, and it is the developer agent's job — the same as for a task that came from `/brainstorm` or `/pi-plan`. A segment that has reached the board is no longer a special case, and this skill growing its own integration path would be a second, divergent execution route for work the existing one already handles.
+
+#### Conversational investigation (`--mode investigate`)
+
+New in **E20_S08_T03**. Produces a plain-language understanding plus graph nodes for a *specific* target — the same conversational mechanics as `onboard`'s default flow, applied at single-target scale instead of whole-codebase scale. Read **Conversational Elicitation** above (Human-Oracle-Availability Limitation, Directory Triage, Convergence Loop, Multi-Session Persistence) before running this — everything below only sequences those shared mechanics for `segment`'s scope; it does not redefine them.
+
+**Step 1 — Resolve the target.** Reuse `resolve-segment-target.sh` exactly as the delivery-shaped path's own Step 1 does above — do not reimplement resolution or the board-linkage check for this mode. A `linked` target is a normal condition here (unlike the delivery-shaped path, an existing epic/story/task referencing the target doesn't disqualify investigating it), but still tell the user before proceeding, the same as the delivery-shaped path does.
+
+**Step 2 — Directory triage, only if the target is a directory with subdirectories.** A single-file target has nothing to triage; skip straight to Step 3. For a directory target, run the shared Directory Triage procedure above against the target's immediate subdirectories as the candidate set.
+
+**Step 3 — Convergence loop.** Run the shared Convergence Loop procedure above. For a single-file target this is one node; for a directory target (after triage) it is one node per surviving candidate. Initialize persistence first:
+
+```bash
+bash skills/uncharted/scripts/elicitation-state.sh init --id "segment-investigate-$(basename "$RESOLVED_TARGET")-$(date -u +%Y%m%d)" --target "$RESOLVED_TARGET"
+```
+
+**Step 4 — On convergence, write the graph and the board item.** Write each converged node/edge to `project/knowledge-graph/graph.json` per the stub schema (`source: "human"`), then present a single `[ARCH]`-tagged board item proposal — epic, story, or task, whichever level fits what was actually investigated (a single flow is usually task-scale; a whole subsystem may warrant a story or, rarely, an epic) — and stop at the same kind of confirmation gate the delivery-shaped path's Step 6 uses (accept / revise / discard / other). **Nothing is written to `project/board/` before that gate is confirmed**, matching the delivery-shaped path's own "nothing written before option 1" guarantee. On acceptance, write the board item and call `elicitation-state.sh complete`.
+
+**This mode never produces a delivery-shaped epic/story/task proposal.** If the investigation surfaces work that should actually be *built* (not just understood), say so as a follow-up recommendation in the `[ARCH]` item's own text and let the user separately invoke `--mode delivery` or `/todo` for that — conversational investigation and delivery planning stay two distinct outputs, per this mode split's own purpose.
 
 ### `import`
 
@@ -441,28 +584,33 @@ destination.
 
 ### `onboard`
 
-Backfill the board for an entire pre-existing codebase at framework-adoption time.
+Give an entire pre-existing codebase board representation at framework-adoption time. Since **E20_S08_T03**, `onboard` has two modes:
 
-> **Placeholder — implemented by E40_S04** (`E40_S04_T01` `provenance` field on epics, `E40_S04_T02` subsystem discovery, `E40_S04_T03` cap enforcement with drop logging, `E40_S04_T04` backfilled epic generation, `E40_S04_T05` `PROJECT_SUMMARY.md` population). All five are live.
->
-> Contract this section must honour when filled in:
-> - Coarse-first: identifies major subsystems, not individual files. Depth is bounded, not exhaustive.
-> - Emits a **capped** number of epics, each marked `provenance: backfilled` so they are distinguishable from normally-authored epics.
-> - The cap is explicit and anything dropped to stay under it is reported to the user. No silent truncation.
-> - **Board and documentation only.** Never modifies, moves, or restructures the consumer's application code. Jenga lives alongside the app; the app never has to conform to a Jenga convention.
+| Invocation | Mode | Output |
+|---|---|---|
+| `onboard <root>` (default) | Conversational — human-in-the-loop elicitation seeded by the same discovery scripts | `[ARCH]`-tagged board items + coarse graph nodes in `project/knowledge-graph/graph.json` |
+| `onboard <root> --legacy` | Fully-automated, zero-prompt, capped-backfilled-epic pass — E40_S04's original behavior, byte-for-byte unchanged | `provenance: backfilled` epics |
+
+**`--legacy` is not a deprecated fallback — it is the designated tool for a codebase with no available human oracle.** Read **Human-Oracle-Availability Limitation** under Conversational Elicitation above before choosing between the two; that section states explicitly when `--legacy` is the *correct* choice, not a lesser one.
+
+> **Build status:** the legacy pipeline (`E40_S04_T01`-`T05`: `provenance` field, subsystem discovery, cap enforcement, backfilled epic generation, `PROJECT_SUMMARY.md` population) is complete and unchanged by this rework — see **Legacy mode** below. The conversational default is new as of `E20_S08_T03` — see **Conversational default** below.
 
 #### The hard constraint: `onboard` never touches application code
+
+This holds in **both** modes — conversational and legacy alike.
 
 **`onboard` mode must never modify, move, rename, delete, or restructure any file that belongs to
 the consumer's application.** This is not a best-effort convention — it is the reason `onboard`
 exists as a *board-only* mode rather than a generic migration tool. Its entire output surface,
 without exception, is:
 
-- `project/board/` (the backfilled epic files this section produces)
-- `project/rapports/analysis/` (understanding documents and the subsystem cap record)
-- `project/PROJECT_SUMMARY.md` (populated by `E40_S04_T05`)
+- `project/board/` (backfilled epics in `--legacy` mode; `[ARCH]`-tagged epics/stories/tasks in conversational mode)
+- `project/rapports/analysis/` (understanding documents and the subsystem cap record — `--legacy` mode only; conversational mode's primary output is the graph, not this document type — see Conversational Elicitation above)
+- `project/PROJECT_SUMMARY.md` (populated by `E40_S04_T05`, `--legacy` mode only)
+- `project/knowledge-graph/graph.json` (coarse graph nodes/edges — conversational mode only, per the stub schema)
+- `project/queue/elicitation-state/` (multi-session persistence scratch state — conversational mode only, git-ignored, not a durable artifact)
 
-Nothing under any other path is ever created, edited, or deleted by `onboard` mode. Jenga's board
+Nothing under any other path is ever created, edited, or deleted by `onboard` mode, in either mode. Jenga's board
 and skills live *alongside* the application; the application never has to conform to a Jenga
 convention to be onboarded. This guarantee is enforced in three independent places, not just
 stated here:
@@ -475,6 +623,34 @@ stated here:
    written — not a warning that can be missed.
 3. **A verifiable post-run check** (below): after a full `onboard` run, `git status` in the
    analysed repository must show changes only under `project/`.
+
+#### Conversational default
+
+New in **E20_S08_T03**. Runs when `onboard` is invoked without `--legacy`.
+
+**Step 1 — discovery stays scripted.** Run the exact same deterministic discovery chain the legacy pipeline uses — `discover-subsystems.sh` — unchanged. Evidence-gathering is not where this rework touches anything; only what happens with the output differs.
+
+```bash
+bash skills/uncharted/scripts/discover-subsystems.sh <root>
+```
+
+**Step 2 — directory triage.** Feed the discovery output's candidate paths into the shared Directory Triage procedure (see Conversational Elicitation above), and stop at its confirmation gate before anything else happens.
+
+**Step 3 — initialize persistence.**
+
+```bash
+bash skills/uncharted/scripts/elicitation-state.sh init --id "onboard-$(basename "$(cd "$root" && pwd)")-$(date -u +%Y%m%d)" --target "<root>" --cap 5
+```
+
+**Step 4 — convergence loop, once per surviving candidate.** Run the shared Convergence Loop procedure (see Conversational Elicitation above) for each candidate that survived triage — this is where the legacy pipeline's `apply-subsystem-cap.sh` and `write-backfilled-epics.sh` would have silently produced a capped set of `provenance: backfilled` epics; the conversational default asks about each one instead, subject to the same risk-weighted gating and hard turn cap. There is deliberately **no subsystem cap** on the conversational path — the turn cap already bounds cost per candidate, and capping the *candidate count* the way the legacy path does would silently drop subsystems from a human-in-the-loop conversation the same way the legacy path drops them from an unattended one, which defeats the point of asking. A codebase with far more subsystems than is practical to walk through conversationally in one sitting is exactly the multi-session case Multi-Session Persistence exists for — pause, resume across sessions, rather than truncate the candidate list.
+
+**Step 5 — on convergence, write the graph and the board item(s).** Per candidate: write the converged node(s)/edge(s) to `project/knowledge-graph/graph.json`, then present an `[ARCH]`-tagged board item proposal at whichever level fits (an individual subsystem is usually story-scale; the whole run may warrant a single `[ARCH]` epic containing one story per converged subsystem — judgement call, not a fixed rule) and stop at a confirmation gate before writing to `project/board/`, exactly as `segment --mode investigate`'s Step 4 does. Call `elicitation-state.sh complete` once every candidate has converged, been deferred, or been resolved past the turn cap.
+
+**`PROJECT_SUMMARY.md` population still applies, unchanged in spirit.** Once the conversational pass has produced its `[ARCH]` items, hand off to the scrum-master for the same `PROJECT_SUMMARY.md` Overview/Architecture & Structure drafting-and-confirmation flow described under **Updating PROJECT_SUMMARY.md from onboard evidence** below (Steps A-D) — substituting the conversational pass's converged understanding for the legacy pipeline's `kept` array as the evidence source. Do not skip the stub-vs-real-content check in Step B just because the evidence came from a conversation instead of a script.
+
+#### Legacy mode (`--legacy`)
+
+Everything below is `E40_S04`'s original, fully-automated, zero-prompt pipeline — **unchanged** by this rework, reachable only via the explicit `--legacy` flag.
 
 #### The subsystem cap
 
@@ -592,7 +768,9 @@ outside `project/` ended up tracked by git.
 
 #### Updating PROJECT_SUMMARY.md from onboard evidence
 
-Live as of `E40_S04_T05`. This is the last step of an `onboard` run, after the backfilled epics
+Live as of `E40_S04_T05`, and reused by both `onboard` modes since `E20_S08_T03` — the conversational default's own Step 5 above hands off here too, substituting its converged understanding for the `kept` array as the evidence source described below. Nested under Legacy mode structurally only because it was written before the conversational path existed; treat "Steps A-D" as shared, not legacy-only.
+
+This is the last step of an `onboard` run, after the backfilled epics (legacy) or `[ARCH]` items (conversational)
 above have been written (or confirmed skipped). Its job is to close the gap the epic itself
 describes: a project adopting Jenga should not end up with a populated board sitting underneath a
 `PROJECT_SUMMARY.md` that still reads as if the codebase were empty.
@@ -684,10 +862,11 @@ hard constraint** above, since that file was never a required write, only a perm
 These hold across every mode:
 
 - **Read-only against application code**, with one exception: `import` mode writes an acquired source to a location the user has explicitly confirmed. Nothing else in this skill modifies, moves, or restructures a consumer's code.
-- **Confirm before writing to the board.** Proposals are presented for approval first, consistent with the brainstorm-before-commit convention.
-- **No new rapport type.** Understanding documents use the existing `analysis` type and land in `project/rapports/analysis/`.
-- **Never invent findings.** If the evidence does not support a conclusion, say so under Open Questions.
+- **Confirm before writing to the board.** Proposals are presented for approval first, consistent with the brainstorm-before-commit convention. Since `E20_S08_T03`, this also covers Directory Triage's confirmation gate and each converged node's graph/board write in the conversational elicitation flow — same convention, applied to a new output type (graph nodes), not a new exception to it.
+- **No new rapport type.** Understanding documents use the existing `analysis` type and land in `project/rapports/analysis/`. Conversational elicitation's output (graph nodes + `[ARCH]` board items) is not an understanding document and does not need one — see Conversational Elicitation above for what it produces instead.
+- **Never invent findings.** If the evidence does not support a conclusion, say so under Open Questions (delivery-shaped/legacy paths) or state the uncertainty plainly in the node itself (conversational paths — see Human-Oracle-Availability Limitation above).
 - **Deterministic work belongs in `skills/uncharted/scripts/`**, agent judgement belongs here.
+- **Existing zero-prompt behavior is never silently retired.** `onboard --legacy` and `segment --mode delivery` reproduce exactly what `/uncharted` did before `E20_S08_T03`, with no behavior drift for a caller who keeps using them.
 
 ---
 
@@ -695,8 +874,8 @@ These hold across every mode:
 
 `/uncharted` is invocable directly, and is also offered automatically at the two moments it is most needed (E40_S05):
 
-- **`/init`** — when scaffolding detects a non-empty, non-Jenga-scaffolded directory, it offers `onboard` instead of proceeding as though the project were empty.
-- **`/reconcile`** — when its normal sync pass finds code with no board linkage, it offers `segment` for the affected paths.
+- **`/init`** — when scaffolding detects a non-empty, non-Jenga-scaffolded directory, it offers `onboard` instead of proceeding as though the project were empty. Since `E20_S08_T03`, this offer surfaces both `onboard` modes — the user picks conversational (default) or `--legacy` at that point, per the mode choice this section describes; `/init` itself makes no decision about which is appropriate.
+- **`/reconcile`** — when its normal sync pass finds code with no board linkage, it offers `segment` for the affected paths. Since `E20_S08_T03`, this offer surfaces both `segment` modes the same way.
 
 Both are offers, never automatic execution.
 

@@ -36,7 +36,17 @@ If `--inline` is absent **and** `JENGA_COMMIT_INLINE` is not set (or is not `1`)
 
 If no epic, task, or story has been implemented, exit with the message: "No implementation to commit."
 
-1. **Reconcile first** — Invoke the `/reconcile` skill before any other action, so the board is never committed in a drifted state.
+1. **Reconcile first, scoped to this commit** — Invoke the `/reconcile` skill before any other action, so the board is never committed in a drifted state.
+   - **Determine the scope to pass** (in order):
+     1. If `/commit` was invoked with an explicit epic/story/task id argument (e.g. `/commit E46`, `/commit E17_S04_T02`), use that id.
+     2. Otherwise, if the calling context already identifies a single task/story/epic just completed (e.g. a developer or tester agent's sender object naming `task_id`/`story_id`/`epic_id`, or a `/do` invocation for one task), use that id.
+     3. Otherwise, derive it from what's staged: run `git diff --cached --name-only` and filter to paths under `project/board/epics/`, `project/board/stories/`, and `project/board/tasks/`. Extract the id each matched filename encodes.
+        - If every extracted id shares a single common story-or-narrower ancestor (all belong to one story's own file plus any of its own tasks' files, or are all exactly one task's own file, or are all exactly one epic's own file with nothing narrower staged), use that single most-specific id (story/task id if present, else the epic id) as the scope.
+        - If matched ids span more than one distinct story, or more than one distinct epic, this case does not resolve — do not guess between them; fall through to case 4.
+        - **If no board files at all are staged, skip `/reconcile` entirely — do not fall through to case 4.** A commit that touches no board file cannot itself commit board drift, so there is nothing for a pre-commit reconcile to protect against; running a full unscoped scan here would be pure waste, not a safety net. This is distinct from the multi-item case immediately above, which still falls through to case 4 since board files genuinely are changing there.
+     4. Otherwise — no argument, no sender context, and staged board files span more than one distinct story or epic — fall back to unscoped `/reconcile` (full board), unchanged from prior behavior.
+   - **Invoke** `/reconcile <scope>` when a scope was determined in cases 1-3, unscoped `/reconcile` on the case-4 fallback, or skip the reconcile step entirely per case 3's no-board-files-staged outcome. Do not re-derive or duplicate `/reconcile`'s own default-scope-to-epic expansion here — passing a bare story or task id through is sufficient; `/reconcile` itself resolves that to the containing epic.
+   - **If `/reconcile` was skipped** (case 3's no-board-files-staged outcome) — continue silently to the next step, exactly as the no-drift outcome below.
    - **If reconcile detects and corrects drift** — inform the user what changed (e.g. demoted/promoted statuses, merged orphaned worktrees, cleaned `todo.md` entries) before proceeding.
    - **If reconcile finds no drift** — continue silently to the next step.
 

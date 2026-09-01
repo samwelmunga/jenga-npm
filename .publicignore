@@ -69,6 +69,14 @@ skills/strategy/
 skills/convert/
 .claude/skills/convert/
 .agents/skills/convert/
+skills/route/
+.claude/skills/route/
+.agents/skills/route/
+
+# --- Private MCP servers ---
+mcp/router/
+.claude/mcp/router/
+.agents/mcp/router/
 
 # --- Scratch worktree used by /mirror-public itself ---
 .mirror-worktrees/

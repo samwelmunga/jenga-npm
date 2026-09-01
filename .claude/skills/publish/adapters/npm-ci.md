@@ -196,13 +196,20 @@ This target type also supports **staged publishing** via `/publish stage` —
 npm's pre-publish staging area — with an OIDC-specific split between the
 automated and human halves of the flow:
 
-- **Staging can run from CI, unattended.** `npm_stage_pipeline.sh` invokes
-  `npm stage publish ... --provenance` for `npm-ci` targets (the same
-  `--provenance` flag the normal deploy pipeline uses), authorised through
-  the same Trusted Publisher OIDC link described above — no `NPM_TOKEN`
-  is needed to stage, exactly as none is needed to publish. A workflow can
-  run `bash skills/publish/scripts/npm_stage_pipeline.sh <target> <path-to-publish.json> --non-interactive`
-  on every merge to stage a candidate release automatically.
+- **The actual `npm stage publish --provenance` call always runs inside
+  GitHub Actions, never on a local machine.** For `npm-ci` targets, phase 4
+  of `npm_stage_pipeline.sh` (run locally via `/publish stage publish`)
+  dispatches the `stage` job of the target's generated workflow (the same
+  `<workflow_path>` / OIDC Trusted Publisher link `npm_ci_pipeline.sh` uses
+  for `/publish deploy`, generated with a `mode: publish | stage`
+  `workflow_dispatch` input) via
+  `gh workflow run <workflow_filename> --repo <github_repo> -f mode=stage`,
+  then blocks on `gh run watch` until that run finishes. The `stage` job
+  itself runs a plain `npm stage publish --provenance --access <access>
+  --tag <dist_tag>` step, authorised through the same Trusted Publisher OIDC
+  link described above — no `NPM_TOKEN` is needed to stage, exactly as none
+  is needed to publish. Local `--dry-run` only prints the `gh workflow run`
+  command that would be dispatched; it never triggers a workflow run.
 - **Approval is always a human, out-of-CI step.** `npm stage approve`
   requires an interactive npm 2FA one-time password — there is no OIDC
   equivalent for approval. A human runs

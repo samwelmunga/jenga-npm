@@ -9,21 +9,98 @@ metadata:
 
 Walks the full board (epics → stories → tasks), verifies each item's status against what actually exists in git, and fixes any drift. Also cleans `project/todo.md` of entries that are already done. Then runs the same check in reverse — code that exists with no board item and no EST-tagged commit behind it — and offers `/uncharted segment` for what it finds.
 
+## Scope argument
+
+`/reconcile` optionally accepts a single scope argument that bounds every phase below to a subset
+of the board instead of always walking the whole thing:
+
+| Argument | Resolves to |
+|---|---|
+| _(none)_ | Full board — unchanged from today's behavior. |
+| `E12` (bare epic id) | That epic, in full. |
+| `E12_S03` or `S03` (bare story id) | The story's **containing epic, in full** — not just the named story. See "Default-scope-to-epic rule" below. |
+| `E12_S03_T01` (bare task id) | The task's **containing epic, in full** — same default-scope-to-epic rule. |
+| `S03-05` or `E12_S03-05` (a story range) | **Exactly** the named stories (and their tasks), plus rollup limited to only the epic(s) those stories belong to. Does not expand to unrelated stories in the same epic(s). Only story-level ranges are supported — an epic-level range (`E01-03`) or a task-level range (`T01-03`) is rejected with a clear reason. |
+| Anything unresolvable (unknown id, malformed range, an ambiguous partial) | A clear error before any board file is touched — no partial result, no silent full-board fallback. |
+
+**Default-scope-to-epic rule (settled — do not relitigate):** a scope argument naming a story or
+task (not an epic) always resolves to that item's *containing epic, in full* — never just the
+named story/task in isolation. Story and epic rollup (Phase 4) cannot be evaluated correctly
+without seeing all sibling stories/tasks, so scoping to a lone story or task would risk an
+incorrect rollup decision. If you want to reconcile *exactly* a set of stories without pulling in
+the rest of their epic(s), use the range syntax (`S03-05`) instead — a range does not apply the
+default-scope-to-epic expansion.
+
+Omitting the argument entirely keeps today's full-board behavior completely unchanged, in every
+phase below.
+
+Scope resolution itself is deterministic and handled entirely by
+`skills/reconcile/scripts/resolve-reconcile-scope.sh` (see Phase 0 immediately below) — this skill
+only interprets that script's output; it does not re-parse scope arguments or re-derive range
+expansion.
+
 ## Instructions
 
 ### 0. Read configuration
 Read `project/configs/workflow.json` for board paths. Fall back to `project/board/` if missing.
 The statuses that count as "completed" are: **Done**, **Passed**, **Passed with remarks**.
 
+### Phase 0 — Resolve scope
+Before touching anything else, resolve the scope argument (if any — see "Scope argument" above)
+into a concrete set of epic/story/task ids:
+
+```bash
+skills/reconcile/scripts/resolve-reconcile-scope.sh <scope-argument>
+```
+
+Omit `<scope-argument>` entirely for an unscoped, full-board run (the script's own no-argument
+path, matching today's default).
+
+- **On `{"status":"error","reason":"..."}` (non-zero exit)** — stop immediately. Report the
+  `reason` to the user as the reconcile failure. Do **not** proceed to Phase 1, and do not touch
+  any board file, `project/todo.md`, or write a reconcile report. This is the enforcement point
+  for the story's AC: an invalid or unresolvable scope argument fails with a clear error before
+  any board file is touched — no partial result and no silent full-board fallback.
+- **On success** — stdout is a single JSON object:
+  ```json
+  {
+    "scope_type": "full" | "epic" | "range",
+    "epic_ids": [...],
+    "story_ids": [...],
+    "task_ids": [...],
+    "owned_path_hints": [...]
+  }
+  ```
+  Carry `scope_type`, `epic_ids`, `story_ids`, `task_ids`, and `owned_path_hints` forward as **the
+  resolved scope** through every phase below. When `scope_type` is `"full"`, every phase runs
+  exactly as documented for the unscoped case — nothing below changes behavior or output. When
+  `scope_type` is `"epic"` or `"range"`, each phase's "when scoped" instructions apply instead.
+
+  `owned_path_hints` is best-effort and non-authoritative (see Phase 5) — treat it only as a
+  positive filter, never as proof that an unlisted path is unrelated to the scope.
+
 ### 1. Snapshot the board
-Scan every file in `epics/`, `stories/`, and `tasks/`. For each item record:
+**When unscoped (`scope_type: "full"`):** scan every file in `epics/`, `stories/`, and `tasks/`,
+exactly as before.
+
+**When scoped (`scope_type: "epic"` or `"range"`):** only scan the board files whose id is in the
+resolved `epic_ids` / `story_ids` / `task_ids` — for `"epic"` scope this is the epic file itself
+plus every story/task file under it; for `"range"` scope this is exactly the named story/task
+files plus the epic file(s) in `epic_ids` (the epic(s) those stories belong to). Files for
+out-of-scope items are not scanned and play no further part in this run.
+
+For each scanned item, record:
 - `id`, `title`, `status` (the **pre-reconcile** status — needed in phase 4)
 - `date_completed` (if set)
 
-Also read `project/todo.md` and parse every non-comment, non-blank line into a list of todo entries.
+Also read `project/todo.md`. When unscoped, parse every non-comment, non-blank line into the list
+of todo entries, as before. When scoped, only parse lines that reference an id in the resolved
+scope (`epic_ids` / `story_ids` / `task_ids`) — out-of-scope lines are left out of the list
+entirely, which is what keeps Phase 6 from touching them later.
 
 ### 2. Verify "completed" tasks — are they really implemented?
-For every task whose status is a completed status:
+For every task recorded in Phase 1 (i.e. every task on the board when unscoped, or only the
+in-scope tasks when scoped) whose status is a completed status:
 
 1. **Search git history** — run `git log --all --oneline --grep="<task_id>"` (e.g. `E01_S01_T01`). A matching commit is strong evidence of implementation.
 2. **Check documentation artefacts** — look for a plan or summary file under `project/documentation/plans/` or `project/documentation/summaries/` whose name contains the task ID.
@@ -44,7 +121,8 @@ If implementation **cannot be confirmed**:
    - Report the demotion.
 
 ### 3. Verify "incomplete" tasks — are they secretly implemented?
-For every task whose status is **not** a completed status (Pending, In Progress, Running, Blocked, etc.):
+For every task recorded in Phase 1 (i.e. every task on the board when unscoped, or only the
+in-scope tasks when scoped) whose status is **not** a completed status (Pending, In Progress, Running, Blocked, etc.):
 
 1. **Search git history** for commits referencing the task ID.
 2. **Check documentation artefacts** as in phase 2.
@@ -62,14 +140,25 @@ If implementation **is confirmed**:
 If implementation **is not confirmed** — no action needed; the status is already correct.
 
 ### 4. Roll up story and epic statuses
-After all tasks have been reconciled:
+After all tasks recorded in Phase 1 have been reconciled (every task on the board when unscoped,
+or only the in-scope tasks when scoped):
 
-- For each **story**: if all of its tasks are now in a completed status, set the story to **Done** (if not already). If any task was demoted, and the story was previously completed, set the story back to **In Progress**.
-- For each **epic**: apply the same roll-up logic over its stories.
+- **When unscoped:** roll up every story and every epic on the board, exactly as before.
+- **When scoped (`scope_type: "epic"`):** roll up only the in-scope stories and the one in-scope
+  epic.
+- **When scoped (`scope_type: "range"`):** roll up only the in-scope stories, and only the
+  epic(s) in `epic_ids` (the epic(s) those named stories belong to) — never an unrelated story in
+  the same epic(s) that wasn't itself named in the range, per the story's AC.
+
+For each story being rolled up: if all of its tasks are now in a completed status, set the story
+to **Done** (if not already). If any task was demoted, and the story was previously completed, set
+the story back to **In Progress**. For each epic being rolled up: apply the same roll-up logic
+over its stories.
 
 #### DoD Gap Detection
 
-After rolling up statuses, scan every story whose status is a completed status (`Passed`, `Passed with remarks`, `Done`) for unchecked Definition of Done items:
+After rolling up statuses, scan every story being rolled up (every completed-status story on the
+board when unscoped, or only the in-scope stories when scoped) whose status is a completed status (`Passed`, `Passed with remarks`, `Done`) for unchecked Definition of Done items:
 
 1. Read the story file and locate the `## Definition of Done` section. If the section is absent, skip this story gracefully (no error).
 2. Scan the DoD section for any lines matching `^- \[ \]` (unchecked checkboxes).
@@ -107,6 +196,22 @@ The script reuses the board-linkage check from
 re-derive linkage yourself, and do not substitute a `grep` over `project/board/` if the script
 fails — a second answer to "is this path on the board" is what that reuse exists to prevent.
 If the script exits non-zero, report the failure in the reconcile report and continue to phase 6.
+
+#### Scoping (best-effort, not authoritative)
+`detect-unlinked-code.sh` itself takes no scope argument and is never modified by this phase — it
+always scans the whole repository, exactly as it does today. When a scope was resolved in Phase 0
+and `scope_type` is **not** `"full"`, filter the *report* (not the script's own output) down to
+paths that fall under one of the resolved scope's `owned_path_hints` prefixes before presenting
+`groups[]` / `covered_groups[]` / `not_checked[]` to the user; a path outside every
+`owned_path_hints` prefix is left out of the scoped report entirely.
+
+This filtering happens only in this judgement/presentation layer, and it is explicitly
+**best-effort, not authoritative**: `owned_path_hints` is derived only from each in-scope item's
+own `docs:` frontmatter list (see `resolve-reconcile-scope.sh`'s own contract), so it can be empty
+or simply not mention every path the scope actually owns. State this caveat directly in the report
+(see `assets/report_format.md`) — never claim a path is "outside the epic" solely because it
+didn't happen to appear in `owned_path_hints`; say the filtering is best-effort instead. When
+`scope_type: "full"`, this phase is completely unchanged — report every finding, unfiltered.
 
 #### Reading the result
 
@@ -176,15 +281,20 @@ phase. If the user picks option 1 or 2, finish the reconcile pass first, then ha
 `/uncharted segment` at the end so the board is consistent before new items are written.
 
 ### 6. Clean `project/todo.md`
-Walk the todo entries parsed in phase 1:
+Walk the todo entries parsed in phase 1 — when scoped, that list already excludes any entry that
+doesn't reference an in-scope id (Phase 1 only parsed in-scope lines), so this phase never removes
+or comments out an out-of-scope entry even if it would otherwise qualify under the rules below.
+When unscoped, every entry from phase 1 is eligible, exactly as before.
 
 - **Already-done entries** — if an entry references a task/story/epic whose pre-reconcile status (from the snapshot in phase 1) was already a completed status **and** whose implementation has been confirmed (phase 2), **remove the line entirely** from `project/todo.md`.
 - **Newly-reconciled entries** — entries that were commented out in phase 3 stay as `<!-- RECONCILED: ... -->`.
 - If `project/todo.md` is left with only the header, the format comment, and blank lines, delete the file.
 
 ### 7. Print a summary
-Output a reconciliation report using the format in `assets/report_format.md`, with one
-additional section from phase 5 placed just before `TODO CLEANUP`:
+Output a reconciliation report using the format in `assets/report_format.md` — the report's very
+first substantive line is always `Scope: ...`, reflecting the scope resolved in Phase 0 (see that
+file's Section rules for the exact forms), so a scoped run is never mistaken for a full pass —
+with one additional section from phase 5 placed just before `TODO CLEANUP`:
 
 ```
 🗺️  UNLINKED CODE (no board item for the files or their directory)

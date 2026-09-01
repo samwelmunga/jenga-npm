@@ -49,3 +49,14 @@ agents/.agents/
 # remember not to `git add` this directory.
 project/queue/handoffs/*.json
 !project/queue/handoffs/.gitkeep
+
+# Conversational elicitation state (project/queue/elicitation-state/,
+# skills/uncharted/scripts/elicitation-state.sh — E20_S08_T03) is
+# session-scratch resumability data for /uncharted's convergence loop, not a
+# durable artifact — the durable output of a converged elicitation is the
+# graph write (project/knowledge-graph/graph.json) and the [ARCH]-tagged
+# board item, both written separately. Mirrors the handoffs/ rule above for
+# the same reason: it must never become a durable git artifact that a later
+# session could mistake for a live in-progress signal.
+project/queue/elicitation-state/*.json
+!project/queue/elicitation-state/.gitkeep

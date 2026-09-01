@@ -16,12 +16,12 @@
     "postinstall": "node scripts/postinstall.js",
     "test": "bats tests/*.bats",
     "validate:npm-metadata": "bash scripts/validate_npm_metadata.sh",
-    "ui:dev": "npm run ui:dev --prefix project/app",
-    "ui:build": "npm run ui:build --prefix project/app",
-    "api:start": "npm run api:start --prefix project/app",
-    "api:dev": "npm run api:dev --prefix project/app",
-    "dashboard:start": "npm run dashboard:start --prefix project/app",
-    "dashboard:open": "npm run dashboard:open --prefix project/app"
+    "ui:dev": "npm run ui:dev --prefix project/app --",
+    "ui:build": "npm run ui:build --prefix project/app --",
+    "api:start": "npm run api:start --prefix project/app --",
+    "api:dev": "npm run api:dev --prefix project/app --",
+    "dashboard:start": "npm run dashboard:start --prefix project/app --",
+    "dashboard:open": "npm run dashboard:open --prefix project/app --"
   },
   "files": [
     "skills/",
@@ -67,15 +67,6 @@
     "url": "https://knappkod.se/jenga-ai"
   },
   "license": "MIT",
-  "dependencies": {
-    "@huggingface/transformers": "^4.2.0"
-  },
-  "overrides": {
-    "sharp": "^0.34.5"
-  },
-  "comments": {
-    "audit": "sharp <0.35.0 and adm-zip <0.6.0 are transitive deps of @huggingface/transformers with no upstream fix available. Not exploitable in this context: only text feature-extraction pipeline is used \u2014 no image processing or ZIP handling at application boundary. Review when @huggingface/transformers ships a patched release."
-  },
   "devDependencies": {
     "bats": "^1.13.0"
   }
