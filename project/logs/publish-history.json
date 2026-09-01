@@ -118,5 +118,21 @@
     "dist_tag": "latest",
     "result": null,
     "reason": null
+  },
+  {
+    "id": "1d68e377-026a-4ad7-a4e3-c27343388eff",
+    "version": "v1.3.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-09-01T13:40:04Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "stage_tested",
+    "git_tag": "v1.3.0",
+    "commit_sha": "fe0983e177bbe78a3b0a938d13e76f0d0a8fc8ae",
+    "stage_id": "56f1bf6f-d2b5-4a95-a6e6-8acf4067ad26",
+    "dist_tag": null,
+    "result": "pass",
+    "reason": null
   }
 ]
