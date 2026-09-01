@@ -76,6 +76,7 @@ Skills are stored in `skills/<name>/SKILL.md`. Invoke them with `/<name>` in a C
 | `/jenga-permission-level` | Report or switch the current session's 5-tier permission level (Locked/Guarded/Standard/Elevated/Unrestricted) without hand-editing settings.json. |
 | `/commit` | Commit completed work using the EST naming convention (`epic(...)`, `story(...)`). |
 | `/lgtm` | Approve current work, commit, and continue. Chains `/commit` + `/continue`. |
+| `/dev-done` | Commit current work and sync the `.claude/`/`.agents/` mirrors. Chains `/commit` + `/self-sync`. |
 | `/continue` | Pick up the next incomplete item across `PROJECT_SUMMARY.md`, epics, and stories. |
 | `/proceed` | Resume execution from where it left off. |
 | `/error` | Guided troubleshooting — gathers context about an error and investigates a fix. |

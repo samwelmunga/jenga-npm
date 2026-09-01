@@ -10,11 +10,11 @@ Runtime threshold values used by `/jenga` and `/do` to determine execution scope
 
 ### Fields
 
-| Field | Type | Initial Value | Description |
+| Field | Type | Current Value | Description |
 |-------|------|---------------|-------------|
-| `threshold_version` | integer | 1 | Version counter for this config. **Must be incremented every time any threshold value changes.** This makes threshold drift visible in git history and code review. |
-| `inline_max_files` | integer | 1 | Maximum number of files a task may touch to qualify for `inline` execution scope (no subagent, no worktree). |
-| `inline_max_lines` | integer | 20 | Maximum total lines changed for a task to qualify for `inline` execution scope. |
+| `threshold_version` | integer | 2 | Version counter for this config. **Must be incremented every time any threshold value changes.** This makes threshold drift visible in git history and code review. |
+| `inline_max_files` | integer | 3 | Maximum number of files a task may touch to qualify for `inline` execution scope (no subagent, no worktree). Raised from 1 to 3 (`threshold_version: 2`) — a 1-file cap forced small multi-file work (e.g. a `SKILL.md` plus one small script, the standard "delegate deterministic logic to a script" shape required by CLAUDE.md's Skill Implementation Principle) through the full worktree+tester pipeline, which costs disproportionately more than the change itself. See `E42_S04_T01` for the case that surfaced this. |
+| `inline_max_lines` | integer | 75 | Maximum total lines changed for a task to qualify for `inline` execution scope. Raised from 20 to 75 alongside `inline_max_files` for the same reason — a small `SKILL.md` + script pair routinely exceeds 20 lines. |
 | `story_max_files` | integer | 5 | Maximum number of files a task may touch to qualify for `story` scope bundling (multiple tasks executed in one developer context). |
 | `bundle_lock_ttl_minutes` | integer | 30 | Time-to-live in minutes for a story-scope bundle lock. A lock older than this value is considered stale and may be reclaimed. |
 

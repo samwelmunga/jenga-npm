@@ -8,13 +8,7 @@
 #   2. gates    — run_gates.sh pre <target> <config> [--non-interactive]
 #                 (build/test are mandatory, global, non-disableable)
 #   3. pack     — resolve <name>@<version>, confirm unless --non-interactive
-#   4. stage    — for `npm` targets: `npm stage publish --tag ... --access
-#                 ... [--otp ...]` run locally. For `npm-ci` targets,
-#                 `--provenance` needs a GitHub Actions OIDC token that only
-#                 exists inside an Actions run, so this phase instead
-#                 dispatches the `stage` job of the target's generated
-#                 workflow (see npm_ci_pipeline.sh) via `gh workflow run
-#                 ... -f mode=stage` and waits on it with `gh run watch`.
+#   4. stage    — npm stage publish --tag ... --access ... [--provenance] [--otp ...]
 #   5. capture  — parse the stage id, falling back to `npm stage list --json`
 #   6. ledger   — write_ledger_entry.sh ... staged ... --stage-id <id> --dist-tag <tag>
 #
@@ -25,8 +19,7 @@
 #   0  success (staged, or --dry-run completed cleanly)
 #   1  user declined the pack confirmation prompt (or no tty was available)
 #   2  a mandatory pre-deploy gate failed; nothing was staged
-#   3  staging failed (locally for `npm`, or the dispatched GitHub Actions
-#      run for `npm-ci`), or the stage id could not be captured
+#   3  `npm stage publish` failed, or the stage id could not be captured
 #   4  validation failed (validate_npm_stage_env.sh's own exit code, or bad
 #      args/config)
 #
@@ -275,82 +268,42 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Phase 4: stage
-#
-# `npm` targets stage locally via `npm stage publish`. `npm-ci` targets pass
-# `--provenance`, which requires a GitHub Actions OIDC token that only
-# exists inside an Actions run — there is no local equivalent — so instead
-# this dispatches the `stage` job of the target's generated workflow (the
-# same workflow file/OIDC Trusted Publisher link `npm_ci_pipeline.sh` uses
-# for `/publish deploy`) via `gh workflow run ... -f mode=stage` and waits
-# for it with `gh run watch`.
+# Phase 4: stage — invoke `npm stage publish`
 # ---------------------------------------------------------------------------
-STAGE_OUTPUT=""
+STAGE_CMD_BASE=(npm stage publish "${PACKAGE_SPEC}" --tag "${DIST_TAG}" --access "${NPM_ACCESS}")
+[[ -n "${REGISTRY}" ]] && STAGE_CMD_BASE+=(--registry "${REGISTRY}")
+[[ "${TARGET_TYPE}" == "npm-ci" ]] && STAGE_CMD_BASE+=(--provenance)
+
+DISPLAY_CMD=("${STAGE_CMD_BASE[@]}")
+(( DRY_RUN )) && DISPLAY_CMD+=(--dry-run)
+[[ -n "${OTP}" ]] && DISPLAY_CMD+=(--otp '********')
+
+log_info "[stage] resolved command: $(printf '%q ' "${DISPLAY_CMD[@]}")"
+
+EXEC_CMD=("${STAGE_CMD_BASE[@]}")
+(( DRY_RUN )) && EXEC_CMD+=(--dry-run)
+# Tracing was already suspended for the rest of this run (if it was active)
+# by the "OTP tracing guard" above, the moment argv was found to contain
+# --otp — before OTP was ever assigned to a variable. Nothing further to do
+# here.
+[[ -n "${OTP}" ]] && EXEC_CMD+=(--otp "${OTP}")
+
 STAGE_STATUS=0
+STAGE_OUTPUT="$("${EXEC_CMD[@]}" 2>&1)" || STAGE_STATUS=$?
 
-if [[ "${TARGET_TYPE}" == "npm-ci" ]]; then
-  command -v gh >/dev/null 2>&1 || fail_usage "'gh' CLI is required to stage an 'npm-ci' target (staging is dispatched as a GitHub Actions workflow run) but was not found on PATH"
-
-  GITHUB_REPO="$(printf '%s' "${TARGET_JSON}" | jq -r '.github_repo // empty')"
-  [[ -n "${GITHUB_REPO}" ]] || fail_usage "target '${TARGET_NAME}' is missing required field 'github_repo' (needed to dispatch the stage job)"
-
-  WORKFLOW_PATH="$(printf '%s' "${TARGET_JSON}" | jq -r '.workflow_path // ".github/workflows/npm-publish.yml"')"
-  WORKFLOW_FILENAME="$(basename "${WORKFLOW_PATH}")"
-
-  if (( DRY_RUN )); then
-    log_info "[dry-run] would dispatch: gh workflow run ${WORKFLOW_FILENAME} --repo ${GITHUB_REPO} -f mode=stage (tag=${DIST_TAG}, access=${NPM_ACCESS})"
-    log_info "[dry-run] no workflow run triggered; no ledger entry written, no registry-mutating call made."
-    exit 0
-  fi
-
-  log_info "[stage] dispatching 'stage' job of ${WORKFLOW_FILENAME} on ${GITHUB_REPO}..."
-  if ! gh workflow run "${WORKFLOW_FILENAME}" --repo "${GITHUB_REPO}" -f mode=stage; then
-    printf 'npm stage pipeline: gh workflow run failed; nothing staged.\n' >&2
-    exit "${EXIT_STAGE_FAILURE}"
-  fi
-
-  RUN_ID="$(gh run list --workflow "${WORKFLOW_FILENAME}" --repo "${GITHUB_REPO}" --limit 1 --json databaseId --jq '.[0].databaseId')"
-  [[ -n "${RUN_ID}" ]] || fail_usage "dispatched the stage workflow but could not resolve its run id via 'gh run list'"
-
-  log_info "[stage] waiting on run ${RUN_ID}..."
-  gh run watch "${RUN_ID}" --repo "${GITHUB_REPO}" --exit-status || STAGE_STATUS=$?
-
-  RUN_URL="$(gh run view "${RUN_ID}" --repo "${GITHUB_REPO}" --json url --jq '.url' 2>/dev/null || true)"
-  STAGE_OUTPUT="staged via GitHub Actions workflow run: ${RUN_URL}"
-else
-  STAGE_CMD_BASE=(npm stage publish --tag "${DIST_TAG}" --access "${NPM_ACCESS}")
-  [[ -n "${REGISTRY}" ]] && STAGE_CMD_BASE+=(--registry "${REGISTRY}")
-
-  DISPLAY_CMD=("${STAGE_CMD_BASE[@]}")
-  (( DRY_RUN )) && DISPLAY_CMD+=(--dry-run)
-  [[ -n "${OTP}" ]] && DISPLAY_CMD+=(--otp '********')
-
-  log_info "[stage] resolved command: $(printf '%q ' "${DISPLAY_CMD[@]}")"
-
-  EXEC_CMD=("${STAGE_CMD_BASE[@]}")
-  (( DRY_RUN )) && EXEC_CMD+=(--dry-run)
-  # Tracing was already suspended for the rest of this run (if it was
-  # active) by the "OTP tracing guard" above, the moment argv was found to
-  # contain --otp — before OTP was ever assigned to a variable. Nothing
-  # further to do here.
-  [[ -n "${OTP}" ]] && EXEC_CMD+=(--otp "${OTP}")
-
-  STAGE_OUTPUT="$(cd "${REPO_ROOT}" && "${EXEC_CMD[@]}" 2>&1)" || STAGE_STATUS=$?
-
-  # Defensive redaction: strip the literal OTP from captured output before
-  # it is ever printed, in case npm echoed the argv back in an error
-  # message. Quoting the pattern operand of ${var//pattern/repl} forces a
-  # literal (non-glob) match, so this is safe even if the OTP happens to
-  # contain characters that are special to bash's extglob pattern matching.
-  if [[ -n "${OTP}" ]]; then
-    STAGE_OUTPUT="${STAGE_OUTPUT//"${OTP}"/********}"
-  fi
+# Defensive redaction: strip the literal OTP from captured output before it
+# is ever printed, in case npm echoed the argv back in an error message.
+# Quoting the pattern operand of ${var//pattern/repl} forces a literal
+# (non-glob) match, so this is safe even if the OTP happens to contain
+# characters that are special to bash's extglob pattern matching.
+if [[ -n "${OTP}" ]]; then
+  STAGE_OUTPUT="${STAGE_OUTPUT//"${OTP}"/********}"
 fi
 
 printf '%s\n' "${STAGE_OUTPUT}"
 
 if [[ ${STAGE_STATUS} -ne 0 ]]; then
-  printf 'npm stage pipeline: staging failed (exit %s); nothing staged.\n' "${STAGE_STATUS}" >&2
+  printf 'npm stage pipeline: npm stage publish failed (exit %s); nothing staged.\n' "${STAGE_STATUS}" >&2
   exit "${EXIT_STAGE_FAILURE}"
 fi
 
