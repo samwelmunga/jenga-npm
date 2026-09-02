@@ -12,6 +12,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Other
 
+## [v1.3.0] — 2026-09-01
+
+### Features
+
+### Bug Fixes
+
+### Other
+- chore(publish): bump to v1.3.0 for staging (c837664)
+- chore(publish): regenerate npm CI workflow with stage-mode dispatch (4f58ef7)
+- chore(mirror): sync from private at 05fb8dd 2026-09-01T13:17:29Z (089921f)
+- chore(mirror): sync from private at 01094b6 2026-09-01T12:50:22Z (25f439b)
+- chore(mirror): sync from private at 001a298 2026-09-01T07:49:47Z (b9ce543)
+- chore(mirror): sync from private at beace6b 2026-09-01T05:01:55Z (1645cc1)
+- chore(mirror): sync from private at cacbd13 2026-08-31T15:13:46Z (4525ac6)
+- chore(publish): record v1.2.4 release notes and ledger entry (21a92f0)
+
 ## [v1.2.4] — 2026-08-30
 
 ### Features
