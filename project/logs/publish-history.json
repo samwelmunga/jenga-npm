@@ -166,5 +166,37 @@
     "dist_tag": "latest",
     "result": null,
     "reason": null
+  },
+  {
+    "id": "bed7894a-39bc-42ce-8f9b-11f702b9dd84",
+    "version": "v2.0.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-09-03T22:49:49Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "rejected",
+    "git_tag": "v2.0.0",
+    "commit_sha": "9ee2a5d1e772c862e5b6722cb368633cd56b597e",
+    "stage_id": "25961bae-fbde-43e0-bbd5-514a5f709b6d",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": "npm automated review stuck on 'validating'; discarded by user via npm CLI"
+  },
+  {
+    "id": "080da4af-6421-4bd0-87e5-8f236d57d538",
+    "version": "v2.0.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-09-03T22:49:49Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "staged",
+    "git_tag": "v2.0.0",
+    "commit_sha": "9ee2a5d1e772c862e5b6722cb368633cd56b597e",
+    "stage_id": "9bbbd5ce-069c-4ac6-9fe1-b6c3d559c8e2",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": null
   }
 ]
