@@ -1,5 +1,5 @@
 ---
-name: clearify
+name: j:clearify
 description: Clarifies ambiguous, dense, or under-specified prompts and conversation on request — inspects an attached prompt or falls back to the current conversation and surfaces plain-language clarifications with examples.
 keywords:
   - clarify this

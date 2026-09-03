@@ -1,5 +1,5 @@
 ---
-name: continue
+name: j:continue
 description: Check project status across PROJECT_SUMMARY.md, epics, and stories to determine what should be done next. Reports "All done!" if everything is complete.
 keywords:
   - continue

@@ -33,6 +33,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { readSkillAllowList } from "./generate-skill-allow-list.js";
 
 // This file lives at <package>/lib/generate-copilot-instructions.js — one level up is the
 // installed jenga-agent package root, which holds templates/.
@@ -70,6 +71,19 @@ function buildSkillList(skillsDir) {
     skillLines.push(`- **${entry.name}**${description ? `: ${description}` : ""}`);
   }
   return skillLines.length > 0 ? skillLines.join("\n") : "_No skills found._";
+}
+
+/**
+ * Build the rendered {{ALLOWED_SKILL_IDS}} block: the canonical, committed
+ * `lib/skill-allow-list.json` artifact (E50_S02_T01/T02), rendered as a compact comma-joined
+ * inline-code list for the "Routing decision table" allow-list check (E50_S02_T04). Reads via
+ * the shared readSkillAllowList() helper — never re-derives its own scan of a skills
+ * directory, mirroring the sibling buildAllowedSkillIds in lib/generate-agent-context.js so
+ * both routing paths share the one committed artifact.
+ */
+function buildAllowedSkillIds(projectRoot, packageRoot) {
+  const ids = readSkillAllowList(projectRoot, packageRoot);
+  return ids.length > 0 ? ids.map((id) => `\`${id}\``).join(", ") : "_No skills found._";
 }
 
 /**
@@ -129,7 +143,10 @@ export function generateCopilotInstructions(
     ? (skillsDir.startsWith("/") ? skillsDir : join(projectRoot, skillsDir))
     : undefined;
   const skillList = buildSkillList(resolvedSkillsDir);
-  const rendered = tpl.replace("{{SKILL_LIST}}", skillList);
+  const allowedSkillIds = buildAllowedSkillIds(projectRoot, packageRoot);
+  const rendered = tpl
+    .replace("{{SKILL_LIST}}", skillList)
+    .replace("{{ALLOWED_SKILL_IDS}}", allowedSkillIds);
 
   const githubDir = join(projectRoot, ".github");
   const copilotInstructionsPath = join(githubDir, "copilot-instructions.md");

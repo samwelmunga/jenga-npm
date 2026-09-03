@@ -1,5 +1,5 @@
 ---
-name: distribute
+name: j:distribute
 description: Distribute Jenga AI framework files from this private monorepo to one or more consuming projects via the local filesystem. Manages release type selection, version bumping, dry-run preview, per-target file copy, and a post-distribution git commit.
 keywords:
   - distribute

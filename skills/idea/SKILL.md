@@ -1,5 +1,5 @@
 ---
-name: idea
+name: j:idea
 description: Capture a loosely-defined idea to project/ideas.md — a lightweight, "maybe someday" log with no board or promotion overhead.
 keywords:
   - idea

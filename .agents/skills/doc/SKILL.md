@@ -1,5 +1,5 @@
 ---
-name: doc
+name: j:doc
 description: Generate or update a documentation file by resolving a target path to a clear documentation objective before writing.
 metadata:
   prefered_agent: developer
@@ -12,6 +12,7 @@ keywords:
 examples:
   - "/doc"
   - "/doc docs/API.md"
+  - "/doc update: docs/API.md"
   - "generate documentation for the CLI"
   - "update the contributing guide"
 ---
@@ -25,12 +26,15 @@ examples:
 ```
 
 - If `target-path` is omitted, default to `README.md`.
+- If the remainder starts with `update:`, strip that prefix, then trim again before resolving the target path.
 - If `target-path` is provided, use it exactly as written after `/doc`.
 - Do not guess additional arguments or rewrite the requested path.
 
 ## Reference Asset
 
 Load `skills/doc/assets/path-objectives.yaml` before resolving the documentation objective. Treat it as the source of truth for the `default_target`, known target paths, and their structural requirements.
+
+For extended usage guidance, provenance notes, and board-author tips, see `skills/doc/README.md`.
 
 ## Synthesis Context Contract
 
@@ -47,6 +51,7 @@ board_items: []
 conflicts_resolved: []
 sources_used: []
 existing_intent: null
+last_update: null
 ```
 
 Required fields from E24_S03:
@@ -60,8 +65,9 @@ Required fields from E24_S03:
 - `conflicts_resolved`
 - `sources_used`
 - `existing_intent`
+- `last_update`
 
-If the shared collector from E24_S03 is not yet merged, construct a temporary context with the same field names so later steps remain compatible.
+If the shared collector from E24_S03 is not yet merged, construct a temporary context with the same field names so later steps remain compatible. `last_update` is resolved during the provenance step below.
 
 ## Instructions
 
@@ -70,12 +76,14 @@ If the shared collector from E24_S03 is not yet merged, construct a temporary co
 1. Read `default_target` from `skills/doc/assets/path-objectives.yaml`. If it is missing, fall back to `README.md`.
 2. Remove the `/doc` command token from the invocation.
 3. Trim the remaining text.
-4. If nothing remains, set `target_path` to `default_target`.
-5. Otherwise, set `target_path` to the trimmed remainder.
+4. If the trimmed remainder starts with the exact prefix `update:`, remove that prefix and trim the remainder again.
+5. If nothing remains, set `target_path` to `default_target`.
+6. Otherwise, set `target_path` to the trimmed remainder.
 
 Examples:
 - `/doc` → `target_path = README.md`
 - `/doc docs/API.md` → `target_path = docs/API.md`
+- `/doc update: docs/API.md` → `target_path = docs/API.md`
 - `/doc docs/CLI.md` → `target_path = docs/CLI.md`
 
 ### 2. Resolve the objective from the rule table
@@ -135,15 +143,37 @@ If `target_path` is not present in `skills/doc/assets/path-objectives.yaml`:
 
 If the target file does not exist, keep `existing_intent = null`.
 
-### 7. Generate a complete replacement file
+### 7. Resolve `last_update` provenance before writing
+
+1. Run `python3 skills/doc/scripts/resolve_last_update.py <target_path>` from the repository root.
+2. The resolver must scan `project/board/epics/`, `project/board/stories/`, and `project/board/tasks/`.
+3. Treat a board item as provenance only when all of the following are true:
+   - `status` is exactly `Done` or `Passed`
+   - `docs` is a YAML list that contains `target_path` as an exact repo-relative string match
+   - `date_completed` is present and parses as `YYYY-MM-DD`
+4. If multiple board items match, select the most recent `date_completed` and store it in `synthesis_context.last_update`.
+5. If no matching provenance is found, set `synthesis_context.last_update = "unknown"`. This is the required fallback because it keeps the frontmatter shape stable while making the missing provenance explicit.
+6. Ignore board items in any other status, items missing `docs`, and items whose `docs` entry uses a non-matching path form.
+
+### 8. Generate a complete replacement file
 
 1. Build a **full file string** from the synthesis context and the resolved target objective.
-2. Treat the generated output as the entire authoritative file.
-3. Do **not** patch a single section, append new text to the end, or leave untouched legacy sections in place.
-4. Keep the output valid Markdown.
-5. When writing, replace the old file contents in one operation.
+2. Start the file with YAML frontmatter for provenance, even when provenance could not be resolved:
 
-### 8. Generate `README.md` for the project-overview objective
+```yaml
+---
+last_update: <YYYY-MM-DD or unknown>
+---
+```
+
+3. Use the resolved `synthesis_context.last_update` value in that frontmatter. Emit `unknown` verbatim when no completed board item provides provenance.
+4. This fallback is mandatory: do not omit the `last_update` key when provenance is missing.
+5. Treat the generated output as the entire authoritative file.
+6. Do **not** patch a single section, append new text to the end, or leave untouched legacy sections in place.
+7. Keep the output valid Markdown.
+8. When writing, replace the old file contents in one operation.
+
+### 9. Generate `README.md` for the project-overview objective
 
 When `target_path = README.md`, generate the full document around the resolved project-overview contract.
 
@@ -175,7 +205,7 @@ When `target_path = README.md`, generate the full document around the resolved p
 - Preserve useful setup warnings from `existing_intent` when they are still valid.
 - Output valid Markdown lists or numbered steps.
 
-### 9. Conditionally include a README Examples section
+### 10. Conditionally include a README Examples section
 
 Only add `## Examples` to `README.md` when the synthesis context supports a grounded project-type inference.
 
@@ -212,7 +242,7 @@ Choose the strongest evidenced type in this priority order when multiple types a
 - Do **not** include placeholder examples, pseudo-commands, or guessed endpoints.
 - If you cannot produce two grounded examples, omit the section instead of improvising.
 
-### 10. Generate non-README targets from the rule table
+### 11. Generate non-README targets from the rule table
 
 For every known non-README target, the path-to-objective rule table determines the file structure. Generate a full document that satisfies the matched rule.
 
@@ -309,6 +339,6 @@ Rules:
 - Summarize each entry from commit subjects and, when needed, nearby commit context.
 - Keep newest entries first.
 
-### 11. Continue using the resolved objective
+### 12. Continue using the resolved objective
 
 After the target path and objective are resolved, use them as the contract for all subsequent `/doc` work. Known paths must bypass the ambiguity gate, and all later decisions about evidence gathering, scope, regeneration, and structure must honor the surfaced `target_path` and `objective` instead of inferring a different goal.

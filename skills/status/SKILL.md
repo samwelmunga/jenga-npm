@@ -1,5 +1,5 @@
 ---
-name: status
+name: j:status
 description: Print a human-readable summary of the entire scrum board — all epics, stories, and tasks with their statuses — plus any open rapports and unprocessed queue triggers. Use when you want a quick overview of project state without reading raw files.
 keywords:
   - status

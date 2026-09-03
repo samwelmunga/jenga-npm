@@ -1,5 +1,5 @@
 ---
-name: error
+name: j:error
 description: Guided troubleshooting flow that gathers context about an error — where it occurs, what was attempted, what went wrong, and what was expected.
 keywords:
   - error

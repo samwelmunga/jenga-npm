@@ -1,5 +1,5 @@
 ---
-name: do
+name: j:do
 description: Execute tasks from the scrum board. Reads from project/todo.md, resolves each entry to its full scrum board context, and drives the developer agent through implementation with the correct sender object and communication contract. Loops until all selected tasks are done or the user exits.
 keywords:
   - do
@@ -15,6 +15,14 @@ metadata:
 ---
 
 # Do — Execute Scrum Board Tasks
+
+## `--trivial` Flag
+
+**Syntax:** `/do <id> --trivial` — a dispatch-time override, distinct from `/todo --trivial` (a creation-time flag documented in `skills/todo/SKILL.md`). Where `/todo --trivial` writes a brand-new task straight to `execution_scope: inline`, `/do <id> --trivial` overrides an **already-existing** task's `execution_scope` — whatever it currently is, including absent (legacy tasks with no execution-scope fields at all) — to `inline` at the moment it's dispatched. See `### 4.1.5. \`--trivial\` Dispatch-Time Override` below for the full mechanics.
+
+**No softer fallback tier — hard fallback to the full pipeline instead.** Unlike `light` scope (which sits between `inline` and `task`), `--trivial` always forces `inline` directly, with no intermediate tier to fall back to first. To compensate, a `--trivial`-forced run that fails `scripts/smoke-harness.sh` or shows detected scope creep mid-run automatically re-routes to the full `task` pipeline (worktree + developer + tester) via the same `#### Fallback to Full Task-Scope Pipeline` procedure the `light`-tier fallback uses — see `### 4.2`'s failure-handling branches and the shared Fallback subsection under `### 4.3`.
+
+**Human-only, same as `/todo --trivial`.** `--trivial` is invoked by a human typing `/do <id> --trivial` — it is never applied autonomously by `/jenga` or the scrum-master's own breakdown/dispatch passes.
 
 ## Instructions
 
@@ -318,9 +326,40 @@ Before invoking the developer, check whether this task was manually scoped by a 
       ```
       Then proceed to step 4.2.
 
+### 4.1.5. `--trivial` Dispatch-Time Override
+
+After override validation (step 4.1) and before branching on `execution_scope` in step 4.2, check whether this invocation was `/do <id> --trivial`.
+
+1. **Detect the flag.** If the task was invoked as `/do <id>` with no `--trivial` flag, skip this entire section and proceed directly to `### 4.2`.
+
+2. **If `--trivial` is present**, read the task's current `execution_scope` from frontmatter. Treat an absent value as `task`, per the epic's backward-compatibility rule (a task that omits `execution_scope` is treated as `execution_scope: task`). Call this the **prior tier** — this covers both tasks nobody flagged as trivial at creation (an already-assigned `story`/`task`/`light` tier) and legacy tasks with no `execution_scope` set at all.
+
+3. **Overwrite `execution_scope` to `inline`** in the task's frontmatter, unconditionally — `--trivial` always forces `inline`, never a softer "lightest safe tier."
+
+4. **Record the override for audit**, reusing the existing `jenga_assigned` / `override_justification` pairing already defined in `templates/SCRUM_BOARD_SCHEMA.md` for exactly this situation ("scope overridden by a human"), rather than inventing a new field:
+   - Set `jenga_assigned: false` (if not already `false`).
+   - Set (or append to, if already present) `override_justification`:
+     ```
+     override_justification: "/do --trivial dispatch-time override on <date>: execution_scope forced from '<prior_tier>' to 'inline' by human operator."
+     ```
+   - Also set (or append to) `scope_rationale`, mirroring the phrasing convention `skills/todo/scripts/add_trivial_task.sh` already uses for the creation-time flag, so both audit fields agree on the prior tier:
+     ```
+     scope_rationale: "forced inline via /do --trivial (dispatch-time override); prior execution_scope was '<prior_tier>'"
+     ```
+   - Emit a non-fatal log line (styled like 4.2's `AUTO-CORRECTION` message):
+     ```
+     TRIVIAL OVERRIDE [<task_id>]: execution_scope forced from "<prior_tier>" to "inline" via --trivial dispatch-time override.
+     ```
+
+5. **Set an in-session marker** (this dispatch is a `--trivial`-forced run) — this does not need to be persisted to frontmatter; it only needs to survive for the remainder of this `/do` invocation. This marker is distinct from an organically-assigned `execution_scope: inline` task (one the scrum-master or `/jenga` assigned `inline` to directly, with no `--trivial` involved) because its failure handling differs — see `### 4.2`'s failure-handling steps below. Do not confuse a `--trivial`-forced run with an organic `inline` task when applying those steps.
+
+6. **Proceed to `### 4.2. Inline Execution Path`** with `execution_scope` now `inline`. Everything else about inline execution (implementation, smoke test invocation, commit convention) is identical between an organic `inline` task and a `--trivial`-forced one — only the two failure-handling branches in `### 4.2` differ, per the marker set in step 5 above.
+
+**Precedence with the locked-task dispatch guard.** If `crucial_level: locked` (checked by `### 4.2`'s locked-task dispatch guard, which always runs and always wins), `--trivial` is redundant but harmless — the task was already going to be forced `inline`. The locked-task guard's own audit fields take precedence for that correction; do not double-write conflicting `override_justification` text. A `locked` task's fallback behavior remains "halt and report," never the `--trivial` fallback below, regardless of whether `--trivial` was also passed.
+
 ### 4.2. Inline Execution Path (execution_scope: inline)
 
-After resolving the task context (step 4) and passing override validation (step 4.1), read `execution_scope` from the task frontmatter.
+After resolving the task context (step 4), passing override validation (step 4.1), and applying the `--trivial` dispatch-time override if present (step 4.1.5), read `execution_scope` from the task frontmatter.
 
 **Locked-task dispatch guard (defense-in-depth).** Before branching on `execution_scope` below, read `crucial_level` from the task frontmatter (per `templates/SCRUM_BOARD_SCHEMA.md`'s Crucial Flag Fields). If `crucial_level: locked`:
 
@@ -349,12 +388,14 @@ After resolving the task context (step 4) and passing override validation (step 
      WARNING [<task_id>]: scripts/smoke-harness.sh not found. Smoke test skipped (stub pass).
      ```
 4. **If the smoke test exits non-zero**:
-   - Write `status: Failed` to the task's frontmatter.
-   - Emit:
-     ```
-     INLINE TASK FAILED [<task_id>]: smoke test returned non-zero exit code. Task marked Failed. Halting.
-     ```
-   - Do not commit. Do not proceed to the next task.
+   - **If this is a `--trivial`-forced run** (marker set in step 4.1.5 — and `crucial_level` is not `locked`, which never falls back, per 4.1.5's precedence note): do NOT write `status: Failed`. `--trivial` always forces `inline` with no softer "lightest safe tier" to fall back to first, so a smoke-harness failure here goes straight to the shared `#### Fallback to Full Task-Scope Pipeline` procedure below (origin: `trivial`). Do not proceed with the remaining inline steps below — the Fallback procedure takes over from here.
+   - **Otherwise** (an organically-assigned `inline` task, `--trivial` not involved): behavior is unchanged from before —
+     - Write `status: Failed` to the task's frontmatter.
+     - Emit:
+       ```
+       INLINE TASK FAILED [<task_id>]: smoke test returned non-zero exit code. Task marked Failed. Halting.
+       ```
+     - Do not commit. Do not proceed to the next task.
 5. **If the smoke test passes**:
    - Commit the changes using the standard commit convention (`task(<task_id>): <short description>`) via `/commit` in inline mode (E32_S04_T03).
    - Run the **Intent-vs-Diff Check** (see `### 5.1. Intent-vs-Diff Check` below) for this task.
@@ -365,9 +406,58 @@ After resolving the task context (step 4) and passing override validation (step 
 7. `inline` tasks always have `needs_docs: false` — skip plan and summary documentation for the implemented task.
 8. Continue to `### 6. Verify documentation`, then `### 7. After successful completion`.
 
-If the implementation cannot be completed inline (scope is larger than anticipated), abort and re-route to the normal developer path (step 5) — unless `crucial_level: locked`, in which case do not re-route; re-attempt inline or halt and report, per the locked-task dispatch guard above.
+If the implementation cannot be completed inline (scope is larger than anticipated — detected scope creep mid-run):
+- **If this is a `--trivial`-forced run** (and `crucial_level` is not `locked`): invoke the shared `#### Fallback to Full Task-Scope Pipeline` procedure below (origin: `trivial`) — the same procedure the smoke-harness-failure branch above uses, not a second bespoke re-route.
+- **Otherwise** (an organically-assigned `inline` task): abort and re-route to the normal developer path (step 5), unchanged from before.
+- **Regardless of `--trivial`**, if `crucial_level: locked`, do not re-route via either path above; re-attempt inline or halt and report, per the locked-task dispatch guard above.
 
-**If `execution_scope` is not `inline`** (or is absent / `task` / `story` / `epic`) **and `crucial_level` is not `locked`**, proceed to step 5 (invoke the developer agent) as normal.
+**If `execution_scope` is `light`** (and `crucial_level` is not `locked` — the locked-task dispatch guard above already ran and takes precedence over any scope check), proceed to `### 4.3. Light Execution Path` below instead of step 5.
+
+**If `execution_scope` is not `inline` and not `light`** (or is absent / `task` / `story` / `epic`) **and `crucial_level` is not `locked`**, proceed to step 5 (invoke the developer agent) as normal.
+
+### 4.3. Light Execution Path (execution_scope: light)
+
+After resolving the task context (step 4), passing override validation (step 4.1), and applying the `--trivial` dispatch-time override if present (step 4.1.5 — note `--trivial` always forces `inline`, so a `light`-scoped task only reaches this section if `--trivial` was *not* passed), if `execution_scope: light` and `crucial_level` is not `locked` (per the locked-task dispatch guard in 4.2, which runs first and always wins), route the task through this path instead of the full `task`-scope pipeline in step 5.
+
+`light` sits between `inline` and `task`: unlike `inline`, it spawns a real developer subagent (so it can handle small branching logic that inline's main-session execution isn't suited for); unlike `task`, it does not create a dedicated worktree and does not invoke the tester as a separate step.
+
+1. **Spawn a developer subagent** (Agent tool, `subagent_type: "developer"`) with the same sender object and context payload as step 5 would use, but with an explicit instruction added to the dispatch prompt: **do not create a worktree** — implement directly against the current checkout (the session's existing working tree), not an isolated `.claude/worktrees/<slug>` copy. This is the one concrete difference from the step-5 `task` path: everything else about how the subagent implements the task (reading the task file, following acceptance criteria, following repo conventions) is unchanged.
+
+2. **After the developer subagent reports implementation complete**, run the smoke test harness using the same invocation convention as `### 4.2. Inline Execution Path`:
+   - Run `bash scripts/smoke-harness.sh <changed_file>...`, passing the paths the subagent changed. With no arguments the harness infers them from `git diff --name-only HEAD`. It exits `0` on pass and `1` on failure.
+   - If `scripts/smoke-harness.sh` does not exist, log a warning and treat the result as a pass:
+     ```
+     WARNING [<task_id>]: scripts/smoke-harness.sh not found. Smoke test skipped (stub pass).
+     ```
+
+3. **If the smoke test passes**:
+   - The developer subagent self-verifies the implementation against the task's acceptance criteria. No tester subagent is invoked for a `light`-scoped task — this is a deliberate, documented exception to "the tester is the sole status-writer" (`agents/tester.md`), mirroring the same exception already established for `inline` scope in step 5 of `### 4.2`. Since no tester runs, the developer/orchestrator is the one who writes the terminal status for a `light`-scoped task.
+   - Commit the changes using the standard commit convention (`task(<task_id>): <short description>`) via `/commit`.
+   - Run the **Intent-vs-Diff Check** (see `### 5.1. Intent-vs-Diff Check` below) for this task.
+   - Write `status: Passed` and `date_completed: <today>` to the task's frontmatter if self-verification passes.
+   - Remove the task from `project/todo.md`.
+   - Continue to `### 6. Verify documentation`, then `### 7. After successful completion`.
+
+4. **If the smoke test fails (non-zero exit)**: do NOT write `status: Failed` and do NOT halt. Instead, invoke `#### Fallback to Full Task-Scope Pipeline` below (origin: `light`).
+
+#### Fallback to Full Task-Scope Pipeline
+
+This is a self-contained, reusable procedure with two current callers — `### 4.2`'s `--trivial`-forced inline failure branches (origin: `trivial`) and `### 4.3`'s `light`-scope smoke-harness failure (origin: `light`) — given a task that was attempted under a reduced-overhead execution scope and failed its smoke-harness check (or, for `trivial`, showed detected scope creep mid-run), do the following. The only thing that varies by caller is the notice text in step 5; steps 1–4 and 6 are identical regardless of origin.
+
+1. **Do not mark the task `Failed`.** A smoke-harness failure (or detected scope creep) under a reduced-overhead scope means the scope was too small for the task, not that the task itself is unworkable — the correct response is to retry under full isolation, not to reject the work.
+2. **Create a worktree** for the task, named `<E##_S##_T##-short-slug>` per standard Worktree Management conventions, if one does not already exist for this task. (A task dispatched under `light` scope, or forced `inline` via `--trivial`, never had one — both premises skip worktree creation — so this step always creates a fresh worktree in that case.)
+3. **Spawn a developer subagent** in that worktree and have it pick up from the current state of the code (the changes already made by the reduced-overhead attempt are still present in the working tree / already committed, if any commit occurred — the subagent continues from there rather than starting over).
+4. **Invoke the tester agent** per the normal `### 5. Invoke the developer agent` flow's contract — full sender object, commit SHAs, worktree path. The tester is responsible for the terminal status write, exactly as in the standard `task`-scope pipeline.
+5. **Emit a clear, non-fatal fallback notice** to the user/orchestrator, using the message matching the caller's origin:
+   - origin `light`:
+     ```
+     LIGHT SCOPE FALLBACK [<task_id>]: smoke test failed; re-routing to full task-scope pipeline (worktree + developer + tester).
+     ```
+   - origin `trivial`:
+     ```
+     TRIVIAL OVERRIDE FALLBACK [<task_id>]: smoke test failed (or scope creep detected); re-routing to full task-scope pipeline (worktree + developer + tester).
+     ```
+6. Resume normal `task`-scope processing (steps 6–8 below) once the tester returns a verdict.
 
 ### 5. Invoke the developer agent
 Pass the following to the developer agent:

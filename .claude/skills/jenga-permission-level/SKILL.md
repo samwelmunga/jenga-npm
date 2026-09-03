@@ -1,5 +1,5 @@
 ---
-name: jenga-permission-level
+name: j:jenga-permission-level
 description: Report or switch the current session's 5-tier permission level (Locked/Guarded/Standard/Elevated/Unrestricted) without hand-editing settings.json.
 keywords:
   - "permission level"

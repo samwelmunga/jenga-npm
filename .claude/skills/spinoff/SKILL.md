@@ -1,5 +1,5 @@
 ---
-name: spinoff
+name: j:spinoff
 description: Capture a diverging topic mid-conversation. Collects context and a mandatory origin, optionally runs /brainstorm for prerequisites, saves an /idea entry, and returns focus to the primary thread.
 keywords:
   - spinoff

@@ -1,5 +1,5 @@
 ---
-name: dev-done
+name: j:dev-done
 description: Commit the current work and immediately sync it into the .claude/ and .agents/ mirrors. Shortcut that chains /commit followed by /self-sync.
 keywords:
   - dev done

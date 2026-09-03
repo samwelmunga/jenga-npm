@@ -1,5 +1,5 @@
 ---
-name: improve
+name: j:improve
 description: A skill for analyzing a codebase and producing a structured improvement plan toward a defined goal.
 ---
 

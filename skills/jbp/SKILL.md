@@ -1,5 +1,5 @@
 ---
-name: jbp
+name: j:jbp
 description: Scaffold the project using the JengaBasePlate boilerplate repo template from https://github.com/samwelmunga/JengaBasePlate.git
 keywords:
   - jbp

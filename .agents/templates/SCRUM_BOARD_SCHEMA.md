@@ -67,8 +67,27 @@ All status fields must use one of the following exact strings:
 | `Blocked`            | Cannot proceed; human intervention required                |
 | `Backlog`            | Epic-level only; queued but not yet prioritized for work    |
 | `Done`               | Epic-level only; all child stories/tasks closed out          |
+| `Merged`             | Set after a successful `/self-sync` run's file diff shows the ticket's recorded files were touched |
+| `Publicized`         | Set after a successful `/mirror-public` run's file diff shows the ticket's recorded files were touched |
+| `Privatized`         | Set at ticket-close time via a static `.publicignore` blocklist membership check (no run dependency) |
+| `Deployed to Stage`  | Set when the public `jenga-npm` repo's CI tags a `vX.Y.Z-stage` tag that resolves back (via the `Source-Commit:` trailer) to this ticket's commit |
+| `Deployed to Prod`   | Set when the public `jenga-npm` repo's CI tags a `vX.Y.Z` (prod) tag that resolves back to this ticket's commit |
 
 Only the **tester agent** may write status values to story and task files. Only the **scrum master** may write status values to epic files and may update story status as part of rollup.
+
+All five statuses above are **script-set, never agent-judged** — no agent decides when a ticket becomes `Merged`, `Publicized`, `Privatized`, `Deployed to Stage`, or `Deployed to Prod`; a deterministic script observation sets them, per the mechanisms described below.
+
+### Static vs. Reactive Status Setting
+
+`Privatized` is set **statically**: at ticket-close time, a script checks whether the ticket's recorded files match the `.publicignore` blocklist. This check has no dependency on any particular run having occurred — it is a pure membership test.
+
+The other four — `Merged`, `Publicized`, `Deployed to Stage`, `Deployed to Prod` — are set **reactively**: a script observes the outcome of a specific run (a `/self-sync` or `/mirror-public` file diff, or a public-repo CI tag event) and sets the status only when that run's evidence confirms the ticket was affected. Absent a qualifying run, the status is not set.
+
+### Publicized / Privatized / Deployed Lifecycle Relationship
+
+`Publicized` and `Privatized` are **mutually exclusive** — a ticket is one or the other, never both. A ticket's files either pass the `.publicignore` blocklist check (making it eligible for `Publicized`) or match it (making it `Privatized`); it cannot satisfy both conditions at once.
+
+Only **`Publicized`** tickets are eligible to progress further down the deploy lifecycle, from `Deployed to Stage` to `Deployed to Prod`. A `Privatized` ticket's files never reach the public `jenga-npm` repo, so it can never acquire a CI tag there and therefore can never reach either deploy status.
 
 ---
 
@@ -161,7 +180,7 @@ reopened_on:                 # comma-separated list, e.g. 2026-02-01, 2026-04-10
 reopened_reason:             # comma-separated list, e.g. "Scope expanded", "Bug found post-release"
 assigned_to: developer | tester | scrum-master
 docs: []                     # optional list of repo-relative documentation paths, e.g. ["README.md", "docs/API.md"]
-execution_scope: task          # task | story | epic | inline; omit for legacy tasks (defaults to task)
+execution_scope: task          # task | story | epic | inline | light; omit for legacy tasks (defaults to task)
 needs_docs: true               # boolean; omit for legacy tasks (defaults to true)
 scope_rationale: ""            # required when execution_scope is set; must contain a numeric/file-count claim
 jenga_assigned: true           # boolean; true = machine-assigned, false = human override
@@ -315,13 +334,14 @@ level.
 These six fields control the execution footprint of a task within the `/jenga` and `/do` workflows. They are **optional** — omitting all six is valid and equivalent to `execution_scope: task` / `needs_docs: true`.
 
 **`execution_scope`**
-- Valid values: `task` | `story` | `epic` | `inline`
+- Valid values: `task` | `story` | `epic` | `inline` | `light`
 - When required: optional; omit for legacy tasks (runtime default: `task`)
 - Description: defines how broadly this task's implementation touches the codebase.
   - `task` — standard single-task scope (default)
   - `story` — task may touch files across multiple tasks in the same story
   - `epic` — task may touch files across stories; requires `epic_scope_approval: true` on the parent epic
   - `inline` — trivial change (e.g. config tweak, comment, schema doc); no execution plan or summary document is needed
+  - `light` — sits between `inline` and `task` in scope: a single developer subagent pass with no worktree, self-verified via `scripts/smoke-harness.sh` in lieu of a separate tester invocation; if the smoke harness fails, execution falls back to `task` scope
 
 **`needs_docs`**
 - Valid values: `true` | `false`
@@ -528,12 +548,23 @@ Each file is written by an agent as the **last action** of its session, and is s
 | `worktree`    | developer, tester    | Absolute path                            |
 | `paths`       | developer, tester    | Commit SHAs                              |
 | `rapport_file`| tester only          | Path to rapport if status is failed/error |
+| `resolved_context` | all, optional   | Digest of context the sending agent already resolved; see below |
 | `date`        | all                  | ISO 8601 UTC                             |
 
 **Status values per agent:**
 - `scrum-master`: `planning_complete`
 - `developer`: `implementation_complete`
 - `tester`: `passed`, `passed_with_remarks`, `failed`, `error`
+
+**`resolved_context` — digest, not a dump (E49).** An optional field a sending agent populates with a short digest of conclusions it already reached while navigating source documents (e.g. which schema fields apply, which skill precedent governs, which decisions are already made) — so the receiving subagent doesn't have to cold-re-read the same files from scratch. It must stay under a size cap of roughly 100 lines (a few hundred tokens), mirroring `scope_rationale`'s "must contain a measurable claim" discipline: a `resolved_context` value that is a raw file dump or exceeds the cap is not valid. The digest is a starting point only — it never restricts the receiving agent from reading full source files when the digest is insufficient or needs verification. The digest body itself lives in a per-task file at `project/queue/context/<agent>-<session_id>-<task_id>.json`, following the same unique-path, single-use, session-scoped convention as `handoffs/` above (not a shared, clobber-prone slot); this handoff's `resolved_context` field holds a reference to (or the inline content of) that file.
+
+**`project/queue/context/` — physical digest files (E49_S01_T02).** The directory itself is kept via `.gitkeep`; individual digest files (`*.json`) are git-ignored for the same reason `handoffs/*.json` is — a committed one can no longer be told apart from a live pending digest by inspection alone. Three scripts implement the convention end to end:
+
+- `scripts/write-context-digest.sh` — the sending agent's write path. Takes `--agent`, `--session-id`, `--task-id`, and digest content (`--content`, `--content-file`, or stdin); enforces the ~100-line cap above by **rejecting** (not truncating) an oversized digest, since a silently-truncated digest could cut off mid-thought and mislead the receiver — the sender is the only party that actually knows what's safe to cut. Writes atomically (tmp file in the same directory, then `mv`) and prints the resulting absolute path to stdout for the caller to place in the handoff's `resolved_context` field.
+- `scripts/consume-context-digest.sh <path>` — the receiving agent's read path. Atomically claims the file (rename to a `.claimed.$$` sibling, same TOCTOU-safe pattern `on_session_end.sh` section 4 uses for `handoffs/`), prints its content (full JSON envelope, or just the `digest` field with `--raw`), and deletes it — single-use, like `handoffs/`.
+- `scripts/sweep-stale-context-digests.sh` — an age-based backstop (default 24h, overridable), invoked from `hooks/on_session_end.sh` on every session end regardless of agent, for a digest whose intended receiver never calls the consume script (abandoned dispatch, or a receiver that read the raw file directly and forgot to clean up). Age-based rather than routed-and-deleted-immediately like `handoffs/`, because a digest's consumer is a later session that may not have started yet when some unrelated session's `SessionEnd` hook fires.
+
+Populating `resolved_context` when dispatching (scrum-master → developer, developer → tester) is sibling task E49_S01_T03 — not yet wired into `agents/scrum-master.md` or `agents/developer.md` as of this writing. The physical convention above is usable standalone in the meantime.
 
 
 

@@ -63,7 +63,7 @@ This is the **very first thing** you do at the start of every session — before
 
 ## Drain Scrum Triggers Queue
 
-This is a self-contained procedure, not a session-start-only step. It may be invoked automatically at session start (see "Session Start — Queue Processing" below) **or** explicitly, mid-session, by another skill — for example `/jenga`'s Phase 4 loop, which runs as one long-lived scrum-master session and needs rollups to happen promptly after each wave of background agent completions rather than waiting for a future session start. Every invocation — automatic or explicit — follows the identical steps below; there is no behavioral difference between the two call sites.
+This is a self-contained procedure, not a session-start-only step. It may be invoked automatically at session start (see "Session Start — Queue Processing" below) **or** explicitly, mid-session, by another skill — for example `j:jenga`'s Phase 4 loop, which runs as one long-lived scrum-master session and needs rollups to happen promptly after each wave of background agent completions rather than waiting for a future session start. Every invocation — automatic or explicit — follows the identical steps below; there is no behavioral difference between the two call sites.
 
 1. **Check `project/queue/scrum_triggers.jsonl`** — If the file exists and is non-empty, process each trigger in order:
    - `rapport_review`: Read each rapport file in `rapport_files` (skipping `*.IGNORE.md`), create backlog items or set affected task/story status to `Failed` with a rapport reference.
@@ -76,7 +76,7 @@ This is a self-contained procedure, not a session-start-only step. It may be inv
        6. **This is the only path** by which a mid-task agent request results in a `crucial_level` board write. Developer and tester never write `crucial_level`, `crucial_set_by`, or `crucial_note` directly to a board file themselves under any circumstance — they may only *request* the change via a `crucial_escalation` rapport, and the actual frontmatter write happens here, exclusively by scrum-master, closing the loop described in E39's Purpose section ("the actual frontmatter write still goes through scrum-master, never the subagent itself").
    - `status_review`: Review the scrum board for any tasks or stories whose status should be updated based on recent activity.
    - `story_rollup`: Check all tasks under the referenced story; if all are `Passed` or `Passed with remarks`, update the story status to `Passed` (or `Passed with remarks` if any remark exists). Then check epic rollup (see Rollup Logic).
-   - `elicitation_resume`: A `/uncharted` conversational architecture elicitation session (`onboard`'s default flow, or `segment --mode investigate` — E20_S08_T03) ended mid-run without converging. Read `state_file` (`project/queue/elicitation-state/<elicitation_id>.json`, written by `skills/uncharted/scripts/elicitation-state.sh`) to see exactly where it left off — which nodes already converged, which are still pending or flagged, and any directory-triage/checkpoint data already confirmed — then resume the conversational flow documented in `skills/uncharted/SKILL.md`'s Multi-Session Persistence subsection from that point rather than restarting the elicitation from scratch. If the state file is missing or unreadable, report that to the user rather than silently starting a fresh elicitation under the same id.
+   - `elicitation_resume`: A `j:uncharted` conversational architecture elicitation session (`onboard`'s default flow, or `segment --mode investigate` — E20_S08_T03) ended mid-run without converging. Read `state_file` (`project/queue/elicitation-state/<elicitation_id>.json`, written by `skills/uncharted/scripts/elicitation-state.sh`) to see exactly where it left off — which nodes already converged, which are still pending or flagged, and any directory-triage/checkpoint data already confirmed — then resume the conversational flow documented in `skills/uncharted/SKILL.md`'s Multi-Session Persistence subsection from that point rather than restarting the elicitation from scratch. If the state file is missing or unreadable, report that to the user rather than silently starting a fresh elicitation under the same id.
    - After processing all triggers, **clear the file** by writing an empty file — do not leave processed triggers.
 
 2. **Check `project/queue/project_summary_updates.jsonl`** — If non-empty, review each proposed update and apply, revise, or reject it with a short note. Clear the file after processing.
@@ -197,6 +197,16 @@ Before writing each task file to `project/board/tasks/`, verify:
 4. `scope_rationale` is specific — not generic filler.
 5. If items 3 or 4 fail, change `execution_scope` to `task` and rewrite `scope_rationale` to reflect that fallback honestly.
 
+### Task-Folding Check
+
+**Before creating a sibling task, verify it has independent work of its own.** This check is required before writing any task file to `project/board/tasks/`, in addition to the Breakdown Checklist above.
+
+Ask: will this deliverable get done anyway as a side effect of an already-planned sibling task in the same story (e.g. a one-line skill-table registration that the task implementing the skill will touch anyway)? If yes, do not create a new task file — fold the deliverable into that sibling task's `## Acceptance Criteria` instead.
+
+**Motivating example:** `E42_S04_T02` ("register `j:dev-done` in `CLAUDE.md`'s skills table") was created as its own sibling task, but the developer implementing `E42_S04_T01` bundled that same one-line table row into T01's commit anyway — T02 never had independent work to do. It was discovered only when the user asked what T02 was even doing, and was later deleted and dropped from the story's `tasks:` list. See `project/rapports/analysis/E42_S04-execution-overhead-postmortem.md`, Finding 4.
+
+This check applies regardless of the sibling task's `execution_scope`.
+
 ---
 
 ## Execution Scope Assignment
@@ -212,6 +222,27 @@ Assign `inline` when **all** of the following are true:
 - The estimated diff is `inline_max_lines` lines or fewer (per `project/configs/scope-thresholds.json`)
 
 `needs_docs` for every `inline`-scoped task is always `false`.
+
+### `light` scope
+
+`light` sits between `inline` and `task`: a single developer subagent pass with no worktree, self-verified via `scripts/smoke-harness.sh` in lieu of a separate tester invocation. If the smoke harness fails, execution falls back to `task` scope automatically at runtime — see `templates/SCRUM_BOARD_SCHEMA.md`'s Execution Scope Fields section for the full runtime contract.
+
+Assign `light` when **any** of the following are true:
+- The task exceeds `inline_max_files` or `inline_max_lines` (per `project/configs/scope-thresholds.json`), but remains a single, tightly-bounded change (one file, or a small handful of directly related files)
+- The change is purely additive or config-level, like `inline`, but its estimated diff exceeds `inline_max_lines`
+- The task introduces minor branching or a small conditional (not "non-trivial architecture" — that still requires `task`) that would otherwise disqualify it from `inline`, but the change is still self-contained enough to verify with a smoke-harness pass rather than a full tester cycle
+
+**Distinguishing `light` from `inline`:** `light` is for changes too big or too branchy for `inline`'s caps (`inline_max_files`, `inline_max_lines`) — if the change fits within those caps with no logic branches, use `inline` instead.
+
+**Distinguishing `light` from `task`:** assign `light`, not `task`, only when **all** of the following also hold:
+- The task does **not** require worktree isolation — it can be implemented directly by a single developer subagent pass
+- The task does **not** require independent tester verification — a `scripts/smoke-harness.sh` self-check is sufficient to catch regressions
+- No shared-infrastructure contention exists (same contention concept as the `story` scope's mandatory contention check below — e.g. `package.json`, `settings.json`, `pyproject.toml`)
+- The task has no cross-story dependencies and tester validation is not sensitive to the specific implementation approach chosen
+
+If any of the `task`-scope triggers below apply (branching beyond "minor," shared infrastructure, cross-story dependencies, contention, or general uncertainty), do not assign `light` — use `task` instead.
+
+**Fallback rule:** if the evidence for `light` isn't concrete — i.e. you cannot point to a specific reason the task exceeds `inline`'s caps while still being confidently worktree-free and tester-free — default to `task`, exactly as the general Fallback Rule above prescribes. Never assign `light` speculatively.
 
 ### `story` scope
 
@@ -339,12 +370,12 @@ When a request comes in:
 ### 3. Finalizing Items
 Once an item is sufficiently defined:
 - Use the appropriate command to register it on the scrum board:
-  - `/todo` — add a new item
+  - `j:todo` — add a new item
   - `/amend` — update or refine an existing item
-  - `/redo` — scrap and restart an item
+  - `j:redo` — scrap and restart an item
 - **Flag user-action prerequisites** — If the item requires the user to perform any action outside agent scope before or during implementation (e.g. creating accounts, configuring OAuth, provisioning services, setting environment variables), call this out explicitly in the task/story description under a `## Prerequisites` section. This ensures the developer creates a proper instructions file when it picks up the task, and the user is never surprised mid-implementation.
-- **Annotate documentation provenance when relevant** — When an epic, story, or task directly results in user-facing documentation updates, add an optional `docs` frontmatter field listing the affected documentation targets. This powers provenance tracking for the `/doc` skill.
-  - **Purpose:** link board work to documentation files so `/doc` can resolve `last_update` frontmatter from real board history.
+- **Annotate documentation provenance when relevant** — When an epic, story, or task directly results in user-facing documentation updates, add an optional `docs` frontmatter field listing the affected documentation targets. This powers provenance tracking for the `j:doc` skill.
+  - **Purpose:** link board work to documentation files so `j:doc` can resolve `last_update` frontmatter from real board history.
   - **When to add it:** use it when the item is expected to change docs such as `README.md`, files under `docs/`, or other user-facing documentation artifacts (for example: a new skill that needs a README update, or a new API that needs `docs/API.md`).
   - **How to populate it:** use repo-relative paths from the repository root, e.g. `docs: ["README.md", "docs/API.md"]`.
   - **Optionality:** do not add `docs` when no documentation target is directly affected; omitted `docs` is valid.
@@ -373,7 +404,7 @@ Before writing any new or amended story file to `project/board/stories/`, valida
 This gate applies to **all story creation and amendment operations** — no story file may be written to the board without passing all three checks.
 
 #### Triggering the Developer
-When board items are committed **and the user intends them for immediate implementation**, write a session handoff file to `project/queue/handoffs/scrum-master-<session_id>-<task_id>.json` — a unique path keyed by this session, not the old shared `project/queue/.session_handoff.json` slot, so that a session ending close to another agent's session can never clobber its handoff. Use the first entry of `task_ids` as `<task_id>` in the filename (or the literal string `batch` if `task_ids` is empty). `on_session_end.sh` forwards the work to the developer queue:
+When board items are committed **and the user intends them for immediate implementation**, write a session handoff file to `project/queue/handoffs/scrum-master-<session_id>-<task_id>.json` — a unique path keyed by this session, not the old shared `project/queue/.session_handoff.json` slot, so that a session ending close to another agent's session can never clobber its handoff. Use the first entry of `task_ids` as `<task_id>` in the filename (or the literal string `batch` if `task_ids` is empty). Before writing the handoff, compose a short `resolved_context` digest of what was already resolved during breakdown for this task — which `templates/SCRUM_BOARD_SCHEMA.md` fields apply, which skill precedent governs, which epic/story-placement decisions were already made — and persist it by calling `scripts/write-context-digest.sh --agent scrum-master --session-id <session_id> --task-id <task_id>` with that content (stays under the ~100-line/few-hundred-token cap defined in `templates/SCRUM_BOARD_SCHEMA.md`'s `resolved_context` subsection; the script rejects oversized input rather than truncating it). Place the script's returned path in the handoff's `resolved_context` field. `on_session_end.sh` forwards the work to the developer queue:
 
 ```json
 {
@@ -383,9 +414,12 @@ When board items are committed **and the user intends them for immediate impleme
   "task_ids": ["<E##_S##_T##>", "..."],
   "story_id": "<E##_S##>",
   "epic_id": "<E##>",
+  "resolved_context": "<path returned by scripts/write-context-digest.sh, or omit if no digest was written>",
   "date": "<ISO 8601 UTC timestamp>"
 }
 ```
+
+This digest is a starting point only, never a restriction: the developer may and should still read the full `templates/SCRUM_BOARD_SCHEMA.md`, relevant skill docs, or `CLAUDE.md` when the digest doesn't cover what it needs.
 
 If the user wants to defer implementation (e.g., brainstorming only, or items are backlogged for later), do **not** write the handoff file.
 
@@ -407,7 +441,7 @@ If the user wants to defer implementation (e.g., brainstorming only, or items ar
 
 ## Brainstorm Mode
 
-When invoked via the `/brainstorm` skill, switch into **Brainstorm Mode**. This is a dedicated exploration phase — no board items are written until the user explicitly signs off.
+When invoked via the `j:brainstorm` skill, switch into **Brainstorm Mode**. This is a dedicated exploration phase — no board items are written until the user explicitly signs off.
 
 In Brainstorm Mode, amplify the following behaviours:
 
@@ -454,28 +488,28 @@ Clarifications, follow-up details, and edge cases that serve the current story a
 When you detect a divergence, stop advancing the current thread and present the structured choice below. Use a calm, neutral tone — the goal is to keep the user in control, not to interrupt them:
 
     It looks like we're moving into a new topic. How would you like to handle it?
-    1. Capture the **new topic** as a `/todo` (I'll return to what we were working on)
-    2. Capture the **current topic** as a `/todo` (I'll continue with the new topic)
-    3. Capture **both** as `/todo` items (you choose which to continue first)
+    1. Capture the **new topic** as a `j:todo` (I'll return to what we were working on)
+    2. Capture the **current topic** as a `j:todo` (I'll continue with the new topic)
+    3. Capture **both** as `j:todo` items (you choose which to continue first)
     4. Ignore it — tell me which topic to continue with
 
 ### Option A — Capture the Diverging Topic
-1. Draft a `/todo` for the diverging topic. Populate the description with: a one-sentence summary, key details and constraints already discussed, and any open questions raised so far.
-2. Before finalising, offer `/brainstorm` to fill in any missing **Prerequisites** (e.g. third-party accounts, environment setup, external approvals).
-3. Once the `/todo` is saved, return to the primary story/epic context exactly where it was paused.
+1. Draft a `j:todo` for the diverging topic. Populate the description with: a one-sentence summary, key details and constraints already discussed, and any open questions raised so far.
+2. Before finalising, offer `j:brainstorm` to fill in any missing **Prerequisites** (e.g. third-party accounts, environment setup, external approvals).
+3. Once the `j:todo` is saved, return to the primary story/epic context exactly where it was paused.
 
 ### Option B — Capture the Primary Topic
-1. Draft a `/todo` for the primary topic using the same context-surfacing approach: summary, details, open questions.
-2. Offer `/brainstorm` to fill in missing Prerequisites before finalising.
-3. Once the `/todo` is saved, pivot to the diverging topic.
+1. Draft a `j:todo` for the primary topic using the same context-surfacing approach: summary, details, open questions.
+2. Offer `j:brainstorm` to fill in missing Prerequisites before finalising.
+3. Once the `j:todo` is saved, pivot to the diverging topic.
 
 ### Option C — Capture Both
-1. Create a `/todo` for the diverging topic (context summary + Prerequisites offer).
-2. Create a `/todo` for the primary topic (context summary + Prerequisites offer).
+1. Create a `j:todo` for the diverging topic (context summary + Prerequisites offer).
+2. Create a `j:todo` for the primary topic (context summary + Prerequisites offer).
 3. Ask the user which topic to continue first.
 
 ### Context Surfacing
-Every `/todo` created through this flow must include in its description:
+Every `j:todo` created through this flow must include in its description:
 - A one-sentence summary of the topic
 - Key details, constraints, or decisions already discussed
 - Open questions or unknowns raised so far
@@ -483,8 +517,8 @@ Every `/todo` created through this flow must include in its description:
 This is non-negotiable — it is the mechanism that prevents context loss.
 
 ### Edge Cases
-- **User declines both options (selects "Ignore it")**: Do not create any `/todo` items. Acknowledge briefly, then ask which topic to continue. Follow the user's direction without pressure.
-- **User wants to pursue both in parallel**: Treat as Option C — create both `/todo` items with full context summaries, then ask which to continue first.
+- **User declines both options (selects "Ignore it")**: Do not create any `j:todo` items. Acknowledge briefly, then ask which topic to continue. Follow the user's direction without pressure.
+- **User wants to pursue both in parallel**: Treat as Option C — create both `j:todo` items with full context summaries, then ask which to continue first.
 ---
 
 ## Mediator Mode
@@ -495,7 +529,7 @@ Activate Mediator Mode whenever the user is working on AI/ML model setup, traini
 - User asks which model architecture to use
 - User needs help choosing training hyperparameters or a framework
 - User wants to understand model evaluation results
-- User is about to run or configure a training job via the `/train` skill
+- User is about to run or configure a training job via the `j:train` skill
 
 You do not need explicit instruction to enter Mediator Mode — detect the context and activate it automatically.
 

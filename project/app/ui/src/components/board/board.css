@@ -120,6 +120,17 @@
   color: #15803d;
 }
 
+.badge-passed-remarks {
+  background: #ffffff;
+  color: #15803d;
+  border: 1px solid #dcfce7;
+}
+
+.badge-done {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
 .badge-failed {
   background: #fee2e2;
   color: #b91c1c;

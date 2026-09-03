@@ -1,5 +1,5 @@
 ---
-name: close-story
+name: j:close-story
 description: Close a story by verifying all tasks are in terminal state, extracting actual diff stats per task, computing scope divergence flags, and writing closure metadata to task frontmatter.
 keywords:
   - close story
@@ -22,7 +22,12 @@ examples:
 1. Verifies all tasks in the story are in a terminal state (Passed or Done).
 2. Extracts actual `git diff --stat` metrics for each task from the commit history.
 3. Writes `actual_files_changed`, `actual_lines_delta`, and `scope_divergence_flag` to each task's frontmatter.
-4. Updates the story's frontmatter `status` to `Done` and records `date_completed`.
+4. Runs a static `.publicignore` blocklist check (E51_S03_T03) against each task's and the story's
+   own touched files, marking `status: Privatized` in place of the normal terminal status wherever
+   every touched file is permanently excluded from the public mirror — independent of any
+   `/mirror-public` run having occurred.
+5. Updates the story's frontmatter `status` to `Done` (or `Privatized`, per step 4) and records
+   `date_completed`.
 
 ---
 
@@ -111,6 +116,28 @@ For **each task ID** listed in the story's `tasks:` frontmatter array:
    field is present but do not treat this as an error. Run divergence
    computation with `0 0` — this will return `false` for all scopes.
 
+7. **Run the static Privatized check** (E51_S03_T03) — immediately after the
+   frontmatter writes and divergence computation above, check whether this
+   task's own work is permanently excluded from the public mirror:
+   ```bash
+   bash skills/close-story/scripts/check-privatized.sh <task-id> "project/board/tasks/<task-id>_*.md"
+   ```
+   This is a **static** check (per `templates/SCRUM_BOARD_SCHEMA.md`'s "Static
+   vs. Reactive Status Setting" section) — it derives the task's touched-file
+   list from its own EST-tagged commit history (same technique as Step 2) and
+   tests every file against `.publicignore`, with **no dependency on any
+   `/mirror-public` run having ever occurred**.
+   - Prints `PRIVATIZED` on stdout if every touched file matched the
+     blocklist — the script has already written `status: Privatized` to the
+     task's frontmatter (superseding whatever status was there, including a
+     contradictory `Publicized`, in which case the script also logs a
+     `publicized_privatized_mismatch` event to `project/logs/events.json`).
+   - Prints `UNCHANGED` if the task has zero matched commits, only partial
+     blocklist coverage, or is already `Privatized` — no error, no board
+     write.
+   - Track any task that came back `PRIVATIZED` for the final report
+     (Step 5).
+
 ---
 
 ### Step 3 — Bundle task attribution
@@ -138,11 +165,29 @@ IDs (e.g. `task(E32_S06_T01, E32_S06_T02): ...`). In this case:
 
 ### Step 4 — Update story frontmatter
 
-After all tasks have been updated, set the following fields in the story's
-frontmatter:
+After all tasks have been updated, run the same static Privatized check
+against the story's own direct commits (E51_S03_T03) **before** deciding the
+story's terminal status:
 
-- `status: Done`
-- `date_completed: <YYYY-MM-DD>` (today's date in UTC)
+```bash
+bash skills/close-story/scripts/check-privatized.sh <story-id> "project/board/stories/<story-id>_*.md"
+```
+
+Passing the story id (`E##_S##`) rather than a task id makes the script's
+anchored-grep commit matching (`"<id>([^0-9_]|$)"`) match only the story's
+own direct commits (e.g. `story(E51_S03): ...`) — not its children's, since
+a story id is a literal string prefix of every one of its own tasks' ids.
+
+- If the script prints `PRIVATIZED`, it has already written
+  `status: Privatized` to the story's frontmatter. **Do not also write
+  `status: Done`** — `Privatized` supersedes `Done` as the more specific
+  terminal status (a story cannot be both), matching how `Merged`/`Publicized`
+  supersede an otherwise-unremarkable closed status on tasks. Still set
+  `date_completed: <YYYY-MM-DD>` (today's date in UTC).
+- If the script prints `UNCHANGED`, proceed as normal: set the following
+  fields in the story's frontmatter:
+  - `status: Done`
+  - `date_completed: <YYYY-MM-DD>` (today's date in UTC)
 
 Use `update-task-frontmatter.sh` targeting the story file, or edit directly.
 
@@ -162,6 +207,32 @@ Tasks updated with actual diff stats:
 If any task had `0` for both fields, note it as potentially untracked:
 ```
   <task-id>: files_changed=0, lines_delta=0 (no EST-tagged commit found)
+```
+
+#### Privatized
+
+Include a "Privatized" note listing any task (from Step 2) or the story itself (from Step 4) that
+`check-privatized.sh` marked `status: Privatized` — every one of its touched files was permanently
+excluded from the public mirror via `.publicignore`, independent of any `/mirror-public` run.
+
+```
+Privatized:
+  <task-id>: all touched files matched .publicignore
+  ...
+Story <story-id>: Privatized (all touched files matched .publicignore) — closed as Privatized, not Done
+```
+
+Or, if none were Privatized:
+```
+Privatized: none
+```
+
+If any ticket was overwritten from `Publicized` to `Privatized` (a precedence mismatch), note it
+explicitly and point to the logged `publicized_privatized_mismatch` event in
+`project/logs/events.json` for investigation:
+```
+  <id>: WARNING — was Publicized, found fully blocklisted, overwritten to Privatized (see
+  project/logs/events.json: publicized_privatized_mismatch)
 ```
 
 #### Scope Divergence
@@ -201,3 +272,4 @@ Scope Divergence: skipped (scope-thresholds.json missing or malformed)
 | `scripts/extract-task-diff-stats.sh <task-id>` | Per-task diff stats from EST-tagged commits |
 | `scripts/update-task-frontmatter.sh <file> <key> <value>` | Write/update a YAML field in task or story frontmatter |
 | `scripts/compute-scope-divergence.sh <execution_scope> <actual_files_changed> <actual_lines_delta>` | Compute scope divergence flag: prints `true` or `false` |
+| `scripts/check-privatized.sh <id> <board-file-path>` | Static `.publicignore` membership check (task or story); prints `PRIVATIZED` (status written) or `UNCHANGED` — no `/mirror-public` run required |

@@ -1,5 +1,5 @@
 ---
-name: doc-sync
+name: j:doc-sync
 description: Compare the current state of a project with its documentation and update documentation to reflect changes. Accepts `update:`, `source:`, `exclude:`, and `minify:` arguments to control scope. Use when documentation may be out of date with implementation, or when the user asks to sync, refresh, update, or shrink docs.
 keywords:
   - doc-sync

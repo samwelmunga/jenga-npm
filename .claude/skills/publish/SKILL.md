@@ -1,5 +1,5 @@
 ---
-name: publish
+name: j:publish
 description: Configure, validate, and orchestrate scaffolded release workflows through a single `/publish` entry point with bounded sub-commands.
 keywords:
   - publish

@@ -4,7 +4,7 @@
 >
 > All features — **skills, agents, hooks, scripts, and any other implementation** — **MUST be created and edited in the root directories** (`skills/`, `agents/`, `hooks/`, `scripts/`, etc.).
 >
-> The **`.agents/`** and **`.claude/`** directories are **generated build outputs**. They are populated automatically by the `/distribute` skill and must **never** be used as the primary location for new or updated features. Any change made only inside `.agents/` or `.claude/` will be overwritten on the next distribution run.
+> The **`.agents/`** and **`.claude/`** directories are **generated build outputs**. They are populated automatically by the `j:distribute` skill and must **never** be used as the primary location for new or updated features. Any change made only inside `.agents/` or `.claude/` will be overwritten on the next distribution run.
 >
 > **Rule:** If you add or modify a skill, agent, hook, or script, the canonical file lives in the root directory. `.agents/` and `.claude/` are read-only artifacts.
 
@@ -12,10 +12,16 @@
 
 ## Workflow Lifecycle
 
-1. **`/init`** — Scaffold the project: git init, directories, `workflow.json`, `PROJECT_SUMMARY.md` stub.
-2. **`/jenga`** — Interactive-by-default board orchestrator: bare shows a picker + confirmation tree, `<ids>` scopes and confirms, `*` runs the original fully automated pipeline with no prompts.
-3. **`/todo`** (or Scrum Master directly) — Translate requirements into board items (epics → stories → tasks).
-4. **`/do`** — Pick a task from `project/todo.md`, invoke the Developer agent with full scrum board context and a sender object.
+> **Invocation convention (`E50_S01`):** every skill's canonical invocation form is now `j:<name>`
+> (e.g. `j:init`, `j:jenga`) rather than the old bare `/<name>`. The old bare `/<name>` form is a
+> **permanent alias** — it keeps resolving indefinitely on every routing surface, is never
+> deprecated, and is never scheduled for removal. Full rationale in
+> `docs/skill-authoring.md`'s "Invocation Convention" section.
+
+1. **`j:init`** — Scaffold the project: git init, directories, `workflow.json`, `PROJECT_SUMMARY.md` stub.
+2. **`j:jenga`** — Interactive-by-default board orchestrator: bare shows a picker + confirmation tree, `<ids>` scopes and confirms, `*` runs the original fully automated pipeline with no prompts.
+3. **`j:todo`** (or Scrum Master directly) — Translate requirements into board items (epics → stories → tasks).
+4. **`j:do`** — Pick a task from `project/todo.md`, invoke the Developer agent with full scrum board context and a sender object.
 5. **Developer** — Reads task, creates a worktree, implements, commits, and calls the Tester.
 6. **Tester** — Validates sender object, runs tests, writes status to the board, triggers rollup if all tasks pass.
 7. **`SessionEnd` hook** — `on_session_end.sh` detects new rapports and writes triggers to the queue.
@@ -58,29 +64,31 @@
 
 ## Skills (Slash Commands)
 
-Skills are stored in `skills/<name>/SKILL.md`. Invoke them with `/<name>` in a Claude Code session.
+Skills are stored in `skills/<name>/SKILL.md`. Invoke them with `j:<name>` in a Claude Code session
+— the bare `/<name>` form also keeps working permanently as an alias (see the Invocation Convention
+note under Workflow Lifecycle above).
 
 | Command | Description |
 |---|---|
-| `/init` | Scaffold project directories, `workflow.json`, `PROJECT_SUMMARY.md`, initial commit. |
-| `/jenga` | Interactive-by-default board orchestrator with a fully automated escape hatch: bare `/jenga` renders a picker + confirmation tree, `/jenga <ids>` resolves an explicit scope + confirms, `/jenga *` reproduces the original zero-prompt, fully automated run. |
-| `/jbp` | Scaffold the project using the [JengaBasePlate](https://github.com/samwelmunga/JengaBasePlate.git) boilerplate. |
-| `/brainstorm` | Focused planning session with the Scrum Master to define and refine features before committing to the board. |
-| `/btw` | Capture a mid-flow mission, classify into epic/story structure, implement now or defer. |
-| `/todo` | Add missions to `project/todo.md` linked to epics and stories. Loops until done, then optionally runs `/do`. |
-| `/redo` | Rework a previous implementation by commit SHA or Epic/Story number. Includes scope assessment, plan, and doc updates. |
-| `/publish` | Configure, validate, and orchestrate scaffolded release workflows (`setup`, `deploy`, `stage`, `history`, `release-notes`) across `mobile-ios`, `npm`, `npm-ci`, and `droplet` targets. `stage` (`npm`/`npm-ci` only) rehearses and smoke-tests a release before it goes live. |
-| `/uncharted` | Entry point for code with no board provenance — three modes: `segment` (a file or directory), `import` (an external source), `onboard` (a whole pre-existing codebase). |
-| `/do` | Execute tasks from the scrum board. Resolves each entry to full board context and drives the Developer agent. |
-| `/status` | Overview of epics, stories, and tasks with statuses, open rapports, and queue depth. |
-| `/jenga-permission-level` | Report or switch the current session's 5-tier permission level (Locked/Guarded/Standard/Elevated/Unrestricted) without hand-editing settings.json. |
-| `/commit` | Commit completed work using the EST naming convention (`epic(...)`, `story(...)`). |
-| `/lgtm` | Approve current work, commit, and continue. Chains `/commit` + `/continue`. |
-| `/dev-done` | Commit current work and sync the `.claude/`/`.agents/` mirrors. Chains `/commit` + `/self-sync`. |
-| `/continue` | Pick up the next incomplete item across `PROJECT_SUMMARY.md`, epics, and stories. |
-| `/proceed` | Resume execution from where it left off. |
-| `/error` | Guided troubleshooting — gathers context about an error and investigates a fix. |
-| `/help` | List all available skills with descriptions. |
+| `j:init` | Scaffold project directories, `workflow.json`, `PROJECT_SUMMARY.md`, initial commit. |
+| `j:jenga` | Interactive-by-default board orchestrator with a fully automated escape hatch: bare `j:jenga` renders a picker + confirmation tree, `j:jenga <ids>` resolves an explicit scope + confirms, `j:jenga *` reproduces the original zero-prompt, fully automated run. |
+| `j:jbp` | Scaffold the project using the [JengaBasePlate](https://github.com/samwelmunga/JengaBasePlate.git) boilerplate. |
+| `j:brainstorm` | Focused planning session with the Scrum Master to define and refine features before committing to the board. |
+| `j:btw` | Capture a mid-flow mission, classify into epic/story structure, implement now or defer. |
+| `j:todo` | Add missions to `project/todo.md` linked to epics and stories. Loops until done, then optionally runs `j:do`. |
+| `j:redo` | Rework a previous implementation by commit SHA or Epic/Story number. Includes scope assessment, plan, and doc updates. |
+| `j:publish` | Configure, validate, and orchestrate scaffolded release workflows (`setup`, `deploy`, `stage`, `history`, `release-notes`) across `mobile-ios`, `npm`, `npm-ci`, and `droplet` targets. `stage` (`npm`/`npm-ci` only) rehearses and smoke-tests a release before it goes live. |
+| `j:uncharted` | Entry point for code with no board provenance — three modes: `segment` (a file or directory), `import` (an external source), `onboard` (a whole pre-existing codebase). |
+| `j:do` | Execute tasks from the scrum board. Resolves each entry to full board context and drives the Developer agent. |
+| `j:status` | Overview of epics, stories, and tasks with statuses, open rapports, and queue depth. |
+| `j:jenga-permission-level` | Report or switch the current session's 5-tier permission level (Locked/Guarded/Standard/Elevated/Unrestricted) without hand-editing settings.json. |
+| `j:commit` | Commit completed work using the EST naming convention (`epic(...)`, `story(...)`). |
+| `j:lgtm` | Approve current work, commit, and continue. Chains `j:commit` + `j:continue`. |
+| `j:dev-done` | Commit current work and sync the `.claude/`/`.agents/` mirrors. Chains `j:commit` + `j:self-sync`. |
+| `j:continue` | Pick up the next incomplete item across `PROJECT_SUMMARY.md`, epics, and stories. |
+| `j:proceed` | Resume execution from where it left off. |
+| `j:error` | Guided troubleshooting — gathers context about an error and investigates a fix. |
+| `j:help` | List all available skills with descriptions. |
 
 ---
 
@@ -103,8 +111,8 @@ examples:                        # optional
 
 | Field | Required | Purpose |
 |---|---|---|
-| `name` | ✅ | Skill name — must match the directory name under `skills/`. |
-| `description` | ✅ | Shown in `/help` listings and the skill registry. |
+| `name` | ✅ | Skill name — `j:` + the directory name under `skills/` (see `docs/skill-authoring.md`'s "Invocation Convention"). |
+| `description` | ✅ | Shown in `j:help` listings and the skill registry. |
 | `metadata.prefered_agent` | ❌ | Sub-agent to delegate to (`scrum-master`, `developer`, `tester`). |
 | `keywords` | ❌ | Short phrases (1–3 words) for Jenga Router keyword matching. |
 | `examples` | ❌ | Natural-language prompts for Jenga Router semantic matching. |
@@ -201,28 +209,28 @@ Clarifying questions, follow-up details, or edge cases that directly serve the c
 When divergence is detected, immediately pause the current line of work and present the following structured choice:
 
     It looks like we're moving into a new topic. How would you like to handle it?
-    1. Capture the **new topic** as a `/todo` (I'll return to what we were doing)
-    2. Capture the **current topic** as a `/todo` (I'll continue with the new topic)
-    3. Capture **both** as `/todo` items (you choose which to continue first)
+    1. Capture the **new topic** as a `j:todo` (I'll return to what we were doing)
+    2. Capture the **current topic** as a `j:todo` (I'll continue with the new topic)
+    3. Capture **both** as `j:todo` items (you choose which to continue first)
     4. Ignore it — tell me which topic to continue with
 
 ### Option A — Capture the Diverging Topic
-1. Summarise the diverging topic using context gathered so far and create a `/todo` with that summary as the description.
-2. Offer `/brainstorm` to fill in any missing Prerequisites before finalising the `/todo`.
-3. Once the `/todo` is saved, return to the primary topic exactly where it was paused.
+1. Summarise the diverging topic using context gathered so far and create a `j:todo` with that summary as the description.
+2. Offer `j:brainstorm` to fill in any missing Prerequisites before finalising the `j:todo`.
+3. Once the `j:todo` is saved, return to the primary topic exactly where it was paused.
 
 ### Option B — Capture the Primary Topic
-1. Summarise the primary topic using context gathered so far and create a `/todo` with that summary as the description.
-2. Offer `/brainstorm` to fill in any missing Prerequisites before finalising the `/todo`.
-3. Once the `/todo` is saved, continue with the diverging topic.
+1. Summarise the primary topic using context gathered so far and create a `j:todo` with that summary as the description.
+2. Offer `j:brainstorm` to fill in any missing Prerequisites before finalising the `j:todo`.
+3. Once the `j:todo` is saved, continue with the diverging topic.
 
 ### Option C — Capture Both
-1. Create a `/todo` for the diverging topic (with context summary and a `/brainstorm` offer for Prerequisites).
-2. Create a `/todo` for the primary topic (with context summary and a `/brainstorm` offer for Prerequisites).
+1. Create a `j:todo` for the diverging topic (with context summary and a `j:brainstorm` offer for Prerequisites).
+2. Create a `j:todo` for the primary topic (with context summary and a `j:brainstorm` offer for Prerequisites).
 3. Ask the user which topic to continue first.
 
 ### Context Surfacing
-In every `/todo` description created through this flow, include:
+In every `j:todo` description created through this flow, include:
 - A one-sentence summary of the topic
 - Key details, constraints, or decisions already discussed
 - Any open questions or unknowns raised so far
@@ -230,5 +238,5 @@ In every `/todo` description created through this flow, include:
 This ensures no context is lost regardless of which option the user chooses.
 
 ### Edge Cases
-- **User declines both options (selects "Ignore it")**: Acknowledge the choice without creating any `/todo` items, then ask the user to explicitly state which topic to continue. Follow their direction.
-- **User wants to pursue both in parallel**: Treat this as Option C — capture both as `/todo` items with full context summaries, then ask the user which to continue first.
+- **User declines both options (selects "Ignore it")**: Acknowledge the choice without creating any `j:todo` items, then ask the user to explicitly state which topic to continue. Follow their direction.
+- **User wants to pursue both in parallel**: Treat this as Option C — capture both as `j:todo` items with full context summaries, then ask the user which to continue first.

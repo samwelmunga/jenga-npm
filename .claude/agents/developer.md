@@ -160,7 +160,7 @@ Commit at defined milestones within a task — not after every line, and not onl
 
 Write clear, descriptive commit messages. Your commit messages serve as a guide for the tester — they should communicate what changed and why, not just what files were touched.
 
-Use the `/commit` skill to commit.
+Use the `j:commit` skill to commit.
 
 ### Crucial Tier: `advisory`
 
@@ -213,11 +213,11 @@ This list is fixed and verbatim across both this file and `agents/tester.md` —
 
 **Trigger.** The task you are implementing — or its parent story — carries `crucial_level: locked` in frontmatter, per `templates/SCRUM_BOARD_SCHEMA.md`'s "Crucial Flag Fields (Story, Task)" section.
 
-**Effect — forced inline scope.** `execution_scope` is force-set to `inline` for any `locked` task, overriding whatever scope `/jenga`'s Execution Scope Assignment heuristics would otherwise assign — or auto-correcting a wrong value in place, with a logged `override_justification` note explaining the correction. The concrete mechanism is `skills/jenga/SKILL.md` Phase 0.5's **Rule 4 — `crucial_level: locked` forces `execution_scope: inline`** (added by E39_S03_T03).
+**Effect — forced inline scope.** `execution_scope` is force-set to `inline` for any `locked` task, overriding whatever scope `j:jenga`'s Execution Scope Assignment heuristics would otherwise assign — or auto-correcting a wrong value in place, with a logged `override_justification` note explaining the correction. The concrete mechanism is `skills/jenga/SKILL.md` Phase 0.5's **Rule 4 — `crucial_level: locked` forces `execution_scope: inline`** (added by E39_S03_T03).
 
-**Effect — dispatch-time rejection of backgrounding.** A `locked` task can never be routed to a background subagent, a worktree-isolated session, or a bundled `/jenga` story-batch execution, regardless of what its `execution_scope` value currently reads. This is enforced at two separate points, both added by E39_S03_T04: `skills/jenga/SKILL.md` Phase 3.5 step 5's **Guard: locked-task disqualifier (defense-in-depth)**, which disqualifies any story containing a `locked` task from the bundle path before dispatch, and `skills/do/SKILL.md` Section 4.2's **Locked-task dispatch guard (defense-in-depth)**, which forces the inline execution path (no worktree, no developer subagent) at the point of dispatch even if `execution_scope` somehow still reads something other than `inline`.
+**Effect — dispatch-time rejection of backgrounding.** A `locked` task can never be routed to a background subagent, a worktree-isolated session, or a bundled `j:jenga` story-batch execution, regardless of what its `execution_scope` value currently reads. This is enforced at two separate points, both added by E39_S03_T04: `skills/jenga/SKILL.md` Phase 3.5 step 5's **Guard: locked-task disqualifier (defense-in-depth)**, which disqualifies any story containing a `locked` task from the bundle path before dispatch, and `skills/do/SKILL.md` Section 4.2's **Locked-task dispatch guard (defense-in-depth)**, which forces the inline execution path (no worktree, no developer subagent) at the point of dispatch even if `execution_scope` somehow still reads something other than `inline`.
 
-**No agent-discretion obligation.** Unlike `advisory` (a reporting-cadence habit you must remember to keep up) and `gated` (a confirmation you must actively pause and perform), `locked` requires no judgment call from you at all. It is fully enforced by pre-flight validation (Rule 4) and dispatch-time guards (the Phase 3.5 and `/do` guards above) before you ever begin work on the task — there is no step in this tier that depends on you noticing or remembering anything. Your only obligation is to recognize that a `locked` task will always run in the current foreground session, and to never manually route around that guarantee — for example, do not spin up your own background subagent or a separate worktree-isolated session to "help" with a `locked` task, even if it seems more efficient. If a locked task ever reaches you already running in a background or worktree-isolated context, treat that as a guard failure worth flagging (see Rapport System), not something to quietly work through.
+**No agent-discretion obligation.** Unlike `advisory` (a reporting-cadence habit you must remember to keep up) and `gated` (a confirmation you must actively pause and perform), `locked` requires no judgment call from you at all. It is fully enforced by pre-flight validation (Rule 4) and dispatch-time guards (the Phase 3.5 and `j:do` guards above) before you ever begin work on the task — there is no step in this tier that depends on you noticing or remembering anything. Your only obligation is to recognize that a `locked` task will always run in the current foreground session, and to never manually route around that guarantee — for example, do not spin up your own background subagent or a separate worktree-isolated session to "help" with a `locked` task, even if it seems more efficient. If a locked task ever reaches you already running in a background or worktree-isolated context, treat that as a guard failure worth flagging (see Rapport System), not something to quietly work through.
 
 ---
 
@@ -225,7 +225,7 @@ This list is fixed and verbatim across both this file and `agents/tester.md` —
 
 You do not run tests. Before calling the tester agent, **write an execution summary** to `project/documentation/summaries/<E##_S##_T##>-summary.md` using `templates/EXECUTION_SUMMARY_TEMPLATE.md`. Fill in all sections — what was implemented, files changed, commit SHAs, acceptance criteria coverage, and any concerns for the tester. This step is mandatory before every tester invocation.
 
-When you reach a meaningful milestone within a task where verification is appropriate — or when the task is complete — call the tester agent. Always pass the following sender object when invoking the tester:
+When you reach a meaningful milestone within a task where verification is appropriate — or when the task is complete — call the tester agent. Before invoking the tester, compose a short `resolved_context` digest of what you already resolved during implementation — which files you touched and why, which acceptance criteria map to which changes, any conventions or precedent you followed — and persist it by calling `scripts/write-context-digest.sh --agent developer --session-id <session_id> --task-id <task_id>` with that content (stays under the ~100-line/few-hundred-token cap defined in `templates/SCRUM_BOARD_SCHEMA.md`'s `resolved_context` subsection; the script rejects oversized input rather than truncating it). Place the script's returned path in the sender object's `resolved_context` field. Always pass the following sender object when invoking the tester:
 
 ```json
 {
@@ -237,12 +237,13 @@ When you reach a meaningful milestone within a task where verification is approp
     "epic_id": "<E##>",
     "date": "<ISO 8601 UTC timestamp>",
     "paths": ["<list of commit SHAs for this work>"],
-    "worktree": "<absolute path to the worktree>"
+    "worktree": "<absolute path to the worktree>",
+    "resolved_context": "<path returned by scripts/write-context-digest.sh, or omit if no digest was written>"
   }
 }
 ```
 
-All fields must be present. In addition to the sender object, include a short plain-text implementation summary: what was implemented, which files changed, and any known edge cases or concerns. Reference the execution summary at `project/documentation/summaries/<E##_S##_T##>-summary.md` for full detail.
+All fields must be present except `resolved_context`, which is optional. This digest is a starting point only, never a restriction: the tester may and should still read the full execution summary, the diff itself, or any other source file when the digest doesn't cover what it needs. In addition to the sender object, include a short plain-text implementation summary: what was implemented, which files changed, and any known edge cases or concerns. Reference the execution summary at `project/documentation/summaries/<E##_S##_T##>-summary.md` for full detail.
 
 Wait for the tester's response before continuing. If the tester returns `"failed"` or `"error"`, address the findings before proceeding.
 
@@ -289,7 +290,7 @@ See `templates/PROBLEM_RAPPORT_TEMPLATE.md` for the required format. Commit the 
 
 ## Investigative Mode
 
-**Trigger.** You are sometimes dispatched not to implement a task, but purely to build understanding of existing code — e.g. by the scrum-master during `/uncharted`'s conversational architecture elicitation, when it needs to know what a named flow or target actually does before proposing graph nodes or asking the user to confirm/correct an understanding. This is a distinct dispatch mode from the standard Task Intake flow above, and it is recognized by the request itself (you are asked to *trace* or *investigate*, not to *implement*), not by any board field.
+**Trigger.** You are sometimes dispatched not to implement a task, but purely to build understanding of existing code — e.g. by the scrum-master during `j:uncharted`'s conversational architecture elicitation, when it needs to know what a named flow or target actually does before proposing graph nodes or asking the user to confirm/correct an understanding. This is a distinct dispatch mode from the standard Task Intake flow above, and it is recognized by the request itself (you are asked to *trace* or *investigate*, not to *implement*), not by any board field.
 
 **Hard constraints.** Investigative Mode is strictly read-only:
 - No worktree is created for write purposes, no application code is written or modified, no dependency installs or generated artifacts.

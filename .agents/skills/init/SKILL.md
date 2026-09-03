@@ -1,5 +1,5 @@
 ---
-name: init
+name: j:init
 description: Initialize a new project with the standard directory structure, PROJECT_SUMMARY.md, workflow.json, git repo, and gitignore. Follows a defined ordered onboarding sequence. Use when setting up a new or empty project.
 keywords:
   - init

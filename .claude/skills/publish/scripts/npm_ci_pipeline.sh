@@ -172,7 +172,7 @@ on:
 
 permissions:
   id-token: write
-  contents: read
+  contents: write
 
 jobs:
   publish:
@@ -194,6 +194,17 @@ jobs:
       - name: Publish to npm
         run: npm publish --provenance --access ${NPM_ACCESS} --tag ${DIST_TAG}
 
+      - name: Tag prod release and remove stage tag
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          VERSION="\$(node -p "require('./package.json').version")"
+          git tag "v\${VERSION}"
+          git push origin "v\${VERSION}"
+          git tag -d "v\${VERSION}-stage" 2>/dev/null || true
+          git push origin ":refs/tags/v\${VERSION}-stage" 2>/dev/null || true
+
   stage:
     if: \${{ github.event.inputs.mode == 'stage' }}
     runs-on: ubuntu-latest
@@ -212,6 +223,15 @@ jobs:
 
       - name: Stage to npm
         run: npm stage publish --provenance --access ${NPM_ACCESS} --tag ${DIST_TAG}
+
+      - name: Tag stage release
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          VERSION="\$(node -p "require('./package.json').version")"
+          git tag -f "v\${VERSION}-stage"
+          git push origin "v\${VERSION}-stage" --force
 EOF
 )"
 

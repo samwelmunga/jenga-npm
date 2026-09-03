@@ -414,3 +414,15 @@ done
 # Remove project/todo.md if it is effectively empty (only blanks, # Todo, and HTML comments).
 # Runs unconditionally on every session end regardless of agent type.
 bash "$PROJECT_DIR/scripts/todo_cleanup.sh"
+
+# --- 6. Stale resolved_context digest sweep (E49_S01_T02) ---
+# Backstop cleanup for project/queue/context/ digest files. The primary
+# cleanup path is scripts/consume-context-digest.sh, called by the receiving
+# subagent once it has read its digest — this sweep only catches a digest
+# whose intended receiver never consumed it (abandoned dispatch, or a
+# receiver that read the raw file directly and forgot to delete it). Age-based
+# rather than routed-and-deleted-immediately like section 4 above, because a
+# digest's consumer is a later session that may not have started yet when
+# THIS session ends — see scripts/sweep-stale-context-digests.sh's header for
+# the full rationale. Runs unconditionally, same as todo cleanup above.
+bash "$PROJECT_DIR/scripts/sweep-stale-context-digests.sh"

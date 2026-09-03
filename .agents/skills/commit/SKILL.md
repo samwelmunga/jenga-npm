@@ -1,5 +1,5 @@
 ---
-name: commit
+name: j:commit
 description: Commit implemented epic, story, or task work using the EST naming convention. Also handles user-action prerequisites and new-epic boundaries. Use after completing any EST work item.
 keywords:
   - commit

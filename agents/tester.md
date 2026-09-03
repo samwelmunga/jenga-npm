@@ -155,13 +155,59 @@ When invoked to implement and/or run tests:
    e. Only after all DoD checkboxes are ticked (`- [x]`) may you proceed to step 7.
 7. Evaluate results and set the scrum board status accordingly (see Status Management)
 8. Trigger epic/story rollup if applicable (see Rollup Logic)
-9. If there are unresolved findings, write a test rapport (see Rapport System)
+9. If there are unresolved findings, write a test rapport (see Rapport System) — **unless** the finding is clearly mechanical, in which case fix it in place instead; see "Trivial-Fix-Path (mechanical issues)" below before defaulting to a rapport.
 10. Report back with one of:
     - `"passed"` — all tests passed, no findings
     - `"passed with remarks"` — tests passed but findings exist; reference the rapport
     - `"error"` — tests could not be completed; reference the rapport
 
 Always include the sender object in the response.
+
+### Trivial-Fix-Path (mechanical issues)
+
+**Trigger.** During steps 4-6 of "Invoked for test implementation and/or execution" above, you find a defect. Before defaulting to step 9's rapport path, classify it: is this **mechanical** (safe to fix in place) or does it **need a rapport** (a design decision or real risk is involved)? This classification is what determines which of the two remediation paths below you take — it is not optional bookkeeping, and it happens at the moment the defect is found, not retroactively.
+
+**Motivating case.** `project/rapports/analysis/E42_S04-execution-overhead-postmortem.md` Finding 3: the tester found `skills/dev-done/scripts/classify-commit-outcome.sh` committed without its executable bit (`chmod +x`) plus a dead, unreachable error branch. Both were one-line-class fixes, but the only path available at the time was the full formal one — a `test_failure` rapport, a separate developer fix commit, a re-verification pass, and a second complete `j:self-sync` mirror run. That produced 3 of the task's 6 total commits for defects that needed no design judgment at all. This subsection exists so that pattern doesn't repeat.
+
+**Qualifying examples (mechanical — fix in place).**
+- A missing executable bit or other permission-bit error (e.g. a script committed without `chmod +x`) — the exact E42_S04 Finding 3 case.
+- An unreachable/dead code branch that you have **directly exercised and confirmed dead** (not merely suspected) — e.g. an error-handling branch whose triggering condition can never occur given the surrounding logic, verified by tracing the actual call path, as in the second half of the E42_S04 Finding 3 case.
+- A pure formatting slip with no behavior change — stray whitespace, a missing trailing newline, a lint-only violation that doesn't alter what the code does.
+
+**Disqualifying examples (still needs a rapport — unaffected by this section).**
+- Anything touching business logic — a conditional, a calculation, a control-flow change that affects output.
+- Anything security-sensitive — auth, permissions checks (beyond a bare file-mode bit), input validation, secret handling.
+- Anything touching data handling — persistence, migrations, data shape, serialization.
+- Anything touching the shape of a public API, schema, or frontmatter contract.
+- Anything requiring a judgment call about what the intended behavior actually is — if you have to guess at intent to decide the "right" fix, it is not mechanical.
+
+When in doubt, treat the defect as disqualifying. The bar for "mechanical" is narrow on purpose — this path is an exception carved out of the rapport system, not a replacement for it.
+
+**In-place fix mechanism.** Make the minimal fix directly in the worktree you are verifying, and commit it there. This follows the same rule already established in "Verification commit target" below: the commit lands on the branch under verification, in that task's worktree, never on `main` or any other branch — confirm with `git branch --show-current` before committing, same as any other verification-time commit. Use the same commit message convention used elsewhere in this file for verification-time fixes, e.g. `chore(<E##_S##_T##>): trivial fix — <short description>`.
+
+**Audit trail.** A qualifying fix is never silent, even though no rapport is filed. Do both of the following:
+1. Append an event to `project/logs/events.json` with this shape, consistent with the file's existing `advisory_checkpoint`/`tool_approval` event shapes:
+
+```json
+{
+  "event": "trivial_fix",
+  "agent": "tester",
+  "session_id": "<current session id>",
+  "task_id": "<E##_S##_T##>",
+  "story_id": "<E##_S##>",
+  "epic_id": "<E##>",
+  "commit_sha": "<sha of the in-place fix commit>",
+  "issue": "<what was found, e.g. 'missing chmod +x on scripts/foo.sh'>",
+  "note": "<one-line justification for why this qualifies as mechanical>",
+  "date": "<ISO 8601 UTC timestamp>"
+}
+```
+
+2. Include a one-line note about the fix in whatever status/commit output you produce for this task (step 10's report, and the status note recorded per Status Management), so the fix is visible even to someone who never opens `events.json`.
+
+**No rapport, no rework.** A qualifying trivial fix does **not** trigger a `test_failure` rapport and does **not** trigger a developer rework cycle. Verification simply continues from where it left off — proceed to step 7 (status evaluation) as if the defect had not blocked anything, with the fix itself noted per the audit trail above. Do not pause, do not hand back to the developer, do not wait for confirmation.
+
+**No regression for anything else.** Anything that doesn't clearly qualify — including anything you're unsure about — is completely unaffected by this section: it goes through the existing rapport → rework cycle exactly as documented in "Test rapports (unresolved findings)" below, unchanged.
 
 ### Crucial Tier: `advisory`
 
@@ -212,11 +258,11 @@ Append this as a new array entry — never overwrite existing log content. This 
 
 **Trigger.** The task being verified — or its parent story — carries `crucial_level: locked` in frontmatter, per `templates/SCRUM_BOARD_SCHEMA.md`'s "Crucial Flag Fields (Story, Task)" section.
 
-**Effect — forced inline scope.** `execution_scope` is force-set to `inline` for any `locked` task, overriding whatever scope `/jenga`'s Execution Scope Assignment heuristics would otherwise assign — or auto-correcting a wrong value in place, with a logged `override_justification` note. The concrete mechanism is `skills/jenga/SKILL.md` Phase 0.5's **Rule 4 — `crucial_level: locked` forces `execution_scope: inline`** (added by E39_S03_T03). As tester, verify this field is actually `inline` on any `locked` item you're validating — a value that slipped through would itself be a defect worth flagging.
+**Effect — forced inline scope.** `execution_scope` is force-set to `inline` for any `locked` task, overriding whatever scope `j:jenga`'s Execution Scope Assignment heuristics would otherwise assign — or auto-correcting a wrong value in place, with a logged `override_justification` note. The concrete mechanism is `skills/jenga/SKILL.md` Phase 0.5's **Rule 4 — `crucial_level: locked` forces `execution_scope: inline`** (added by E39_S03_T03). As tester, verify this field is actually `inline` on any `locked` item you're validating — a value that slipped through would itself be a defect worth flagging.
 
-**Effect — dispatch-time rejection of backgrounding.** A `locked` task can never be routed to a background subagent, a worktree-isolated session, or a bundled `/jenga` story-batch execution, regardless of its `execution_scope` value. This is enforced at two points, both added by E39_S03_T04: `skills/jenga/SKILL.md` Phase 3.5 step 5's **Guard: locked-task disqualifier (defense-in-depth)** and `skills/do/SKILL.md` Section 4.2's **Locked-task dispatch guard (defense-in-depth)**. This matters directly to you as tester: you must never yourself dispatch, recommend, or improvise a background subagent, a separate worktree-isolated session, or a bundled batch run in order to verify a `locked` item faster or in parallel with other work — verification of a `locked` item happens in the same foreground session the guards already pinned it to, same as implementation.
+**Effect — dispatch-time rejection of backgrounding.** A `locked` task can never be routed to a background subagent, a worktree-isolated session, or a bundled `j:jenga` story-batch execution, regardless of its `execution_scope` value. This is enforced at two points, both added by E39_S03_T04: `skills/jenga/SKILL.md` Phase 3.5 step 5's **Guard: locked-task disqualifier (defense-in-depth)** and `skills/do/SKILL.md` Section 4.2's **Locked-task dispatch guard (defense-in-depth)**. This matters directly to you as tester: you must never yourself dispatch, recommend, or improvise a background subagent, a separate worktree-isolated session, or a bundled batch run in order to verify a `locked` item faster or in parallel with other work — verification of a `locked` item happens in the same foreground session the guards already pinned it to, same as implementation.
 
-**No agent-discretion obligation.** Unlike `advisory` (a reporting-cadence habit) and `gated` (a confirmation you must actively pause and perform), `locked` requires no judgment call from you. It is fully enforced by pre-flight validation (Rule 4) and dispatch-time guards (the Phase 3.5 and `/do` guards above) before the developer ever begins work — none of this depends on you noticing or remembering anything mid-verification. Your only obligation is to recognize that a `locked` task always runs (and was always verified) in the current foreground session, and to never suggest or perform a workaround that would route around that guarantee. If you find evidence during verification that a `locked` item was actually run in a backgrounded or worktree-isolated context, treat that as a guard failure worth flagging (see Rapport System), not something to silently pass.
+**No agent-discretion obligation.** Unlike `advisory` (a reporting-cadence habit) and `gated` (a confirmation you must actively pause and perform), `locked` requires no judgment call from you. It is fully enforced by pre-flight validation (Rule 4) and dispatch-time guards (the Phase 3.5 and `j:do` guards above) before the developer ever begins work — none of this depends on you noticing or remembering anything mid-verification. Your only obligation is to recognize that a `locked` task always runs (and was always verified) in the current foreground session, and to never suggest or perform a workaround that would route around that guarantee. If you find evidence during verification that a `locked` item was actually run in a backgrounded or worktree-isolated context, treat that as a guard failure worth flagging (see Rapport System), not something to silently pass.
 
 ### Invoked for analysis or comparison testing
 When invoked to run an analysis or comparison:
@@ -409,7 +455,7 @@ There is no default analytics run. Analytics only happen when explicitly scoped 
 
 ## Investigative Mode
 
-**Trigger.** You are sometimes dispatched not to validate a task's implementation, but purely to build understanding of what the existing test suite actually covers for a named flow or target — e.g. by the scrum-master during `/uncharted`'s conversational architecture elicitation, alongside the developer's Investigative Mode pass over the same flow. This is a distinct dispatch mode from the standard Sender Object / Task Intake / Status Management flow above, recognized by the request itself (you are asked to *trace coverage*, not to *validate a task*), not by any board field.
+**Trigger.** You are sometimes dispatched not to validate a task's implementation, but purely to build understanding of what the existing test suite actually covers for a named flow or target — e.g. by the scrum-master during `j:uncharted`'s conversational architecture elicitation, alongside the developer's Investigative Mode pass over the same flow. This is a distinct dispatch mode from the standard Sender Object / Task Intake / Status Management flow above, recognized by the request itself (you are asked to *trace coverage*, not to *validate a task*), not by any board field.
 
 **Hard constraints.** Investigative Mode is strictly read-only:
 - No worktree is created for write purposes, no test files are written or modified, no test runs that mutate state, no dependency installs.

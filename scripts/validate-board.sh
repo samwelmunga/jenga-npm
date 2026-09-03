@@ -25,6 +25,11 @@ STATUS_VALUES = {
     "Blocked",
     "Backlog",
     "Done",
+    "Merged",
+    "Publicized",
+    "Privatized",
+    "Deployed to Stage",
+    "Deployed to Prod",
 }
 
 # E39 tiered item-level caution/escalation. crucial_level is OPTIONAL — absence means no

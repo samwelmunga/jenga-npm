@@ -1,5 +1,5 @@
 ---
-name: redo
+name: j:redo
 description: Redo parts or entire previous implementations identified by a commit SHA or an Epic/Story number (e.g. E01, E02_S03). Expects an identifier and a description of what to redo and why. Use when the user wants to revisit, rework, or rewrite previously completed work, including updating all affected documentation.
 keywords:
   - redo

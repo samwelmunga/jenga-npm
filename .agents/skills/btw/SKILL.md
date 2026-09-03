@@ -1,5 +1,5 @@
 ---
-name: btw
+name: j:btw
 description: Capture a new mission (feature, change, or addition) and fit it into the project's Epic/Story structure, then choose to implement now or defer.
 keywords:
   - btw

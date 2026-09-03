@@ -1,5 +1,5 @@
 ---
-name: jenga
+name: j:jenga
 description: Interactive-by-default board orchestrator with a fully automated escape hatch. Bare `/jenga` renders a picker and confirmation tree before scoping the run; `/jenga <ids>` resolves an explicit fuzzy-ID scope and confirms it; `/jenga *` reproduces the original zero-prompt behavior — decomposing any unbroken Epics into Stories, any unbroken Stories into Tasks, queuing all unqueued Tasks into todo.md, then executing every eligible item with no user prompts — until the board is fully started.
 keywords:
   - jenga

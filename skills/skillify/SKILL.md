@@ -1,5 +1,5 @@
 ---
-name: skillify
+name: j:skillify
 description: Refactor one or more existing skills into a cleaner, more maintainable structure — extracting hardcoded content into asset files, offloading deterministic steps into scripts, and reorganizing the skill body to reflect the leaner result. Use this whenever the user wants to clean up, improve, or restructure an existing skill, mentions that a skill has hardcoded content that could be templated, or asks to "skillify", "refactor", or "tidy up" a skill. Trigger even if the user just pastes a skill and says something like "can we make this better?".
 ---
 

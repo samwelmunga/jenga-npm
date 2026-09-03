@@ -10,18 +10,27 @@ This project uses **Jenga** — a skill-based AI agent framework. Jenga organise
 ### How Jenga Works
 
 - Each **skill** is a self-contained instruction set stored under `.agents/skills/<skill-name>/` (the non-Claude discovery path; Claude Code reads the same content from `.claude/skills/`).
-- Skills are invoked by typing `/skill-name` in the chat prompt.
+- Skills are invoked by typing `j:skill-name` in the chat prompt (e.g. `j:status`, `j:commit`). The
+  older bare `/skill-name` form (e.g. `/status`, `/commit`) is a **permanent alias** — it keeps
+  resolving indefinitely, with no deprecation warning and no removal planned — so treat a message in
+  either form as the exact same invocation.
 - The active project directory is available via the `JENGA_PROJECT_DIR` environment variable. **Use `JENGA_PROJECT_DIR` — not `CLAUDE_PROJECT_DIR` or any other agent-specific variable** — as the canonical path to the project folder.
 
 ### Skill Routing
 
-Unlike Claude Code, GitHub Copilot has **no native slash-command interception** — typing `/skill-name`
-does not automatically load or run anything on its own. Copilot depends entirely on the instructions
-below to know what "invoking a skill" concretely means. Do not improvise a plausible-sounding response
-instead of following these steps — that is the exact failure this section exists to prevent.
+Unlike Claude Code, GitHub Copilot has **no native slash-command interception** — typing `j:skill-name`
+(or the older bare `/skill-name` alias) does not automatically load or run anything on its own. Copilot
+depends entirely on the instructions below to know what "invoking a skill" concretely means. Do not
+improvise a plausible-sounding response instead of following these steps — that is the exact failure
+this section exists to prevent.
 
-When the user's message is or matches `/skill-name` (or otherwise clearly matches a known skill's
-keyword or intent):
+**Old bare-form alias.** `j:skill-name` is the canonical invocation form. A message using the older
+bare `/skill-name` form is not deprecated and must not be treated as an error, a warning case, or a
+migration prompt — route it to the identical skill as its `j:skill-name` equivalent. Both forms remain
+equally valid indefinitely.
+
+When the user's message is or matches `j:skill-name`, or matches the older bare `/skill-name` alias (or
+otherwise clearly matches a known skill's keyword or intent):
 
 1. Locate the target file at `.agents/skills/<skill-name>/SKILL.md` (the discovery path from "How
    Jenga Works" above).
@@ -37,9 +46,17 @@ answer directly using your full capabilities.
 
 #### Routing decision table
 
+Before acting on any row below that opens a `SKILL.md` file, first check the identifier against
+the trusted allow-list: {{ALLOWED_SKILL_IDS}}. Since Copilot/Codex has no native interception for
+`j:skill-name`, this prose-level check is the entire enforcement mechanism — there is no runtime
+guard behind it.
+
 | Situation | Action |
 |-----------|--------|
-| Message matches a skill keyword or intent | Open `.agents/skills/<skill-name>/SKILL.md`, read it fully, execute it as written |
+| Message matches `j:skill-name` and `skill-name` is in the allow-list | Open `.agents/skills/<skill-name>/SKILL.md`, read it fully, execute it as written |
+| Message matches the older bare `/skill-name` alias and `skill-name` is in the allow-list | Treat identically to `j:skill-name` — same skill, same file, no warning, no migration prompt |
+| Message matches a skill keyword or intent and the matched skill is in the allow-list | Open `.agents/skills/<skill-name>/SKILL.md`, read it fully, execute it as written |
+| Message matches `j:skill-name` or `/skill-name`, but `skill-name` is **not** in the allow-list | Do not open or execute anything — tell the user the identifier is unrecognized and is not a known Jenga skill |
 | Message is a general coding or project question | Answer directly |
 | Ambiguous — could be skill or free-form | Prefer the skill; open and execute its `SKILL.md` rather than describing it |
 

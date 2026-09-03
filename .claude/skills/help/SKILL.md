@@ -1,5 +1,5 @@
 ---
-name: help
+name: j:help
 description: List all available skills with a short description of what each one does. Also use this skill when the user wants to know what commands or skills are available in the project.
 keywords:
   - help

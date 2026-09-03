@@ -1,5 +1,5 @@
 ---
-name: deep-dive
+name: j:deep-dive
 description: >
   Multi-phase investigation workflow. The scrum-master orchestrates information
   gathering, interactive brainstorming, critical scrutiny, and solution assessment

@@ -33,6 +33,7 @@ import { fileURLToPath } from 'node:url';
 
 import { mirror } from '../lib/mirror.js';
 import { generateCopilotInstructions } from '../lib/generate-copilot-instructions.js';
+import { generateSkillAllowList } from '../lib/generate-skill-allow-list.js';
 
 // ESM equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -152,6 +153,30 @@ function main() {
 
     totalCopied  += result.added.length + result.overwritten.length;
     totalSkipped += result.skipped.length;
+  }
+
+  // Regenerate the canonical skill allow-list (E50_S02) from the freshly mirrored
+  // `.agents/skills` BEFORE bootstrapping .github/copilot-instructions.md below — so a consumer
+  // install ships a correct, current allow-list from the very first `npm install`, not
+  // only after a later `/self-sync`. The output is written into this installed package's own
+  // `lib/` (not the consumer root — `lib/` is never duplicated into the consumer per this file's
+  // header comment), matching generateSkillAllowList's own default output location and the path
+  // the MCP router / native routing enforcement (E50_S02_T03/T04) read from at runtime.
+  //
+  // Ordering matters (E50_S02_T04): generateCopilotInstructions() below now renders an
+  // {{ALLOWED_SKILL_IDS}} block by reading this same lib/skill-allow-list.json path. Running
+  // this regeneration first means that render reflects the freshly-mirrored `.agents/skills`
+  // scan from this very postinstall run, not the stale artifact committed at publish time.
+  // Wrapped in a try/catch-and-warn pattern so a generation failure degrades gracefully
+  // (console warning) rather than failing the whole postinstall.
+  try {
+    const result = generateSkillAllowList(
+      path.join(consumerRoot, '.agents', 'skills'),
+      path.join(packageRoot, 'lib', 'skill-allow-list.json')
+    );
+    console.log(`  ✓ lib/skill-allow-list.json regenerated (${result.skill_count} skills)`);
+  } catch (e) {
+    console.log(`  ⚠  Could not regenerate lib/skill-allow-list.json — ${e.message}`);
   }
 
   // Bootstrap .github/copilot-instructions.md unconditionally, right after the mirror step —

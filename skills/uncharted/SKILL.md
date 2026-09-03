@@ -1,5 +1,5 @@
 ---
-name: uncharted
+name: j:uncharted
 description: Investigate code that has no Jenga board provenance — a foreign file, an external source being pulled in, or an entire pre-existing codebase — and give it a consistent understanding document plus proper board representation.
 metadata:
   prefered_agent: scrum-master

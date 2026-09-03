@@ -906,7 +906,8 @@ Every call between agents must include a **sender object**. This is the typed co
     "epic_id": "<E##>",
     "date": "<ISO 8601 UTC timestamp>",
     "paths": ["<commit SHA 1>", "<commit SHA 2>"],
-    "worktree": "<absolute path to task worktree>"
+    "worktree": "<absolute path to task worktree>",
+    "resolved_context": "<optional: path to a digest file under project/queue/context/>"
   }
 }
 ```
@@ -916,6 +917,7 @@ Every call between agents must include a **sender object**. This is the typed co
 - The Tester rejects any call with missing required fields (responds with `"error"`)
 - The `paths` array contains commit SHAs from the Developer's commits for this task
 - The `worktree` field is the absolute path to the isolated git worktree created by the Developer
+- The `resolved_context` field is optional: a size-capped digest (under ~100 lines/a few hundred tokens) of what the sending agent already resolved — relevant schema fields, skill precedent, prior decisions — written via `scripts/write-context-digest.sh` to a unique file under `project/queue/context/`. It's a starting point only, never a restriction — the receiving agent may still read full source files when the digest doesn't cover what it needs.
 
 **Required fields by agent:**
 
@@ -929,3 +931,4 @@ Every call between agents must include a **sender object**. This is the typed co
 | `date` | ✅ | ✅ | ✅ |
 | `paths` (commit SHAs) | ❌ | ✅ | ✅ |
 | `worktree` | ❌ | ✅ | ✅ |
+| `resolved_context` (optional) | ✅ | ✅ | ❌ |

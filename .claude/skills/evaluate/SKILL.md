@@ -1,5 +1,5 @@
 ---
-name: evaluate
+name: j:evaluate
 description: Analyzes example files against a target goal and produces a structured evaluation rapport.
 ---
 

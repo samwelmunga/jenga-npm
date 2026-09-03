@@ -1,6 +1,109 @@
 # Skill Authoring Guide
 
-Skills are stored in `skills/<name>/SKILL.md` and invoked with `/<name>` in a Claude Code session.
+Skills are stored in `skills/<name>/SKILL.md` and invoked with `j:<name>` in a Claude Code session —
+the canonical form as of `E50_S01`. The old bare `/<name>` form keeps resolving permanently as an
+alias. See "Invocation Convention" below for the mechanics and the full migration policy.
+
+---
+
+## Invocation Convention
+
+`E50` namespaces every Jenga skill invocation under a `j:` prefix (e.g. `j:status`, `j:commit`,
+`j:init`) to avoid collision with, or masquerading by, a same-named command from another tool or
+skill installed in the same agent session. This section records the two decisions this required —
+the rename mechanism and the old-form migration policy — and the investigation behind them, so the
+routing-surface tasks that implement the actual cutover (`E50_S01_T02` Claude Code native,
+`E50_S01_T03` Jenga Router MCP, `E50_S01_T04` Copilot/Codex templates) share one unambiguous
+contract instead of each re-deciding it.
+
+### Decision 1 — Rename mechanism: frontmatter-only, not a directory rename
+
+**Directory names under `skills/` do not change.** Only the frontmatter `name:` field changes, from
+`name: <skill-name>` to `name: j:<skill-name>`.
+
+This deliberately breaks the invariant stated elsewhere in this guide that `name` "must match the
+directory name under `skills/`". The invariant is replaced with a new one: once migrated, a skill's
+frontmatter `name` equals `j:` followed by its (unprefixed) directory name — the directory name
+remains the bare, on-disk identifier; the frontmatter `name` becomes the canonical, `j:`-prefixed
+invocation identifier that downstream routing surfaces read.
+
+**Why not rename the directories themselves:**
+- `:` is not a valid filename character on Windows (reserved for drive letters / alternate data
+  streams). This project has no `"os"` restriction in `package.json` and ships as a general-purpose
+  npm package (`@jenga-ai/agent`) — it must not assume a POSIX-only install/dev surface. A directory
+  literally named `skills/j:status/` would break on Windows checkouts, npm installs, and any Windows
+  contributor's local clone.
+- Claude Code's own native skill resolution is a **literal-string, directory-name-based match**,
+  independent of `SKILL.md` content. `templates/agent-context.md.tpl`'s Skill Routing section states
+  this explicitly: "If you are Claude Code, `/skill-name` is a native harness-level mechanism: the
+  harness itself intercepts the literal command and loads the skill for you, independent of anything
+  written here." That means a frontmatter change alone cannot, by itself, make the harness resolve a
+  *new* literal string on the Claude Code native surface — the actual wiring for that surface is
+  `E50_S01_T02`'s job, using this decision's identifier as its source of truth. What this task fixes
+  is the **canonical identifier** every surface should treat as "this skill's real name" going
+  forward — not the low-level mechanics of how each individual surface's resolver gets there.
+- `scripts/postinstall.js` and `lib/mirror.js` (the install/dev mirror pipeline) copy `skills/` and
+  `agents/` by directory name and are entirely content-agnostic about `SKILL.md` — a frontmatter-only
+  change requires no changes to either and cannot break the mirror/install path.
+- `mcp/router/skill-index.js` already indexes skills by their frontmatter `fm.name` (not directory
+  name), and `mcp/router/index.js`'s `route_prompt` already emits whatever string is in
+  `match.skill.name` (`transformed: "/${match.skill.name} ${text}"`). A frontmatter-only rename is
+  therefore a real, load-bearing signal for that surface — `E50_S01_T03` only needs to teach the
+  router to also match legacy bare-form input against the same record (see Decision 2), not to
+  restructure how the index is built.
+
+Verified before deciding: every one of this repo's 42 `skills/*/SKILL.md` files currently has a
+frontmatter `name:` that matches its directory name exactly (no pre-existing drift to reconcile).
+
+### Decision 2 — Old bare-form migration policy: alias (not deprecation warning, not removal)
+
+**The bare `/skill-name` form keeps resolving indefinitely, on all three routing surfaces, alongside
+the new `j:skill-name` form.** No warning is emitted and no removal is scheduled by this decision.
+
+This is the only one of the three candidate policies (alias / deprecation warning / removal) that can
+be implemented **uniformly** across all three surfaces given Decision 1:
+
+- **Claude Code native.** Because directories are not renamed, the bare form keeps resolving through
+  the exact same harness-level literal-string match it always has — Jenga has no interception point
+  on that path at all ("independent of anything written here," per the same harness quote above).
+  Concretely, this means neither a runtime deprecation warning nor an actual removal of the bare form
+  is achievable on this surface without literally renaming/deleting the directory — which would
+  reopen the Windows-filename problem Decision 1 exists to avoid. A policy that only 2 of 3 surfaces
+  can actually enforce is not the uniform decision this story requires.
+- **Jenga Router MCP.** Easily supports a warning or removal (structured JSON response, full control
+  over matching) — but is deliberately kept as a plain alias to stay consistent with the native
+  surface above, not because it's technically constrained.
+- **Copilot/Codex prose templates.** Also easily supports a warning or removal (fully
+  instruction-driven) — same reasoning: kept as a plain alias for cross-surface consistency.
+
+**Reasoning for choosing alias over the other two, given the above:** requiring every surface to
+behave identically was treated as more valuable than extracting a stronger nudge from the two
+surfaces capable of one. A policy that warns or removes on 2 surfaces while silently aliasing on the
+third would be a worse outcome than a plain, honest alias everywhere — it would give users a
+false impression of uniform deprecation while the Claude Code native surface quietly never
+enforced it. Full removal was also rejected outright for the reason given for Claude Code native
+above: it is not actually achievable there without the same directory-rename/Windows tradeoff, so
+"remove everywhere" was never a real option under Decision 1.
+
+**Residual risk, left open by this task on purpose:** because the bare form is never removed or
+warned against, the collision/masquerade risk motivating this epic persists on the *bare* namespace
+indefinitely — only the new `j:`-prefixed namespace gets the `E50_S02` allow-list guard's protection.
+Actually retiring the bare form would require revisiting the directory-rename tradeoff in Decision 1
+(e.g. accepting a Windows-incompatible directory layout, or some other mechanism not yet designed)
+and is out of scope here — a future task, not this one, if the tradeoff is ever revisited.
+
+### What `E50_S01_T02`–`T04` inherit from this decision
+
+Each routing-surface task implements the surface-specific mechanics of the same contract:
+1. Treat a skill's canonical identifier as `j:<name>` (frontmatter `name`, once migrated).
+2. Also keep matching the corresponding bare `<name>` input to the same skill record — no warning,
+   no removal.
+3. Never rename `skills/<name>/` or `agents/<name>` directories to include a colon.
+
+`scripts/apply-j-prefix.sh` (this task) performs the deterministic parts of step 1 (frontmatter
+rewrite) and updates bare `/<name>` prose mentions in `agents/*.md` to `j:<name>` (per the Skill
+Implementation Principle in `CLAUDE.md`) — `--dry-run` supported so `E50_S01_T02` can verify its
+output before committing to it.
 
 ---
 
@@ -11,7 +114,7 @@ Every `SKILL.md` begins with a YAML frontmatter block. All fields except `name` 
 ```yaml
 ---
 name: <skill-name>
-description: <one-sentence description shown in /help listings>
+description: <one-sentence description shown in j:help listings>
 metadata:
   prefered_agent: <agent_name>       # optional — delegate execution to a sub-agent
 keywords:                            # optional — short phrases for keyword routing
@@ -28,8 +131,8 @@ minimum_permission_level: <1-5>       # optional — minimum session permission 
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `name` | string | ✅ | Skill name. Must match the directory name under `skills/`. |
-| `description` | string | ✅ | One-sentence description shown in `/help` listings and the skill registry. |
+| `name` | string | ✅ | Skill name. Before `E50_S01` migration: must match the directory name under `skills/`. After migration: `j:` + the directory name — see "Invocation Convention" above. |
+| `description` | string | ✅ | One-sentence description shown in `j:help` listings and the skill registry. |
 | `metadata.prefered_agent` | string | ❌ | Sub-agent to delegate execution to. Valid values: `scrum-master`, `developer`, `tester`. |
 | `keywords` | string[] | ❌ | Short words or phrases (1–3 words) strongly associated with this skill. Used by the Jenga Router for keyword matching. |
 | `examples` | string[] | ❌ | Natural-language prompt strings that should trigger this skill. Used by the Jenga Router for semantic matching. |
@@ -79,7 +182,7 @@ examples:
 
 ### `minimum_permission_level`
 
-An optional integer (`1`-`5`) declaring the minimum session permission level a skill needs to run correctly. This corresponds to the 5-tier system defined by the `/jenga-permission-level` epic: `1` = Locked, `2` = Guarded (the permanent default), `3` = Standard, `4` = Elevated, `5` = Unrestricted. See the level matrix under `templates/permission-levels/` for what each tier permits.
+An optional integer (`1`-`5`) declaring the minimum session permission level a skill needs to run correctly. This corresponds to the 5-tier system defined by the `j:jenga-permission-level` epic: `1` = Locked, `2` = Guarded (the permanent default), `3` = Standard, `4` = Elevated, `5` = Unrestricted. See the level matrix under `templates/permission-levels/` for what each tier permits.
 
 Set this field only when a skill genuinely cannot complete its work at the default Guarded (2) level — e.g. it needs to run commands that Guarded denies. Most skills should omit this field entirely and run at the default level.
 
@@ -87,7 +190,7 @@ Set this field only when a skill genuinely cannot complete its work at the defau
 - Use the lowest level that actually satisfies the skill's needs — never request more than necessary.
 - Skills that set this field **must** call `scripts/check-permission-level.sh <minimum-level>` at the top of their instructions, before any other work, to gate execution on the current session level.
 - If the current session level is below the declared minimum, the skill must surface an explicit confirmation prompt to the user before elevating — silent auto-elevation is never permitted.
-- Elevation happens via the same mechanism as `/jenga-permission-level <n>` (i.e. the skill drives the same level switch, it does not invent a separate one).
+- Elevation happens via the same mechanism as `j:jenga-permission-level <n>` (i.e. the skill drives the same level switch, it does not invent a separate one).
 - Immediately after the skill's own work completes, reset the session level back to Guarded (2) — regardless of what level it was elevated to. Elevation must never be held past the skill's own execution, and must never be left for the next session start to clean up.
 - Do not use this field to hold a session at an elevated level across multiple skills or commands — each elevation is scoped to a single skill invocation.
 
@@ -128,4 +231,23 @@ Follow these conventions:
 - Use numbered steps for sequential workflows.
 - Use `bash` code blocks for any shell commands the skill should run.
 - Reference board paths via `$(bash scripts/board_resolver.sh)` rather than hard-coding them.
+
+---
+
+## Threat Model — the `j:` Allow-List Guard
+
+The `j:` skill allow-list guard (`E50_S02`) checks whether a `j:`-prefixed invocation matches a
+canonical list of genuine Jenga skill identifiers before treating it as trusted.
+
+**In scope.** The guard prevents an unrelated or malicious skill from adopting the `j:` prefix and
+being invoked as though it were a genuine Jenga skill — it defends the **invocation-matching layer**
+against name-collision and masquerading.
+
+**Explicitly out of scope.** The guard does **not** sandbox, scan, or otherwise verify the *content*
+of a third-party skill file. A skill whose identifier doesn't collide with anything on the allow-list,
+or one installed under a name that legitimately isn't `j:`-prefixed, is neither made safer nor less
+safe by this guard — content-level trust of any skill, Jenga's own or third-party, is a separate,
+unaddressed concern.
+
+This residual risk is a deliberate scope boundary of `E50_S02`, not an oversight.
 - Keep the skill body focused on *what to do*, not *how Claude works*.

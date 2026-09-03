@@ -1,5 +1,5 @@
 ---
-name: brainstorm
+name: j:brainstorm
 description: Engage the scrum-master agent in a focused planning session to define, refine, or challenge features, improvements, tasks, stories, and epics. The agent asks probing questions, challenges assumptions, and helps shape ideas into actionable backlog items.
 keywords:
   - brainstorm

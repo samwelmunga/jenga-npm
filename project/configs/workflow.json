@@ -1,5 +1,5 @@
 {
-  "statuses": ["Pending", "In Progress", "Running", "Passed", "Passed with remarks", "Failed", "Rejected", "Blocked"],
+  "statuses": ["Pending", "In Progress", "Passed", "Passed with remarks", "Failed", "Rejected", "Blocked", "Backlog", "Done", "Merged", "Publicized", "Privatized", "Deployed to Stage", "Deployed to Prod"],
   "rapport_types": ["conflict", "implementation_blocker", "security_concern", "test_failure", "analysis"],
   "paths": {
     "board": "project/board",

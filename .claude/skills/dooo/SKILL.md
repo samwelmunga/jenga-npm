@@ -1,5 +1,5 @@
 ---
-name: dooo
+name: j:dooo
 description: Parallel execution orchestrator. Calls /do to start implementations via sub-agents, then loops back to the board to identify and offer parallelisable tasks until the user selects "Done".
 keywords:
   - dooo

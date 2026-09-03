@@ -3,6 +3,8 @@ const STATUS_CLASSES = {
   Running: 'badge-running',
   'In Progress': 'badge-in-progress',
   Passed: 'badge-passed',
+  'Passed with remarks': 'badge-passed-remarks',
+  Done: 'badge-done',
   Failed: 'badge-failed',
 }
 

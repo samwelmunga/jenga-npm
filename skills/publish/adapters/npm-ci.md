@@ -99,11 +99,33 @@ Run the adapter phases in this exact order:
    ```yaml
    permissions:
      id-token: write
-     contents: read
+     contents: write
    ```
-   and runs `npm publish --provenance` to attach a build provenance attestation
-   to the published package. In `--dry-run` mode, print the rendered YAML to
-   stdout and exit 0 without writing any file.
+   (`contents: write` — bumped from `read` — is required so the `publish` and
+   `stage` jobs can push the tags described below; this is the CI's own token
+   gaining write access to tag *its own* repository, nothing else, and no new
+   secret or credential is introduced) and runs `npm publish --provenance` to
+   attach a build provenance attestation to the published package. In
+   `--dry-run` mode, print the rendered YAML to stdout and exit 0 without
+   writing any file.
+
+   Each job also gains a final step, gated on `if: success()` so a failed
+   publish/stage never creates or moves a tag:
+   - **`publish` job — "Tag prod release and remove stage tag":** reads the
+     version from `package.json`, tags the checked-out commit `v<version>`
+     (no force — this tag is immutable; a genuine collision fails loudly
+     rather than silently moving a prod tag), pushes it, then best-effort
+     deletes the corresponding `v<version>-stage` tag both locally and on the
+     remote (tolerating its absence, e.g. a prod publish that skipped
+     staging).
+   - **`stage` job — "Tag stage release":** reads the version the same way
+     and tags the checked-out commit `v<version>-stage` — a **mutable**
+     pointer, force-created (`git tag -f`) and force-pushed, so re-staging the
+     same version moves the tag rather than failing.
+
+   Both new steps configure a `github-actions[bot]` git identity
+   (`user.name`/`user.email`) before tagging, since no prior step in the
+   workflow sets one.
 
 3. **`commit-workflow`** — write the generated YAML to `<workflow_path>`
    (creating the `.github/workflows/` directory if needed) and commit it with:

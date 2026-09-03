@@ -1,5 +1,5 @@
 ---
-name: wtf
+name: j:wtf
 description: Alias of /clearify — clarifies ambiguous, dense, or under-specified prompts and conversation on request. This folder exists only so the `/wtf` slash command resolves to a skill; behaviour is identical to `/clearify`.
 keywords:
   - wtf

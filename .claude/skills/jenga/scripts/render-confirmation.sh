@@ -97,12 +97,18 @@
 # ENTIRE turn is rejected as an error turn (state left untouched) — there
 # is no partial application of the valid numbers in a mixed-validity reply.
 #
-# Toggling is NOT cascading: unchecking a parent epic/story does not
-# automatically uncheck its children, and vice versa. Each displayed
-# number is an independent checkbox. This is a deliberate simplicity
-# choice — the task only requires "uncheck or re-check individual
-# presented items", not cascading selection logic (that expansion/cascade
-# concern already belongs to cascade-resolve.sh, per its own header).
+# Toggling CASCADES downward (E45_S02_T03): checking or unchecking a
+# story applies the same resulting state to all of its tasks; checking or
+# unchecking an epic applies the same resulting state to all of its
+# stories and their tasks. This is a deliberate, explicit reversal of the
+# original non-cascading design (see this story's 2026-08-27 close-out) —
+# the user hit a real case where unchecking a parent epic left its child
+# story/tasks checked, requiring a manual follow-up uncheck command.
+# Cascade is STRICTLY DOWNWARD (parent -> descendants) only: checking a
+# leaf task does NOT imply its ancestors should also be checked, so a
+# checked child under an unchecked parent is a valid (if visually
+# inconsistent) state. Toggling a leaf task (no children) behaves exactly
+# as it always has — no descendants to cascade into.
 #
 # ---------------------------------------------------------------------------
 # OUTPUT CONTRACT (deliberately NOT uniform JSON — see rationale below)
@@ -165,8 +171,15 @@
 # STATE FILE
 # ---------------------------------------------------------------------------
 # Created under `mktemp -t jenga-confirm-XXXXXX.json`. Stores:
-#   - `numbering`: displayed number -> {item, level, checked} — the ONLY
-#     field that mutates across turns is `checked`.
+#   - `numbering`: displayed number -> {item, level, checked, children} —
+#     `children` is a fixed list of the item's direct descendant numbers
+#     (a story's task numbers; an epic's story numbers), computed once at
+#     build time so continue-mode can cascade a toggle without
+#     re-deriving parent/child relationships from `item_id`/`epic_id`/
+#     `story_id` at toggle time. `children` is always `[]` for a leaf
+#     task. The only fields that mutate across turns are `checked` values
+#     (potentially many at once, via cascade — see TOGGLE COMMAND GRAMMAR
+#     above).
 #   - `layout`: the fixed print order (item lines + header markers),
 #     computed once at start. Continue mode never recomputes tree shape —
 #     it only re-renders from `layout` + the live `checked` flags in
@@ -305,15 +318,17 @@ def pluralize_task(n):
     return f"{n} task{'' if n == 1 else 's'}"
 
 
-def add_item(item, level, indent):
+def add_item(item, level, indent, parent_number=None):
     global counter
     n = str(counter)
     counter += 1
     suffix = ""
     if item.get("id") in undecomposed_ids:
         suffix = "  [needs decomposition -- no children on the board yet]"
-    numbering[n] = {"item": item, "level": level, "checked": True}
+    numbering[n] = {"item": item, "level": level, "checked": True, "children": []}
     layout.append({"kind": "item", "number": n, "level": level, "indent": indent, "suffix": suffix})
+    if parent_number is not None:
+        numbering[parent_number]["children"].append(n)
     return n
 
 
@@ -328,7 +343,7 @@ def append_suffix(extra):
 
 
 for e in epics:
-    add_item(e, "epic", INDENT["epic"])
+    e_num = add_item(e, "epic", INDENT["epic"])
     child_stories = stories_by_epic.get(e["id"], [])
     story_count = len(child_stories)
     task_count = sum(len(tasks_by_story.get(s["id"], [])) for s in child_stories)
@@ -340,23 +355,23 @@ for e in epics:
     append_suffix(", ".join(parts))
 
     for s in child_stories:
-        add_item(s, "story", INDENT["story"])
+        s_num = add_item(s, "story", INDENT["story"], parent_number=e_num)
         child_tasks = tasks_by_story.get(s["id"], [])
         if child_tasks:
             append_suffix(pluralize_task(len(child_tasks)))
         for t in child_tasks:
-            add_item(t, "task", INDENT["task"])
+            add_item(t, "task", INDENT["task"], parent_number=s_num)
 
 if orphan_stories:
     layout.append({"kind": "header", "text": ""})
     layout.append({"kind": "header", "text": "-- Directly Selected Stories (no epic in this selection) --"})
     for s in orphan_stories:
-        add_item(s, "story", INDENT["story"])
+        s_num = add_item(s, "story", INDENT["story"])
         child_tasks = tasks_by_story.get(s["id"], [])
         if child_tasks:
             append_suffix(pluralize_task(len(child_tasks)))
         for t in child_tasks:
-            add_item(t, "task", INDENT["task"])
+            add_item(t, "task", INDENT["task"], parent_number=s_num)
 
 if orphan_tasks:
     layout.append({"kind": "header", "text": ""})
@@ -644,18 +659,40 @@ if invalid:
     print(f"STATE_FILE: {state_file_path}", file=sys.stderr)
     sys.exit(1)
 
+def apply_cascade(num, value):
+    """Set `num`'s checked state to `value`, then recurse into every
+    number in its `children` list (a story's tasks; an epic's stories,
+    which recurse further into their own tasks). Strictly downward —
+    never touches a parent. A leaf task has an empty `children` list, so
+    this degenerates to exactly the old single-flag assignment for the
+    non-cascading base case."""
+    numbering[num]["checked"] = value
+    for child in numbering[num].get("children", []):
+        apply_cascade(child, value)
+
+
 # All-or-nothing application, de-duplicated (first-seen wins on dupes).
+# Resulting values are computed from PRE-mutation state in a first pass,
+# then applied (with cascade) in a second pass -- this avoids a
+# parent-then-child (or child-then-parent) double-toggle artifact when a
+# single reply lists both a parent and one of its own descendants, e.g.
+# bare-number toggle "5,6" where 6 is a child of 5.
 seen = set()
+pending = []
 for tok in valid_tokens:
     if tok in seen:
         continue
     seen.add(tok)
     if action == "check":
-        numbering[tok]["checked"] = True
+        value = True
     elif action == "uncheck":
-        numbering[tok]["checked"] = False
+        value = False
     else:
-        numbering[tok]["checked"] = not numbering[tok]["checked"]
+        value = not numbering[tok]["checked"]
+    pending.append((tok, value))
+
+for tok, value in pending:
+    apply_cascade(tok, value)
 
 state["numbering"] = numbering
 with open(state_file_path, "w", encoding="utf-8") as f:

@@ -1,5 +1,5 @@
 ---
-name: proceed
+name: j:proceed
 description: Review project progress by checking epics and stories, optionally consulting PROJECT_SUMMARY.md and WARP.md, then continue executing the project plan.
 keywords:
   - proceed

@@ -1,5 +1,5 @@
 ---
-name: lgtm
+name: j:lgtm
 description: Approve and commit the current work, then continue to the next task. Shortcut that chains /commit followed by /continue.
 keywords:
   - lgtm

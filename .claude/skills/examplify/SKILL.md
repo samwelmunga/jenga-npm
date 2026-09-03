@@ -1,5 +1,5 @@
 ---
-name: examplify
+name: j:examplify
 description: Explains concepts, features, use cases, and patterns based on provided context — a description, scenario, code snippet, or file. Use when the user wants to understand what something is, how it works, when to use it, or wants a concrete example.
 keywords:
   - examplify

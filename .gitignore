@@ -60,3 +60,15 @@ project/queue/handoffs/*.json
 # session could mistake for a live in-progress signal.
 project/queue/elicitation-state/*.json
 !project/queue/elicitation-state/.gitkeep
+
+# resolved_context digest files (project/queue/context/ — E49_S01_T02) are
+# transient, single-use handoff payloads written by scripts/write-context-digest.sh
+# and consumed (read + deleted) by scripts/consume-context-digest.sh, with
+# scripts/sweep-stale-context-digests.sh as an age-based backstop for a digest
+# whose intended receiver never consumes it. Mirrors the handoffs/ rule above
+# for the same reason: a digest is a per-session scratch payload referenced by
+# a handoff's resolved_context field, not a durable record — the durable
+# record is the handoff/board state that referenced it. See
+# templates/SCRUM_BOARD_SCHEMA.md's resolved_context subsection.
+project/queue/context/*.json
+!project/queue/context/.gitkeep

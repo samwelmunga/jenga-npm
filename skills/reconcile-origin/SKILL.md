@@ -1,5 +1,5 @@
 ---
-name: reconcile-origin
+name: j:reconcile-origin
 description: Sync the current (or specified) branch with origin by rebasing local commits on top of the latest upstream state.
 keywords:
   - "sync branch"
