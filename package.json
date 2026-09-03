@@ -7,7 +7,7 @@
     "access": "public"
   },
   "bin": {
-    "jenga": "./bin/jenga.js"
+    "jenga": "bin/jenga.js"
   },
   "engines": {
     "node": ">=14.13.1"
