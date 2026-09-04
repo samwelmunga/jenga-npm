@@ -1,5 +1,7 @@
 # Jenga AI
 
+> ⚠️ **Upgrading from a prior version?** Earlier releases could hit a command-collision bug: some host tools (e.g. GitHub Copilot) ship their own built-in `/init` command, which could silently shadow Jenga's own `/init` skill. This release adds **`/j-init`** — an identical, collision-safe copy of `/init` — so you always have a guaranteed-unshadowed way to scaffold a project. If `/init` isn't behaving as documented, run `/j-init` instead.
+
 **A structured multi-agent development workflow that works with any AI agent or AI-native IDE.** Three specialised AI agents — Scrum Master, Developer, and Tester — collaborate through a shared scrum board, an event-driven trigger queue, and a coordinated pipeline of `j:`-prefixed skills that hand work between them — to take a project from idea to verified, committed code — across as many sessions as it takes.
 
 [![npm version](https://img.shields.io/npm/v/@jenga-ai/agent.svg)](https://www.npmjs.com/package/@jenga-ai/agent)
@@ -37,7 +39,7 @@ Jenga AI solves each of these with structure: persistent board state, strict age
 - **A coordinated skill pipeline, not a command list** — planning skills (`j:pi-plan`, `j:todo`) hand off to execution skills (`j:do`, `j:dooo`), which hand off to review skills (`j:status`, `j:reconcile`), each stage reading and writing the same board state — the old bare `/<name>` form still works everywhere as a permanent alias
 - **An event-driven trigger queue** — async handoffs between agents with a full audit trail in `project/logs/events.json`
 - **Isolated git worktrees per task** — the Developer never works directly on your main branch
-- **Works with any AI agent or IDE** — Claude Code, GitHub Copilot, Warp, and Codex CLI are all supported today
+- **Works with any AI agent or IDE** — Claude Code, GitHub Copilot, and Codex CLI are all supported today
 
 > 📖 **Full reference:** [project/.wiki/documentation.md](project/.wiki/documentation.md) | [Intro Guide](project/.wiki/intro-guide.md)
 
@@ -171,7 +173,6 @@ Each agent is defined in `.agents/agents/`. They communicate exclusively through
 **Prerequisites:** An AI agent or AI-native IDE. Supported platforms include:
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 - GitHub Copilot (VS Code extension or CLI)
-- [Warp](https://www.warp.dev/)
 - Codex CLI
 
 **Install from npm:**
@@ -199,7 +200,6 @@ Jenga AI has been tested with:
 |---|---|
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | AI coding agent |
 | [GitHub Copilot](https://github.com/features/copilot) | AI coding assistant |
-| [Warp](https://www.warp.dev/) | AI-native terminal |
 | Codex CLI | AI coding agent |
 
 The framework is platform-agnostic by design — any AI agent that can read Markdown files and execute slash commands can use it.
