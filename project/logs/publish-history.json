@@ -214,5 +214,21 @@
     "dist_tag": "latest",
     "result": null,
     "reason": "tarball predated package.json/skill-allow-list corrections; rejected to restage with fixed content"
+  },
+  {
+    "id": "3c2e9421-7565-4918-92ed-cb3229410b56",
+    "version": "v2.0.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-09-04T01:18:27Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "staged",
+    "git_tag": "v2.0.0",
+    "commit_sha": "2a730f35e7bdc759376cabfd20d57e573593d505",
+    "stage_id": "48a3cdd5-74d8-4515-b9bc-2554796c3fcc",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": null
   }
 ]
