@@ -1,7 +1,7 @@
 {
   "name": "@jenga-ai/agent",
   "version": "2.0.0",
-  "description": "Structured multi-agent development workflow for AI coding agents — scrum board, role-bounded scrum master / developer / tester agents, and 30+ slash-command skills. Works with Claude Code, GitHub Copilot, and Codex.",
+  "description": "Structured multi-agent development workflow for AI coding agents \u2014 scrum board, role-bounded scrum master / developer / tester agents, and 30+ slash-command skills. Works with Claude Code, GitHub Copilot, and Codex.",
   "type": "module",
   "publishConfig": {
     "access": "public"
@@ -69,7 +69,21 @@
     "skills",
     "project-management",
     "developer-tools",
-    "cli"
+    "cli",
+    "jenga",
+    "jenga-ai",
+    "ai-coding",
+    "ai-coding-agent",
+    "coding-agent",
+    "coding-agents",
+    "ai-workflow",
+    "coding-workflow",
+    "development-workflow",
+    "software-development",
+    "developer-workflow",
+    "ai-framework",
+    "agentic-engineering",
+    "ai-engineering"
   ],
   "author": {
     "name": "Samwel Munga",

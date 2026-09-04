@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-03T21:24:38.642Z",
-  "skill_count": 37,
+  "generated_at": "2026-09-04T00:10:14.475Z",
+  "skill_count": 43,
   "skills": [
     "brainstorm",
     "btw",
@@ -8,6 +8,7 @@
     "close-story",
     "commit",
     "continue",
+    "convert",
     "deep-dive",
     "dev-done",
     "distribute",
@@ -27,16 +28,21 @@
     "jenga",
     "jenga-permission-level",
     "lgtm",
+    "mirror-public",
     "pi-plan",
     "proceed",
     "publish",
     "reconcile",
     "reconcile-origin",
     "redo",
+    "route",
+    "self-sync",
     "skillify",
     "spinoff",
     "status",
+    "strategy",
     "todo",
+    "train",
     "uncharted",
     "wtf"
   ]
