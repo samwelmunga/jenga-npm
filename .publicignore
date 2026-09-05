@@ -31,17 +31,6 @@ project/rapports/
 # --- Top-level todo (working list of pending missions) ---
 project/todo.md
 
-# --- Test suite (E28_S12) ---
-# tests/ isn't run by the real jenga-npm npm-ci pipeline (.github/workflows/publish.yml runs only
-# `npm ci` -> `npm publish`) and isn't listed in package.json's `files`, so a real `npm install`
-# consumer never receives it either — it was only shipping to the public git mirror as an
-# incidental side effect of "ship everything except the blocklist". Shipping it caused
-# tests/generate-j-alias.bats and tests/init.bats to fail on a public checkout once E28_S09/E28_S10
-# stripped canonical bare-name skill dirs from the public ship set, since those tests hardcode
-# bare-name paths (skills/close-story/, skills/init/...) that only exist privately. Simplest fix:
-# don't ship the suite at all, rather than making every test dual-context-proof forever.
-tests/
-
 # --- Private planning + execution artefacts tied to board items ---
 project/documentation/plans/
 project/documentation/summaries/
