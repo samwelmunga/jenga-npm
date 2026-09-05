@@ -1,5 +1,5 @@
 ---
-name: j:j-spinoff
+name: j:spinoff
 description: Polyfill alias of the spinoff skill under a collision-safe directory name. Identical behavior to /spinoff — Capture a diverging topic mid-conversation. Collects context and a mandatory origin, optionally runs /brainstorm for prerequisites, saves an /idea entry, and returns focus to the primary thread. Use when the bare /spinoff form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - spinoff

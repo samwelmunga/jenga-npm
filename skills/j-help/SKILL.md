@@ -1,5 +1,5 @@
 ---
-name: j:j-help
+name: j:help
 description: Polyfill alias of the help skill under a collision-safe directory name. Identical behavior to /help — List all available skills with a short description of what each one does. Also use this skill when the user wants to know what commands or skills are available in the project. Use when the bare /help form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - help

@@ -1,5 +1,5 @@
 ---
-name: j:j-clearify
+name: j:clearify
 description: Polyfill alias of the clearify skill under a collision-safe directory name. Identical behavior to /clearify — Clarifies ambiguous, dense, or under-specified prompts and conversation on request — inspects an attached prompt or falls back to the current conversation and surfaces plain-language clarifications with examples. Use when the bare /clearify form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - clarify this

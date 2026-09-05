@@ -1,5 +1,5 @@
 ---
-name: j:j-do
+name: j:do
 description: Polyfill alias of the do skill under a collision-safe directory name. Identical behavior to /do — Execute tasks from the scrum board. Reads from project/todo.md, resolves each entry to its full scrum board context, and drives the developer agent through implementation with the correct sender object and communication contract. Loops until all selected tasks are done or the user exits. Use when the bare /do form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - do

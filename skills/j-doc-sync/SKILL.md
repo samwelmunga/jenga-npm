@@ -1,5 +1,5 @@
 ---
-name: j:j-doc-sync
+name: j:doc-sync
 description: Polyfill alias of the doc-sync skill under a collision-safe directory name. Identical behavior to /doc-sync — Compare the current state of a project with its documentation and update documentation to reflect changes. Accepts `update:`, `source:`, `exclude:`, and `minify:` arguments to control scope. Use when documentation may be out of date with implementation, or when the user asks to sync, refresh, update, or shrink docs. Use when the bare /doc-sync form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - doc-sync

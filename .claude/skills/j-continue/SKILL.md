@@ -1,5 +1,5 @@
 ---
-name: j:j-continue
+name: j:continue
 description: Polyfill alias of the continue skill under a collision-safe directory name. Identical behavior to /continue — Check project status across PROJECT_SUMMARY.md, epics, and stories to determine what should be done next. Reports "All done!" if everything is complete. Use when the bare /continue form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - continue

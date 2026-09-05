@@ -1,5 +1,5 @@
 ---
-name: j:j-lgtm
+name: j:lgtm
 description: Polyfill alias of the lgtm skill under a collision-safe directory name. Identical behavior to /lgtm — Approve and commit the current work, then continue to the next task. Shortcut that chains /commit followed by /continue. Use when the bare /lgtm form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - lgtm

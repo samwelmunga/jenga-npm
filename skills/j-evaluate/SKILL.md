@@ -1,5 +1,5 @@
 ---
-name: j:j-evaluate
+name: j:evaluate
 description: Polyfill alias of the evaluate skill under a collision-safe directory name. Identical behavior to /evaluate — Analyzes example files against a target goal and produces a structured evaluation rapport. Use when the bare /evaluate form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - j-evaluate

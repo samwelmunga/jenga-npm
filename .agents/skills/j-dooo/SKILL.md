@@ -1,5 +1,5 @@
 ---
-name: j:j-dooo
+name: j:dooo
 description: Polyfill alias of the dooo skill under a collision-safe directory name. Identical behavior to /dooo — Parallel execution orchestrator. Calls /do to start implementations via sub-agents, then loops back to the board to identify and offer parallelisable tasks until the user selects "Done". Use when the bare /dooo form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - dooo

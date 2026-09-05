@@ -1,5 +1,5 @@
 ---
-name: j:j-error
+name: j:error
 description: Polyfill alias of the error skill under a collision-safe directory name. Identical behavior to /error — Guided troubleshooting flow that gathers context about an error — where it occurs, what was attempted, what went wrong, and what was expected. Use when the bare /error form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - error

@@ -1,5 +1,5 @@
 ---
-name: j:j-close-story
+name: j:close-story
 description: Polyfill alias of the close-story skill under a collision-safe directory name. Identical behavior to /close-story — Close a story by verifying all tasks are in terminal state, extracting actual diff stats per task, computing scope divergence flags, and writing closure metadata to task frontmatter. Use when the bare /close-story form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - close story

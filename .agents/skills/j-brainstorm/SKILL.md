@@ -1,5 +1,5 @@
 ---
-name: j:j-brainstorm
+name: j:brainstorm
 description: Polyfill alias of the brainstorm skill under a collision-safe directory name. Identical behavior to /brainstorm — Engage the scrum-master agent in a focused planning session to define, refine, or challenge features, improvements, tasks, stories, and epics. The agent asks probing questions, challenges assumptions, and helps shape ideas into actionable backlog items. Use when the bare /brainstorm form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - brainstorm

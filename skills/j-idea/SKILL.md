@@ -1,5 +1,5 @@
 ---
-name: j:j-idea
+name: j:idea
 description: Polyfill alias of the idea skill under a collision-safe directory name. Identical behavior to /idea — Capture a loosely-defined idea to project/ideas.md — a lightweight, "maybe someday" log with no board or promotion overhead. Use when the bare /idea form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - idea

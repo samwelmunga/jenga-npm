@@ -1,5 +1,5 @@
 ---
-name: j:j-jbp
+name: j:jbp
 description: Polyfill alias of the jbp skill under a collision-safe directory name. Identical behavior to /jbp — Scaffold the project using the JengaBasePlate boilerplate repo template from https://github.com/samwelmunga/JengaBasePlate.git. Use when the bare /jbp form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - jbp

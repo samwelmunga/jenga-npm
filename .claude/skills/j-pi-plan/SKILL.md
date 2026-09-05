@@ -1,5 +1,5 @@
 ---
-name: j:j-pi-plan
+name: j:pi-plan
 description: Polyfill alias of the pi-plan skill under a collision-safe directory name. Identical behavior to /pi-plan — Define or expand project Epics in PROJECT_SUMMARY.md. Use this at the start of a project to establish its foundation, AND whenever the user wants to add major new features, plan a significant new area of work, or make epic-level changes to an existing project. Trigger whenever you hear things like "new feature area", "big change", "new epic", "expand the project", "add a major capability", or "plan a new phase" — even mid-project. Use when the bare /pi-plan form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - epic

@@ -1,5 +1,5 @@
 ---
-name: j:j-dev-done
+name: j:dev-done
 description: Polyfill alias of the dev-done skill under a collision-safe directory name. Identical behavior to /dev-done — Commit the current work and immediately sync it into the .claude/ and .agents/ mirrors. Shortcut that chains /commit followed by /self-sync. Use when the bare /dev-done form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - dev done

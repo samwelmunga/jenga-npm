@@ -1,5 +1,5 @@
 ---
-name: j:j-deep-dive
+name: j:deep-dive
 description: Polyfill alias of the deep-dive skill under a collision-safe directory name. Identical behavior to /deep-dive — >. Use when the bare /deep-dive form is shadowed by another tool's own built-in command of the same name.
 metadata:
   prefered_agent: scrum_master

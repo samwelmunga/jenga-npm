@@ -1,5 +1,5 @@
 ---
-name: j:j-doc
+name: j:doc
 description: Polyfill alias of the doc skill under a collision-safe directory name. Identical behavior to /doc — Generate or update a documentation file by resolving a target path to a clear documentation objective before writing. Use when the bare /doc form is shadowed by another tool's own built-in command of the same name.
 metadata:
   prefered_agent: developer

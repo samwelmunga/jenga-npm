@@ -1,5 +1,5 @@
 ---
-name: j:j-publish
+name: j:publish
 description: Polyfill alias of the publish skill under a collision-safe directory name. Identical behavior to /publish — Configure, validate, and orchestrate scaffolded release workflows through a single `/publish` entry point with bounded sub-commands. Use when the bare /publish form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - publish

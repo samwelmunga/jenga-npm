@@ -1,5 +1,5 @@
 ---
-name: j:j-proceed
+name: j:proceed
 description: Polyfill alias of the proceed skill under a collision-safe directory name. Identical behavior to /proceed — Review project progress by checking epics and stories, optionally consulting PROJECT_SUMMARY.md and WARP.md, then continue executing the project plan. Use when the bare /proceed form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - proceed

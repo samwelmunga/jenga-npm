@@ -1,5 +1,5 @@
 ---
-name: j:j-examplify
+name: j:examplify
 description: Polyfill alias of the examplify skill under a collision-safe directory name. Identical behavior to /examplify — Explains concepts, features, use cases, and patterns based on provided context — a description, scenario, code snippet, or file. Use when the user wants to understand what something is, how it works, when to use it, or wants a concrete example. Use when the bare /examplify form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - examplify

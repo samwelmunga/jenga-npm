@@ -1,5 +1,5 @@
 ---
-name: j:j-improve
+name: j:improve
 description: Polyfill alias of the improve skill under a collision-safe directory name. Identical behavior to /improve — A skill for analyzing a codebase and producing a structured improvement plan toward a defined goal. Use when the bare /improve form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - j-improve

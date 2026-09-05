@@ -1,5 +1,5 @@
 ---
-name: j:j-todo
+name: j:todo
 description: Polyfill alias of the todo skill under a collision-safe directory name. Identical behavior to /todo — Add missions to the project todo list (project/todo.md), optionally linking them to epics and stories. Loops until the user is done, then optionally executes the list. Use when the bare /todo form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - todo

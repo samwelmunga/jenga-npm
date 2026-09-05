@@ -1,5 +1,5 @@
 ---
-name: j:j-wtf
+name: j:wtf
 description: Polyfill alias of the wtf skill under a collision-safe directory name. Identical behavior to /wtf — Alias of /clearify — clarifies ambiguous, dense, or under-specified prompts and conversation on request. This folder exists only so the `/wtf` slash command resolves to a skill; behaviour is identical to `/clearify`. Use when the bare /wtf form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - wtf

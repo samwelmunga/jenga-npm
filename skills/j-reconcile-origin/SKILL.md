@@ -1,5 +1,5 @@
 ---
-name: j:j-reconcile-origin
+name: j:reconcile-origin
 description: Polyfill alias of the reconcile-origin skill under a collision-safe directory name. Identical behavior to /reconcile-origin — Sync the current (or specified) branch with origin by rebasing local commits on top of the latest upstream state. Use when the bare /reconcile-origin form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - "sync branch"

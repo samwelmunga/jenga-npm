@@ -1,5 +1,5 @@
 ---
-name: j:j-commit
+name: j:commit
 description: Polyfill alias of the commit skill under a collision-safe directory name. Identical behavior to /commit — Commit implemented epic, story, or task work using the EST naming convention. Also handles user-action prerequisites and new-epic boundaries. Use after completing any EST work item. Use when the bare /commit form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - commit

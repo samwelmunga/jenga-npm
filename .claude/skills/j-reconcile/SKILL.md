@@ -1,5 +1,5 @@
 ---
-name: j:j-reconcile
+name: j:reconcile
 description: Polyfill alias of the reconcile skill under a collision-safe directory name. Identical behavior to /reconcile — Reconcile the scrum board with actual implementation state. Cross-checks every task's board status against git history and worktrees, merges orphaned worktree branches, demotes unimplemented "Done" items, promotes secretly-implemented items, flags code with no board provenance and offers /uncharted segment for it, and cleans stale entries from todo.md. Use when the board feels out of sync, after a big merge session, when tasks were completed outside the normal workflow, or when todo.md has grown stale. Trigger on phrases like "sync the board", "clean up the board", "reconcile", "board is out of date", "todo is stale", or "check what's really done". Use when the bare /reconcile form is shadowed by another tool's own built-in command of the same name.
 metadata:
   prefered_agent: scrum-master

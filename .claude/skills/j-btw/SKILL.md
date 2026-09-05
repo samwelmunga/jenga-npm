@@ -1,5 +1,5 @@
 ---
-name: j:j-btw
+name: j:btw
 description: Polyfill alias of the btw skill under a collision-safe directory name. Identical behavior to /btw — Capture a new mission (feature, change, or addition) and fit it into the project's Epic/Story structure, then choose to implement now or defer. Use when the bare /btw form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - btw

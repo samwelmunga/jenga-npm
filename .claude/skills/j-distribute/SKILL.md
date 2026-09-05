@@ -1,5 +1,5 @@
 ---
-name: j:j-distribute
+name: j:distribute
 description: Polyfill alias of the distribute skill under a collision-safe directory name. Identical behavior to /distribute — Distribute Jenga AI framework files from this private monorepo to one or more consuming projects via the local filesystem. Manages release type selection, version bumping, dry-run preview, per-target file copy, and a post-distribution git commit. Use when the bare /distribute form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - distribute

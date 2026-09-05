@@ -1,5 +1,5 @@
 ---
-name: j:j-uncharted
+name: j:uncharted
 description: Polyfill alias of the uncharted skill under a collision-safe directory name. Identical behavior to /uncharted — Investigate code that has no Jenga board provenance — a foreign file, an external source being pulled in, or an entire pre-existing codebase — and give it a consistent understanding document plus proper board representation. Use when the bare /uncharted form is shadowed by another tool's own built-in command of the same name.
 metadata:
   prefered_agent: scrum-master
