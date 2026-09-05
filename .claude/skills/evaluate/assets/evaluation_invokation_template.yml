@@ -1,3 +1,0 @@
-goal: ""  # The confirmed target goal (e.g. "improve checkout performance")
-paths:    # One or more paths to example files produced by /examplify
-  - ""
