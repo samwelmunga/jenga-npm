@@ -68,6 +68,17 @@ Skills are stored in `skills/<name>/SKILL.md`. Invoke them with `j:<name>` in a 
 — the bare `/<name>` form also keeps working permanently as an alias (see the Invocation Convention
 note under Workflow Lifecycle above).
 
+> **`j-<name>` directory twins (`E50_S05`):** separately from the `j:<name>` colon convention above,
+> every skill — except `init`/`j-init` (already paired, the original precedent set in `E50_S04`) and
+> `index` (a non-skill directory) — also has a `skills/j-<name>/` directory twin, invocable as
+> `/j-<name>`. This is a complementary mechanism, not a replacement: it gives collision safety via a
+> real duplicate directory under a distinct name, rather than a routing/frontmatter alias, for cases
+> where a host tool ships its own same-named built-in command (e.g. GitHub Copilot's own `/init`,
+> which motivated `j-init` in the first place) and would otherwise shadow the bare `/<name>` form.
+> Twins are generated and kept in lockstep exclusively via `scripts/generate-j-alias.sh` — never
+> hand-edit a `skills/j-<name>/` directory directly. Full rationale in `docs/skill-authoring.md`'s
+> "Invocation Convention" section.
+
 | Command | Description |
 |---|---|
 | `j:init` | Scaffold project directories, `workflow.json`, `PROJECT_SUMMARY.md`, initial commit. |

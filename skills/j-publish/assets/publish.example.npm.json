@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "defaults": {
+    "history_file": "project/logs/publish-history.json",
+    "mandatory_checks": [
+      "build",
+      "test"
+    ],
+    "optional_checks": [
+      "lint",
+      "type-check",
+      "smoke-test"
+    ]
+  },
+  "targets": [
+    {
+      "name": "npm-public",
+      "type": "npm",
+      "platform": "npm-registry",
+      "checks": {
+        "pre": [
+          "lint",
+          "type-check"
+        ],
+        "post": [
+          "smoke-test"
+        ]
+      },
+      "secrets": {
+        "NPM_TOKEN": "$NPM_TOKEN"
+      },
+      "npm": {
+        "package_name": "jenga-agent",
+        "access": "public",
+        "registry": "https://registry.npmjs.org",
+        "dist_tag": "latest"
+      },
+      "notes": "Scaffold example for a public npm registry publish. Field guide: `package_name` = the name that will appear in the registry (supports @scope/name); `access` = \"public\" for openly-installable packages or \"restricted\" for private packages; `registry` = target registry URL (default https://registry.npmjs.org, override for private registries or GitHub Packages); `dist_tag` = npm dist-tag applied to this publish (default \"latest\", use \"next\" or \"beta\" for pre-releases). The `secrets.NPM_TOKEN` entry maps to the `NPM_TOKEN` env var loaded at publish time — never hard-code the token value here."
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+default_target: README.md
+rules:
+  - path: README.md
+    objective: project overview
+    summary: Create or update a high-level project overview.
+    required_sections:
+      - Description
+      - Getting Started
+    optional_sections:
+      - Examples
+  - path: docs/API.md
+    objective: API reference documentation
+    summary: Document the public API surface, endpoints, inputs, outputs, and integration details.
+    required_sections:
+      - Overview
+      - Endpoints or Interfaces
+      - Request and Response Details
+  - path: docs/CLI.md
+    objective: CLI usage guide
+    summary: Explain command usage, arguments, flags, examples, and common workflows.
+    required_sections:
+      - Overview
+      - Commands
+      - Flags
+      - Examples
+  - path: docs/CONTRIBUTING.md
+    objective: contributor guide
+    summary: Explain how contributors should set up, work on, test, and submit changes.
+    required_sections:
+      - Development Setup
+      - Workflow
+      - Contribution Expectations
+  - path: CHANGELOG.md
+    objective: changelog / release notes
+    summary: Record notable changes, releases, and upgrade notes in chronological order.
+    required_sections:
+      - Release Entries
+      - Notable Changes
+  - path: docs/STRATEGY.md
+    objective: strategy brief
+    summary: Produce a high-level strategy brief suitable for investors and strategic partners. Covers vision, value proposition, scope, and target audience. Does not include revenue model, pricing, or competitive analysis.
+    required_sections:
+      - Vision
+      - Value Proposition
+      - Scope
+      - Target Audience
+    generation_rules:
+      tone: Write for an investor or strategic partner audience. Use clear, confident language. Avoid jargon and internal shorthand. Do not use first-person plural ("we") excessively — prefer direct statements about the project.
+      sourcing: Draw content exclusively from PROJECT_SUMMARY.md and existing docs/. Do not invent facts, figures, or claims not present in the source material.
+      missing_fields: If the project has insufficient context to fill a section, produce a stub with the section header and a clearly marked note — e.g. "<!-- TODO: fill in once product direction is confirmed -->" — rather than erroring or hallucinating content.
+      exclusions: Do not include revenue model, pricing strategy, monetisation plans, competitive analysis, or financial projections. If any of these are present in source files, omit them silently.

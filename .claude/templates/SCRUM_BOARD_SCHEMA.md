@@ -564,7 +564,7 @@ Each file is written by an agent as the **last action** of its session, and is s
 - `scripts/consume-context-digest.sh <path>` — the receiving agent's read path. Atomically claims the file (rename to a `.claimed.$$` sibling, same TOCTOU-safe pattern `on_session_end.sh` section 4 uses for `handoffs/`), prints its content (full JSON envelope, or just the `digest` field with `--raw`), and deletes it — single-use, like `handoffs/`.
 - `scripts/sweep-stale-context-digests.sh` — an age-based backstop (default 24h, overridable), invoked from `hooks/on_session_end.sh` on every session end regardless of agent, for a digest whose intended receiver never calls the consume script (abandoned dispatch, or a receiver that read the raw file directly and forgot to clean up). Age-based rather than routed-and-deleted-immediately like `handoffs/`, because a digest's consumer is a later session that may not have started yet when some unrelated session's `SessionEnd` hook fires.
 
-Populating `resolved_context` when dispatching (scrum-master → developer, developer → tester) is sibling task E49_S01_T03 — not yet wired into `agents/scrum-master.md` or `agents/developer.md` as of this writing. The physical convention above is usable standalone in the meantime.
+Populating `resolved_context` when dispatching (scrum-master → developer, developer → tester) is wired into both `agents/scrum-master.md`'s dispatch-to-developer step and `agents/developer.md`'s call-to-tester step (E49_S01_T03).
 
 
 

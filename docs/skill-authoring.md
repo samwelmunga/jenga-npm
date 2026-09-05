@@ -105,6 +105,39 @@ rewrite) and updates bare `/<name>` prose mentions in `agents/*.md` to `j:<name>
 Implementation Principle in `CLAUDE.md`) — `--dry-run` supported so `E50_S01_T02` can verify its
 output before committing to it.
 
+### `j-<name>` directory twins — a separate, complementary mechanism (`E50_S04`/`E50_S05`)
+
+Distinct from everything above, every skill (except where explicitly excluded — see below) also has a
+second, literal directory under `skills/j-<name>/` — a full functional duplicate of `skills/<name>/`,
+invocable as `/j-<name>`.
+
+**Purpose.** Decision 1 above is a frontmatter-only rename precisely because Claude Code's native
+resolver does a literal-string, directory-name match, and Jenga has no interception point on that
+surface at all. That means if a host tool ships its own built-in command with the exact same bare
+name as a Jenga skill — the motivating case was GitHub Copilot's own built-in `/init` — it can shadow
+Jenga's bare `/<name>` form on that surface, and no frontmatter change can fix it. `j-init`
+(`E50_S04`) was built as a one-off fix: a byte-for-byte duplicate of `skills/init/` under the
+collision-safe directory name `skills/j-init/`, giving a guaranteed-unshadowed path to the same flow
+regardless of what else is installed. `E50_S05` generalizes that one-off pattern to every skill.
+
+**How this differs from the `j:<name>` colon convention.** The colon convention (Decision 1 above) is
+a frontmatter-only identifier change — no new directory, no new files. The `j-<name>` pattern is the
+opposite: a real, second, on-disk directory, deliberately duplicating content rather than aliasing it,
+because the collision it defends against happens at the directory-name-resolution layer the colon
+convention cannot reach. The two are complementary, not alternatives — a skill keeps its `j:<name>`
+frontmatter identifier *and* gains a `j-<name>` directory twin; neither replaces the other.
+
+**Generation and sync.** `scripts/generate-j-alias.sh <skill-name>` is the only supported way to
+create or update a `skills/j-<name>/` directory — per `CLAUDE.md`'s Skill Implementation Principle,
+this is never hand-maintained. It copies the full `skills/<skill-name>/` tree, rewrites
+self-referential path references and frontmatter (`name: j:<skill-name>` → `name: j:j-<skill-name>`),
+and is idempotent and fully rebuilding on every run, so a source change is picked up in full on the
+next invocation rather than incrementally patched. `E50_S05_T02` ran it once across all 41 eligible
+skills; re-running it against a changed source skill is the ongoing lockstep-sync path.
+
+**Exclusions.** `skills/init/`/`skills/j-init/` are excluded (already hand-built and paired before the
+generator existed) and `skills/index/` is excluded (no `SKILL.md` — not a skill, not part of routing).
+
 ---
 
 ## Frontmatter Spec

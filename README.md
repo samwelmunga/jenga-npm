@@ -1,8 +1,7 @@
 # Jenga AI
+### No agent merges its own code.
 
-> ⚠️ **Upgrading from a prior version?** Earlier releases could hit a command-collision bug: some host tools (e.g. GitHub Copilot) ship their own built-in `/init` command, which could silently shadow Jenga's own `/init` skill. This release adds **`/j-init`** — an identical, collision-safe copy of `/init` — so you always have a guaranteed-unshadowed way to scaffold a project. If `/init` isn't behaving as documented, run `/j-init` instead.
-
-**A structured multi-agent development workflow that works with any AI agent or AI-native IDE.** Three specialised AI agents — Scrum Master, Developer, and Tester — collaborate through a shared scrum board, an event-driven trigger queue, and a coordinated pipeline of `j:`-prefixed skills that hand work between them — to take a project from idea to verified, committed code — across as many sessions as it takes.
+Jenga AI is an agentic software engineering framework for AI-assisted development: it splits work across three role-bounded agents — a Scrum Master that plans, a Developer that implements in an isolated git worktree, and a Tester that runs your test suite and owns the board status. Work survives session boundaries as Epics, Stories, and Tasks on a Markdown board your agent reads at the start of every session.
 
 [![npm version](https://img.shields.io/npm/v/@jenga-ai/agent.svg)](https://www.npmjs.com/package/@jenga-ai/agent)
 [![license](https://img.shields.io/npm/l/@jenga-ai/agent.svg)](LICENSE)
@@ -13,35 +12,39 @@ npm install @jenga-ai/agent
 
 ## The Problem It Solves
 
-Without a framework like Jenga AI, AI-assisted development has serious structural weaknesses:
+You've had this happen: Claude wrote the feature, said it worked, and the session ended. Next session it had no idea any of it existed. Without a framework like Jenga AI, AI-assisted development has serious structural weaknesses:
 
 [![How AI Coding Agents Understand Your Codebase & Developer Tools](https://img.youtube.com/vi/zAe-sau06io/maxresdefault.jpg)](https://www.youtube.com/watch?v=zAe-sau06io)
 
-*"How AI Coding Agents Understand Your Codebase & Developer Tools" — IBM Technology on the same gap in session memory and tooling context that Jenga AI's board and agent contracts are built to close.*
+*"How AI Coding Agents Understand Your Codebase & Developer Tools" — IBM Technology on the same gap in persistent development context and tooling context that Jenga AI's board and agent contracts are built to close.*
 
 | Problem | Reality |
 |---|---|
-| **AI has no session memory** | Every AI agent session starts from scratch — no awareness of open tasks, past decisions, or what was already tested |
+| **No persistent engineering context** | Every AI agent session starts from scratch — no awareness of open tasks, past decisions, or what was already tested |
 | **No role separation** | The AI writes *and* "tests" code in the same context, leading to hallucinated test results and self-affirming bugs |
 | **No structured planning** | Work happens ad-hoc — no Epic → Story → Task hierarchy to organise or track progress |
 | **No handoff protocol** | Switching from implementing to testing means manually re-explaining context every time |
 | **No audit trail** | You can't replay *why* something was built, by which agent, based on which task |
 | **Sessions just end** | Work-in-progress, unresolved problems, and incomplete stories silently vanish |
 
-Jenga AI solves each of these with structure: persistent board state, strict agent roles, typed inter-agent contracts, and session-end hooks that preserve context between sessions.
+Jenga AI solves each of these with structure: persistent engineering context maintained via board state, strict agent roles, typed inter-agent contracts, and session-end hooks that carry that context between sessions.
 
 ---
 
 ## What You Get
 
 - **Three specialised agents** — Scrum Master, Developer, Tester — each with a distinct role and no self-graded work
-- **A persistent scrum board** — Epics, Stories, and Tasks tracked as Markdown files with structured frontmatter, surviving every session boundary
-- **A coordinated skill pipeline, not a command list** — planning skills (`j:pi-plan`, `j:todo`) hand off to execution skills (`j:do`, `j:dooo`), which hand off to review skills (`j:status`, `j:reconcile`), each stage reading and writing the same board state — the old bare `/<name>` form still works everywhere as a permanent alias
+- **A persistent, Kanban-style scrum board** — Epics, Stories, and Tasks tracked as Markdown files with structured frontmatter, surviving every session boundary
+- **A coordinated skill pipeline — one agentic workflow, not a command list** — planning skills (`j:pi-plan`, `j:todo`) hand off to execution skills (`j:do`, `j:dooo`), which hand off to review skills (`j:status`, `j:reconcile`), each stage reading and writing the same board state — the old bare `/<name>` form still works everywhere as a permanent alias
 - **An event-driven trigger queue** — async handoffs between agents with a full audit trail in `project/logs/events.json`
 - **Isolated git worktrees per task** — the Developer never works directly on your main branch
-- **Works with any AI agent or IDE** — Claude Code, GitHub Copilot, and Codex CLI are all supported today
+- **Works with any AI coding agent or AI-native IDE** — Claude Code, GitHub Copilot, and Codex CLI are all supported today
 
 > 📖 **Full reference:** [project/.wiki/documentation.md](project/.wiki/documentation.md) | [Intro Guide](project/.wiki/intro-guide.md)
+
+### "Isn't this just an LLM grading another LLM?"
+
+The Tester doesn't read your code and form an opinion about it. It executes the test suite you configure in `project/configs/test-config.json` and reports pass or fail — in this repo, `bats` for unit and integration, `shellcheck` for SAST. What Jenga guarantees structurally is that the agent that wrote the code is not the agent that decides it's done, and doesn't get to write its own status onto the board. What comes out of that gate depends on what you wire into it — the same as any CI pipeline.
 
 ## Platform Support
 
@@ -51,84 +54,62 @@ Jenga AI solves each of these with structure: persistent board state, strict age
 | **GitHub Copilot** | `.agents/` — mirrored automatically on install | `.github/copilot-instructions.md` — bootstrapped at `npm install` time, refined by `jenga init` |
 | **Codex** | `.agents/` — mirrored automatically on install | `AGENTS.md` — generated by `j:init` today |
 
-`CLAUDE.md` and `AGENTS.md` are generated unconditionally by `j:init` — every agent gets a real, populated root-level context file out of the box, not just a pointer. If either file already exists as a genuine pre-existing user file, Jenga writes its own copy as `J-CLAUDE.md` / `J-AGENTS.md` instead and inserts a short reference into the existing file, leaving it otherwise untouched.
+`CLAUDE.md` and `AGENTS.md` are generated unconditionally by `j:init` — every agent gets a real, populated root-level context file, not just a pointer. If either file already exists as a genuine pre-existing user file, Jenga leaves it untouched, writes its own copy as `J-CLAUDE.md` / `J-AGENTS.md`, and inserts a short reference line into the original.
 
-`.github/copilot-instructions.md` follows a different path: `scripts/postinstall.js` writes it unconditionally and non-interactively the moment `npm install` finishes, so Copilot has working `j:<name>` routing instructions (the bare `/<name>` form also still resolves, as a permanent alias) even if a consumer's very first action is a Copilot slash command, before the separate `jenga init` CLI wizard has ever run. Running `jenga init` afterward refines the same file using the user's actual chosen skills path — it is never generated by the `j:init` skill itself.
+`.github/copilot-instructions.md` follows a different path, because Copilot needs it before `j:init` may ever run: `npm install` triggers `scripts/postinstall.js`, which writes it unconditionally and non-interactively, so `j:<name>` routing (the bare `/<name>` form still resolves too, as a permanent alias) works from a consumer's very first Copilot command. A later `jenga init` run refines that same file using the project's actual chosen skills path.
 
 ---
 
 ## Examples
 
-### Before / After
+### A Real Session, On This Repo
 
-**Without Jenga AI:**
+Not a demo — this is what actually produced the section you're reading.
+
+The conversation starts with a request to align this README's language and content with a positioning plan drafted for this epic (E41):
+
 ```
-You: "Add user authentication"
-AI agent: [writes auth code, declares it works, session ends]
-
-Next session:
-You: "What's the status of auth?"
-AI agent: "I don't have context from the previous session."
+j:improve E41: I want to make some adjustments to the README in both
+language as well as content to better match [the E41 positioning plan]
+[...]
 ```
 
-**With Jenga AI:**
-```
-j:todo → "Add user authentication" → linked to E01_S02
-j:do   → Developer creates worktree E01_S02_T01-auth
-       → implements, commits at milestones
-       → hands off to Tester with sender object
+That plan already existed, so the copy gets edited directly — no need to re-run a fresh analysis pass just to re-derive it. A few edits later, ten more issues surface, one with an `j:brainstorm` request attached:
 
-Tester → runs tests, updates board status to ✅ Passed
-SessionEnd → writes status_review trigger to queue
-
-Next session:
-j:status → "E01_S02 ✅ complete — E01_S03 pending"
 ```
+Then do a j:todo on this, as there are more places that should be
+edited based on that scrutiny rapport:
+* Remove warning banner about Copilot conflict
+[...]
+* Fewer, better and more relatable examples, we should
+  j:brainstorm this so I can send examples from real world usecases
+[...]
+* Should we really display the entire Skill list here?
+[...]
+```
+
+`j:todo` classifies the ten items into two stories: nine mechanical README fixes (`E41_S10`), and the Examples section you're reading right now (`E41_S11`) — carved out and held back specifically because of that `j:brainstorm` request, since a real example had to come from the user, not be invented.
+
+Once `E41_S10` is on the board, it's picked to run first. The Scrum Master reads the story and decomposes it into seven tasks, executed through `j:do`. Five are small, single-file text fixes deemed `--trivial` — they run inline, smoke-tested and committed directly, no worktree needed. Two need an editorial call — one of them being which skills are "foundational" enough to stay inline — those escalate to a real git worktree with a Developer and a Tester. The Tester independently re-verifies the diff, catches one file the Developer missed, fixes it, and queues the story for rollup. The Scrum Master processes that queue next: `E41_S10` → `Passed`. Epic `E41` stays `In Progress` — three other stories are still open.
+
+Then, circling back to the deferred request:
+
+```
+Jenga AI: [...] Remaining open thread from this session: E41_S11
+(Examples rework) is on the board but not started — it's gated on
+a j:brainstorm session where you supply real-world use cases. Want
+to do that now, or leave it queued?
+
+You: do it now
+```
+
+`j:brainstorm` opens for the gated story — the session you're reading right now, working out what this example should even say.
+
+Nobody hand-wrote this task breakdown. The board did it, the routing rules decided what needed a real worktree versus what could run inline, and the Tester — not the agent that made the edits — decided when each piece was actually done. The board entries are real: `E41_S10` and `E41_S11`.
 
 ---
 
-### Real-World Scenario: Building a Feature Across Sessions
-
-Imagine you're building a REST API with auth, rate limiting, and an admin dashboard. Each is a separate Epic. Here's how Jenga AI handles that across multiple days:
-
-**Planning**
-```
-j:init         → scaffolds project/, board/, workflow.json
-j:pi-plan      → Scrum Master helps shape the auth epic into stories
-j:todo         → "Add JWT auth" → E01_S01, "Add refresh tokens" → E01_S02
-```
-
-**Implementation**
-```
-j:do           → Developer picks up E01_S01_T01-jwt-middleware
-               → creates isolated worktree, implements, commits
-               → Tester validates, marks Passed, triggers rollup
-j:status       → E01_S01 ✅, E01_S02 Pending
-j:continue     → picks up E01_S02 automatically
-j:proceed      → resumes project plan from current board state
-```
-
-**New idea mid-session**
-```
-You: "Actually, let's also add API rate limiting while we're at it"
-j:btw          → captures "rate limiting" as E02 without losing E01 context
-               → returns focus to E01_S02
-j:spinoff      → captures a diverging topic mid-conversation, saves as j:todo
-               → returns focus to primary thread
-```
-
-**Parallel work**
-```
-j:jenga        → interactive board orchestrator: pick or scope, confirm, then execute (`j:jenga *` for the original fully automated, no-prompts run)
-j:dooo         → orchestrates E01_S02 and E02_S01 in parallel sub-agents
-j:reconcile    → syncs board with actual git history after parallel merges
-```
-
-The board, the audit log, and `PROJECT_SUMMARY.md` survive every session boundary. You never re-explain context.
-
----
-
-## How It Works
+## How Jenga AI's Agentic Workflow Works
 
 ```
 j:init → j:pi-plan → j:todo → j:do
@@ -172,7 +153,7 @@ Each agent is defined in `.agents/agents/`. They communicate exclusively through
 
 **Prerequisites:** An AI agent or AI-native IDE. Supported platforms include:
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
-- GitHub Copilot (VS Code extension or CLI)
+- [GitHub Copilot](https://github.com/features/copilot) (VS Code extension or CLI)
 - Codex CLI
 
 **Install from npm:**
@@ -182,7 +163,7 @@ npm install -g @jenga-ai/agent
 
 Or clone directly:
 
-1. **Clone or copy this repo** into your project's `.agents/` directory (or wherever you keep project tooling).
+1. **Clone or copy this repo** into your project's root.
 2. **Run `j:init`** — scaffolds `project/`, creates `workflow.json`, `PROJECT_SUMMARY.md`, and makes an initial commit.
 3. **Run `j:pi-plan`** — define your project goals and initial epics.
 4. **Run `j:todo`** — describe features to implement; they're linked to the board automatically.
@@ -208,189 +189,40 @@ The framework is platform-agnostic by design — any AI agent that can read Mark
 
 ## Skills (Slash Commands)
 
-Skills live in `.agents/skills/<name>/SKILL.md`. Invoke with `j:<name>` in your AI agent or IDE's command interface — the old bare `/<name>` form also keeps working permanently as an alias.
+Skills live in `.agents/skills/<name>/SKILL.md`. Invoke with `j:<name>` in your AI agent or IDE's command interface — the old bare `/<name>` form also keeps working permanently as an alias. A handful of the most foundational commands:
 
-### Setup & Planning
+> ⚠️ **Command collision with a host tool?** Some host tools ship their own built-in command that can
+> shadow one of Jenga's — e.g. GitHub Copilot's own built-in `/init`, which could silently shadow
+> Jenga's `/init` skill. Every skill (except `init`, already handled) has a collision-safe `/j-<name>`
+> directory-twin form — e.g. `/j-init` — that always resolves to the genuine Jenga skill regardless of
+> what else is installed. This is separate from the `j:<name>` colon form above: it's a real duplicate
+> directory under a distinct name, not a routing alias, generated and kept in sync via
+> `scripts/generate-j-alias.sh`. If a `j:<name>` or bare `/<name>` command isn't behaving as
+> documented, try its `/j-<name>` form instead.
 
 | Command | Description |
 |---|---|
 | `j:init` | Scaffold project directories, `workflow.json`, `PROJECT_SUMMARY.md`, initial git commit |
-| `j:jbp` | Scaffold using the [JengaBasePlate](https://github.com/samwelmunga/JengaBasePlate.git) boilerplate |
 | `j:jenga` | Interactive-by-default board orchestrator — bare shows a picker + confirmation tree, `<ids>` scopes and confirms, `*` runs fully automated with no prompts |
-| `j:pi-plan` | Define or expand Epics in `PROJECT_SUMMARY.md` — use at start or when adding major new work |
-| `j:brainstorm` | Focused planning session with the Scrum Master before committing anything to the board |
-| `j:deep-dive` | Multi-phase investigation — gathers info, brainstorms, scrutinises, and produces a refined output |
-| `j:uncharted` | Entry point for code with no board provenance — `segment` (a file or directory), `import` (an external source), `onboard` (a whole pre-existing codebase) |
 | `j:todo` | Add missions to `project/todo.md` linked to epics and stories |
-| `j:btw` | Capture a mid-flow idea, classify it into epic/story structure, implement now or defer |
-| `j:spinoff` | Capture a diverging topic without losing your current thread |
-
-### Execution
-
-| Command | Description |
-|---|---|
 | `j:do` | Execute tasks from the scrum board, drives the Developer agent through the full loop |
-| `j:dooo` | Parallel execution orchestrator — runs multiple tasks simultaneously via sub-agents |
-| `j:redo` | Rework a previous implementation by commit SHA or Epic/Story number |
-| `j:publish` | Configure, validate, and orchestrate scaffolded release workflows — `setup`, `deploy`, `stage` (npm/npm-ci pre-approval staged publishing), `history`, `release-notes` |
-| `j:error` | Guided troubleshooting — gathers context, investigates, and drives a fix |
-| `j:train` | Scaffold and run ML training jobs (new job from template or run existing) |
-
-### Status & Review
-
-| Command | Description |
-|---|---|
 | `j:status` | Print a full scrum board overview — epics, stories, tasks, rapports, queue depth |
-| `j:jenga-permission-level` | Report or switch the current session's 5-tier permission level (Locked/Guarded/Standard/Elevated/Unrestricted) without hand-editing settings.json |
-| `j:continue` | Check project status and pick up the next incomplete item |
-| `j:proceed` | Review progress and resume executing the project plan |
-| `j:reconcile` | Sync the board with actual git history — fixes drift, merges orphaned worktrees |
-| `j:reconcile-origin` | Sync the current or specified branch with origin via rebase. Presents conflict reports with resolution options. |
 
-### Committing & Maintenance
-
-| Command | Description |
-|---|---|
-| `j:commit` | Commit completed work using the EST naming convention |
-| `j:lgtm` | Approve current work, commit, and continue — chains `j:commit` + `j:continue` |
-| `j:distribute` | Propagate workflow changes to all registered consumer projects |
-| `j:doc` | Generate or update a documentation file from codebase evidence |
-| `j:doc-sync` | Compare project state with documentation and update stale docs |
-| `j:skillify` | Refactor a skill — extract assets, offload scripts, clean up the body |
-| `j:route` | Intelligently route a prompt to the best-matching skill |
-| `j:improve` | Analyse a codebase and produce a structured improvement plan |
-| `j:evaluate` | Analyse example files against a target goal and produce an evaluation rapport |
-| `j:examplify` | Explain a concept, feature, or pattern with grounded examples |
-| `j:help` | List all available skills with descriptions |
-| `j:customize-cloud-agent` | Configure the Copilot cloud agent environment (`copilot-setup-steps.yml`, preinstalls, runners) |
-
----
-
-## Distributing the Workflow
-
-Jenga AI can propagate its workflow files to other projects on your machine via `j:distribute`.
-
-1. **Register consumer projects** — add each consuming project to `distribute.config.json` at the repo root (or pass a path directly: `j:distribute /path/to/project`).
-2. **Run `j:distribute`** — choose `major`, `minor`, `patch`, or `amend` release type; the skill handles versioning, dry-run preview, file copy, and a version bump commit.
-
-Each consuming project holds a `jenga.config.json` tracking the distributed version, last distribution date, and source. To exclude specific files per consumer project, add a `.jenga_ignore` at the consumer root (never overwritten by distribute).
-
----
-
-## Directory Structure
-
-```
-.agents/                   ← Workflow root (place this in your project)
-├── agents/
-│   ├── scrum-master.md
-│   ├── developer.md
-│   └── tester.md
-├── hooks/
-│   └── on_session_end.sh
-├── mcp/
-│   ├── help/
-│   └── execute-ticket/
-├── skills/
-│   ├── brainstorm/
-│   ├── btw/
-│   ├── commit/
-│   ├── continue/
-│   ├── deep-dive/
-│   ├── distribute/
-│   ├── do/
-│   ├── doc/
-│   ├── doc-sync/
-│   ├── dooo/
-│   ├── error/
-│   ├── evaluate/
-│   ├── examplify/
-│   ├── help/
-│   ├── improve/
-│   ├── init/
-│   ├── pi-plan/
-│   ├── jbp/
-│   ├── jenga/
-│   ├── lgtm/
-│   ├── proceed/
-│   ├── reconcile/
-│   ├── redo/
-│   ├── route/
-│   ├── skillify/
-│   ├── spinoff/
-│   ├── status/
-│   ├── todo/
-│   └── train/
-├── templates/
-│   ├── SCRUM_BOARD_SCHEMA.md
-│   ├── PROBLEM_RAPPORT_TEMPLATE.md
-│   └── JENGA_CONFIG_TEMPLATE.json
-├── settings.json
-├── jenga.config.json       ← Workflow version source
-├── .jenga_paths            ← Machine-local consumer paths (git-ignored)
-└── RELEASE_NOTE.md
-
-project/                   ← Created by j:init inside your software project
-├── board/
-│   ├── epics/             ← E##_<slug>.md
-│   ├── stories/           ← E##_S##_<slug>.md
-│   └── tasks/             ← E##_S##_T##_<slug>.md
-├── configs/
-│   ├── workflow.json      ← Shared constants (statuses, paths, agents)
-│   └── test-config.json   ← Test tool stack (owned by Tester, user-approved)
-├── data/
-│   └── baselines.json     ← Analytics baselines (owned by Tester)
-├── documentation/
-│   ├── plans/             ← Pre-execution plans by Developer
-│   └── summaries/         ← Post-execution summaries by Developer
-├── queue/
-│   ├── scrum_triggers.jsonl
-│   ├── developer_triggers.jsonl
-│   ├── tester_triggers.jsonl
-│   └── project_summary_updates.jsonl
-├── rapports/
-│   ├── problems/          ← Problem rapports (Developer + Tester)
-│   └── analysis/          ← Analysis rapports (Tester)
-├── logs/
-│   └── events.json        ← Append-only inter-agent event log
-└── PROJECT_SUMMARY.md     ← Project source of truth (owned by Scrum Master)
-
-CHANGELOG.md                ← Created by j:init at the project's repo root; maintained by j:publish
-```
-
----
-
-## Agent Communication Contract
-
-Every inter-agent call passes a typed **sender object**:
-
-```json
-{
-  "sender": {
-    "agent": "<scrum-master | developer | tester | orchestrator>",
-    "session_id": "<session id>",
-    "task_id": "<E##_S##_T##>",
-    "story_id": "<E##_S##>",
-    "epic_id": "<E##>",
-    "date": "<ISO 8601 UTC>",
-    "paths": ["<commit SHA>", "..."],
-    "worktree": "<absolute path to worktree>",
-    "resolved_context": "<optional: path to a digest file under project/queue/context/>"
-  }
-}
-```
-
-All agents log every incoming sender object to `project/logs/events.json` as their **first action** on every invocation. `resolved_context` is optional — a size-capped digest of what the sending agent already resolved (relevant schema fields, skill precedent, prior decisions), written via `scripts/write-context-digest.sh` so the receiving agent doesn't have to cold-re-read source docs its parent already navigated. It's a starting point, never a restriction — the receiver can still read full source files.
+> 📖 **Full skill list** (planning, review, committing & maintenance commands): [project/.wiki/documentation.md](project/.wiki/documentation.md#skills)
 
 ---
 
 ## When to Use Jenga AI
 
 **Use it when:**
-- You're building a non-trivial project across multiple sessions
-- You want reliable test separation — the Tester never trusts the Developer's self-assessment
+- You're building a non-trivial project across multiple sessions and need persistent engineering context instead of re-explaining it every time
+- You want an agentic development workflow with separate planning, coding, testing, and review agents — not one model self-grading its own work
 - You need traceability — who did what, when, on which task
-- You want to reuse and propagate your AI workflow across multiple projects
+- You're working across more than one AI coding agent or AI-native IDE and want one workflow, not a separate setup per tool
+- You want to reuse and propagate the same agentic workflow across multiple projects (`j:distribute`)
 
 **You might not need it when:**
 - You're doing a quick one-off script or single-session experiment
 - Your project has no meaningful test surface
+
+📖 **Full reference:** [project/.wiki/documentation.md](project/.wiki/documentation.md)

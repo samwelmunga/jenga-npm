@@ -1,0 +1,190 @@
+---
+name: j:j-doc-sync
+description: Polyfill alias of the doc-sync skill under a collision-safe directory name. Identical behavior to /doc-sync — Compare the current state of a project with its documentation and update documentation to reflect changes. Accepts `update:`, `source:`, `exclude:`, and `minify:` arguments to control scope. Use when documentation may be out of date with implementation, or when the user asks to sync, refresh, update, or shrink docs. Use when the bare /doc-sync form is shadowed by another tool's own built-in command of the same name.
+keywords:
+  - doc-sync
+  - documentation
+  - update docs
+  - sync docs
+  - j-doc-sync
+  - polyfill
+examples:
+  - "update the documentation"
+  - "sync docs with current state"
+  - "j-doc-sync"
+---
+
+# Doc-Sync — Keep Documentation in Sync with the Codebase
+
+This skill is a literal-directory-name duplicate of `skills/doc-sync/`. It exists so that `/j-doc-sync` (and `j:j-doc-sync`) give a guaranteed-unshadowed way to reach the same flow as `/doc-sync`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/doc-sync` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+
+This file is generated/synced by `scripts/generate-j-alias.sh doc-sync` from `skills/doc-sync/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
+
+## What this skill does
+
+Analyses project source files, compares them against existing documentation, and updates any documentation that is stale, incomplete, or missing. Can be scoped with arguments to focus on specific files or exclude noise.
+
+---
+
+## Argument Parsing
+
+Before doing anything, check the user's message for arguments. Arguments may appear in any order and may be combined in a single invocation.
+
+| Argument | Format | Meaning |
+|---|---|---|
+| `--update:` | `update: <path(s)>` | Documentation file(s) to check and update. Comma or space-separated. |
+| `--source:` | `source: <path(s)>` | Source file(s) or director(ies) to prioritize when analysing changes. Comma or space-separated. |
+| `--exclude:` | `exclude: <path(s)>` | File(s) or director(ies) to skip entirely — neither read as source nor updated. Comma or space-separated. |
+| `--minify:` | `minify: <percent>` | Reduce each target documentation file by approximately N% by removing redundant and non-essential content. Defaults to `70` (i.e. scale down to 70% of original size) if no value is given. |
+
+**Examples:**
+- `doc-sync update: docs/API.md source: src/api/`
+- `doc-sync exclude: node_modules, dist update: README.md`
+- `doc-sync source: src/auth/ update: docs/auth.md, docs/security.md`
+- `doc-sync minify: 50 update: docs/API.md`
+- `doc-sync minify: update: README.md` *(uses default 70%)*
+
+All paths are interpreted relative to the project root.
+
+---
+
+## Instructions
+
+### 1. Parse arguments
+
+Extract any `update:`, `source:`, `exclude:`, and `minify:` values from the user's message.
+- Store each as a list: `update_targets`, `source_paths`, `exclude_paths`.
+- Store `minify` as a number `minify_pct`. If the `minify:` key is present but has no value, default to `70`. If `minify:` is absent entirely, set `minify_pct` to `null` (no minification).
+- Merge `exclude_paths` with the default excludes from `assets/default_excludes.txt`.
+
+### 2. Resolve update targets
+
+If `update_targets` is **not empty**, use those paths as the documentation files to update.
+
+If `update_targets` is **empty**, resolve targets from `assets/doc_targets.md`:
+- Read the file and parse the **Documentation Targets** list.
+- Each entry is a relative path to a documentation file to keep up to date.
+- If no entry matches an existing file, skip it and note it as missing.
+
+If neither source has targets (no arguments and no doc_targets), scan the project for documentation files:
+- Look for `*.md`, `docs/`, `documentation/`, `project/documentation/`, `README*`, `CHANGELOG*`, `CONTRIBUTING*`.
+- Ask the user: *"I found the following documentation files. Which should I update?"* — present the list and let them select.
+
+### 3. Resolve analysis sources
+
+If `source_paths` is **not empty**, read those files and directories (recursively if directories).
+
+If `source_paths` is **empty**, infer sources from each update target:
+- Read the existing content of the documentation file.
+- Look for mentions of paths, module names, function names, or API routes that hint at what code it describes.
+- Use those hints to locate relevant source files in the project.
+- Fall back to a broad scan of common source directories (`src/`, `lib/`, `app/`, project root) if no hints are found.
+
+Apply `exclude_paths` at this step — skip any file or directory matching an excluded path.
+
+### 4. Analyse for drift
+
+For each update target and its resolved sources:
+
+1. **Read the documentation file** — understand what it currently claims (structure, API, config, behaviour, examples).
+2. **Read the source files** — extract the current reality (exported functions, routes, config keys, CLI flags, env vars, class names, etc.).
+3. **Compare** — identify:
+   - Sections that reference removed or renamed things.
+   - Missing documentation for new things added in source.
+   - Outdated examples, wrong flag names, stale code snippets.
+   - Incorrect or missing configuration keys/values.
+
+#### 4a. Cross-reference `.publicignore` for "missing documentation" candidates
+
+Every candidate identified above as "missing documentation for new things added in source" ships publicly by default unless this project has adopted `/mirror-public`. Before flagging any such candidate, check whether it's actually private-only:
+
+1. **Check for `.publicignore` at the repo root.** Most projects using this framework will not have one (they haven't adopted `/mirror-public`) — if it's absent, **skip this entire sub-step**. Fall through to flagging every "missing documentation" candidate exactly as `3.` above already would, with no further filtering.
+2. **If `.publicignore` exists**, for each "missing documentation" candidate, determine its source path (relative to the repo root) and classify it by running:
+   ```
+   scripts/check-publicignore-match.sh <path> [<path> ...]
+   ```
+   This reuses `/mirror-public`'s own `mirror.sh` matching logic (`rsync --exclude-from=.publicignore`) — a file this script reports `BLOCKED` is guaranteed to be a file `/mirror-public --dry-run` would also report as "would be blocked", and vice versa for `PUBLIC`. It needs no network access and does not require `/mirror-public` to be configured.
+3. **`BLOCKED`** → do not flag this candidate as missing documentation. It's private-only and will never ship to the public mirror, so public docs coverage is not applicable.
+4. **`PUBLIC`** → flag it as usual in step 5's report, and name `README.md` and `project/.wiki/documentation.md` (the confirmed canonical full-reference doc — see `assets/doc_targets.md`) as the target docs to check for coverage of this item.
+
+This sub-step only changes what gets flagged as "missing documentation" in step 3's third bullet — it does not affect the other three drift categories (renamed/removed references, outdated examples, incorrect config keys), which are flagged regardless of `.publicignore` since they concern existing documentation content, not public-shipping coverage of new source additions.
+
+### 5. Report findings before updating
+
+Before making any writes, present a concise drift summary per file:
+
+```
+📄 docs/API.md
+  ✏️  /api/users route renamed to /api/members in source
+  ➕  New endpoint POST /api/invites not documented
+  🗑️  Reference to deprecated `--verbose` flag still present
+
+📄 README.md
+  ✏️  Setup instructions reference Node 16; project now requires Node 20
+  ➕  New environment variable DATABASE_URL not listed
+```
+
+Ask: *"Should I apply all updates, or skip any of these?"*
+
+### 6. Apply updates
+
+For each approved update:
+- Edit the documentation file in-place — preserve existing structure, tone, and formatting.
+- Replace stale references with accurate ones.
+- Add new sections or entries for undocumented items.
+- Remove or mark deprecated items with a note if full removal seems too aggressive (ask when uncertain).
+- Do not alter sections that appear unrelated to the analysed source files.
+
+### 6a. Minify (if `minify_pct` is set)
+
+After sync edits are applied (or if only minification was requested), reduce each target file to approximately `minify_pct`% of its current size:
+
+**What to remove — in priority order:**
+1. Duplicate explanations of the same concept said in multiple ways.
+2. Verbose prose that restates what a code example already shows clearly.
+3. Historical context, changelogs, or migration notes buried in reference docs.
+4. Filler phrases ("It is important to note that…", "As mentioned above…").
+5. Redundant examples where one concise example covers the same case as two or three longer ones — keep the most illustrative, remove the rest.
+6. Section headers with no meaningful content beneath them.
+
+**What to keep — never remove:**
+- All unique technical facts (function signatures, config keys, env vars, routes, types).
+- Code examples that demonstrate something not expressed in prose.
+- Warnings, caveats, and known limitations.
+- Installation and setup steps.
+
+**Process:**
+1. Calculate the current character count of the file.
+2. Target size = `current_size × (minify_pct / 100)`.
+3. Remove content following the priority list above until the file is at or below the target size.
+4. If the target cannot be reached without removing essential content, stop at the smallest safe size and note the actual reduction achieved.
+5. Do not rewrite or paraphrase kept content — only remove.
+
+### 7. Summarise changes
+
+After all writes are done, print a summary:
+
+```
+✅ Updated 3 documentation files:
+   - docs/API.md       (2 sections updated, 1 added)
+   - README.md         (setup instructions refreshed)
+   - docs/config.md    (3 new env vars added)
+
+🗜️  Minified 2 documentation files:
+   - docs/API.md       (4 200 → 2 940 chars, −30%)
+   - README.md         (3 100 → 2 170 chars, −30%)
+
+⚠️  Skipped 1 file (no matching sources found):
+   - docs/legacy.md
+```
+
+If nothing needed updating, print: `✅ Documentation is already in sync with the source.`
+If minification could not reach the target, note: `⚠️ docs/API.md reduced to X% (target was Y% — essential content limit reached).`
+
+---
+
+## Reference files
+
+- `assets/doc_targets.md` — Editable list of documentation files this skill checks by default.
+- `assets/default_excludes.txt` — Paths always excluded from source analysis unless overridden.
+- `scripts/check-publicignore-match.sh` (repo root) — Used in step 4a to classify "missing documentation" candidates as `PUBLIC`/`BLOCKED` per `.publicignore`, reusing `/mirror-public`'s exact matching semantics.

@@ -1,0 +1,17 @@
+{
+  "statuses": ["Pending", "In Progress", "Passed", "Passed with remarks", "Failed", "Rejected", "Blocked"],
+  "rapport_types": ["conflict", "implementation_blocker", "security_concern", "test_failure", "analysis"],
+  "paths": {
+    "board": "project/board",
+    "epics": "project/board/epics",
+    "stories": "project/board/stories",
+    "tasks": "project/board/tasks",
+    "rapports_problems": "project/rapports/problems",
+    "rapports_analysis": "project/rapports/analysis",
+    "queue": "project/queue",
+    "logs": "project/logs",
+    "data": "project/data",
+    "configs": "project/configs"
+  },
+  "agents": ["developer", "tester", "scrum-master"]
+}
