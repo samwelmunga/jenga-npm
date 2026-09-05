@@ -1,6 +1,6 @@
 {
   "name": "@jenga-ai/agent",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "An agentic development workflow for Claude Code, Copilot, and Codex \u2014 with a persistent Epic/Story/Task board, an isolated git worktree per task, and a separate tester agent that runs your test suite before anything is marked done.",
   "type": "module",
   "publishConfig": {
