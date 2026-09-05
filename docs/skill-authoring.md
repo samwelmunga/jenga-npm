@@ -136,7 +136,10 @@ next invocation rather than incrementally patched. `E50_S05_T02` ran it once acr
 skills; re-running it against a changed source skill is the ongoing lockstep-sync path.
 
 **Exclusions.** `skills/init/`/`skills/j-init/` are excluded (already hand-built and paired before the
-generator existed) and `skills/index/` is excluded (no `SKILL.md` — not a skill, not part of routing).
+generator existed), `skills/jenga/` and `skills/jenga-permission-level/` are excluded (root
+orchestrator commands — the invocation surface for these two must stay exactly `/jenga`/`j:jenga`
+and `/jenga-permission-level`/`j:jenga-permission-level`, never a doubled `j-jenga` alias), and
+`skills/index/` is excluded (no `SKILL.md` — not a skill, not part of routing).
 
 ---
 

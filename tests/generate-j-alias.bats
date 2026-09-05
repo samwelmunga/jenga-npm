@@ -107,3 +107,20 @@ run_generator() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"refusing to touch 'j-init'"* ]]
 }
+
+@test "hard-refuses 'jenga'/'jenga-permission-level' and their j- forms with a non-zero exit (E50_S06_T01)" {
+  # Unlike the init/j-init no-op above (exit 0, a legitimate hand-maintained pair), jenga
+  # and jenga-permission-level must never get a j-<name> twin at all, so this is a hard
+  # error with a non-zero exit — see docs/skill-authoring.md's "j-<name> directory twins"
+  # Exclusions paragraph and project/rapports (E50_S06) for the full rationale.
+  for bad in "jenga" "j-jenga" "jenga-permission-level" "j-jenga-permission-level"; do
+    run run_generator "$bad"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"hard-excluded from this generator"* ]]
+  done
+
+  # No stray j-jenga*/twin directories were materialized under skills/.
+  run ls "$PROJECT_DIR/skills"
+  [ "$status" -eq 0 ]
+  [ "$output" = "close-story" ]
+}

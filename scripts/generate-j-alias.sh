@@ -33,6 +33,13 @@
 #     not a silent no-op, so a typo'd or non-skill argument fails clearly.
 #   - Refuses to touch the skills/init/ <-> skills/j-init/ pair — that pair already
 #     exists, is hand-maintained, and is explicitly out of scope for this story.
+#   - Refuses to touch skills/jenga/ or skills/jenga-permission-level/ (and their would-be
+#     j-jenga/j-jenga-permission-level twins) — hard error, non-zero exit (E50_S06_T01).
+#     These are root orchestrator commands; their invocation surface must stay exactly
+#     /jenga (j:jenga) and /jenga-permission-level (j:jenga-permission-level), never a
+#     doubled j-jenga alias. A prior generic run of this generator produced exactly that
+#     unreachable doubled twin by mistake — see docs/skill-authoring.md's "j-<name>
+#     directory twins" Exclusions paragraph.
 #
 # This is a single-skill generator only. Running it across every skill in the repo is a
 # separate task (E50_S05_T02) — deliberately not built here.
@@ -90,6 +97,19 @@ fi
 if [[ "$SKILL_NAME" == "init" || "$SKILL_NAME" == "j-init" ]]; then
   echo "generate-j-alias.sh: refusing to touch '$SKILL_NAME' — the skills/init/ <-> skills/j-init/ pair already exists and is hand-maintained (out of scope for this generator, E50_S05). No-op." >&2
   exit 0
+fi
+
+# Hard exclusion (E50_S06_T01): jenga and jenga-permission-level are root orchestrator
+# commands whose invocation surface must stay exactly /jenga (j:jenga) and
+# /jenga-permission-level (j:jenga-permission-level) — never a doubled j-jenga alias.
+# Unlike the init/j-init case above (a silent no-op, exit 0, because that pair is
+# legitimately hand-maintained and pre-dates this generator), this is a hard error with a
+# non-zero exit: a j-jenga/j-jenga-permission-level twin should never be generated at all,
+# so a future accidental invocation must fail loudly rather than silently succeed as a
+# no-op. See docs/skill-authoring.md's "j-<name> directory twins" Exclusions paragraph.
+if [[ "$SKILL_NAME" == "jenga" || "$SKILL_NAME" == "j-jenga" || "$SKILL_NAME" == "jenga-permission-level" || "$SKILL_NAME" == "j-jenga-permission-level" ]]; then
+  echo "generate-j-alias.sh: error: refusing to generate a j-<name> twin for '$SKILL_NAME' — jenga and jenga-permission-level are root orchestrator commands and are hard-excluded from this generator (E50_S06_T01). Their invocation surface must stay exactly /jenga (j:jenga) and /jenga-permission-level (j:jenga-permission-level), never a doubled j-jenga alias. This is not a no-op — it is an intentional hard failure." >&2
+  exit 1
 fi
 
 SRC_DIR="$SKILLS_DIR/$SKILL_NAME"
