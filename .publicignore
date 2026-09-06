@@ -206,6 +206,20 @@ mcp/router/
 .claude/mcp/router/
 .agents/mcp/router/
 
+# --- Private-tooling tests (E50_S07_T11) ---
+# These tests exercise the private tooling blocklisted above (mcp/router/ and
+# skills/mirror-public/) and fail in the public mirror with a missing-dependency
+# error if they sync without their subject. They must ship alongside their
+# (already-blocklisted) subjects — i.e. stay excluded here too.
+# tests/router-prefix-guard.bats: imports mcp/router/allow-list-guard.js
+tests/router-prefix-guard.bats
+# tests/mirror-orphaned-twin-rewrite.bats: sources skills/mirror-public/scripts/mirror.sh via the helper below
+tests/mirror-orphaned-twin-rewrite.bats
+# tests/helpers/mirror-orphaned-twin-rewrite.sh: sources skills/mirror-public/scripts/mirror.sh directly
+tests/helpers/mirror-orphaned-twin-rewrite.sh
+# tests/helpers/router-route.mjs: drives the router that router-prefix-guard.bats imports
+tests/helpers/router-route.mjs
+
 # --- Scratch worktree used by /mirror-public itself ---
 .mirror-worktrees/
 
