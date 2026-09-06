@@ -379,13 +379,18 @@ if [[ -z "${STAGE_ID}" ]] && printf '%s' "${STAGE_OUTPUT}" | jq -e . >/dev/null 
   STAGE_ID="$(printf '%s' "${STAGE_OUTPUT}" | jq -r '.id // .stageId // .stage_id // empty' 2>/dev/null || true)"
 fi
 
-# Attempt 3: fall back to `npm stage list <package>@<version> --json` and
-# extract the most recent matching entry's id.
+# Attempt 3: fall back to `npm stage list <package> --json` and extract the
+# most recent matching entry's id. `npm stage list` rejects a version-
+# qualified spec ("Version specifiers are not supported for listing staged
+# packages") — it only accepts a bare package name — so this must pass
+# PACKAGE_NAME, never PACKAGE_SPEC; the version match happens client-side via
+# jq below instead (confirmed live on jenga-npm during v1.3.0 staging on
+# 2026-09-01, project/todo.md).
 if [[ -z "${STAGE_ID}" ]]; then
   log_warn "could not parse a stage id directly from stage output; falling back to 'npm stage list --json'..."
 
   LIST_STATUS=0
-  LIST_OUTPUT="$(npm stage list "${PACKAGE_SPEC}" --json 2>&1)" || LIST_STATUS=$?
+  LIST_OUTPUT="$(npm stage list "${PACKAGE_NAME}" --json 2>&1)" || LIST_STATUS=$?
 
   if [[ ${LIST_STATUS} -ne 0 ]]; then
     printf '%s\n' "${LIST_OUTPUT}" >&2
@@ -405,7 +410,7 @@ if [[ -z "${STAGE_ID}" ]]; then
 fi
 
 if [[ -z "${STAGE_ID}" ]]; then
-  printf 'npm stage pipeline: staged successfully but the stage id could not be captured from either the direct output or "npm stage list --json". Run "npm stage list %s --json" manually to recover it.\n' "${PACKAGE_SPEC}" >&2
+  printf 'npm stage pipeline: staged successfully but the stage id could not be captured from either the direct output or "npm stage list --json". Run "npm stage list %s --json" manually to recover it (bare package name — a version-qualified spec is rejected by npm).\n' "${PACKAGE_NAME}" >&2
   exit "${EXIT_STAGE_FAILURE}"
 fi
 

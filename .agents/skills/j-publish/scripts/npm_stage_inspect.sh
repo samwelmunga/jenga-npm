@@ -419,8 +419,31 @@ cmd_list() {
   # `list` itself needs no config (npm stage list takes no target/config).
   : "${config_arg}"
 
+  # `npm stage list` rejects a version-qualified spec ("Version specifiers
+  # are not supported for listing staged packages") — it only accepts a bare
+  # package name. If the caller passed one anyway (e.g. "@jenga-ai/agent@1.3.0"
+  # or "some-pkg@1.3.0"), split it into name + version here, pass only the
+  # bare name to npm, and filter the result to that version client-side
+  # below (same fallback the fix in npm_stage_pipeline.sh uses). A leading
+  # '@' belongs to a scoped package's own name, not a version marker, so the
+  # version split point is the second '@' for scoped specs, the first for
+  # unscoped ones.
+  local package_name="${package_spec}" package_version=""
+  if [[ -n "${package_spec}" ]]; then
+    if [[ "${package_spec}" == @* ]]; then
+      local rest="${package_spec#@}"
+      if [[ "${rest}" == *"@"* ]]; then
+        package_name="@${rest%%@*}"
+        package_version="${rest#*@}"
+      fi
+    elif [[ "${package_spec}" == *"@"* ]]; then
+      package_name="${package_spec%%@*}"
+      package_version="${package_spec#*@}"
+    fi
+  fi
+
   local -a cmd=(npm stage list)
-  [[ -n "${package_spec}" ]] && cmd+=("${package_spec}")
+  [[ -n "${package_name}" ]] && cmd+=("${package_name}")
   cmd+=(--json)
 
   if (( dry_run )); then
@@ -434,6 +457,16 @@ cmd_list() {
     printf '%s\n' "${output}" >&2
     printf 'npm stage inspect: npm stage list failed (exit %s).\n' "${status}" >&2
     exit "${EXIT_OP_FAILED}"
+  fi
+
+  if [[ -n "${package_version}" ]]; then
+    local filtered
+    if filtered="$(printf '%s' "${output}" | jq -c --arg ver "${package_version}" '
+      ( if (type == "array") then . else (.stages? // .items? // []) end )
+      | [ .[] | select((.version // "") == $ver) ]
+    ' 2>/dev/null)"; then
+      output="${filtered}"
+    fi
   fi
 
   if (( json_out )); then
