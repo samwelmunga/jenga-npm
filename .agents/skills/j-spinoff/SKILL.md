@@ -1,5 +1,5 @@
 ---
-name: j:spinoff
+name: j.spinoff
 description: Polyfill alias of the spinoff skill under a collision-safe directory name. Identical behavior to /spinoff — Capture a diverging topic mid-conversation. Collects context and a mandatory origin, optionally runs /brainstorm for prerequisites, saves an /idea entry, and returns focus to the primary thread. Use when the bare /spinoff form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - spinoff
@@ -19,7 +19,7 @@ metadata:
 
 # Spinoff — Capture a Diverging Topic
 
-This skill is a literal-directory-name duplicate of `skills/spinoff/`. It exists so that `/j-spinoff` (and `j:j-spinoff`) give a guaranteed-unshadowed way to reach the same flow as `/spinoff`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/spinoff` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+This skill is a literal-directory-name duplicate of `skills/spinoff/`. It exists so that `/j-spinoff` (and `j.j-spinoff`) give a guaranteed-unshadowed way to reach the same flow as `/spinoff`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/spinoff` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
 
 This file is generated/synced by `scripts/generate-j-alias.sh spinoff` from `skills/spinoff/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
 

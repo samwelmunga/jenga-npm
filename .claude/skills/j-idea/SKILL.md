@@ -1,5 +1,5 @@
 ---
-name: j:idea
+name: j.idea
 description: Polyfill alias of the idea skill under a collision-safe directory name. Identical behavior to /idea — Capture a loosely-defined idea to project/ideas.md — a lightweight, "maybe someday" log with no board or promotion overhead. Use when the bare /idea form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - idea
@@ -20,7 +20,7 @@ metadata:
 
 # Idea — Lightweight Idea Capture
 
-This skill is a literal-directory-name duplicate of `skills/idea/`. It exists so that `/j-idea` (and `j:j-idea`) give a guaranteed-unshadowed way to reach the same flow as `/idea`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/idea` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+This skill is a literal-directory-name duplicate of `skills/idea/`. It exists so that `/j-idea` (and `j.j-idea`) give a guaranteed-unshadowed way to reach the same flow as `/idea`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/idea` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
 
 This file is generated/synced by `scripts/generate-j-alias.sh idea` from `skills/idea/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
 

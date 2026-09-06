@@ -1,5 +1,5 @@
 ---
-name: j:redo
+name: j.redo
 description: Polyfill alias of the redo skill under a collision-safe directory name. Identical behavior to /redo — Redo parts or entire previous implementations identified by a commit SHA or an Epic/Story number (e.g. E01, E02_S03). Expects an identifier and a description of what to redo and why. Use when the user wants to revisit, rework, or rewrite previously completed work, including updating all affected documentation. Use when the bare /redo form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - redo
@@ -19,7 +19,7 @@ metadata:
 
 # Redo — Rework a Previous Implementation
 
-This skill is a literal-directory-name duplicate of `skills/redo/`. It exists so that `/j-redo` (and `j:j-redo`) give a guaranteed-unshadowed way to reach the same flow as `/redo`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/redo` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+This skill is a literal-directory-name duplicate of `skills/redo/`. It exists so that `/j-redo` (and `j.j-redo`) give a guaranteed-unshadowed way to reach the same flow as `/redo`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/redo` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
 
 This file is generated/synced by `scripts/generate-j-alias.sh redo` from `skills/redo/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
 

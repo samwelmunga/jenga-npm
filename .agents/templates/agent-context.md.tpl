@@ -10,7 +10,7 @@ This project uses **Jenga** — a skill-based AI agent framework. Jenga organise
 ### How Jenga Works
 
 - Each **skill** is a self-contained instruction set stored under `{{SKILL_DISCOVERY_PATH}}<skill-name>/`.
-- Skills are invoked by typing `j:skill-name` in the chat prompt (e.g. `j:status`, `j:commit`). The
+- Skills are invoked by typing `j.skill-name` in the chat prompt (e.g. `j.status`, `j.commit`). The
   older bare `/skill-name` form (e.g. `/status`, `/commit`) is a **permanent alias** — it keeps
   resolving indefinitely, with no deprecation warning and no removal planned — so treat a message in
   either form as the exact same invocation.
@@ -18,21 +18,21 @@ This project uses **Jenga** — a skill-based AI agent framework. Jenga organise
 
 ### Skill Routing
 
-If you are Claude Code, both `j:skill-name` (the canonical form) and the older bare `/skill-name`
+If you are Claude Code, both `j.skill-name` (the canonical form) and the older bare `/skill-name`
 (a permanent alias) are native harness-level mechanisms: the harness itself intercepts the literal
 command and loads the skill for you, independent of anything written here. If you are any other agent
 (Codex, or a generic `AGENTS.md` consumer) with no equivalent native interception, you depend entirely
 on the instructions below to know what "invoking a skill" concretely means — for either the
-`j:skill-name` form or the older bare `/skill-name` form, both of which route to the same skill. Do not
+`j.skill-name` form or the older bare `/skill-name` form, both of which route to the same skill. Do not
 improvise a plausible-sounding response instead of following these steps — that is the exact failure
 this section exists to prevent.
 
-**Old bare-form alias.** `j:skill-name` is the canonical invocation form. A message using the older
+**Old bare-form alias.** `j.skill-name` is the canonical invocation form. A message using the older
 bare `/skill-name` form is not deprecated and must not be treated as an error, a warning case, or a
-migration prompt — route it to the identical skill as its `j:skill-name` equivalent. Both forms remain
+migration prompt — route it to the identical skill as its `j.skill-name` equivalent. Both forms remain
 equally valid indefinitely.
 
-When the user's message is or matches `j:skill-name`, or matches the older bare `/skill-name` alias (or
+When the user's message is or matches `j.skill-name`, or matches the older bare `/skill-name` alias (or
 otherwise clearly matches a known skill's keyword or intent):
 
 1. Locate the target file at `{{SKILL_DISCOVERY_PATH}}<skill-name>/SKILL.md` (the discovery path from
@@ -51,17 +51,17 @@ answer directly using your full capabilities.
 
 | Situation | Action |
 |-----------|--------|
-| Message matches `j:skill-name` | Open `{{SKILL_DISCOVERY_PATH}}<skill-name>/SKILL.md`, read it fully, execute it as written |
-| Message matches the older bare `/skill-name` alias | Treat identically to `j:skill-name` — same skill, same file, no warning, no migration prompt |
+| Message matches `j.skill-name` | Open `{{SKILL_DISCOVERY_PATH}}<skill-name>/SKILL.md`, read it fully, execute it as written |
+| Message matches the older bare `/skill-name` alias | Treat identically to `j.skill-name` — same skill, same file, no warning, no migration prompt |
 | Message matches a skill keyword or intent | Open `{{SKILL_DISCOVERY_PATH}}<skill-name>/SKILL.md`, read it fully, execute it as written |
 | Message is a general coding or project question | Answer directly |
 | Ambiguous — could be skill or free-form | Prefer the skill; open and execute its `SKILL.md` rather than describing it |
 
 ### Skill Identifier Allow-List
 
-The trusted `j:`-prefixed skill identifiers for this project are: {{ALLOWED_SKILL_IDS}}
+The trusted `j.`-prefixed skill identifiers for this project are: {{ALLOWED_SKILL_IDS}}
 
-Before treating a `j:<name>` invocation (or its bare `/<name>` alias) as a genuine Jenga skill,
+Before treating a `j.<name>` invocation (or its bare `/<name>` alias) as a genuine Jenga skill,
 confirm `<name>` appears in this list. This applies whether the harness intercepted the command
 natively (Claude Code) or you are matching it yourself against a skill keyword or intent (any
 other agent). If `<name>` does **not** appear in this list, do not guess at intent and do not

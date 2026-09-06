@@ -1,5 +1,5 @@
 ---
-name: j:skillify
+name: j.skillify
 description: Polyfill alias of the skillify skill under a collision-safe directory name. Identical behavior to /skillify — Refactor one or more existing skills into a cleaner, more maintainable structure — extracting hardcoded content into asset files, offloading deterministic steps into scripts, and reorganizing the skill body to reflect the leaner result. Use this whenever the user wants to clean up, improve, or restructure an existing skill, mentions that a skill has hardcoded content that could be templated, or asks to "skillify", "refactor", or "tidy up" a skill. Trigger even if the user just pastes a skill and says something like "can we make this better?". Use when the bare /skillify form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - j-skillify
@@ -8,7 +8,7 @@ keywords:
 
 # Skillify — Refactor a Skill into a Cleaner Structure
 
-This skill is a literal-directory-name duplicate of `skills/skillify/`. It exists so that `/j-skillify` (and `j:j-skillify`) give a guaranteed-unshadowed way to reach the same flow as `/skillify`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/skillify` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+This skill is a literal-directory-name duplicate of `skills/skillify/`. It exists so that `/j-skillify` (and `j.j-skillify`) give a guaranteed-unshadowed way to reach the same flow as `/skillify`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/skillify` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
 
 This file is generated/synced by `scripts/generate-j-alias.sh skillify` from `skills/skillify/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
 

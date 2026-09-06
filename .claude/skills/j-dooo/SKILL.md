@@ -1,5 +1,5 @@
 ---
-name: j:dooo
+name: j.dooo
 description: Polyfill alias of the dooo skill under a collision-safe directory name. Identical behavior to /dooo — Parallel execution orchestrator. Calls /do to start implementations via sub-agents, then loops back to the board to identify and offer parallelisable tasks until the user selects "Done". Use when the bare /dooo form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - dooo
@@ -19,7 +19,7 @@ metadata:
 
 # Dooo — Parallel Execution Orchestrator
 
-This skill is a literal-directory-name duplicate of `skills/dooo/`. It exists so that `/j-dooo` (and `j:j-dooo`) give a guaranteed-unshadowed way to reach the same flow as `/dooo`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/dooo` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+This skill is a literal-directory-name duplicate of `skills/dooo/`. It exists so that `/j-dooo` (and `j.j-dooo`) give a guaranteed-unshadowed way to reach the same flow as `/dooo`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/dooo` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
 
 This file is generated/synced by `scripts/generate-j-alias.sh dooo` from `skills/dooo/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
 

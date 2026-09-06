@@ -1,5 +1,5 @@
 ---
-name: j:evaluate
+name: j.evaluate
 description: Polyfill alias of the evaluate skill under a collision-safe directory name. Identical behavior to /evaluate — Analyzes example files against a target goal and produces a structured evaluation rapport. Use when the bare /evaluate form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - j-evaluate
@@ -8,7 +8,7 @@ keywords:
 
 # Evaluate
 
-This skill is a literal-directory-name duplicate of `skills/evaluate/`. It exists so that `/j-evaluate` (and `j:j-evaluate`) give a guaranteed-unshadowed way to reach the same flow as `/evaluate`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/evaluate` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+This skill is a literal-directory-name duplicate of `skills/evaluate/`. It exists so that `/j-evaluate` (and `j.j-evaluate`) give a guaranteed-unshadowed way to reach the same flow as `/evaluate`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/evaluate` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
 
 This file is generated/synced by `scripts/generate-j-alias.sh evaluate` from `skills/evaluate/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
 

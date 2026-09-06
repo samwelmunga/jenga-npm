@@ -1,5 +1,5 @@
 ---
-name: j:uncharted
+name: j.uncharted
 description: Polyfill alias of the uncharted skill under a collision-safe directory name. Identical behavior to /uncharted — Investigate code that has no Jenga board provenance — a foreign file, an external source being pulled in, or an entire pre-existing codebase — and give it a consistent understanding document plus proper board representation. Use when the bare /uncharted form is shadowed by another tool's own built-in command of the same name.
 metadata:
   prefered_agent: scrum-master
@@ -27,7 +27,7 @@ examples:
 
 # Uncharted — Investigative Workflow for Foreign & Pre-Existing Code
 
-This skill is a literal-directory-name duplicate of `skills/uncharted/`. It exists so that `/j-uncharted` (and `j:j-uncharted`) give a guaranteed-unshadowed way to reach the same flow as `/uncharted`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/uncharted` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+This skill is a literal-directory-name duplicate of `skills/uncharted/`. It exists so that `/j-uncharted` (and `j.j-uncharted`) give a guaranteed-unshadowed way to reach the same flow as `/uncharted`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/uncharted` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
 
 This file is generated/synced by `scripts/generate-j-alias.sh uncharted` from `skills/uncharted/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
 

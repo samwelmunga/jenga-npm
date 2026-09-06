@@ -31,6 +31,13 @@
 # Every test below runs against a throwaway $BATS_TEST_TMPDIR, never against
 # this repository's own contents.
 
+# Shared assertion helpers. A bare `[[ ... ]]` does NOT fail a bats test unless
+# it is the body's final statement -- `[[` is a shell keyword and never fires
+# bats' ERR trap -- so every assertion below goes through a helper function,
+# which is an ordinary simple command and does abort on failure. See the header
+# of tests/helpers/assertions.bash (E50_S07_T08).
+load helpers/assertions
+
 REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
 
 setup() {
@@ -73,9 +80,9 @@ run_init_as_consumer() {
   cd "$CONSUMER_DIR" || return 1
   local script=""
   for candidate in "${INIT_SCRIPT_CANDIDATES[@]}"; do
-    [[ -f "$candidate" ]] && { script="$candidate"; break; }
+    if [ -f "$candidate" ]; then script="$candidate"; break; fi
   done
-  [[ -n "$script" ]] || { echo "no init.sh found under .claude/, .agents/, or skills/ (bare or j-init form)" >&2; return 1; }
+  if [ -z "$script" ]; then echo "no init.sh found under .claude/, .agents/, or skills/ (bare or j-init form)" >&2; return 1; fi
   bash "$script" --visibility visible
 }
 
@@ -140,12 +147,12 @@ assert_full_scaffold() {
 
   run git -C "$dir" log --oneline
   [ "$status" -eq 0 ]
-  [[ "$output" == *"init: scaffold project structure and workflow config"* ]]
+  assert_output_contains "init: scaffold project structure and workflow config"
 }
 
 @test "init.sh scaffolds a complete project when run directly against an empty directory" {
   local init_script="$REPO_ROOT/skills/init/scripts/init.sh"
-  [[ -f "$init_script" ]] || init_script="$REPO_ROOT/skills/j-init/scripts/init.sh"
+  if [ ! -f "$init_script" ]; then init_script="$REPO_ROOT/skills/j-init/scripts/init.sh"; fi
   run bash -c "cd '$CONSUMER_DIR' && bash '$init_script' --visibility visible"
   [ "$status" -eq 0 ]
   assert_full_scaffold "$CONSUMER_DIR"
@@ -156,9 +163,9 @@ assert_full_scaffold() {
   cd "$CONSUMER_DIR"
   local_script=""
   for candidate in "${INIT_SCRIPT_CANDIDATES[@]}"; do
-    [[ -f "$candidate" ]] && { local_script="$candidate"; break; }
+    if [ -f "$candidate" ]; then local_script="$candidate"; break; fi
   done
-  [[ "$local_script" == ".claude/skills/init/scripts/init.sh" || "$local_script" == ".claude/skills/j-init/scripts/init.sh" ]]
+  assert_one_of "$local_script" ".claude/skills/init/scripts/init.sh" ".claude/skills/j-init/scripts/init.sh"
 }
 
 @test "init.sh scaffolds a complete project from a mirrored npm-consumer install (.claude/ + node_modules)" {
@@ -174,7 +181,7 @@ assert_full_scaffold() {
   INIT_CWD="$CONSUMER_DIR" node "$REPO_ROOT/scripts/postinstall.js" >/dev/null
   run run_init_as_consumer
   [ "$status" -ne 0 ]
-  [[ "$output" == *"could not locate the jenga-agent package root"* ]]
+  assert_output_contains "could not locate the jenga-agent package root"
 }
 
 @test "postinstall bootstraps a routable .github/copilot-instructions.md before jenga init has ever run (E46_S03_T01)" {
@@ -185,16 +192,26 @@ assert_full_scaffold() {
   run cat "$f"
   [ "$status" -eq 0 ]
   # JENGA managed-block markers present
-  [[ "$output" == *"<!-- JENGA:START -->"* ]]
-  [[ "$output" == *"<!-- JENGA:END -->"* ]]
-  # The /skill-name routing convention text is present, not just a generic file
-  [[ "$output" == *'Skills are invoked by typing `/skill-name`'* ]]
+  assert_output_contains "<!-- JENGA:START -->"
+  assert_output_contains "<!-- JENGA:END -->"
+  # The invocation-convention prose is present, not just a generic file.
+  #
+  # This assertion previously read 'Skills are invoked by typing `/skill-name`'.
+  # E50_S01_T04 and then E50_S07_T01 deliberately moved the canonical form to
+  # `j.skill-name`, leaving the bare `/skill-name` form as a PERMANENT alias
+  # (E50 Decision 2) — so the old literal stopped rendering. Nothing caught it:
+  # the assertion was a bare mid-test `[[ ... ]]`, which bats never fails on, so
+  # it reported ok against text that had not existed for two tasks. See
+  # tests/helpers/assertions.bash and E50_S07_T08. Both forms are pinned now,
+  # because Decision 2 requires both to stay documented.
+  assert_output_contains 'Skills are invoked by typing `j.skill-name`'
+  assert_output_contains '`/skill-name`'
   # Skill list is populated from .agents/skills/ (mirrored by the same
   # postinstall run) rather than falling back to the empty-list placeholder
-  [[ "$output" != *"_No skills found._"* ]]
+  assert_output_not_contains "_No skills found._"
   # Accepts either the bare "init" entry (private monorepo) or "j-init" (a
   # public mirror checkout, where only the twin ships — E28_S12 follow-up)
-  [[ "$output" == *"- **init**"* || "$output" == *"- **j-init**"* ]]
+  assert_output_contains_any "- **init**" "- **j-init**"
 }
 
 @test "a jenga-init-equivalent refinement pass after postinstall does not duplicate the JENGA block or corrupt content outside it (E46_S03_T01 idempotency)" {
@@ -251,14 +268,14 @@ assert_full_scaffold() {
   [ "$status" -eq 0 ]
   # New mechanical instruction present: open the target SKILL.md, read it in
   # full, execute it as written.
-  [[ "$output" == *"SKILL.md"* ]]
-  [[ "$output" == *"read it"* ]]
-  [[ "$output" == *"execute its instructions exactly as written"* ]]
-  [[ "$output" == *"Do not substitute your own judgment"* ]]
+  assert_output_contains "SKILL.md"
+  assert_output_contains "read it"
+  assert_output_contains "Execute its instructions exactly as written"
+  assert_output_contains "Do not substitute your own judgment"
   # The old vague wording (route decision without an execution mechanism)
   # must be gone — asserting its absence is what actually catches a
   # regression back to the pre-E46_S04_T01 prose.
-  [[ "$output" != *"invoke the skill immediately using the slash-command syntax"* ]]
+  assert_output_not_contains "invoke the skill immediately using the slash-command syntax"
 }
 
 @test "rendered CLAUDE.md and AGENTS.md contain the mechanical open-read-execute routing instruction with the correct per-target discovery path (E46_S04_T01)" {
@@ -273,17 +290,17 @@ assert_full_scaffold() {
 
   run cat "$claude_md"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"execute its instructions exactly as written"* ]]
-  [[ "$output" == *"Do not substitute your own judgment"* ]]
-  [[ "$output" != *"invoke the skill immediately using the slash-command syntax"* ]]
+  assert_output_contains "Execute its instructions exactly as written"
+  assert_output_contains "Do not substitute your own judgment"
+  assert_output_not_contains "invoke the skill immediately using the slash-command syntax"
   # CLAUDE.md's discovery path is .claude/skills/ per generate-agent-context.js's TARGETS table
-  [[ "$output" == *".claude/skills/<skill-name>/SKILL.md"* ]]
+  assert_output_contains ".claude/skills/<skill-name>/SKILL.md"
 
   run cat "$agents_md"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"execute its instructions exactly as written"* ]]
-  [[ "$output" == *"Do not substitute your own judgment"* ]]
-  [[ "$output" != *"invoke the skill immediately using the slash-command syntax"* ]]
+  assert_output_contains "Execute its instructions exactly as written"
+  assert_output_contains "Do not substitute your own judgment"
+  assert_output_not_contains "invoke the skill immediately using the slash-command syntax"
   # AGENTS.md's discovery path is .agents/skills/ per generate-agent-context.js's TARGETS table
-  [[ "$output" == *".agents/skills/<skill-name>/SKILL.md"* ]]
+  assert_output_contains ".agents/skills/<skill-name>/SKILL.md"
 }

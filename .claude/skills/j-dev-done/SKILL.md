@@ -1,5 +1,5 @@
 ---
-name: j:dev-done
+name: j.dev-done
 description: Polyfill alias of the dev-done skill under a collision-safe directory name. Identical behavior to /dev-done — Commit the current work and immediately sync it into the .claude/ and .agents/ mirrors. Shortcut that chains /commit followed by /self-sync. Use when the bare /dev-done form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - dev done
@@ -16,7 +16,7 @@ examples:
 
 # Dev-Done — Commit, then Sync the Mirrors
 
-This skill is a literal-directory-name duplicate of `skills/dev-done/`. It exists so that `/j-dev-done` (and `j:j-dev-done`) give a guaranteed-unshadowed way to reach the same flow as `/dev-done`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/dev-done` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+This skill is a literal-directory-name duplicate of `skills/dev-done/`. It exists so that `/j-dev-done` (and `j.j-dev-done`) give a guaranteed-unshadowed way to reach the same flow as `/dev-done`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/dev-done` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
 
 This file is generated/synced by `scripts/generate-j-alias.sh dev-done` from `skills/dev-done/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
 

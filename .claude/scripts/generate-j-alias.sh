@@ -16,8 +16,8 @@
 #      copied SKILL.md and any copied scripts to "skills/j-<skill-name>/" — including the
 #      .claude/skills/<skill-name>/ and .agents/skills/<skill-name>/ mirrored-install
 #      fallback paths, which fall out of the same literal substring replace.
-#   3. Rewrites the copied SKILL.md's frontmatter: name: j:<skill-name> -> name:
-#      j:j-<skill-name>; description: reframed as a polyfill alias; keywords: gets
+#   3. Rewrites the copied SKILL.md's frontmatter: name: j.<skill-name> -> name:
+#      j.j-<skill-name>; description: reframed as a polyfill alias; keywords: gets
 #      j-<skill-name> and polyfill appended (existing keywords preserved, list created
 #      if absent); examples: gets a "j-<skill-name>" example appended if the list exists.
 #   4. Inserts a short, programmatically generated lockstep/duplicate-alias note near the
@@ -36,7 +36,7 @@
 #   - Refuses to touch skills/jenga/ or skills/jenga-permission-level/ (and their would-be
 #     j-jenga/j-jenga-permission-level twins) — hard error, non-zero exit (E50_S06_T01).
 #     These are root orchestrator commands; their invocation surface must stay exactly
-#     /jenga (j:jenga) and /jenga-permission-level (j:jenga-permission-level), never a
+#     /jenga (j.jenga) and /jenga-permission-level (j.jenga-permission-level), never a
 #     doubled j-jenga alias. A prior generic run of this generator produced exactly that
 #     unreachable doubled twin by mistake — see docs/skill-authoring.md's "j-<name>
 #     directory twins" Exclusions paragraph.
@@ -100,15 +100,15 @@ if [[ "$SKILL_NAME" == "init" || "$SKILL_NAME" == "j-init" ]]; then
 fi
 
 # Hard exclusion (E50_S06_T01): jenga and jenga-permission-level are root orchestrator
-# commands whose invocation surface must stay exactly /jenga (j:jenga) and
-# /jenga-permission-level (j:jenga-permission-level) — never a doubled j-jenga alias.
+# commands whose invocation surface must stay exactly /jenga (j.jenga) and
+# /jenga-permission-level (j.jenga-permission-level) — never a doubled j-jenga alias.
 # Unlike the init/j-init case above (a silent no-op, exit 0, because that pair is
 # legitimately hand-maintained and pre-dates this generator), this is a hard error with a
 # non-zero exit: a j-jenga/j-jenga-permission-level twin should never be generated at all,
 # so a future accidental invocation must fail loudly rather than silently succeed as a
 # no-op. See docs/skill-authoring.md's "j-<name> directory twins" Exclusions paragraph.
 if [[ "$SKILL_NAME" == "jenga" || "$SKILL_NAME" == "j-jenga" || "$SKILL_NAME" == "jenga-permission-level" || "$SKILL_NAME" == "j-jenga-permission-level" ]]; then
-  echo "generate-j-alias.sh: error: refusing to generate a j-<name> twin for '$SKILL_NAME' — jenga and jenga-permission-level are root orchestrator commands and are hard-excluded from this generator (E50_S06_T01). Their invocation surface must stay exactly /jenga (j:jenga) and /jenga-permission-level (j:jenga-permission-level), never a doubled j-jenga alias. This is not a no-op — it is an intentional hard failure." >&2
+  echo "generate-j-alias.sh: error: refusing to generate a j-<name> twin for '$SKILL_NAME' — jenga and jenga-permission-level are root orchestrator commands and are hard-excluded from this generator (E50_S06_T01). Their invocation surface must stay exactly /jenga (j.jenga) and /jenga-permission-level (j.jenga-permission-level), never a doubled j-jenga alias. This is not a no-op — it is an intentional hard failure." >&2
   exit 1
 fi
 
@@ -250,12 +250,16 @@ if desc_field is None or len(desc_field["lines"]) != 1:
     sys.exit(f"generate-j-alias.sh: error: {target_skill_md} has no single-line 'description:' field")
 
 current_name = key_re.match(name_field["lines"][0]).group(2).strip().strip('"\'')
-if current_name not in (f"j:{skill_name}", skill_name):
+# Accepts the current "j.<name>" form, the bare "<name>" form, and the legacy
+# "j:<name>" form (pre-E50_S07_T01) so a twin can still be regenerated from a
+# not-yet-migrated source instead of hard-aborting. Whatever the source carries,
+# the twin is always emitted on the current "j." separator.
+if current_name not in (f"j.{skill_name}", f"j:{skill_name}", skill_name):
     sys.exit(
         f"generate-j-alias.sh: error: frontmatter name '{current_name}' in {target_skill_md} "
-        f"does not match expected 'j:{skill_name}' (or bare '{skill_name}') — refusing to guess, aborting."
+        f"does not match expected 'j.{skill_name}' (or bare '{skill_name}') — refusing to guess, aborting."
     )
-name_field["lines"][0] = f"name: j:j-{skill_name}\n"
+name_field["lines"][0] = f"name: j.j-{skill_name}\n"
 
 original_desc = key_re.match(desc_field["lines"][0]).group(2).strip().strip('"\'').rstrip(".")
 new_desc = (
@@ -289,7 +293,7 @@ body_lines = lines[close_idx + 1:]
 
 note_text = (
     f"This skill is a literal-directory-name duplicate of `skills/{skill_name}/`. It exists so "
-    f"that `/j-{skill_name}` (and `j:j-{skill_name}`) give a guaranteed-unshadowed way to reach "
+    f"that `/j-{skill_name}` (and `j.j-{skill_name}`) give a guaranteed-unshadowed way to reach "
     f"the same flow as `/{skill_name}`, even if a host tool's own built-in command of the same "
     f"name would otherwise shadow or override the bare `/{skill_name}` alias (Claude Code's "
     f"native skill resolution is a literal-string, directory-name-based match — see "

@@ -1,5 +1,5 @@
 ---
-name: j:init
+name: j.init
 description: Polyfill alias of the init skill under a collision-safe directory name. Identical behavior to /init — initializes a new project with the standard directory structure, PROJECT_SUMMARY.md, workflow.json, git repo, and gitignore. Use when the built-in "/init" command (e.g. GH Copilot's own init) shadows Jenga's /init alias.
 keywords:
   - init
@@ -21,7 +21,7 @@ This skill is a literal-directory-name duplicate of `skills/init/`. It exists be
 some host tools/harnesses (e.g. GH Copilot) ship their own built-in command literally
 named `/init`, which can shadow or override Jenga AI's own `/init` alias (Claude Code's
 native skill resolution is a literal-string, directory-name-based match — see
-`docs/skill-authoring.md`'s "Invocation Convention"). `/j-init` (and `j:j-init`) give
+`docs/skill-authoring.md`'s "Invocation Convention"). `/j-init` (and `j.j-init`) give
 users a guaranteed-unshadowed way to reach the exact same setup flow.
 
 Keep this file's instructions in lockstep with `skills/init/SKILL.md` — any change made

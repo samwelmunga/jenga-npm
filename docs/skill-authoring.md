@@ -1,38 +1,89 @@
 # Skill Authoring Guide
 
-Skills are stored in `skills/<name>/SKILL.md` and invoked with `j:<name>` in a Claude Code session —
-the canonical form as of `E50_S01`. The old bare `/<name>` form keeps resolving permanently as an
-alias. See "Invocation Convention" below for the mechanics and the full migration policy.
+Skills are stored in `skills/<name>/SKILL.md` and invoked with `j.<name>` in a Claude Code session —
+the canonical form, namespaced by `E50_S01` and given its current `.` separator by `E50_S07`. The old
+bare `/<name>` form keeps resolving permanently as an alias. See "Invocation Convention" below for
+the mechanics, the naming constraint every skill `name` must satisfy, and the full migration policy.
 
 ---
 
 ## Invocation Convention
 
-`E50` namespaces every Jenga skill invocation under a `j:` prefix (e.g. `j:status`, `j:commit`,
-`j:init`) to avoid collision with, or masquerading by, a same-named command from another tool or
+`E50` namespaces every Jenga skill invocation under a `j.` prefix (e.g. `j.status`, `j.commit`,
+`j.init`) to avoid collision with, or masquerading by, a same-named command from another tool or
 skill installed in the same agent session. This section records the two decisions this required —
 the rename mechanism and the old-form migration policy — and the investigation behind them, so the
 routing-surface tasks that implement the actual cutover (`E50_S01_T02` Claude Code native,
 `E50_S01_T03` Jenga Router MCP, `E50_S01_T04` Copilot/Codex templates) share one unambiguous
 contract instead of each re-deciding it.
 
-### Decision 1 — Rename mechanism: frontmatter-only, not a directory rename
+### Decision 1 — Rename mechanism: frontmatter-only, with a validated separator
 
 **Directory names under `skills/` do not change.** Only the frontmatter `name:` field changes, from
-`name: <skill-name>` to `name: j:<skill-name>`.
+`name: <skill-name>` to `name: j.<skill-name>`.
 
 This deliberately breaks the invariant stated elsewhere in this guide that `name` "must match the
 directory name under `skills/`". The invariant is replaced with a new one: once migrated, a skill's
-frontmatter `name` equals `j:` followed by its (unprefixed) directory name — the directory name
-remains the bare, on-disk identifier; the frontmatter `name` becomes the canonical, `j:`-prefixed
+frontmatter `name` equals `j.` followed by its (unprefixed) directory name — the directory name
+remains the bare, on-disk identifier; the frontmatter `name` becomes the canonical, `j.`-prefixed
 invocation identifier that downstream routing surfaces read.
 
-**Why not rename the directories themselves:**
-- `:` is not a valid filename character on Windows (reserved for drive letters / alternate data
-  streams). This project has no `"os"` restriction in `package.json` and ships as a general-purpose
-  npm package (`@jenga-ai/agent`) — it must not assume a POSIX-only install/dev surface. A directory
-  literally named `skills/j:status/` would break on Windows checkouts, npm installs, and any Windows
-  contributor's local clone.
+#### The constraint the separator must satisfy
+
+A skill's frontmatter `name:` is **not free-form text**. Consuming host tools parse it and *validate
+the value*, and a name that fails validation does not load at all — the skill is simply absent, with
+no partial or degraded mode. The binding constraint is therefore the **strictest name validator among
+all host tools that load Jenga skills**. Currently that is GitHub Copilot CLI's:
+
+```
+Skill name must start with an ASCII letter or number and contain only
+ASCII letters (a-z, A-Z), numbers, hyphens, underscores, dots, and spaces
+```
+
+Any new separator, prefix, or naming scheme must be checked against this rule — and against the
+equivalent rule of any host tool added later — **before** it is adopted.
+
+**Why this is stated so emphatically.** `E50_S01` originally chose `:` and justified it by arguing
+that a colon was safe *because* it lived in frontmatter rather than in a filename — i.e. it checked
+the constraint imposed by the *filesystem* and concluded the frontmatter value was therefore
+unconstrained. That inference was false. `E50_S07` found the Copilot CLI rejecting **82 of 82** Jenga
+skills on version 1.0.83 — a total outage on that surface, not a partial degradation. The filename
+argument below is still correct about filenames; it was never a licence to treat the frontmatter
+value as unvalidated.
+
+**Two things the outage did *not* prove.** Both were considered and disproved during the `E50_S07`
+investigation; do not re-derive them:
+1. **The rule is not "A-Z only."** Hyphens, underscores, dots and spaces are all legal. The only
+   character Jenga ever used that is off the allow-list is `:`.
+2. **The `j-<name>` directory twins (`E50_S05`) were not the cause and are not invalid.** Their
+   directory names are perfectly legal. They failed only because their frontmatter carried
+   `name: j:j-<name>` — the same colon. See the twins section below; that mechanism is untouched.
+
+#### The chosen separator: `.`
+
+`j.<name>` was selected from four candidates because it is legal under the rule above, it keeps
+`E50`'s namespace intent fully intact (`j.status` is still one unmistakably-Jenga identifier, not a
+bare name that anything else could supply), and it is a one-character diff from `j:` — making the
+cutover a separator swap rather than a redesign of the convention.
+
+**Verify empirically, not from documentation.** The check for Copilot is `copilot skill list` run
+from the repo root: a valid name appears in the listing, an invalid one appears under
+"failed to load" with the reason. `tests/` carries a regression gate for exactly this (`E50_S07_T04`),
+so a future name change that a host tool would reject fails the suite instead of shipping.
+
+#### Why not rename the directories themselves
+
+- **The host tool's identity for a skill is its frontmatter `name`, not its directory name.** Verified
+  on Copilot CLI 1.0.83: a skill living in a directory named `status/` but declaring
+  `name: j.status` is listed as `j.status`. Renaming the directory would therefore buy nothing on
+  that surface — the prefix is already carried by the field the tool actually reads.
+- A directory rename could never have rescued the old `:` separator anyway. `:` is not a valid
+  filename character on Windows (reserved for drive letters / alternate data streams), and this
+  project has no `"os"` restriction in `package.json` and ships as a general-purpose npm package
+  (`@jenga-ai/agent`) — it must not assume a POSIX-only install/dev surface. A directory literally
+  named `skills/j:status/` would break on Windows checkouts, npm installs, and any Windows
+  contributor's clone. `.` *is* a legal filename character, so this particular objection no longer
+  binds the current separator — but the remaining reasons below still do.
 - Claude Code's own native skill resolution is a **literal-string, directory-name-based match**,
   independent of `SKILL.md` content. `templates/agent-context.md.tpl`'s Skill Routing section states
   this explicitly: "If you are Claude Code, `/skill-name` is a native harness-level mechanism: the
@@ -52,13 +103,14 @@ invocation identifier that downstream routing surfaces read.
   router to also match legacy bare-form input against the same record (see Decision 2), not to
   restructure how the index is built.
 
-Verified before deciding: every one of this repo's 42 `skills/*/SKILL.md` files currently has a
-frontmatter `name:` that matches its directory name exactly (no pre-existing drift to reconcile).
+Verified before deciding (at `E50_S01`, when the repo had 42 skills): every `skills/*/SKILL.md`
+frontmatter `name:` matched its directory name exactly, so there was no pre-existing drift to
+reconcile. The invariant has held through `E50_S07`'s separator swap across all 82 skills.
 
 ### Decision 2 — Old bare-form migration policy: alias (not deprecation warning, not removal)
 
 **The bare `/skill-name` form keeps resolving indefinitely, on all three routing surfaces, alongside
-the new `j:skill-name` form.** No warning is emitted and no removal is scheduled by this decision.
+the new `j.skill-name` form.** No warning is emitted and no removal is scheduled by this decision.
 
 This is the only one of the three candidate policies (alias / deprecation warning / removal) that can
 be implemented **uniformly** across all three surfaces given Decision 1:
@@ -87,7 +139,7 @@ above: it is not actually achievable there without the same directory-rename/Win
 
 **Residual risk, left open by this task on purpose:** because the bare form is never removed or
 warned against, the collision/masquerade risk motivating this epic persists on the *bare* namespace
-indefinitely — only the new `j:`-prefixed namespace gets the `E50_S02` allow-list guard's protection.
+indefinitely — only the new `j.`-prefixed namespace gets the `E50_S02` allow-list guard's protection.
 Actually retiring the bare form would require revisiting the directory-rename tradeoff in Decision 1
 (e.g. accepting a Windows-incompatible directory layout, or some other mechanism not yet designed)
 and is out of scope here — a future task, not this one, if the tradeoff is ever revisited.
@@ -95,13 +147,16 @@ and is out of scope here — a future task, not this one, if the tradeoff is eve
 ### What `E50_S01_T02`–`T04` inherit from this decision
 
 Each routing-surface task implements the surface-specific mechanics of the same contract:
-1. Treat a skill's canonical identifier as `j:<name>` (frontmatter `name`, once migrated).
+1. Treat a skill's canonical identifier as `j.<name>` (frontmatter `name`, once migrated).
 2. Also keep matching the corresponding bare `<name>` input to the same skill record — no warning,
    no removal.
-3. Never rename `skills/<name>/` or `agents/<name>` directories to include a colon.
+3. Never rename `skills/<name>/` or `agents/<name>` directories to carry the `j.` prefix — the
+   prefix lives in frontmatter only (see "Why not rename the directories themselves" above). The
+   separate `skills/j-<name>/` twins are not an exception to this: they are additional directories,
+   not renames of the originals.
 
 `scripts/apply-j-prefix.sh` (this task) performs the deterministic parts of step 1 (frontmatter
-rewrite) and updates bare `/<name>` prose mentions in `agents/*.md` to `j:<name>` (per the Skill
+rewrite) and updates bare `/<name>` prose mentions in `agents/*.md` to `j.<name>` (per the Skill
 Implementation Principle in `CLAUDE.md`) — `--dry-run` supported so `E50_S01_T02` can verify its
 output before committing to it.
 
@@ -120,25 +175,25 @@ Jenga's bare `/<name>` form on that surface, and no frontmatter change can fix i
 collision-safe directory name `skills/j-init/`, giving a guaranteed-unshadowed path to the same flow
 regardless of what else is installed. `E50_S05` generalizes that one-off pattern to every skill.
 
-**How this differs from the `j:<name>` colon convention.** The colon convention (Decision 1 above) is
+**How this differs from the `j.<name>` prefix convention.** The prefix convention (Decision 1 above) is
 a frontmatter-only identifier change — no new directory, no new files. The `j-<name>` pattern is the
 opposite: a real, second, on-disk directory, deliberately duplicating content rather than aliasing it,
-because the collision it defends against happens at the directory-name-resolution layer the colon
-convention cannot reach. The two are complementary, not alternatives — a skill keeps its `j:<name>`
+because the collision it defends against happens at the directory-name-resolution layer the
+frontmatter prefix cannot reach. The two are complementary, not alternatives — a skill keeps its `j.<name>`
 frontmatter identifier *and* gains a `j-<name>` directory twin; neither replaces the other.
 
 **Generation and sync.** `scripts/generate-j-alias.sh <skill-name>` is the only supported way to
 create or update a `skills/j-<name>/` directory — per `CLAUDE.md`'s Skill Implementation Principle,
 this is never hand-maintained. It copies the full `skills/<skill-name>/` tree, rewrites
-self-referential path references and frontmatter (`name: j:<skill-name>` → `name: j:j-<skill-name>`),
+self-referential path references and frontmatter (`name: j.<skill-name>` → `name: j.j-<skill-name>`),
 and is idempotent and fully rebuilding on every run, so a source change is picked up in full on the
 next invocation rather than incrementally patched. `E50_S05_T02` ran it once across all 41 eligible
 skills; re-running it against a changed source skill is the ongoing lockstep-sync path.
 
 **Exclusions.** `skills/init/`/`skills/j-init/` are excluded (already hand-built and paired before the
 generator existed), `skills/jenga/` and `skills/jenga-permission-level/` are excluded (root
-orchestrator commands — the invocation surface for these two must stay exactly `/jenga`/`j:jenga`
-and `/jenga-permission-level`/`j:jenga-permission-level`, never a doubled `j-jenga` alias), and
+orchestrator commands — the invocation surface for these two must stay exactly `/jenga`/`j.jenga`
+and `/jenga-permission-level`/`j.jenga-permission-level`, never a doubled `j-jenga` alias), and
 `skills/index/` is excluded (no `SKILL.md` — not a skill, not part of routing).
 
 ---
@@ -150,7 +205,7 @@ Every `SKILL.md` begins with a YAML frontmatter block. All fields except `name` 
 ```yaml
 ---
 name: <skill-name>
-description: <one-sentence description shown in j:help listings>
+description: <one-sentence description shown in j.help listings>
 metadata:
   prefered_agent: <agent_name>       # optional — delegate execution to a sub-agent
 keywords:                            # optional — short phrases for keyword routing
@@ -167,8 +222,8 @@ minimum_permission_level: <1-5>       # optional — minimum session permission 
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `name` | string | ✅ | Skill name. Before `E50_S01` migration: must match the directory name under `skills/`. After migration: `j:` + the directory name — see "Invocation Convention" above. |
-| `description` | string | ✅ | One-sentence description shown in `j:help` listings and the skill registry. |
+| `name` | string | ✅ | Skill name. Before `E50_S01` migration: must match the directory name under `skills/`. After migration: `j.` + the directory name — see "Invocation Convention" above. |
+| `description` | string | ✅ | One-sentence description shown in `j.help` listings and the skill registry. |
 | `metadata.prefered_agent` | string | ❌ | Sub-agent to delegate execution to. Valid values: `scrum-master`, `developer`, `tester`. |
 | `keywords` | string[] | ❌ | Short words or phrases (1–3 words) strongly associated with this skill. Used by the Jenga Router for keyword matching. |
 | `examples` | string[] | ❌ | Natural-language prompt strings that should trigger this skill. Used by the Jenga Router for semantic matching. |
@@ -218,7 +273,7 @@ examples:
 
 ### `minimum_permission_level`
 
-An optional integer (`1`-`5`) declaring the minimum session permission level a skill needs to run correctly. This corresponds to the 5-tier system defined by the `j:jenga-permission-level` epic: `1` = Locked, `2` = Guarded (the permanent default), `3` = Standard, `4` = Elevated, `5` = Unrestricted. See the level matrix under `templates/permission-levels/` for what each tier permits.
+An optional integer (`1`-`5`) declaring the minimum session permission level a skill needs to run correctly. This corresponds to the 5-tier system defined by the `j.jenga-permission-level` epic: `1` = Locked, `2` = Guarded (the permanent default), `3` = Standard, `4` = Elevated, `5` = Unrestricted. See the level matrix under `templates/permission-levels/` for what each tier permits.
 
 Set this field only when a skill genuinely cannot complete its work at the default Guarded (2) level — e.g. it needs to run commands that Guarded denies. Most skills should omit this field entirely and run at the default level.
 
@@ -226,7 +281,7 @@ Set this field only when a skill genuinely cannot complete its work at the defau
 - Use the lowest level that actually satisfies the skill's needs — never request more than necessary.
 - Skills that set this field **must** call `scripts/check-permission-level.sh <minimum-level>` at the top of their instructions, before any other work, to gate execution on the current session level.
 - If the current session level is below the declared minimum, the skill must surface an explicit confirmation prompt to the user before elevating — silent auto-elevation is never permitted.
-- Elevation happens via the same mechanism as `j:jenga-permission-level <n>` (i.e. the skill drives the same level switch, it does not invent a separate one).
+- Elevation happens via the same mechanism as `j.jenga-permission-level <n>` (i.e. the skill drives the same level switch, it does not invent a separate one).
 - Immediately after the skill's own work completes, reset the session level back to Guarded (2) — regardless of what level it was elevated to. Elevation must never be held past the skill's own execution, and must never be left for the next session start to clean up.
 - Do not use this field to hold a session at an elevated level across multiple skills or commands — each elevation is scoped to a single skill invocation.
 
@@ -270,18 +325,18 @@ Follow these conventions:
 
 ---
 
-## Threat Model — the `j:` Allow-List Guard
+## Threat Model — the `j.` Allow-List Guard
 
-The `j:` skill allow-list guard (`E50_S02`) checks whether a `j:`-prefixed invocation matches a
+The `j.` skill allow-list guard (`E50_S02`) checks whether a `j.`-prefixed invocation matches a
 canonical list of genuine Jenga skill identifiers before treating it as trusted.
 
-**In scope.** The guard prevents an unrelated or malicious skill from adopting the `j:` prefix and
+**In scope.** The guard prevents an unrelated or malicious skill from adopting the `j.` prefix and
 being invoked as though it were a genuine Jenga skill — it defends the **invocation-matching layer**
 against name-collision and masquerading.
 
 **Explicitly out of scope.** The guard does **not** sandbox, scan, or otherwise verify the *content*
 of a third-party skill file. A skill whose identifier doesn't collide with anything on the allow-list,
-or one installed under a name that legitimately isn't `j:`-prefixed, is neither made safer nor less
+or one installed under a name that legitimately isn't `j.`-prefixed, is neither made safer nor less
 safe by this guard — content-level trust of any skill, Jenga's own or third-party, is a separate,
 unaddressed concern.
 

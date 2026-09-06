@@ -1,5 +1,5 @@
 ---
-name: j:doc-sync
+name: j.doc-sync
 description: Polyfill alias of the doc-sync skill under a collision-safe directory name. Identical behavior to /doc-sync — Compare the current state of a project with its documentation and update documentation to reflect changes. Accepts `update:`, `source:`, `exclude:`, and `minify:` arguments to control scope. Use when documentation may be out of date with implementation, or when the user asks to sync, refresh, update, or shrink docs. Use when the bare /doc-sync form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - doc-sync
@@ -16,7 +16,7 @@ examples:
 
 # Doc-Sync — Keep Documentation in Sync with the Codebase
 
-This skill is a literal-directory-name duplicate of `skills/doc-sync/`. It exists so that `/j-doc-sync` (and `j:j-doc-sync`) give a guaranteed-unshadowed way to reach the same flow as `/doc-sync`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/doc-sync` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+This skill is a literal-directory-name duplicate of `skills/doc-sync/`. It exists so that `/j-doc-sync` (and `j.j-doc-sync`) give a guaranteed-unshadowed way to reach the same flow as `/doc-sync`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/doc-sync` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
 
 This file is generated/synced by `scripts/generate-j-alias.sh doc-sync` from `skills/doc-sync/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
 

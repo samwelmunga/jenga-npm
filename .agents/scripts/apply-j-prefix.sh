@@ -1,22 +1,28 @@
 #!/usr/bin/env bash
-# scripts/apply-j-prefix.sh — mechanical j: prefix rename for skill invocation
+# scripts/apply-j-prefix.sh — mechanical j. prefix rename for skill invocation
 #
 # Implements the mechanism decided in docs/skill-authoring.md's "Invocation Convention"
-# section (E50_S01_T01):
+# section (E50_S01_T01), with the separator corrected from ":" to "." in E50_S07_T01:
 #
 #   1. Frontmatter-only rename. For every skills/<name>/SKILL.md, rewrites the
-#      frontmatter `name:` field from `<name>` to `j:<name>`. Directory names are
-#      left untouched — ":" is not a Windows-safe filename character, and Claude
-#      Code's native skill resolution is a literal-string match against the
+#      frontmatter `name:` field from `<name>` to `j.<name>`. Directory names are
+#      left untouched — neither ":" nor "." is worth putting in a path here, and
+#      Claude Code's native skill resolution is a literal-string match against the
 #      discovery-path directory name, independent of frontmatter content (see the
 #      docs section for the full investigation and citation).
 #   2. Bare-form prose rewrite. For every agents/*.md file, rewrites bare
-#      "/<name>" invocation mentions in prose to "j:<name>", for every skill name
+#      "/<name>" invocation mentions in prose to "j.<name>", for every skill name
 #      discovered in step 1 — longest-name-first, boundary-safe (skill names
 #      contain hyphens, so a naive `\b` regex would misfire — e.g. it would
 #      falsely match "/doc" inside "/doc-sync"; this only rewrites a match when
 #      the character immediately before/after it is not itself an identifier
 #      character: letter, digit, "-", or ":").
+#
+# Separator history (E50_S07): this script originally emitted "j:<name>". GitHub
+# Copilot CLI validates the frontmatter `name:` VALUE and rejects anything outside
+# [A-Za-z0-9], hyphen, underscore, dot, and space — so the colon made every skill
+# fail to load there. The separator is now "." which is on that allow-list. The
+# namespace intent of E50 is unchanged; only the separator character moved.
 #
 # This script does NOT remove or disable the old bare "/<name>" form. The
 # migration decision recorded alongside the mechanism above is "alias" — both
@@ -34,8 +40,10 @@
 #   --skills-only   Only process skills/*/SKILL.md frontmatter (step 1).
 #   --agents-only   Only process agents/*.md prose (step 2).
 #
-# Idempotent: already-migrated skills (name already starts with "j:") are
-# silently skipped, not re-applied or reported as an error.
+# Idempotent: already-migrated skills (name already starts with "j.") are
+# silently skipped, not re-applied or reported as an error. Skills still carrying
+# the legacy "j:<name>" form are REPAIRED to "j.<name>" rather than skipped —
+# skipping them would silently leave a Copilot-breaking name in place.
 
 set -euo pipefail
 
@@ -125,10 +133,15 @@ if os.path.isdir(skills_dir):
 
         skill_names.append(entry)
 
-        if current_name.startswith("j:"):
+        if current_name.startswith("j."):
             continue  # already migrated — not an error, nothing to do
 
-        if current_name != entry:
+        # Legacy "j:<name>" form (emitted by this script before E50_S07_T01).
+        # The colon is rejected by GitHub Copilot CLI's skill-name validator, so
+        # this is repaired to "j.<name>" rather than skipped as "already migrated".
+        base_name = current_name[2:] if current_name.startswith("j:") else current_name
+
+        if base_name != entry:
             errors.append(
                 f"{skill_path}: frontmatter name '{current_name}' does not match "
                 f"directory name '{entry}' — skipped for safety"
@@ -138,7 +151,7 @@ if os.path.isdir(skills_dir):
         if not do_skills:
             continue
 
-        new_line = f"name: j:{entry}\n"
+        new_line = f"name: j.{entry}\n"
         changes.append({
             "type": "frontmatter",
             "file": skill_path,
@@ -185,7 +198,7 @@ if do_agents and os.path.isdir(agents_dir):
                     continue  # e.g. "/doc" inside "/doc-sync"
                 matches.append((start, end))
             for start, end in reversed(matches):
-                text = text[:start] + f"j:{name}" + text[end:]
+                text = text[:start] + f"j.{name}" + text[end:]
                 file_changes += 1
 
         if file_changes:

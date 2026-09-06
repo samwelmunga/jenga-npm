@@ -1,5 +1,5 @@
 ---
-name: j:pi-plan
+name: j.pi-plan
 description: Polyfill alias of the pi-plan skill under a collision-safe directory name. Identical behavior to /pi-plan — Define or expand project Epics in PROJECT_SUMMARY.md. Use this at the start of a project to establish its foundation, AND whenever the user wants to add major new features, plan a significant new area of work, or make epic-level changes to an existing project. Trigger whenever you hear things like "new feature area", "big change", "new epic", "expand the project", "add a major capability", or "plan a new phase" — even mid-project. Use when the bare /pi-plan form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - epic
@@ -19,7 +19,7 @@ metadata:
 
 # Pi-plan — Define and Expand Project Epics
 
-This skill is a literal-directory-name duplicate of `skills/pi-plan/`. It exists so that `/j-pi-plan` (and `j:j-pi-plan`) give a guaranteed-unshadowed way to reach the same flow as `/pi-plan`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/pi-plan` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+This skill is a literal-directory-name duplicate of `skills/pi-plan/`. It exists so that `/j-pi-plan` (and `j.j-pi-plan`) give a guaranteed-unshadowed way to reach the same flow as `/pi-plan`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/pi-plan` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
 
 This file is generated/synced by `scripts/generate-j-alias.sh pi-plan` from `skills/pi-plan/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
 

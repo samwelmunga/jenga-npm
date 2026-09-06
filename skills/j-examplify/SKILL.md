@@ -1,5 +1,5 @@
 ---
-name: j:examplify
+name: j.examplify
 description: Polyfill alias of the examplify skill under a collision-safe directory name. Identical behavior to /examplify — Explains concepts, features, use cases, and patterns based on provided context — a description, scenario, code snippet, or file. Use when the user wants to understand what something is, how it works, when to use it, or wants a concrete example. Use when the bare /examplify form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - examplify
@@ -17,7 +17,7 @@ examples:
 
 # Concept Explainer
 
-This skill is a literal-directory-name duplicate of `skills/examplify/`. It exists so that `/j-examplify` (and `j:j-examplify`) give a guaranteed-unshadowed way to reach the same flow as `/examplify`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/examplify` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+This skill is a literal-directory-name duplicate of `skills/examplify/`. It exists so that `/j-examplify` (and `j.j-examplify`) give a guaranteed-unshadowed way to reach the same flow as `/examplify`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/examplify` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
 
 This file is generated/synced by `scripts/generate-j-alias.sh examplify` from `skills/examplify/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
 

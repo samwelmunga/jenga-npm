@@ -55,10 +55,16 @@ function extractName(content) {
   const nameMatch = fmMatch[1].match(/^name:\s*(.+)$/m);
   if (!nameMatch) return null;
   const rawName = nameMatch[1].trim().replace(/^["']|["']$/g, "");
-  // Frontmatter may carry either the pre-E50_S01 bare form or the post-rename "j:<name>" form
-  // (skills/*/SKILL.md was migrated in E50_S01_T02) — strip the prefix so the allow-list always
+  // Frontmatter may carry the pre-E50_S01 bare form, the E50_S01 "j:<name>" form, or the
+  // current "j.<name>" form (E50_S07_T01 swapped the separator because GitHub Copilot CLI
+  // rejects ":" in a skill name) — strip whichever prefix is present so the allow-list always
   // holds bare identifiers, matching mcp/router/skill-index.js's `bareName` handling.
-  return rawName.replace(/^j:/i, "");
+  //
+  // Both separators must stay accepted: this guard is the E50_S02 anti-masquerading check, and
+  // a normalizer that fails to strip silently populates the allow-list with prefixed entries
+  // ("j.brainstorm" instead of "brainstorm"), which no longer match what the guard compares
+  // against. That is a security-guard failure, not a cosmetic one.
+  return rawName.replace(/^j[.:]/i, "");
 }
 
 /**

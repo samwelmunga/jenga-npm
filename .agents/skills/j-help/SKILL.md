@@ -1,5 +1,5 @@
 ---
-name: j:help
+name: j.help
 description: Polyfill alias of the help skill under a collision-safe directory name. Identical behavior to /help — List all available skills with a short description of what each one does. Also use this skill when the user wants to know what commands or skills are available in the project. Use when the bare /help form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - help
@@ -17,7 +17,7 @@ examples:
 
 # Help — List Available Skills
 
-This skill is a literal-directory-name duplicate of `skills/help/`. It exists so that `/j-help` (and `j:j-help`) give a guaranteed-unshadowed way to reach the same flow as `/help`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/help` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+This skill is a literal-directory-name duplicate of `skills/help/`. It exists so that `/j-help` (and `j.j-help`) give a guaranteed-unshadowed way to reach the same flow as `/help`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/help` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
 
 This file is generated/synced by `scripts/generate-j-alias.sh help` from `skills/help/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
 

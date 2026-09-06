@@ -25,6 +25,13 @@
 # lib/resolve-project-dir.sh) — never against this repository's own
 # skills/ contents.
 
+# Shared assertion helpers. A bare `[[ ... ]]` does NOT fail a bats test unless
+# it is the body's final statement -- `[[` is a shell keyword and never fires
+# bats' ERR trap -- so every assertion below goes through a helper function,
+# which is an ordinary simple command and does abort on failure. See the header
+# of tests/helpers/assertions.bash (E50_S07_T08).
+load helpers/assertions
+
 REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
 
 setup() {
@@ -80,7 +87,7 @@ run_generator() {
 @test "rejects a ../-containing skill-name with a non-zero exit and no filesystem changes" {
   run run_generator "../../../victim"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"not a valid skill name"* ]]
+  assert_output_contains "not a valid skill name"
 
   # The pre-existing unrelated content at the escaped target survives untouched.
   [ -f "$PROJECT_DIR/victim/precious.txt" ]
@@ -99,7 +106,7 @@ run_generator() {
   for bad in ".." "/etc/passwd" "foo/bar" "-x" "UPPER" "close-story/../../victim" "j-.."; do
     run run_generator "$bad"
     [ "$status" -ne 0 ]
-    [[ "$output" == *"not a valid skill name"* ]]
+    assert_output_contains "not a valid skill name"
   done
 
   # None of these attempts left any trace under skills/.
@@ -111,22 +118,27 @@ run_generator() {
 @test "still accepts a valid skill-name and generates skills/j-<name>/ (regression check on the happy path)" {
   run run_generator "close-story"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"generated/synced skills/j-close-story/"* ]]
+  assert_output_contains "generated/synced skills/j-close-story/"
   [ -f "$PROJECT_DIR/skills/j-close-story/SKILL.md" ]
 
+  # E50_S07_T01: the generator now emits the "j." separator — the colon is
+  # rejected by GitHub Copilot CLI's skill-name validator. Note the fixture
+  # above deliberately stays on the legacy "name: j:close-story" form, so this
+  # case doubles as coverage of the generator's legacy-source acceptance path:
+  # whatever separator the SOURCE carries, the generated twin is always "j.".
   run grep "^name:" "$PROJECT_DIR/skills/j-close-story/SKILL.md"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"j:j-close-story"* ]]
+  assert_output_contains "j.j-close-story"
 }
 
 @test "still no-ops on 'init' and 'j-init' (out-of-scope hand-maintained pair, unaffected by the new guards)" {
   run run_generator "init"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"refusing to touch 'init'"* ]]
+  assert_output_contains "refusing to touch 'init'"
 
   run run_generator "j-init"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"refusing to touch 'j-init'"* ]]
+  assert_output_contains "refusing to touch 'j-init'"
 }
 
 @test "hard-refuses 'jenga'/'jenga-permission-level' and their j- forms with a non-zero exit (E50_S06_T01)" {
@@ -137,7 +149,7 @@ run_generator() {
   for bad in "jenga" "j-jenga" "jenga-permission-level" "j-jenga-permission-level"; do
     run run_generator "$bad"
     [ "$status" -ne 0 ]
-    [[ "$output" == *"hard-excluded from this generator"* ]]
+    assert_output_contains "hard-excluded from this generator"
   done
 
   # No stray j-jenga*/twin directories were materialized under skills/.

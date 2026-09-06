@@ -1,5 +1,5 @@
 ---
-name: j:brainstorm
+name: j.brainstorm
 description: Polyfill alias of the brainstorm skill under a collision-safe directory name. Identical behavior to /brainstorm — Engage the scrum-master agent in a focused planning session to define, refine, or challenge features, improvements, tasks, stories, and epics. The agent asks probing questions, challenges assumptions, and helps shape ideas into actionable backlog items. Use when the bare /brainstorm form is shadowed by another tool's own built-in command of the same name.
 keywords:
   - brainstorm
@@ -19,7 +19,7 @@ metadata:
 
 # Brainstorm — Collaborative Planning with the Scrum Master
 
-This skill is a literal-directory-name duplicate of `skills/brainstorm/`. It exists so that `/j-brainstorm` (and `j:j-brainstorm`) give a guaranteed-unshadowed way to reach the same flow as `/brainstorm`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/brainstorm` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+This skill is a literal-directory-name duplicate of `skills/brainstorm/`. It exists so that `/j-brainstorm` (and `j.j-brainstorm`) give a guaranteed-unshadowed way to reach the same flow as `/brainstorm`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/brainstorm` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
 
 This file is generated/synced by `scripts/generate-j-alias.sh brainstorm` from `skills/brainstorm/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
 

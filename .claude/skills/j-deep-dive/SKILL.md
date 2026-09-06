@@ -1,5 +1,5 @@
 ---
-name: j:deep-dive
+name: j.deep-dive
 description: Polyfill alias of the deep-dive skill under a collision-safe directory name. Identical behavior to /deep-dive — >. Use when the bare /deep-dive form is shadowed by another tool's own built-in command of the same name.
 metadata:
   prefered_agent: scrum_master
@@ -20,7 +20,7 @@ examples:
 
 # /deep-dive — Deep Investigation Workflow
 
-This skill is a literal-directory-name duplicate of `skills/deep-dive/`. It exists so that `/j-deep-dive` (and `j:j-deep-dive`) give a guaranteed-unshadowed way to reach the same flow as `/deep-dive`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/deep-dive` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+This skill is a literal-directory-name duplicate of `skills/deep-dive/`. It exists so that `/j-deep-dive` (and `j.j-deep-dive`) give a guaranteed-unshadowed way to reach the same flow as `/deep-dive`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/deep-dive` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
 
 This file is generated/synced by `scripts/generate-j-alias.sh deep-dive` from `skills/deep-dive/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
 
