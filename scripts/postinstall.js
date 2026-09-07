@@ -120,6 +120,7 @@ import {
 } from '../lib/postinstall-manifest.js';
 import { readLegacyShippedPaths } from './generate-legacy-shipped-paths.js';
 import { generateCopilotInstructions } from '../lib/generate-copilot-instructions.js';
+import { generateCopilotHooks } from '../lib/generate-copilot-hooks.js';
 import { generateSkillAllowList } from '../lib/generate-skill-allow-list.js';
 
 // ESM equivalent of __dirname
@@ -384,6 +385,21 @@ function main() {
     }
   } catch (e) {
     console.log(`  ⚠  Could not bootstrap .github/copilot-instructions.md — ${e.message}`);
+  }
+
+  // Bootstrap .github/hooks/jenga.json unconditionally, same pattern as the
+  // copilot-instructions.md bootstrap immediately above (E16_S03_T04). Wires Copilot CLI's
+  // native sessionEnd/userPromptSubmitted hooks to this package's hooks/copilot_session_end.sh
+  // and hooks/prompt_router.sh, using absolute node_modules/@jenga-ai/agent paths (packageRoot
+  // !== consumerRoot here, so lib/generate-copilot-hooks.js bakes in the stable installed-package
+  // path rather than a runtime git-root lookup — see that file's own header comment for why).
+  // Entirely Jenga-owned output (unlike copilot-instructions.md), so this is a plain
+  // idempotent overwrite — no marker-merge needed.
+  try {
+    const result = generateCopilotHooks(consumerRoot, packageRoot);
+    console.log(`  ✓ .github/hooks/jenga.json bootstrapped (${result.path})`);
+  } catch (e) {
+    console.log(`  ⚠  Could not bootstrap .github/hooks/jenga.json — ${e.message}`);
   }
 
   // Write .jenga-version to record the installed version at consumer root

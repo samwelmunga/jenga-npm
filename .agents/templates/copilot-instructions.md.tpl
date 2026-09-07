@@ -97,6 +97,38 @@ Neither layer inspects a skill's *contents*; both defend the invocation-matching
 | Message is a general coding or project question | Answer directly |
 | Ambiguous — could be skill or free-form | Prefer the skill; open and execute its `SKILL.md` rather than describing it |
 
+### Sub-Agent Delegation (`prefered_agent`)
+
+Some skills declare a `metadata.prefered_agent: <agent_name>` field in their `SKILL.md`
+frontmatter. This names a sub-agent persona — a file under `agents/` (`scrum-master`,
+`developer`, `tester`) — that should execute the skill, the same delegation Claude Code performs
+natively for the same skill via root `CLAUDE.md`'s "Skill Frontmatter" section.
+
+**Copilot CLI has its own native custom-agent-loading mechanism for this.** The `--agent <name>`
+CLI flag and the interactive `/agent [name]` command both load a custom agent-definition file
+discovered from `.github/agents/*.md` or `.claude/agents/*.md`, keyed by that file's frontmatter
+`name:` field — not its filename. Jenga's `agents/*.md` personas are mirrored into both of those
+paths by `/self-sync` (`skills/self-sync/scripts/run.js`); cite `.github/agents/` as the
+canonical path for this purpose, parallel to how "How Jenga Works" above cites `.agents/skills/`
+as canonical for skills. `.agents/agents/` is also mirrored (for reasons unrelated to Copilot)
+but is a **confirmed Copilot-discovery dead-end** — the native agent loader does not read it;
+never rely on it when resolving a `prefered_agent`.
+
+When a matched skill's frontmatter has `metadata.prefered_agent: <agent_name>`:
+
+1. Before executing the skill's instructions, load that persona by invoking `--agent
+   <agent_name>` (if starting a new `copilot` invocation) or the interactive `/agent
+   <agent_name>` command (if already in an interactive session).
+2. Then proceed with the skill's instructions exactly as written, per the "Skill Routing"
+   section above — the loaded agent persona governs *how* the skill executes, not *whether* it
+   does, and does not change which `SKILL.md` file gets opened or the allow-list check that
+   precedes it.
+3. If a skill's frontmatter has no `prefered_agent` field, execute it directly with no agent
+   switch.
+
+Valid `<agent_name>` values match the agent definitions under `agents/` (frontmatter `name:`
+field, not the filename): `scrum-master`, `developer`, `tester`.
+
 ### Available Skills
 
 {{SKILL_LIST}}

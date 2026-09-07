@@ -3,9 +3,13 @@
 #
 # Copilot CLI session-end entry point.
 #
-# GitHub Copilot CLI does not fire a native SessionEnd hook. Call this script
-# manually at the end of a Copilot session or as a post-step in any skill
-# that completes a significant pipeline stage (e.g. commit, lgtm).
+# GitHub Copilot CLI DOES fire a native `sessionEnd` hook (confirmed empirically against a real
+# installed `copilot` CLI under E16_S03_T03 — see docs/hook-parity.md). This script is wired as
+# that hook's command via `.github/hooks/jenga.json` (committed here; generated per-consumer at
+# `jenga init` / npm postinstall time via lib/generate-copilot-hooks.js — see E16_S03_T04).
+# It can also still be called manually — e.g. as a post-step in a skill, or on a Copilot install
+# that hasn't run `jenga init`/postinstall yet and so has no `.github/hooks/jenga.json` — the
+# manual path documented below remains a valid fallback, not the primary mechanism.
 #
 # This wrapper:
 #   1. Sources lib/resolve-project-dir.sh to export JENGA_PROJECT_DIR,

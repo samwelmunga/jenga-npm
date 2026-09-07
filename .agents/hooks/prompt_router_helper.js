@@ -1,16 +1,28 @@
 #!/usr/bin/env node
 // hooks/prompt_router_helper.js
-// Companion helper for prompt_router.sh — implements Claude Code UserPromptSubmit logic.
+// Companion helper for prompt_router.sh — implements the UserPromptSubmit /
+// userPromptSubmitted routing logic shared by Claude Code and GitHub Copilot CLI
+// (E16_S03_T04 — both platforms deliver a JSON stdin payload with a `prompt` field, so
+// no platform branching is needed here).
 // Reads JSON payload from stdin, checks if the Jenga Router is running,
 // and either routes the prompt or passes it through unchanged.
+//
+// ESM (root package.json sets "type": "module") — found and fixed under E16_S03_T04 while
+// verifying the new Copilot userPromptSubmitted wiring end-to-end: this file previously used
+// CommonJS require()/__dirname, which crashes under Node's ESM loader with
+// "ReferenceError: require is not defined in ES module scope". That crash predates this task
+// (present since the file's original authoring, e09242d) and affected the existing Claude-side
+// UserPromptSubmit hook equally — not something newly introduced by the Copilot wiring.
 
-"use strict";
-const { readFileSync, existsSync } = require("fs");
-const { join } = require("path");
+import { readFileSync, existsSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, "..");
 
-// Read stdin (JSON payload from Claude Code: {"prompt": "..."})
+// Read stdin (JSON payload from Claude Code: {"prompt": "..."}, or from Copilot CLI's
+// userPromptSubmitted event: {"sessionId": "...", "timestamp": ..., "cwd": "...", "prompt": "..."})
 let input;
 try {
   const raw = readFileSync("/dev/stdin", "utf8").trim();

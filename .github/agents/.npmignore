@@ -1,0 +1,8 @@
+# Exclude Claude/Copilot session artefacts from npm publish
+# This file is intentionally placed inside agents/ because npm-packlist v8
+# nullifies the ROOT .npmignore when package.json has a `files` field.
+# A .npmignore inside a subdirectory is processed independently and is not nullified.
+
+.agents
+.agents/
+.agents/**

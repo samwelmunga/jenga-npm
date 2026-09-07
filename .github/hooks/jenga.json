@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionEnd": [
+      {
+        "type": "command",
+        "bash": "bash \"$(git rev-parse --show-toplevel)/hooks/copilot_session_end.sh\""
+      }
+    ],
+    "userPromptSubmitted": [
+      {
+        "type": "command",
+        "bash": "bash \"$(git rev-parse --show-toplevel)/hooks/prompt_router.sh\""
+      }
+    ]
+  }
+}

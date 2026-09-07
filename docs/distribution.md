@@ -57,9 +57,13 @@ install.
    post-cleanup tree, not a stale one.
 8. **Bootstrap `.github/copilot-instructions.md`** (idempotent; a later `jenga init` refines
    it without duplicating the JENGA block).
-9. **Write `.jenga-version`** with the installed version.
+9. **Bootstrap `.github/hooks/jenga.json`** — GitHub Copilot CLI's native hook config, wiring
+   `sessionEnd`/`userPromptSubmitted` to `hooks/copilot_session_end.sh`/`hooks/prompt_router.sh`
+   inside the installed package (`lib/generate-copilot-hooks.js`, E16_S03_T04). Entirely
+   package-owned output, so this is a plain deterministic overwrite each run — no marker-merge.
+10. **Write `.jenga-version`** with the installed version.
 
-Steps 5–8 are all best-effort: a failure there logs a warning but never fails the install.
+Steps 5–9 are all best-effort: a failure there logs a warning but never fails the install.
 
 ---
 
