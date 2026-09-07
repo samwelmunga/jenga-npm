@@ -171,6 +171,13 @@ Or clone directly:
 
 Run `j.status` at any time to see where the project stands.
 
+**CLI maintenance commands.** The `jenga` binary installed alongside the package (`jenga --help`)
+also ships a couple of maintenance commands, distinct from the in-agent `j.<name>` skills above:
+
+| Command | Description |
+|---|---|
+| `jenga doctor` (alias: `jenga clean`) | Scans `.agents/` and `.claude/` for orphaned package-owned files left behind by an upgrade (or any other mirror drift), previews them, and deletes only on explicit confirmation. Never deletes unattended — add `--dry-run` to preview only. See `docs/distribution.md` for the ownership heuristic and its false-positive posture. |
+
 ---
 
 ## Supported Platforms
