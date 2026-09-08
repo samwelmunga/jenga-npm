@@ -230,5 +230,69 @@
     "dist_tag": "latest",
     "result": null,
     "reason": null
+  },
+  {
+    "event": "gate_failure",
+    "gate": "test",
+    "phase": "pre",
+    "target": "npm-jenga",
+    "date": "2026-09-05T19:05:26Z",
+    "exit_code": 2
+  },
+  {
+    "event": "gate_failure",
+    "gate": "test",
+    "phase": "pre",
+    "target": "npm-jenga",
+    "date": "2026-09-05T21:55:18Z",
+    "exit_code": 2
+  },
+  {
+    "id": "6b3c1492-36e5-4830-9cd3-5b7c135d8da2",
+    "version": "v3.0.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-09-05T23:00:30Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "staged",
+    "git_tag": "v3.0.0",
+    "commit_sha": "44e2d8dabb32cf7738ae2840ea4f663a91e9fa4a",
+    "stage_id": "64cd95d2-7f16-4fc7-bbb8-860b6f291e08",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": null
+  },
+  {
+    "event": "gate_failure",
+    "gate": "test",
+    "phase": "pre",
+    "target": "npm-jenga",
+    "date": "2026-09-06T14:33:45Z",
+    "exit_code": 2
+  },
+  {
+    "id": "391f6831-0cf8-4113-90b3-f2778d1003ed",
+    "version": "v3.0.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-09-06T16:52:14Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "staged",
+    "git_tag": "v3.0.0",
+    "commit_sha": "e35f69f61d6b0c671c9462b88ba10934ac4f34ee",
+    "stage_id": "6e854459-75ab-402b-ac73-28a25a1b9042",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": null
+  },
+  {
+    "event": "gate_failure",
+    "gate": "test",
+    "phase": "pre",
+    "target": "npm-jenga",
+    "date": "2026-09-08T01:25:00Z",
+    "exit_code": 2
   }
 ]
