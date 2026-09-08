@@ -81,6 +81,17 @@ echo '{}' > project/data/baselines.json
 echo "→ Creating events.json..."
 echo '[]' > project/logs/events.json
 
+# ─── 8.5. Create project/knowledge-graph/{STUB_SCHEMA.md,graph.json} ─────────
+# Consumed by skills/uncharted's conversational elicitation flow (`onboard`,
+# `segment --mode investigate`), which writes coarse graph nodes/edges to
+# graph.json per the stub schema — both must exist before that flow's first
+# write, per templates/KNOWLEDGE_GRAPH_STUB_SCHEMA_TEMPLATE.md's own header
+# comment (E20_S08_T01; replaced wholesale once E20_S01's real schema lands).
+echo "→ Copying knowledge-graph STUB_SCHEMA.md from template..."
+cp "$PKG_ROOT/templates/KNOWLEDGE_GRAPH_STUB_SCHEMA_TEMPLATE.md" project/knowledge-graph/STUB_SCHEMA.md
+echo "→ Creating project/knowledge-graph/graph.json..."
+echo '{"nodes": [], "edges": []}' > project/knowledge-graph/graph.json
+
 # ─── 9. Create docs/STRATEGY.md ──────────────────────────────────────────────
 echo "→ Creating docs/STRATEGY.md (strategic brief for investors, partners, and the product team)..."
 mkdir -p docs

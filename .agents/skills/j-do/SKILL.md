@@ -58,7 +58,7 @@ Extract the following named values for use throughout this skill:
 These values must be read fresh on each invocation. Never use hardcoded fallbacks.
 
 ### 1. Check for `project/todo.md`
-Run `bash scripts/todo_manager.sh exists`. If it exits non-zero, inform the user there are no queued tasks and exit.
+Run `bash "$([ -f scripts/todo_manager.sh ] && echo scripts/todo_manager.sh || echo node_modules/@jenga-ai/agent/scripts/todo_manager.sh)" exists`. If it exits non-zero, inform the user there are no queued tasks and exit.
 
 ### 1.5. Story-Bundle Execution Mode
 
@@ -284,7 +284,7 @@ No patch file is written on success.
 If `/do` is invoked with a task ID (`E##_S##_T##`) or a plain-text title, skip this section and use the normal task execution path (steps 2–8 below).
 
 ### 2. List tasks and let the user choose
-Run `bash scripts/todo_manager.sh list` to display the queued tasks. Ask the user:
+Run `bash "$([ -f scripts/todo_manager.sh ] && echo scripts/todo_manager.sh || echo node_modules/@jenga-ai/agent/scripts/todo_manager.sh)" list` to display the queued tasks. Ask the user:
 - Execute a specific task (by number or title)
 - Execute the next task from the top of the list
 - Exit
@@ -294,14 +294,14 @@ Run `bash scripts/todo_manager.sh list` to display the queued tasks. Ask the use
 Before resolving a task for execution, inspect the selected entry's ID:
 
 - **Epic (`E##`)** — the entry refers to a whole epic that has not yet been broken into stories.
-  Use the scrum-master agent to read the epic's board file (`$(bash scripts/board_resolver.sh)epics/`) and decompose it into stories. For each story produced:
-  1. Write a story file to `$(bash scripts/board_resolver.sh)stories/`.
-  2. Run `bash scripts/todo_manager.sh add '<story title>: <E##_S##>'`
-  After breakdown, Run `bash scripts/todo_manager.sh remove '<epic entry title>'` and go back to step 2 so the new stories are visible.
+  Use the scrum-master agent to read the epic's board file (`$(bash "$([ -f scripts/board_resolver.sh ] && echo scripts/board_resolver.sh || echo node_modules/@jenga-ai/agent/scripts/board_resolver.sh)")epics/`) and decompose it into stories. For each story produced:
+  1. Write a story file to `$(bash "$([ -f scripts/board_resolver.sh ] && echo scripts/board_resolver.sh || echo node_modules/@jenga-ai/agent/scripts/board_resolver.sh)")stories/`.
+  2. Run `bash "$([ -f scripts/todo_manager.sh ] && echo scripts/todo_manager.sh || echo node_modules/@jenga-ai/agent/scripts/todo_manager.sh)" add '<story title>: <E##_S##>'`
+  After breakdown, Run `bash "$([ -f scripts/todo_manager.sh ] && echo scripts/todo_manager.sh || echo node_modules/@jenga-ai/agent/scripts/todo_manager.sh)" remove '<epic entry title>'` and go back to step 2 so the new stories are visible.
 
 - **Story (`E##_S##`) with no tasks** — the entry refers to a story that has not yet been broken into tasks.
-  Check `$(bash scripts/board_resolver.sh)tasks/` for any task files whose front-matter `story_id` matches this story. If none exist, use the scrum-master agent to read the story's board file and decompose it into tasks. For each task produced:
-  1. Write a task file to `$(bash scripts/board_resolver.sh)tasks/`.
+  Check `$(bash "$([ -f scripts/board_resolver.sh ] && echo scripts/board_resolver.sh || echo node_modules/@jenga-ai/agent/scripts/board_resolver.sh)")tasks/` for any task files whose front-matter `story_id` matches this story. If none exist, use the scrum-master agent to read the story's board file and decompose it into tasks. For each task produced:
+  1. Write a task file to `$(bash "$([ -f scripts/board_resolver.sh ] && echo scripts/board_resolver.sh || echo node_modules/@jenga-ai/agent/scripts/board_resolver.sh)")tasks/`.
   After breakdown, keep the story entry in `project/todo.md` (tasks are discovered from it automatically). Go back to step 2.
 
 - **Story (`E##_S##`) with existing tasks**, or **Task (`E##_S##_T##`)** — no breakdown needed; proceed to step 4.
@@ -310,7 +310,7 @@ Before resolving a task for execution, inspect the selected entry's ID:
 Each todo entry uses the format: `<mission title>: <E##_S##_T##>` (or `E##_S##` if no task ID).
 
 Before starting:
-1. Locate and read the matching file from `$(bash scripts/board_resolver.sh)tasks/` (or `$(bash scripts/board_resolver.sh)stories/` if story-level)
+1. Locate and read the matching file from `$(bash "$([ -f scripts/board_resolver.sh ] && echo scripts/board_resolver.sh || echo node_modules/@jenga-ai/agent/scripts/board_resolver.sh)")tasks/` (or `$(bash "$([ -f scripts/board_resolver.sh ] && echo scripts/board_resolver.sh || echo node_modules/@jenga-ai/agent/scripts/board_resolver.sh)")stories/` if story-level)
 2. If the file does not exist, warn the user and skip — do not proceed with a task that has no scrum board definition
 3. Present a brief summary of the task: title, acceptance criteria, parent story, parent epic
 
@@ -389,10 +389,10 @@ After resolving the task context (step 4), passing override validation (step 4.1
 1. Read the task file and load its full content (description, acceptance criteria). Do NOT create a worktree. Do NOT spawn a developer subagent.
 2. Implement the task inline — make the required changes to files directly in the current session.
 3. Run the smoke test harness before committing anything:
-   - Run `bash scripts/smoke-harness.sh <changed_file>...`, passing the paths changed in step 2. With no arguments the harness infers them from `git diff --name-only HEAD`. It exits `0` on pass and `1` on failure.
-   - If `scripts/smoke-harness.sh` does not exist, log a warning and treat the result as a pass:
+   - Run `bash "$([ -f scripts/smoke-harness.sh ] && echo scripts/smoke-harness.sh || echo node_modules/@jenga-ai/agent/scripts/smoke-harness.sh)" <changed_file>...`, passing the paths changed in step 2. With no arguments the harness infers them from `git diff --name-only HEAD`. It exits `0` on pass and `1` on failure.
+   - If neither `scripts/smoke-harness.sh` nor `node_modules/@jenga-ai/agent/scripts/smoke-harness.sh` exists, log a warning and treat the result as a pass:
      ```
-     WARNING [<task_id>]: scripts/smoke-harness.sh not found. Smoke test skipped (stub pass).
+     WARNING [<task_id>]: smoke-harness.sh not found. Smoke test skipped (stub pass).
      ```
 4. **If the smoke test exits non-zero**:
    - **If this is a `--trivial`-forced run** (marker set in step 4.1.5 — and `crucial_level` is not `locked`, which never falls back, per 4.1.5's precedence note): do NOT write `status: Failed`. `--trivial` always forces `inline` with no softer "lightest safe tier" to fall back to first, so a smoke-harness failure here goes straight to the shared `#### Fallback to Full Task-Scope Pipeline` procedure below (origin: `trivial`). Do not proceed with the remaining inline steps below — the Fallback procedure takes over from here.
@@ -431,10 +431,10 @@ After resolving the task context (step 4), passing override validation (step 4.1
 1. **Spawn a developer subagent** (Agent tool, `subagent_type: "developer"`) with the same sender object and context payload as step 5 would use, but with an explicit instruction added to the dispatch prompt: **do not create a worktree** — implement directly against the current checkout (the session's existing working tree), not an isolated `.claude/worktrees/<slug>` copy. This is the one concrete difference from the step-5 `task` path: everything else about how the subagent implements the task (reading the task file, following acceptance criteria, following repo conventions) is unchanged.
 
 2. **After the developer subagent reports implementation complete**, run the smoke test harness using the same invocation convention as `### 4.2. Inline Execution Path`:
-   - Run `bash scripts/smoke-harness.sh <changed_file>...`, passing the paths the subagent changed. With no arguments the harness infers them from `git diff --name-only HEAD`. It exits `0` on pass and `1` on failure.
-   - If `scripts/smoke-harness.sh` does not exist, log a warning and treat the result as a pass:
+   - Run `bash "$([ -f scripts/smoke-harness.sh ] && echo scripts/smoke-harness.sh || echo node_modules/@jenga-ai/agent/scripts/smoke-harness.sh)" <changed_file>...`, passing the paths the subagent changed. With no arguments the harness infers them from `git diff --name-only HEAD`. It exits `0` on pass and `1` on failure.
+   - If neither `scripts/smoke-harness.sh` nor `node_modules/@jenga-ai/agent/scripts/smoke-harness.sh` exists, log a warning and treat the result as a pass:
      ```
-     WARNING [<task_id>]: scripts/smoke-harness.sh not found. Smoke test skipped (stub pass).
+     WARNING [<task_id>]: smoke-harness.sh not found. Smoke test skipped (stub pass).
      ```
 
 3. **If the smoke test passes**:
@@ -528,8 +528,8 @@ Additionally, if the completed work introduces user-facing changes, update `READ
 ### 7. After successful completion
 - Check for any `_INSTRUCTIONS.md` files in `project/instructions/` whose ID matches the completed task. If found, present them to the user and explain that these actions must be completed before the feature will work correctly.
 - Invoke the `/commit` skill to commit the work (if not already committed by the developer)
-- Run `bash scripts/todo_manager.sh remove '<task title>'` to remove the completed task from `project/todo.md`
-- Run `bash scripts/todo_manager.sh teardown` to delete `project/todo.md` if it is now effectively empty
+- Run `bash "$([ -f scripts/todo_manager.sh ] && echo scripts/todo_manager.sh || echo node_modules/@jenga-ai/agent/scripts/todo_manager.sh)" remove '<task title>'` to remove the completed task from `project/todo.md`
+- Run `bash "$([ -f scripts/todo_manager.sh ] && echo scripts/todo_manager.sh || echo node_modules/@jenga-ai/agent/scripts/todo_manager.sh)" teardown` to delete `project/todo.md` if it is now effectively empty
 
 ### 8. Loop
 Go back to step 1.

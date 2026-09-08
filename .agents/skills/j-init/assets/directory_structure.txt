@@ -3,6 +3,7 @@ project/board/stories
 project/board/tasks
 project/instructions
 project/configs
+project/knowledge-graph
 project/data
 project/queue
 project/rapports/problems

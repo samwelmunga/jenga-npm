@@ -72,6 +72,7 @@ Jenga AI supports two distribution paths:
 - **E47** — Distributable Project Dashboard *(Pending)*
 - **E48** — Agent Dashboard — Live AI Item Review *(Pending, blocked on E47)*
 - **E50** — Skill Namespace Prefix & Anti-Masquerading Allow-List *(In Progress)*
+- **E53** — Jenga Natural-Language Dispatcher & Playbooks *(In Progress — reopened 2026-09-09 for Playbooks v2, see below)*
 
 ## Distributable Project Dashboard (E47)
 E05–E09 built a working local dashboard (Express API + Vite/React UI, `project/app/api` + `project/app/ui`), but it only ever worked against this monorepo's own `project/` directory and is excluded from the published npm package's `files` list (confirmed via `npm pack --dry-run`) — a consumer who runs `npm install @jenga-ai/agent` has no access to it at all, despite E09's own story titles (`jenga dashboard start`, `jenga dashboard open`) already naming it as a CLI feature it never became. Filed via `/btw` (2026-08-31) after a session that fixed three bugs blocking the dashboard from working even in this repo: a nested-`npm run` flag-forwarding bug, a missing `express` dependency unreachable from `project/app/ui/scripts/dashboard-start.cjs`, and a route-shadowing bug where the API server's catch-all 404 (registered at module-require time) silently defeated `--serve-app`'s static/SPA-fallback middleware. This epic generalizes the now-working dashboard into a real per-consumer-project feature: S01 ships it in the npm package, S02 resolves its data source against the *invoking* project rather than this repo, and S03 wires actual `jenga dashboard start`/`open` CLI subcommands into `bin/jenga.js` (currently only `init`, `start`, `attach`, `status` exist). S02 explicitly reuses E46's path-resolution precedent (fail loudly rather than assume monorepo-relative paths) instead of rediscovering the same defect pattern independently. Scoped by the user as a generalization/relocation of existing working code, not a rewrite.
@@ -85,6 +86,74 @@ E26 built the npm distribution pipeline and is marked `Passed`, but `jenga-agent
 **E16 reopened for sub-agent delegation parity (2026-09-07).** Filed via `/error` + `/todo`. `templates/copilot-instructions.md.tpl` documents Copilot's discovery of `.github/skills/` / `.agents/skills/` / `.claude/skills/` (E16_S02, `Done`), but never mentions the `agents/*.md` sub-agent personas or explains a skill's `metadata.prefered_agent` frontmatter field — the parallel piece Claude Code gets natively via root `CLAUDE.md`'s "Skill Frontmatter" section. `skills/self-sync/scripts/run.js`'s copy-set mirrors `agents/` into `.claude/` and `.agents/` but never into `.github/`. New story **E16_S05** (`Copilot Sub-Agent Delegation Parity`) closes this: `E16_S05_T01` empirically verifies whether Copilot CLI has any native custom-agent-loading mechanism (undetermined as of filing — deliberately left open rather than guessed at during breakdown); `E16_S05_T02` implements whichever path that finding points to (a real `.github/agents/`-style mirror via the self-sync copy-set, or a documented prose convention in `copilot-instructions.md.tpl`, mirroring the existing `j.skill-name` routing-table precedent). `E16_S05_T01` merged 2026-09-07 (`Passed`, later `Merged` post-self-sync) — Copilot CLI does have a native custom-agent-loading mechanism (`--agent`/`/agent`, `.github/agents/` and `.claude/agents/` are both live discovery paths, `.agents/agents/` is not), so `E16_S05_T02` took the native-integration path: it wired a narrower `GITHUB_COPY_SET = ['agents']` mirror into `skills/self-sync/scripts/run.js` (a new `.github/agents/` target alongside the existing `.claude/`/`.agents/` mirrors) and added a "Sub-Agent Delegation (`prefered_agent`)" section to `templates/copilot-instructions.md.tpl` mirroring `CLAUDE.md`'s "Skill Frontmatter" section. `E16_S05_T02` verified `Passed` 2026-09-07 and the story rolled up to `Passed` the same day.
 
 **E16_S04 reopened — dual-write silently reverted by E26 (found via `/reconcile`, 2026-09-07).** `E16_S04` (`jenga attach` writing `mcpServers.jenga` into both `.claude/settings.json` and `.agents/settings.json`) was `Done`/`Passed` since 2026-07-11, but commit `619198b` (E26, 2026-08-04) deliberately dropped the `.agents/settings.json` half of that write from `lib/commands/attach.js` as "redundant" — current `attach.js` only writes `.claude/settings.json`, and `project/documentation/examples/jenga-mcp-and-cli.md` still describes the dual-write as live. By explicit human decision, `E16_S04_T01`–`T03` keep their original `Passed` status (this is a documented, deliberate revert, not an oversight to silently re-fix); new task **`E16_S04_T04`** corrects the stale docs and records the decision trail, and reopens the story to `In Progress` since it now has real unfinished work. `T04` also carries an open, deliberately unresolved question — should the dual-write return, or should this story be formally closed as superseded by E26 — for a human to decide later.
+
+## Jenga Natural-Language Dispatcher & Playbooks (E53) — Playbooks v2 reopening
+E53 shipped `Passed with remarks` on 2026-09-08 (S01: `/jenga`'s NL fallback branch absorbing
+`/route`'s matching; S02: multi-skill playbook proposals with a JSON-file playbook catalog,
+`match-playbook.sh`, an editable confirmation renderer, and a halt-on-failure sequential runner).
+A `/deep-dive` on a `/improve` request against README's Skills section surfaced a much larger
+underlying feature gap — per-step parameters, a shared type registry, conditionals, and
+playbook-to-playbook composition — captured in
+`project/documentation/plans/e53-playbooks-v2-extension-plan.md` (locked design),
+`scrutiny-e53-playbooks-v2-extension.md` (verdict: CAUTIOUS, 6/10 feasibility — two real
+design-level blockers), and `solution-assessment-e53-playbooks-v2-extension.md` (verdict:
+CHALLENGING, 4-6 weeks realistic). E53 was reopened (`dates_previously_completed: 2026-09-08`,
+`reopened_on: 2026-09-09`) for five new stories, committed via `/todo` on the user's explicit
+sign-off of the locked design:
+
+- **E53_S03** — Type registry, `StepObject` schema (`skill`/`playbook`/`instruction`/
+  `forward_from`/`resolve`, plus a reserved `version` field), and load-time validation.
+  Implements the deep-dive's **Blocker 1 resolution**: `{when, type}` predicates for
+  classifier-script skills (`j.jenga`) are redefined as a purely *structural*, load-time-only
+  check — "does this step have `forward_from`, and does its source's declared type guarantee
+  non-empty output" — never a claim about `j.jenga`'s actual runtime classification, which
+  `detect-nl-intent.sh` still resolves at real invocation time, unchanged. Initial `output_types`
+  adoption is deliberately partial: `j.status`, `j.uncharted`, `j.jenga`, `j.reconcile` only.
+- **E53_S04** — Conditional step execution, reusing the same typed-output capture
+  `forward_from` already needs (no second data-capture mechanism). Introduces a `skipped` status
+  scoped strictly to playbook-step context (never written to task/story board status, no change
+  to `templates/SCRUM_BOARD_SCHEMA.md`'s Status Values table), gated on an explicit
+  rollup-consumer audit. Also defines artifact persistence/retention (reusing `events.json`-style
+  conventions with redaction).
+- **E53_S05** — Playbook-to-playbook composition (`{playbook: "id"}` step type, cycle detection,
+  configurable depth limit defaulting to 3, transparent cross-boundary data-flow, and a
+  nesting-**preserving** confirmation display rather than a flat undifferentiated list).
+- **E53_S06** — `resolve` scoped explicitly to reshape/filter/type-bridge only (documented as a
+  named, scoped exception to "Scripts Over Inline Logic"), hard-fail-on-unresolvable-transform,
+  and the new `j.playbook <id>` direct-invocation skill with structured load-time-failure
+  reasons (not a generic "not found").
+- **E53_S07** — **Deliberately split out**, per explicit user requirement, from S06:
+  confirmation-driven `resolve` (pre-authorizing a downstream confirmation gate) implementing the
+  solution assessment's Problem 3 Solution B. This directly touches Jenga's interactive-by-default
+  human-in-the-loop safety model (scrutiny's Assumption 3, Key Question 1, and its one
+  High-severity risk entry) — the story's first Acceptance Criterion is a hard gate: no
+  implementation begins until a dedicated safety review's outcome is recorded on the story file
+  itself. Filed now only so the reasoning isn't lost before that review happens.
+
+**Triage-first, per the solution assessment's Problem 13 (near-zero cost, may reshape scope):**
+new trivial task `E53_S02_T05` (added directly to the already-`Passed with remarks` E53_S02,
+`execution_scope: inline`) classifies E53_S02's own two open remarks before S03-S07 start:
+(1) `E53_S01_T02`'s YAML folded/literal block-scalar parsing bug in `load-nl-catalog.js`
+(`project/rapports/problems/E53_S01_T02-yaml-folded-scalar-description-gap.md`) is **orthogonal**
+to Playbooks v2 (single-skill NL catalog parsing, not schema/conditional/composition/resolve
+work) — the task files a new small Maintenance (E42) task for it rather than folding it in here;
+(2) `E53_S02_T02`'s remark that `match-playbook.sh`'s `ambiguous` multi-way-tie path was only
+exercised against scratch data (the catalog holds one playbook) is expected to resolve
+**organically** once `E53_S05` lands a real second playbook — no new task filed for it, only a
+cross-reference note already written into `E53_S05`'s own Definition of Done.
+
+**Explicitly out of scope, already tracked elsewhere, no board items created:** multi-source
+`resolve` (logged in `project/ideas.md`) and the post-output intercept/countdown mechanic
+(board stub `E44_S04`).
+
+**Mechanics note:** per `/todo`'s normal (non-`--trivial`) flow, only story-level board files were
+written for S03-S07 — task-level decomposition is deferred to `/do`'s own breakdown pass when each
+story is picked up. No `crucial_level` was proposed for any of the five new stories: none of them
+touch the four fixed heuristics in `agents/scrum-master.md`'s Crucial Level Heuristic Proposal
+(auth/secrets, `templates/SCRUM_BOARD_SCHEMA.md`/`scripts/validate-board.sh`, production config,
+public-facing distribution) even though `E53_S07` is substantively the highest-risk item in this
+batch — its risk is instead controlled narratively, via the hard safety-review gate written into
+its own first Acceptance Criterion.
 
 ## Skill Namespace Prefix & Anti-Masquerading Allow-List (E50)
 The canonical skill-namespace separator changed from `j:` (colon, E50_S01) to `j.` (dot, E50_S07_T01): every `skills/*/SKILL.md` frontmatter now reads `name: j.<name>` (twins: `j.j-<name>`). Reason: GitHub Copilot CLI validates the frontmatter `name` *value* and rejects any character outside `[A-Za-z0-9]`, hyphen, underscore, dot, space — the colon made all 82 skills fail to load there, a total Copilot outage. Directory names are unchanged (Claude Code resolves by directory name, unaffected). The old bare `/<name>` form remains a permanent, never-deprecated alias — see `CLAUDE.md`'s "Invocation Convention" note.

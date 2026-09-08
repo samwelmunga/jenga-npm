@@ -81,7 +81,7 @@ When `--trivial` is present, the mission is written as a **fully-formed task boa
 
 5. **Add to `project/todo.md`** by running (skip this step if step 4.5 already ran):
    ```
-   bash scripts/todo_manager.sh add '<mission title>: <Epic no.>_<Story no.>'
+   bash "$([ -f scripts/todo_manager.sh ] && echo scripts/todo_manager.sh || echo node_modules/@jenga-ai/agent/scripts/todo_manager.sh)" add '<mission title>: <Epic no.>_<Story no.>'
    ```
    The epic and story reference is only required if the mission is assigned to one.
 

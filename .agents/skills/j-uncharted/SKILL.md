@@ -387,7 +387,7 @@ It runs `scripts/validate-board.sh` over every file and `scripts/validate-story-
 
 On success, tell the user exactly which files were created, with their IDs.
 
-**Step 8 — Hand off to the standard path.** Queue each new task with the canonical todo owner — `scripts/todo_manager.sh add "<entry>"`, one call per task, referencing the task ID — and the work then proceeds through the ordinary `/todo` → `/do` → developer → tester path, with no special casing anywhere along it. Point the tasks' Description at the understanding document from Step 2; it is the context the developer picking one up would otherwise lack.
+**Step 8 — Hand off to the standard path.** Queue each new task with the canonical todo owner — `` bash "$([ -f scripts/todo_manager.sh ] && echo scripts/todo_manager.sh || echo node_modules/@jenga-ai/agent/scripts/todo_manager.sh)" add "<entry>" ``, one call per task, referencing the task ID — and the work then proceeds through the ordinary `/todo` → `/do` → developer → tester path, with no special casing anywhere along it. Point the tasks' Description at the understanding document from Step 2; it is the context the developer picking one up would otherwise lack.
 
 **`/uncharted` writes board files and stops there.** It does not adapt the segment to project conventions, edit or move the code it just analysed, open a worktree, or write an execution plan. That is ordinary developer work, driven by ordinary task files, and it is the developer agent's job — the same as for a task that came from `/brainstorm` or `/pi-plan`. A segment that has reached the board is no longer a special case, and this skill growing its own integration path would be a second, divergent execution route for work the existing one already handles.
 

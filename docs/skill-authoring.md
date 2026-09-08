@@ -321,7 +321,34 @@ Follow these conventions:
 
 - Use numbered steps for sequential workflows.
 - Use `bash` code blocks for any shell commands the skill should run.
-- Reference board paths via `$(bash scripts/board_resolver.sh)` rather than hard-coding them.
+- Reference board paths via `$(bash "$([ -f scripts/board_resolver.sh ] && echo scripts/board_resolver.sh || echo node_modules/@jenga-ai/agent/scripts/board_resolver.sh)")` rather than hard-coding them — see "Invoking a root-level `scripts/` file" below for why the resolving form is required, not just the bare path.
+
+### Invoking a root-level `scripts/` file
+
+`postinstall.js` mirrors only `skills/` and `agents/` into a consumer's `.claude/`/`.agents/` —
+`scripts/` (and `templates/`, `lib/`) is never copied there. A `SKILL.md` instruction written as a
+bare `bash scripts/<name>.sh` assumes the executing agent's cwd has its own `scripts/` directory,
+which is true only inside this monorepo's own dev checkout (where `scripts/` sits at the repo root).
+For a genuine npm consumer, that same file lives at `node_modules/@jenga-ai/agent/scripts/<name>.sh`
+instead, so the bare form fails outright the first time a consumer's agent reaches that step
+(confirmed: this broke `/uncharted`'s `validate-proposed-items.sh` and `elicitation-state.sh`
+`with-lock.sh` calls, and the same bare pattern is used by `/todo`'s and `/do`'s `todo_manager.sh`
+and `board_resolver.sh` calls).
+
+Because the Bash tool's shell state does not persist between calls, a variable resolved once cannot
+be reused by a later invocation — every command that touches a root-level `scripts/` file must
+resolve its own path in the same command, checking for the specific target file (not just that some
+`scripts/` directory exists, since a consumer's own unrelated project may already have one):
+
+```bash
+bash "$([ -f scripts/<name>.sh ] && echo scripts/<name>.sh || echo node_modules/@jenga-ai/agent/scripts/<name>.sh)" <args>
+```
+
+This is the same monorepo-checkout-vs-installed-package fallback already used programmatically
+inside scripts themselves (`skills/init/scripts/init.sh`'s `PKG_ROOT` resolution,
+`skills/uncharted/scripts/elicitation-state.sh`'s `WITH_LOCK` resolution) — just expressed as a
+self-contained prose idiom since a `SKILL.md` instruction has no `$SCRIPT_DIR` of its own to climb
+from.
 
 ---
 

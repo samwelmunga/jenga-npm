@@ -48,8 +48,24 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 REPO_ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)
 [ -n "$REPO_ROOT" ] || REPO_ROOT=$(cd -- "$SCRIPT_DIR/../../.." && pwd -P)
 
-BOARD_VALIDATOR="$REPO_ROOT/scripts/validate-board.sh"
-STORY_VALIDATOR="$REPO_ROOT/scripts/validate-story-format.sh"
+# ─── Resolve the validators' package root ─────────────────────────────────
+# postinstall.js mirrors only skills/ and agents/ into a consumer's .claude/
+# and .agents/ — scripts/ (which owns both validators) is never copied there,
+# so this script — itself shipped under skills/j-uncharted/scripts/ and mirrored
+# alongside it — cannot assume "$REPO_ROOT/scripts/..." exists. Mirrors
+# skills/init/scripts/init.sh's PKG_ROOT fallback (same pattern already
+# applied to this skill's elicitation-state.sh WITH_LOCK resolution): prefer
+# a monorepo checkout's sibling scripts/ dir, else fall back to the installed
+# npm package under node_modules/@jenga-ai/agent.
+if [ -f "$SCRIPT_DIR/../../../scripts/validate-board.sh" ]; then
+  VALIDATOR_ROOT="$SCRIPT_DIR/../../../scripts"
+elif [ -f "$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/validate-board.sh" ]; then
+  VALIDATOR_ROOT="$REPO_ROOT/node_modules/@jenga-ai/agent/scripts"
+else
+  VALIDATOR_ROOT="$REPO_ROOT/scripts"
+fi
+BOARD_VALIDATOR="$VALIDATOR_ROOT/validate-board.sh"
+STORY_VALIDATOR="$VALIDATOR_ROOT/validate-story-format.sh"
 
 usage() {
   echo "Usage: $(basename "$0") <board-file> [more-files...]" >&2
