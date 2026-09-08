@@ -42,20 +42,24 @@ REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
 
 setup() {
   CONSUMER_DIR="$BATS_TEST_TMPDIR/consumer"
-  mkdir -p "$CONSUMER_DIR/.agents/skills/do" \
+  mkdir -p "$CONSUMER_DIR/.agents/skills/j-do" \
            "$CONSUMER_DIR/.agents/skills/j-legacy-twin" \
            "$CONSUMER_DIR/.agents/skills/my-custom-skill" \
            "$CONSUMER_DIR/.agents/agents"
 
-  # Currently-shipped skill (this repo has skills/do/) — must survive untouched.
-  cat > "$CONSUMER_DIR/.agents/skills/do/SKILL.md" <<'EOF'
+  # Currently-shipped skill — must survive untouched. This MUST name a skill that ships in both
+  # this monorepo and the public mirror, because doctor's candidacy check reads the installed
+  # package's own skills/ listing. `skills/do/` is unusable here: .publicignore blocklists every
+  # canonical duplicate of a j-<name>-twinned skill (E28_S09), so it is absent from the mirror and
+  # doctor rightly reports it as an orphan there. The j-<name> twin ships in both, so use it.
+  cat > "$CONSUMER_DIR/.agents/skills/j-do/SKILL.md" <<'EOF'
 ---
 name: j.do
 ---
 # do
 EOF
   # Consumer file living INSIDE a still-current package skill directory — must survive.
-  echo "my notes" > "$CONSUMER_DIR/.agents/skills/do/my-notes.md"
+  echo "my notes" > "$CONSUMER_DIR/.agents/skills/j-do/my-notes.md"
 
   # Orphaned Jenga-shaped skill (not shipped by this repo's current skills/) — candidate.
   cat > "$CONSUMER_DIR/.agents/skills/j-legacy-twin/SKILL.md" <<'EOF'
@@ -114,7 +118,7 @@ run_doctor_with_confirmation() {
 @test "doctor --dry-run: current package-owned files and consumer files never listed as candidates" {
   run run_doctor doctor --dry-run
   [ "$status" -eq 0 ]
-  assert_not_contains "$output" "skills/do/"
+  assert_not_contains "$output" "skills/j-do/"
   assert_not_contains "$output" "my-custom-skill"
   assert_not_contains "$output" "developer.md"
 }
@@ -150,8 +154,8 @@ run_doctor_with_confirmation() {
   [ ! -e "$CONSUMER_DIR/.agents/agents/retired-agent.md" ]
 
   # Survivors untouched.
-  [ -f "$CONSUMER_DIR/.agents/skills/do/SKILL.md" ]
-  [ -f "$CONSUMER_DIR/.agents/skills/do/my-notes.md" ]
+  [ -f "$CONSUMER_DIR/.agents/skills/j-do/SKILL.md" ]
+  [ -f "$CONSUMER_DIR/.agents/skills/j-do/my-notes.md" ]
   [ -f "$CONSUMER_DIR/.agents/skills/my-custom-skill/SKILL.md" ]
   [ -f "$CONSUMER_DIR/.agents/agents/developer.md" ]
 }
