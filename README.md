@@ -40,7 +40,7 @@ Jenga AI solves each of these with structure: persistent engineering context mai
 - **Isolated git worktrees per task** — the Developer never works directly on your main branch
 - **Works with any AI coding agent or AI-native IDE** — Claude Code, GitHub Copilot, and Codex CLI are all supported today
 
-> 📖 **Full reference:** [project/.wiki/documentation.md](project/.wiki/documentation.md) | [Intro Guide](project/.wiki/intro-guide.md)
+> 📖 **Full reference:** [Docs site](https://samwelmunga.github.io/jenga-npm/reference.html) · **Intro Guide:** [Docs site](https://samwelmunga.github.io/jenga-npm/getting-started.html) — mirrored at [project/.wiki/documentation.md](project/.wiki/documentation.md) / [intro-guide.md](project/.wiki/intro-guide.md)
 
 ### "Isn't this just an LLM grading another LLM?"
 
@@ -215,7 +215,7 @@ Skills live in `.agents/skills/<name>/SKILL.md`. Invoke with `j.<name>` in your 
 | `j.do` | Execute tasks from the scrum board, drives the Developer agent through the full loop |
 | `j.status` | Print a full scrum board overview — epics, stories, tasks, rapports, queue depth |
 
-> 📖 **Full skill list** (planning, review, committing & maintenance commands): [project/.wiki/documentation.md](project/.wiki/documentation.md#skills)
+> 📖 **Full skill list** (planning, review, committing & maintenance commands): [Docs site](https://samwelmunga.github.io/jenga-npm/skills.html) — mirrored at [project/.wiki/documentation.md#skills](project/.wiki/documentation.md#skills)
 
 ---
 
@@ -232,4 +232,4 @@ Skills live in `.agents/skills/<name>/SKILL.md`. Invoke with `j.<name>` in your 
 - You're doing a quick one-off script or single-session experiment
 - Your project has no meaningful test surface
 
-📖 **Full reference:** [project/.wiki/documentation.md](project/.wiki/documentation.md)
+📖 **Full reference:** [Docs site](https://samwelmunga.github.io/jenga-npm/reference.html) — mirrored at [project/.wiki/documentation.md](project/.wiki/documentation.md)
