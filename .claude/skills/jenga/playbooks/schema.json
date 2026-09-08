@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://jenga.local/schemas/jenga-playbook.schema.json",
+  "title": "Jenga Multi-Skill Playbook",
+  "description": "Schema for a single multi-skill playbook definition consumed by skills/jenga/scripts/load-playbooks.sh (E53_S02_T01). A playbook is a dedicated, versionable data file describing an ORDERED chain of skills that /jenga's natural-language branch may propose (as an editable, confirmable numbered list -- see skills/jenga/scripts/render-playbook-confirmation.sh, E53_S02_T03) when free-text intent spans more than one skill and does not cleanly resolve to a single one via skills/route/SKILL.md's Step 2 matching. This file itself (schema.json) is never treated as a playbook -- load-playbooks.sh explicitly excludes it by filename when scanning skills/jenga/playbooks/*.json.",
+  "type": "object",
+  "required": ["id", "name", "description", "keywords", "examples", "steps"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Stable, unique, kebab-case identifier for this playbook (e.g. \"brainstorm-to-mirror\"). Must equal the filename's basename without the .json extension -- load-playbooks.sh validates this so a playbook's id can never silently drift from its file location.",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "name": {
+      "type": "string",
+      "description": "Short human-readable display name shown to the user in the confirmation prompt and in routing/report output, e.g. \"Idea to Public Release\"."
+    },
+    "description": {
+      "type": "string",
+      "description": "One-sentence explanation of what this playbook accomplishes end-to-end, used as the lowest-priority match signal (description match, same as skills/route/SKILL.md's Step 2 Pass 3) when keywords/examples don't produce a confident match."
+    },
+    "keywords": {
+      "type": "array",
+      "description": "Short phrases (1-3 words) for verbatim, case-insensitive keyword matching against the raw natural-language prompt -- the highest-priority match signal (Pass 1), mirroring skills/route/SKILL.md's Step 2 Pass 1 semantics exactly, but scoped to this playbook's catalog rather than the single-skill catalog.",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "examples": {
+      "type": "array",
+      "description": "Natural-language example prompts a user might type that should resolve to this playbook. Used for the semantic similarity match (Pass 2), mirroring skills/route/SKILL.md's Step 2 Pass 2 semantics. At least one example must plausibly span the full breadth of this playbook's steps (not just its first step) so it is distinguishable from a plain single-skill match.",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "steps": {
+      "type": "array",
+      "description": "Ordered list of bare skill names (the directory name under skills/<name>/SKILL.md, e.g. \"brainstorm\", not \"j.brainstorm\" or \"/brainstorm\") that make up this playbook's chain, in the exact execution order. Each entry MUST resolve to an existing skills/<name>/SKILL.md at load time -- load-playbooks.sh skips (with a stderr warning) any playbook referencing a nonexistent skill rather than silently including a broken chain in the catalog.",
+      "items": { "type": "string" },
+      "minItems": 2
+    }
+  }
+}

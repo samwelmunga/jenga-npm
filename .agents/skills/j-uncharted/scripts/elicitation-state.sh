@@ -151,7 +151,21 @@ if [ -z "$REPO_ROOT" ]; then
   exit 2
 fi
 
-WITH_LOCK="$REPO_ROOT/scripts/with-lock.sh"
+# ─── Resolve with-lock.sh's package root ──────────────────────────────────
+# postinstall.js mirrors only skills/ and agents/ into a consumer's .claude/
+# and .agents/ — scripts/ (which owns with-lock.sh) is never copied there, so
+# this script — itself shipped under skills/j-uncharted/scripts/ and mirrored
+# alongside it — cannot assume "$REPO_ROOT/scripts/with-lock.sh" exists.
+# Mirrors skills/init/scripts/init.sh's PKG_ROOT fallback: prefer a monorepo
+# checkout's sibling scripts/ dir, else fall back to the installed npm
+# package under node_modules/@jenga-ai/agent.
+if [ -f "$SCRIPT_DIR/../../../scripts/with-lock.sh" ]; then
+  WITH_LOCK="$SCRIPT_DIR/../../../scripts/with-lock.sh"
+elif [ -f "$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/with-lock.sh" ]; then
+  WITH_LOCK="$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/with-lock.sh"
+else
+  WITH_LOCK="$REPO_ROOT/scripts/with-lock.sh"
+fi
 STATE_DIR="$REPO_ROOT/project/queue/elicitation-state"
 DEFAULT_CAP=5
 
