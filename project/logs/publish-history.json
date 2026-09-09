@@ -294,5 +294,37 @@
     "target": "npm-jenga",
     "date": "2026-09-08T01:25:00Z",
     "exit_code": 2
+  },
+  {
+    "id": "130948de-132c-4faf-8fa3-971a67508314",
+    "version": "v3.1.1",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-09-08T22:21:40Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": "/Users/samwelmunga/Desktop/Projects/agents-public/CHANGELOG.md",
+    "platform_state": "dry-run",
+    "git_tag": "v3.1.1",
+    "commit_sha": "5c95cb6faaacfddb1ead49a44042c0d467583c99",
+    "stage_id": null,
+    "dist_tag": null,
+    "result": null,
+    "reason": null
+  },
+  {
+    "id": "5b21c1a5-d0b5-4a63-98db-73baf7604b0c",
+    "version": "v3.1.1",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-09-08T22:27:14Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": "/Users/samwelmunga/Desktop/Projects/agents-public/CHANGELOG.md",
+    "platform_state": "uploaded",
+    "git_tag": "v3.1.1",
+    "commit_sha": "909930d1c570b7441c9fd3ccb427c7b602314307",
+    "stage_id": null,
+    "dist_tag": null,
+    "result": null,
+    "reason": null
   }
 ]

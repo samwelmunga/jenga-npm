@@ -12,6 +12,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Other
 
+## [v3.1.1] — 2026-09-08
+
+### Features
+
+### Bug Fixes
+
+### Other
+- chore: sync local settings and publish log state (5c95cb6)
+- chore(mirror): sync from private at 243de17 2026-09-08T21:53:54Z (8269652)
+- chore(mirror): sync from private at 646b09e 2026-09-08T14:08:34Z (171c630)
+- chore(publish): bump version to 3.1.0 for minor stage (9ccdf19)
+- chore(mirror): sync from private at 76c4b85 2026-09-08T02:00:43Z (8c6f988)
+- chore(mirror): sync from private at e8c25f3 2026-09-07T23:46:12Z (3f1fe80)
+- chore(mirror): sync from private at bb0cbb6 2026-09-07T10:13:29Z (c39859d)
+- chore(mirror): sync from private at 249dedc 2026-09-06T15:53:37Z (e35f69f)
+- chore(mirror): sync from private at 79c9e89 2026-09-06T13:17:29Z (9591aa3)
+- chore(mirror): sync from private at c7a3fe1 2026-09-06T05:03:28Z (e46f377)
+- chore(mirror): sync from private at 573d913 2026-09-06T05:00:31Z (8dfd22c)
+
 ## [v1.3.0] — 2026-09-01
 
 ### Features
