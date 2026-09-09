@@ -101,7 +101,7 @@ Every candidate identified above as "missing documentation for new things added 
 1. **Check for `.publicignore` at the repo root.** Most projects using this framework will not have one (they haven't adopted `/mirror-public`) — if it's absent, **skip this entire sub-step**. Fall through to flagging every "missing documentation" candidate exactly as `3.` above already would, with no further filtering.
 2. **If `.publicignore` exists**, for each "missing documentation" candidate, determine its source path (relative to the repo root) and classify it by running:
    ```
-   scripts/check-publicignore-match.sh <path> [<path> ...]
+   bash "$([ -f scripts/check-publicignore-match.sh ] && echo scripts/check-publicignore-match.sh || echo node_modules/@jenga-ai/agent/scripts/check-publicignore-match.sh)" <path> [<path> ...]
    ```
    This reuses `/mirror-public`'s own `mirror.sh` matching logic (`rsync --exclude-from=.publicignore`) — a file this script reports `BLOCKED` is guaranteed to be a file `/mirror-public --dry-run` would also report as "would be blocked", and vice versa for `PUBLIC`. It needs no network access and does not require `/mirror-public` to be configured.
 3. **`BLOCKED`** → do not flag this candidate as missing documentation. It's private-only and will never ship to the public mirror, so public docs coverage is not applicable.
@@ -180,6 +180,17 @@ After all writes are done, print a summary:
 
 If nothing needed updating, print: `✅ Documentation is already in sync with the source.`
 If minification could not reach the target, note: `⚠️ docs/API.md reduced to X% (target was Y% — essential content limit reached).`
+
+### 8. GitHub Pages site follow-up (E41_S13)
+
+If this run updated `project/.wiki/documentation.md`, `project/.wiki/intro-guide.md`, or any
+`project/.wiki/concepts/*.md` file, also re-run `bash "$([ -f scripts/build-pages-site.sh ] && echo scripts/build-pages-site.sh || echo node_modules/@jenga-ai/agent/scripts/build-pages-site.sh)"` afterward. That
+script deterministically regenerates the GitHub Pages documentation site's wiki-derived pages
+(`docs/getting-started.md`, `docs/concepts.md`, `docs/skills.md`, `docs/agents.md`,
+`docs/hooks.md`, `docs/mcp-tools.md`, `docs/reference.md`) from the wiki content this step just
+updated — without re-running it, the Pages site silently drifts from the wiki the same way
+`README.md` and the wiki itself have drifted from each other before. Mention this in the
+summary output (e.g. `🔄 Re-ran build-pages-site.sh to refresh the Pages site`).
 
 ---
 

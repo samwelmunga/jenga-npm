@@ -191,6 +191,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Regenerate lib/legacy-shipped-paths.json (E26_S08_T03)
+        run: node scripts/generate-legacy-shipped-paths.js || echo "::warning::legacy-shipped-paths generation failed; publishing without an updated list"
+
       - name: Publish to npm
         run: npm publish --provenance --access ${NPM_ACCESS} --tag ${DIST_TAG}
 

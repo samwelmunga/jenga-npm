@@ -129,7 +129,7 @@ For **each task ID** listed in the story's `tasks:` frontmatter array:
    ```bash
    bash skills/j-close-story/scripts/check-privatized.sh <task-id> "project/board/tasks/<task-id>_*.md"
    ```
-   This is a **static** check (per `templates/SCRUM_BOARD_SCHEMA.md`'s "Static
+   This is a **static** check (per `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s "Static
    vs. Reactive Status Setting" section) — it derives the task's touched-file
    list from its own EST-tagged commit history (same technique as Step 2) and
    tests every file against `.publicignore`, with **no dependency on any

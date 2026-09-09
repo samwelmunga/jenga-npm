@@ -1,0 +1,8 @@
+{
+  "_comment": "Canonical playbook output-type vocabulary for Epic E53's Playbooks v2 StepObject/output_types contract (E53_S03_T02). Extend this vocabulary by adding entries to the 'types' array below -- NEVER by code changes; skills/jenga/scripts/load-playbooks.sh references this file by name in its own header contract (see that script's 'TYPE REGISTRY' section). Governed by the Scrum Master: registry additions/changes route through the normal board-item process rather than an ungoverned edit to this file -- see docs/skill-authoring.md's 'Playbook Type Registry Governance' section for the full policy.",
+  "types": [
+    "text",
+    "id_list",
+    "file_list"
+  ]
+}

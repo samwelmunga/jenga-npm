@@ -343,7 +343,7 @@ After override validation (step 4.1) and before branching on `execution_scope` i
 
 3. **Overwrite `execution_scope` to `inline`** in the task's frontmatter, unconditionally — `--trivial` always forces `inline`, never a softer "lightest safe tier."
 
-4. **Record the override for audit**, reusing the existing `jenga_assigned` / `override_justification` pairing already defined in `templates/SCRUM_BOARD_SCHEMA.md` for exactly this situation ("scope overridden by a human"), rather than inventing a new field:
+4. **Record the override for audit**, reusing the existing `jenga_assigned` / `override_justification` pairing already defined in `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)` for exactly this situation ("scope overridden by a human"), rather than inventing a new field:
    - Set `jenga_assigned: false` (if not already `false`).
    - Set (or append to, if already present) `override_justification`:
      ```
@@ -368,7 +368,7 @@ After override validation (step 4.1) and before branching on `execution_scope` i
 
 After resolving the task context (step 4), passing override validation (step 4.1), and applying the `--trivial` dispatch-time override if present (step 4.1.5), read `execution_scope` from the task frontmatter.
 
-**Locked-task dispatch guard (defense-in-depth).** Before branching on `execution_scope` below, read `crucial_level` from the task frontmatter (per `templates/SCRUM_BOARD_SCHEMA.md`'s Crucial Flag Fields). If `crucial_level: locked`:
+**Locked-task dispatch guard (defense-in-depth).** Before branching on `execution_scope` below, read `crucial_level` from the task frontmatter (per `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s Crucial Flag Fields). If `crucial_level: locked`:
 
 - This task MUST be routed through the inline execution path below — no worktree, no developer subagent — regardless of what `execution_scope` currently reads. This guards against a locked task reaching dispatch with a non-`inline` `execution_scope` (a race, a manually edited file, or a task added to a story's `tasks:` list after `skills/jenga/SKILL.md` Phase 0.5's Rule 4 last ran).
 - If `execution_scope` is already `inline`, proceed directly to the inline steps below — no correction needed.

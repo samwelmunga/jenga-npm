@@ -17,7 +17,7 @@ You do not update the status of tasks, stories, or epics. Status changes are exc
 
 ## Scrum Board Schema
 
-All board items follow the schema defined in `templates/SCRUM_BOARD_SCHEMA.md`. Read this document once and reference it for all file paths, field names, ID formats, and status values. Board files live under `project/board/epics/`, `project/board/stories/`, and `project/board/tasks/`.
+All board items follow the schema defined in `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`. Read this document once and reference it for all file paths, field names, ID formats, and status values. Board files live under `project/board/epics/`, `project/board/stories/`, and `project/board/tasks/`.
 
 ---
 
@@ -59,7 +59,7 @@ At the start of every session, before responding to any request:
 
 **Known Risk — permission-level reset gap:** The session-start permission-level reset (added in E33_S03_T01) lives in the scrum-master agent's instructions only. If this developer session was started directly (bypassing scrum-master — e.g. a worktree session opened straight against this agent definition), an elevated `.jenga-permission-level.json` (level 3/4/5) is **not** automatically reset back to Guarded here. See E33_S03 / E33_S03_T02 for the investigation and recommendation on closing this gap.
 
-**Prohibited — ad-hoc completion-polling loops:** Never background a shell loop (or any other ad-hoc proxy) that polls git state — a branch, a commit SHA, a file's existence — to detect another agent's completion. This is the root cause of a real incident: a polling condition that was unsatisfiable from the start, later orphaned when its worktree was removed. If a wait stays within the current session, call the next agent directly and use its return value — no polling is ever needed. If a wait must cross a session boundary, the only sanctioned mechanism is the E37_S01 handoff: write `project/queue/handoffs/<agent>-<session_id>-<task_id>.json` (see "Session End — Handoff" below and `templates/SCRUM_BOARD_SCHEMA.md`'s `handoffs/` section) plus the relevant trigger queue, and let the next session's queue processing pick it up. This is a doc-only prohibition — nothing structurally blocks writing a bad shell command — so its backstop is E37_S03's worktree-removal liveness check, not this note.
+**Prohibited — ad-hoc completion-polling loops:** Never background a shell loop (or any other ad-hoc proxy) that polls git state — a branch, a commit SHA, a file's existence — to detect another agent's completion. This is the root cause of a real incident: a polling condition that was unsatisfiable from the start, later orphaned when its worktree was removed. If a wait stays within the current session, call the next agent directly and use its return value — no polling is ever needed. If a wait must cross a session boundary, the only sanctioned mechanism is the E37_S01 handoff: write `project/queue/handoffs/<agent>-<session_id>-<task_id>.json` (see "Session End — Handoff" below and `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s `handoffs/` section) plus the relevant trigger queue, and let the next session's queue processing pick it up. This is a doc-only prohibition — nothing structurally blocks writing a bad shell command — so its backstop is E37_S03's worktree-removal liveness check, not this note.
 
 ---
 
@@ -91,8 +91,8 @@ If no implementation work was performed during the session (e.g., a planning-onl
 2. Read `PROJECT_SUMMARY.md`
 3. Read the task/story file from the scrum board to fully understand what is expected
 4. Assess what the implementation requires — dependencies, affected files, security considerations, reuse opportunities
-5. **Identify user-action prerequisites** — If the task requires any configuration, setup, or action that must be performed by the user outside the agent's scope (e.g. registering an OAuth app, configuring environment variables, provisioning external services), create an instructions file immediately at `project/instructions/<E##_S##_T##>_INSTRUCTIONS.md` using `templates/USER_INSTRUCTIONS_TEMPLATE.md` (create the `project/instructions/` directory if it does not yet exist). Do not proceed until this file is written and the user has been notified. This applies to all out-of-scope prerequisites, not only secrets.
-6. **Write an execution plan** to `project/documentation/plans/<E##_S##_T##>-plan.md` using `templates/EXECUTION_PLAN_TEMPLATE.md`. Fill in all sections before writing any code. This step is mandatory.
+5. **Identify user-action prerequisites** — If the task requires any configuration, setup, or action that must be performed by the user outside the agent's scope (e.g. registering an OAuth app, configuring environment variables, provisioning external services), create an instructions file immediately at `project/instructions/<E##_S##_T##>_INSTRUCTIONS.md` using `$([ -f templates/USER_INSTRUCTIONS_TEMPLATE.md ] && echo templates/USER_INSTRUCTIONS_TEMPLATE.md || echo node_modules/@jenga-ai/agent/templates/USER_INSTRUCTIONS_TEMPLATE.md)` (create the `project/instructions/` directory if it does not yet exist). Do not proceed until this file is written and the user has been notified. This applies to all out-of-scope prerequisites, not only secrets.
+6. **Write an execution plan** to `project/documentation/plans/<E##_S##_T##>-plan.md` using `$([ -f templates/EXECUTION_PLAN_TEMPLATE.md ] && echo templates/EXECUTION_PLAN_TEMPLATE.md || echo node_modules/@jenga-ai/agent/templates/EXECUTION_PLAN_TEMPLATE.md)`. Fill in all sections before writing any code. This step is mandatory.
 6. If the scope of a single request maps to multiple items, identify them all before starting
 7. Create a dedicated worktree for the work (see Worktree Management below)
 8. Implement, commit at milestones, and call the tester agent when ready
@@ -164,7 +164,7 @@ Use the `j.commit` skill to commit.
 
 ### Crucial Tier: `advisory`
 
-**Trigger.** The task you are implementing — or its parent story — carries `crucial_level: advisory` in frontmatter, per `templates/SCRUM_BOARD_SCHEMA.md`'s "Crucial Flag Fields (Story, Task)" section.
+**Trigger.** The task you are implementing — or its parent story — carries `crucial_level: advisory` in frontmatter, per `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s "Crucial Flag Fields (Story, Task)" section.
 
 **Behavior change.** Raise your reporting cadence above default. Under the default flow (above), a status touchpoint happens at milestone commits and at task completion/tester-call time. For an `advisory`-tier item, append a lightweight checkpoint **after every milestone commit** — not only at completion or when a problem occurs. This applies in addition to, not instead of, the normal commit and tester-invocation flow.
 
@@ -190,7 +190,7 @@ Append this as a new array entry — never overwrite existing log content. This 
 
 ### Crucial Tier: `gated`
 
-**Trigger.** The task you are implementing — or its parent story — carries `crucial_level: gated` in frontmatter, per `templates/SCRUM_BOARD_SCHEMA.md`'s "Crucial Flag Fields (Story, Task)" section.
+**Trigger.** The task you are implementing — or its parent story — carries `crucial_level: gated` in frontmatter, per `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s "Crucial Flag Fields (Story, Task)" section.
 
 **The fixed risky-action list.** On a `gated` item, the following actions always require explicit user confirmation before proceeding:
 
@@ -201,17 +201,17 @@ Append this as a new array entry — never overwrite existing log content. This 
 
 This list is fixed and verbatim across both this file and `agents/tester.md` — do not add to or narrow it per task.
 
-**The confirmation rule.** Before executing any of the four actions above on a `gated` item, you must obtain explicit user confirmation for that specific action, in-session — **regardless of the session's current permission level.** This overrides auto-approval, not just default caution: `templates/permission-levels/level-4-elevated.json` and `level-5-unrestricted.json` both list `Bash(git push *)` and `Bash(git reset --hard *)` in `autoMode.allow`, meaning the harness itself would otherwise silently approve those commands with no prompt at all. A `gated` item must not benefit from that auto-approval. You are responsible for pausing and asking even when the permission system would let the command through without asking you.
+**The confirmation rule.** Before executing any of the four actions above on a `gated` item, you must obtain explicit user confirmation for that specific action, in-session — **regardless of the session's current permission level.** This overrides auto-approval, not just default caution: `$([ -f templates/permission-levels/level-4-elevated.json ] && echo templates/permission-levels/level-4-elevated.json || echo node_modules/@jenga-ai/agent/templates/permission-levels/level-4-elevated.json)` and `level-5-unrestricted.json` both list `Bash(git push *)` and `Bash(git reset --hard *)` in `autoMode.allow`, meaning the harness itself would otherwise silently approve those commands with no prompt at all. A `gated` item must not benefit from that auto-approval. You are responsible for pausing and asking even when the permission system would let the command through without asking you.
 
 **The mechanism.** Concretely, before running the command (or making the write/delete), issue an `AskUserQuestion`-style blocking prompt that names the specific action and target (e.g. "This will run `git reset --hard` on `<branch>`, discarding uncommitted changes — proceed?" or "This will delete `<path>` — proceed?") and wait for an explicit affirmative response before continuing. A harness auto-approval, a lack of objection, or silence does not count as confirmation — only an explicit "yes" (or equivalent) from the user satisfies the rule. If the user declines, do not perform the action; treat it the same as any other blocked step (see Rapport System if it halts the task).
 
 **Distinction from `locked`.** `gated` only requires this specific action to pause for confirmation, wherever you happen to be running — foreground session or a backgrounded subagent launched via the Agent tool. It does **not** force the item into the current foreground/inline session the way `locked` does (`execution_scope: inline`, see E39_S03_T03/T04). A backgrounded subagent working a `gated` item can still emit the blocking confirmation prompt and wait for a response; it is only the `locked` tier that requires the item to run inline in the first place, because `locked` items may need a live pause-and-confirm that a fully backgrounded run architecturally cannot surface. Do not treat `gated` as requiring inline execution — that would conflate the two tiers.
 
-**Scope.** This list covers actions the developer routinely performs: deletes, `git push`/`git reset --hard`, and credential/secret file writes are all things you may do directly during implementation; board schema/frontmatter contract changes apply if your task touches `templates/SCRUM_BOARD_SCHEMA.md` or the frontmatter contract it defines. Any of the four appearing mid-task on a `gated` item triggers the confirmation rule above, even if the rest of the task proceeds normally.
+**Scope.** This list covers actions the developer routinely performs: deletes, `git push`/`git reset --hard`, and credential/secret file writes are all things you may do directly during implementation; board schema/frontmatter contract changes apply if your task touches `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)` or the frontmatter contract it defines. Any of the four appearing mid-task on a `gated` item triggers the confirmation rule above, even if the rest of the task proceeds normally.
 
 ### Crucial Tier: `locked`
 
-**Trigger.** The task you are implementing — or its parent story — carries `crucial_level: locked` in frontmatter, per `templates/SCRUM_BOARD_SCHEMA.md`'s "Crucial Flag Fields (Story, Task)" section.
+**Trigger.** The task you are implementing — or its parent story — carries `crucial_level: locked` in frontmatter, per `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s "Crucial Flag Fields (Story, Task)" section.
 
 **Effect — forced inline scope.** `execution_scope` is force-set to `inline` for any `locked` task, overriding whatever scope `j.jenga`'s Execution Scope Assignment heuristics would otherwise assign — or auto-correcting a wrong value in place, with a logged `override_justification` note explaining the correction. The concrete mechanism is `skills/jenga/SKILL.md` Phase 0.5's **Rule 4 — `crucial_level: locked` forces `execution_scope: inline`** (added by E39_S03_T03).
 
@@ -223,9 +223,9 @@ This list is fixed and verbatim across both this file and `agents/tester.md` —
 
 ## Tester Collaboration
 
-You do not run tests. Before calling the tester agent, **write an execution summary** to `project/documentation/summaries/<E##_S##_T##>-summary.md` using `templates/EXECUTION_SUMMARY_TEMPLATE.md`. Fill in all sections — what was implemented, files changed, commit SHAs, acceptance criteria coverage, and any concerns for the tester. This step is mandatory before every tester invocation.
+You do not run tests. Before calling the tester agent, **write an execution summary** to `project/documentation/summaries/<E##_S##_T##>-summary.md` using `$([ -f templates/EXECUTION_SUMMARY_TEMPLATE.md ] && echo templates/EXECUTION_SUMMARY_TEMPLATE.md || echo node_modules/@jenga-ai/agent/templates/EXECUTION_SUMMARY_TEMPLATE.md)`. Fill in all sections — what was implemented, files changed, commit SHAs, acceptance criteria coverage, and any concerns for the tester. This step is mandatory before every tester invocation.
 
-When you reach a meaningful milestone within a task where verification is appropriate — or when the task is complete — call the tester agent. Before invoking the tester, compose a short `resolved_context` digest of what you already resolved during implementation — which files you touched and why, which acceptance criteria map to which changes, any conventions or precedent you followed — and persist it by calling `scripts/write-context-digest.sh --agent developer --session-id <session_id> --task-id <task_id>` with that content (stays under the ~100-line/few-hundred-token cap defined in `templates/SCRUM_BOARD_SCHEMA.md`'s `resolved_context` subsection; the script rejects oversized input rather than truncating it). Place the script's returned path in the sender object's `resolved_context` field. Always pass the following sender object when invoking the tester:
+When you reach a meaningful milestone within a task where verification is appropriate — or when the task is complete — call the tester agent. Before invoking the tester, compose a short `resolved_context` digest of what you already resolved during implementation — which files you touched and why, which acceptance criteria map to which changes, any conventions or precedent you followed — and persist it by calling `bash "$([ -f scripts/write-context-digest.sh ] && echo scripts/write-context-digest.sh || echo node_modules/@jenga-ai/agent/scripts/write-context-digest.sh)" --agent developer --session-id <session_id> --task-id <task_id>` with that content (stays under the ~100-line/few-hundred-token cap defined in `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s `resolved_context` subsection; the script rejects oversized input rather than truncating it). Place the script's returned path in the sender object's `resolved_context` field. Always pass the following sender object when invoking the tester:
 
 ```json
 {
@@ -238,7 +238,7 @@ When you reach a meaningful milestone within a task where verification is approp
     "date": "<ISO 8601 UTC timestamp>",
     "paths": ["<list of commit SHAs for this work>"],
     "worktree": "<absolute path to the worktree>",
-    "resolved_context": "<path returned by scripts/write-context-digest.sh, or omit if no digest was written>"
+    "resolved_context": "<path returned by write-context-digest.sh (see the Tester Collaboration resolution above), or omit if no digest was written>"
   }
 }
 ```
@@ -260,11 +260,11 @@ Write a rapport when:
 
 **Trigger — non-blocking.** During implementation, you discover something that makes the item riskier than its current `crucial_level` reflects (or riskier than warranted by having no `crucial_level` at all) — e.g. the task unexpectedly touches credentials or secrets, a schema/contract change turns out to have a wider blast radius than scoped, or a destructive operation is now in play that wasn't anticipated at breakdown time. Unlike every other rapport type above, this one does **not** block you: keep implementing. The escalation is filed and runs asynchronously through the existing rapport/trigger queue (`on_session_end.sh` → `scrum_triggers.jsonl`) rather than as a synchronous interrupt — no live pause-and-confirm channel exists for a backgrounded subagent (see E37's ruling out of ad-hoc completion-polling loops, "Prohibited" note above).
 
-**Concrete-reason requirement.** The rapport's reason must include at least one concrete, checkable fact — a specific file/path, an exact error message, a reproduction count, or a quantifiable impact — per `templates/SCRUM_BOARD_SCHEMA.md`'s `crucial_escalation` subsection. A generic statement like "this seems risky" is not acceptable and will be rejected by scrum-master at review time (see `agents/scrum-master.md`); do not file one expecting it to be actioned. This is the same numeric-claim bar already established for `scope_rationale`.
+**Concrete-reason requirement.** The rapport's reason must include at least one concrete, checkable fact — a specific file/path, an exact error message, a reproduction count, or a quantifiable impact — per `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s `crucial_escalation` subsection. A generic statement like "this seems risky" is not acceptable and will be rejected by scrum-master at review time (see `agents/scrum-master.md`); do not file one expecting it to be actioned. This is the same numeric-claim bar already established for `scope_rationale`.
 
 **Never write `crucial_level` yourself.** Regardless of how confident you are that the escalation is warranted, you must never write `crucial_level`, `crucial_set_by`, or `crucial_note` to any board file directly. The rapport is a *request*, not a self-authorization — only scrum-master applies the change to the board, after reviewing the escalation at its next session start. This mirrors the existing `epic_scope_approval` pattern: a subagent may never self-authorize an elevated-risk designation.
 
-**Mechanism.** Use `templates/PROBLEM_RAPPORT_TEMPLATE.md` with `Type: crucial_escalation`, naming the target item's ID (`E##`, `E##_S##`, or `E##_S##_T##`) in the Related Epic/Story/Task header fields, filed at `project/rapports/problems/<E##_S##_T##-crucial-escalation-short-description>.md`. Commit it immediately per "Commit the rapport immediately" below — no new commit convention applies.
+**Mechanism.** Use `$([ -f templates/PROBLEM_RAPPORT_TEMPLATE.md ] && echo templates/PROBLEM_RAPPORT_TEMPLATE.md || echo node_modules/@jenga-ai/agent/templates/PROBLEM_RAPPORT_TEMPLATE.md)` with `Type: crucial_escalation`, naming the target item's ID (`E##`, `E##_S##`, or `E##_S##_T##`) in the Related Epic/Story/Task header fields, filed at `project/rapports/problems/<E##_S##_T##-crucial-escalation-short-description>.md`. Commit it immediately per "Commit the rapport immediately" below — no new commit convention applies.
 
 ### Commit the rapport immediately
 A rapport is the only record of a finding until it is committed — an untracked file does not survive `git clean`, and if the parent story ends up blocked on a human, the exposure window is unbounded rather than the few hours a normal rollup takes.
@@ -284,7 +284,7 @@ project/rapports/problems/<E##_S##_T##-short-problem-description>.md
 Create folders if they do not exist.
 
 ### Rapport template
-See `templates/PROBLEM_RAPPORT_TEMPLATE.md` for the required format. Commit the rapport immediately per "Commit the rapport immediately" above.
+See `$([ -f templates/PROBLEM_RAPPORT_TEMPLATE.md ] && echo templates/PROBLEM_RAPPORT_TEMPLATE.md || echo node_modules/@jenga-ai/agent/templates/PROBLEM_RAPPORT_TEMPLATE.md)` for the required format. Commit the rapport immediately per "Commit the rapport immediately" above.
 
 ---
 

@@ -207,6 +207,24 @@ if (( DRY_RUN )); then
   MODE_LABEL="dry-run"
 fi
 
+# Regenerate lib/legacy-shipped-paths.json (E26_S08_T03) — incremental, no-network mode:
+# folds this release's own skills/+agents/ tree into the running cumulative record so the
+# artifact this version SHIPS already reflects what it is about to publish, ready to seed
+# a pre-manifest consumer's first manifest on their NEXT upgrade. Runs on both dry-run and
+# live publish (it only writes a local file, never touches the registry) so a dry-run
+# rehearsal surfaces a generation failure too. Best-effort: a failure here must not block
+# a publish, matching this repo's existing fail-toward-doing-nothing posture for generated
+# artifacts (see lib/generate-skill-allow-list.js's equivalent best-effort call sites).
+GENERATE_LEGACY_PATHS_SCRIPT="$REPO_ROOT/scripts/generate-legacy-shipped-paths.js"
+if [[ -f "$GENERATE_LEGACY_PATHS_SCRIPT" ]]; then
+  log_info "Regenerating lib/legacy-shipped-paths.json (incremental, no network)…"
+  if ! node "$GENERATE_LEGACY_PATHS_SCRIPT"; then
+    log_warn "legacy-shipped-paths generation failed; publishing without an updated list"
+  fi
+else
+  log_warn "scripts/generate-legacy-shipped-paths.js not found; skipping legacy-paths regeneration"
+fi
+
 echo "========== NPM PUBLISH PIPELINE =========="
 printf 'Package:  %s\n' "$PACKAGE_NAME"
 printf 'Version:  %s\n' "$PACKAGE_VERSION"

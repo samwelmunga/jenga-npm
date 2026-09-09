@@ -20,7 +20,7 @@ You work with three item types:
 
 ## Scrum Board Schema
 
-All board items follow the schema defined in `templates/SCRUM_BOARD_SCHEMA.md`. Read this document at the start of every session. It defines file paths, filename conventions, frontmatter fields, status values, and the file-locking mechanism (`scripts/with-lock.sh`) for concurrency control.
+All board items follow the schema defined in `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`. Read this document at the start of every session. It defines file paths, filename conventions, frontmatter fields, status values, and the file-locking mechanism (`scripts/with-lock.sh`) for concurrency control.
 
 Board files live under:
 - `project/board/epics/` — epic files
@@ -48,7 +48,7 @@ This is the **very first thing** you do at the start of every session — before
 2. **If the file does not exist** — treat the session as already at Guarded level. This is not an error; do nothing further and continue to Session Start — Queue Processing.
 3. **If the file exists and its `session_level` field equals `2`** — the session is already at Guarded level. Do nothing further and continue to Session Start — Queue Processing.
 4. **If the file exists and `session_level` is `1`, `3`, `4`, or `5`** (i.e. anything other than `2`), reset the session to Guarded:
-   a. Prefer running `scripts/jenga-permission-level-switch.sh 2` if that script is present in the repo — it performs the copy described below. If the script is not present or fails, fall back to copying the template file directly: copy `templates/permission-levels/level-2-guarded.json` over both `.claude/settings.json` and `.agents/settings.json`.
+   a. Prefer running `bash "$([ -f scripts/jenga-permission-level-switch.sh ] && echo scripts/jenga-permission-level-switch.sh || echo node_modules/@jenga-ai/agent/scripts/jenga-permission-level-switch.sh)" 2` if that script is present (monorepo checkout or installed npm package) — it performs the copy described below. If the script is not present or fails, fall back to copying the template file directly: copy `$([ -f templates/permission-levels/level-2-guarded.json ] && echo templates/permission-levels/level-2-guarded.json || echo node_modules/@jenga-ai/agent/templates/permission-levels/level-2-guarded.json)` over both `.claude/settings.json` and `.agents/settings.json`.
    b. Rewrite `.jenga-permission-level.json` to `{"session_level": 2}`.
    c. Optionally log the reset to `project/logs/events.json` as a `permission_level_reset` event, e.g.:
       ```json
@@ -68,9 +68,9 @@ This is a self-contained procedure, not a session-start-only step. It may be inv
 1. **Check `project/queue/scrum_triggers.jsonl`** — If the file exists and is non-empty, process each trigger in order:
    - `rapport_review`: Read each rapport file in `rapport_files` (skipping `*.IGNORE.md`), create backlog items or set affected task/story status to `Failed` with a rapport reference.
      - **`Type: crucial_escalation` rapports are handled differently** from the generic backlog-or-`Failed` handling above. This rapport type does not report a defect and the target item is not failing — it is a mid-task request from developer or tester to change the target item's `crucial_level` (see E39 — Crucial Flag). For each rapport whose `**Type:**` header reads `crucial_escalation`:
-       1. **Identify the target** — read the rapport's `**Related Epic:**` / `**Related Story:**` / `**Related Task:**` header (per `templates/PROBLEM_RAPPORT_TEMPLATE.md`'s `crucial_escalation` note) to find the item (`E##`, `E##_S##`, or `E##_S##_T##`) whose `crucial_level` is being escalated.
-       2. **Review the reason** — check the rapport's Problem Description against the concrete-reason bar defined in `templates/SCRUM_BOARD_SCHEMA.md`'s `crucial_escalation` subsection: it must include at least one concrete, checkable fact (a specific file/path, an exact error message, a reproduction count, or a quantifiable impact, e.g. "affects 12 downstream tasks"). A subjective statement alone (e.g. "this seems risky") fails this check.
-       3. **Accept branch** — if the reason is concrete, apply the escalation to the target item's board file through `scripts/with-lock.sh` (per the File Locking protocol in `templates/SCRUM_BOARD_SCHEMA.md`), setting all three Crucial Flag Fields at once: `crucial_level` to the tier the rapport requests, or the nearest of `advisory` / `gated` / `locked` judged warranted — using the same default-tier-per-heuristic table documented above under "Crucial Level Heuristic Proposal" as a reference point, since a mid-task escalation is evaluated with the same judgment as a breakdown-time proposal, not a looser bar; `crucial_set_by` to `<agent>-escalation` (e.g. `developer-escalation`, `tester-escalation`, matching the `agent` named in the rapport's Sender object and the enum already defined in `templates/SCRUM_BOARD_SCHEMA.md`'s Crucial Flag Fields section); and `crucial_note` to a summary of the concrete reason together with the rapport's file path.
+       1. **Identify the target** — read the rapport's `**Related Epic:**` / `**Related Story:**` / `**Related Task:**` header (per `$([ -f templates/PROBLEM_RAPPORT_TEMPLATE.md ] && echo templates/PROBLEM_RAPPORT_TEMPLATE.md || echo node_modules/@jenga-ai/agent/templates/PROBLEM_RAPPORT_TEMPLATE.md)`'s `crucial_escalation` note) to find the item (`E##`, `E##_S##`, or `E##_S##_T##`) whose `crucial_level` is being escalated.
+       2. **Review the reason** — check the rapport's Problem Description against the concrete-reason bar defined in `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s `crucial_escalation` subsection: it must include at least one concrete, checkable fact (a specific file/path, an exact error message, a reproduction count, or a quantifiable impact, e.g. "affects 12 downstream tasks"). A subjective statement alone (e.g. "this seems risky") fails this check.
+       3. **Accept branch** — if the reason is concrete, apply the escalation to the target item's board file through `$([ -f scripts/with-lock.sh ] && echo scripts/with-lock.sh || echo node_modules/@jenga-ai/agent/scripts/with-lock.sh)` (per the File Locking protocol in `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`), setting all three Crucial Flag Fields at once: `crucial_level` to the tier the rapport requests, or the nearest of `advisory` / `gated` / `locked` judged warranted — using the same default-tier-per-heuristic table documented above under "Crucial Level Heuristic Proposal" as a reference point, since a mid-task escalation is evaluated with the same judgment as a breakdown-time proposal, not a looser bar; `crucial_set_by` to `<agent>-escalation` (e.g. `developer-escalation`, `tester-escalation`, matching the `agent` named in the rapport's Sender object and the enum already defined in `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s Crucial Flag Fields section); and `crucial_note` to a summary of the concrete reason together with the rapport's file path.
        4. **Reject branch** — if the reason is generic or non-concrete, do not write any of `crucial_level` / `crucial_set_by` / `crucial_note` to the target item. Instead, decline the escalation using the same `.IGNORE.md` convention already documented in `agents/tester.md`'s "IGNORE.md — skipping resolved rapports" section: rename the rapport file to `<name>.IGNORE.md` and append an Ignore Log entry stating the escalation was declined for lacking a concrete reason. This keeps the declined rapport from being silently re-surfaced as a fresh `rapport_review` trigger on a future `on_session_end.sh` scan, since that scan's new-rapport detection skips `*.IGNORE.md` files.
        5. **Report back** — in both branches, name the target item and the decision made (accepted at tier X with `crucial_set_by`/`crucial_note` set, or declined for lacking a concrete reason) as part of the existing "Report to the user" step below (Session Start — Queue Processing, item 3); no separate reporting step is needed.
        6. **This is the only path** by which a mid-task agent request results in a `crucial_level` board write. Developer and tester never write `crucial_level`, `crucial_set_by`, or `crucial_note` directly to a board file themselves under any circumstance — they may only *request* the change via a `crucial_escalation` rapport, and the actual frontmatter write happens here, exclusively by scrum-master, closing the loop described in E39's Purpose section ("the actual frontmatter write still goes through scrum-master, never the subagent itself").
@@ -108,7 +108,7 @@ When all stories under an epic are complete:
 - Update the epic `status` to `Passed` or `Passed with remarks` accordingly
 - Set `date_completed` on the epic
 
-Wrap every status write through `scripts/with-lock.sh <target-file> -- <command>` instead of reading/writing a `.lock` file by hand — see `templates/SCRUM_BOARD_SCHEMA.md`'s "File Locking (Concurrency Control)" section for the full mechanism. If the script cannot acquire the lock within its timeout, it never runs the write; abort and write a problem rapport rather than bypassing it.
+Wrap every status write through `"$([ -f scripts/with-lock.sh ] && echo scripts/with-lock.sh || echo node_modules/@jenga-ai/agent/scripts/with-lock.sh)" <target-file> -- <command>` instead of reading/writing a `.lock` file by hand — see `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s "File Locking (Concurrency Control)" section for the full mechanism. If the script cannot acquire the lock within its timeout, it never runs the write; abort and write a problem rapport rather than bypassing it.
 
 ---
 
@@ -225,7 +225,7 @@ Assign `inline` when **all** of the following are true:
 
 ### `light` scope
 
-`light` sits between `inline` and `task`: a single developer subagent pass with no worktree, self-verified via `scripts/smoke-harness.sh` in lieu of a separate tester invocation. If the smoke harness fails, execution falls back to `task` scope automatically at runtime — see `templates/SCRUM_BOARD_SCHEMA.md`'s Execution Scope Fields section for the full runtime contract.
+`light` sits between `inline` and `task`: a single developer subagent pass with no worktree, self-verified via `$([ -f scripts/smoke-harness.sh ] && echo scripts/smoke-harness.sh || echo node_modules/@jenga-ai/agent/scripts/smoke-harness.sh)` in lieu of a separate tester invocation. If the smoke harness fails, execution falls back to `task` scope automatically at runtime — see `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s Execution Scope Fields section for the full runtime contract.
 
 Assign `light` when **any** of the following are true:
 - The task exceeds `inline_max_files` or `inline_max_lines` (per `project/configs/scope-thresholds.json`), but remains a single, tightly-bounded change (one file, or a small handful of directly related files)
@@ -236,7 +236,7 @@ Assign `light` when **any** of the following are true:
 
 **Distinguishing `light` from `task`:** assign `light`, not `task`, only when **all** of the following also hold:
 - The task does **not** require worktree isolation — it can be implemented directly by a single developer subagent pass
-- The task does **not** require independent tester verification — a `scripts/smoke-harness.sh` self-check is sufficient to catch regressions
+- The task does **not** require independent tester verification — a `$([ -f scripts/smoke-harness.sh ] && echo scripts/smoke-harness.sh || echo node_modules/@jenga-ai/agent/scripts/smoke-harness.sh)` self-check is sufficient to catch regressions
 - No shared-infrastructure contention exists (same contention concept as the `story` scope's mandatory contention check below — e.g. `package.json`, `settings.json`, `pyproject.toml`)
 - The task has no cross-story dependencies and tester validation is not sensitive to the specific implementation approach chosen
 
@@ -297,11 +297,11 @@ When in doubt, default to `task`. `task` is the safe choice and imposes no penal
 
 **When it runs:** During the same breakdown pass where `execution_scope` and `needs_docs` are assigned to a story or task — before the item is written to the board. Evaluate every new or amended story/task against the heuristic list below as part of the same pass, not as a separate follow-up step.
 
-**Skip check — already-declined proposals.** Before evaluating the heuristic list, check whether the item already carries `crucial_declined: true` in its existing frontmatter (see "Declined Crucial Proposal Fields" in `templates/SCRUM_BOARD_SCHEMA.md`). If it does, **do not** re-run the heuristic evaluation or re-propose a `crucial_level` for this item — the user already declined a proposal for it in a prior session, and re-surfacing the same question on every subsequent breakdown pass would be noise, not caution. This check only suppresses re-proposal on the *same* item that already has a recorded decline; it does not apply to other items, even similar ones, in the same story.
+**Skip check — already-declined proposals.** Before evaluating the heuristic list, check whether the item already carries `crucial_declined: true` in its existing frontmatter (see "Declined Crucial Proposal Fields" in `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`). If it does, **do not** re-run the heuristic evaluation or re-propose a `crucial_level` for this item — the user already declined a proposal for it in a prior session, and re-surfacing the same question on every subsequent breakdown pass would be noise, not caution. This check only suppresses re-proposal on the *same* item that already has a recorded decline; it does not apply to other items, even similar ones, in the same story.
 
 **The heuristic list.** Check the item against each of the following, verbatim:
 - Item touches auth, secrets, or credentials
-- Item touches schema or frontmatter contracts (e.g. `templates/SCRUM_BOARD_SCHEMA.md`, `scripts/validate-board.sh`)
+- Item touches schema or frontmatter contracts (e.g. `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`, `scripts/validate-board.sh`)
 - Item touches production configuration
 - Item touches public-facing distribution (e.g. `mirror.sh`, `scripts/distribute*`, publish targets)
 
@@ -311,7 +311,7 @@ When in doubt, default to `task`. `task` is the safe choice and imposes no penal
 |-----------|---------------|-----------|
 | Auth, secrets, or credentials | `gated` | Irreversible or hard-to-detect damage (leaked credential, broken auth) if the wrong action is taken without confirmation |
 | Public-facing distribution (`mirror.sh`, `scripts/distribute*`, publish targets) | `gated` | Actions here are externally visible and can push to a public surface; mirrors the risky-action gating E33 already applies to `autoMode.allow` |
-| Schema or frontmatter contracts (`templates/SCRUM_BOARD_SCHEMA.md`, `scripts/validate-board.sh`) | `advisory` | Usually reversible via a follow-up board edit; escalate to `gated` only when a stronger signal is present, e.g. the change also touches validation logic that could silently accept or reject valid board files |
+| Schema or frontmatter contracts (`$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`, `scripts/validate-board.sh`) | `advisory` | Usually reversible via a follow-up board edit; escalate to `gated` only when a stronger signal is present, e.g. the change also touches validation logic that could silently accept or reject valid board files |
 | Production configuration | `advisory` | Risk varies widely by config surface; escalate to `gated` only when a stronger signal is present, e.g. the change could take down a live service |
 
 `locked` is never a default outcome of this mapping — it is reserved for cases that specifically require a live pause-and-confirm mid-task (per E39's architectural rationale: only a foreground, `inline`-executed session can pause and ask the user something before every write). If an item's risk profile seems to need that, say so explicitly as part of the rationale rather than silently defaulting to it.
@@ -331,7 +331,7 @@ This is the same shape of guarantee as `epic_scope_approval` under Execution Sco
 If the user explicitly declines a same-session proposal:
 
 1. The item is written to the board **without any of the three `crucial_level` fields set** (`crucial_level`, `crucial_set_by`, `crucial_note` all absent) — exactly as if no proposal had ever been made.
-2. Instead, record the decline using the dedicated fields documented under "Declined Crucial Proposal Fields" in `templates/SCRUM_BOARD_SCHEMA.md`:
+2. Instead, record the decline using the dedicated fields documented under "Declined Crucial Proposal Fields" in `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`:
    - `crucial_declined: true`
    - `crucial_declined_note`: free text naming the heuristic(s) that matched, the tier that was proposed, and the date declined (e.g. `"Declined 2026-08-27: matched 'schema/frontmatter contracts' heuristic, proposed advisory tier; user declined without further reason."`)
 3. Do not re-propose a `crucial_level` for this same item on a later breakdown pass — see the "Skip check" above, which is the enforcement half of this rule.
@@ -384,7 +384,7 @@ Once an item is sufficiently defined:
 
 #### Story Format Validation
 
-Before writing any new or amended story file to `project/board/stories/`, validate that the file content meets the format requirements defined in `templates/SCRUM_BOARD_SCHEMA.md` (Story Format Standards section).
+Before writing any new or amended story file to `project/board/stories/`, validate that the file content meets the format requirements defined in `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)` (Story Format Standards section).
 
 **Steps:**
 1. Before persisting the story file, inspect the draft content for the following:
@@ -399,12 +399,12 @@ Before writing any new or amended story file to `project/board/stories/`, valida
    - Log what was corrected (e.g. `"Fixed: converted plain DoD bullets to - [ ] checkboxes"`).
    - Re-verify the fixed content passes all three checks before persisting.
 3. **If all checks pass**: write the story file to its final path normally.
-4. Optionally, if running in a shell-capable environment, you may also run `scripts/validate-story-format.sh <story-file-path>` as a confirmation step after writing.
+4. Optionally, if running in a shell-capable environment, you may also run `bash "$([ -f scripts/validate-story-format.sh ] && echo scripts/validate-story-format.sh || echo node_modules/@jenga-ai/agent/scripts/validate-story-format.sh)" <story-file-path>` as a confirmation step after writing.
 
 This gate applies to **all story creation and amendment operations** — no story file may be written to the board without passing all three checks.
 
 #### Triggering the Developer
-When board items are committed **and the user intends them for immediate implementation**, write a session handoff file to `project/queue/handoffs/scrum-master-<session_id>-<task_id>.json` — a unique path keyed by this session, not the old shared `project/queue/.session_handoff.json` slot, so that a session ending close to another agent's session can never clobber its handoff. Use the first entry of `task_ids` as `<task_id>` in the filename (or the literal string `batch` if `task_ids` is empty). Before writing the handoff, compose a short `resolved_context` digest of what was already resolved during breakdown for this task — which `templates/SCRUM_BOARD_SCHEMA.md` fields apply, which skill precedent governs, which epic/story-placement decisions were already made — and persist it by calling `scripts/write-context-digest.sh --agent scrum-master --session-id <session_id> --task-id <task_id>` with that content (stays under the ~100-line/few-hundred-token cap defined in `templates/SCRUM_BOARD_SCHEMA.md`'s `resolved_context` subsection; the script rejects oversized input rather than truncating it). Place the script's returned path in the handoff's `resolved_context` field. `on_session_end.sh` forwards the work to the developer queue:
+When board items are committed **and the user intends them for immediate implementation**, write a session handoff file to `project/queue/handoffs/scrum-master-<session_id>-<task_id>.json` — a unique path keyed by this session, not the old shared `project/queue/.session_handoff.json` slot, so that a session ending close to another agent's session can never clobber its handoff. Use the first entry of `task_ids` as `<task_id>` in the filename (or the literal string `batch` if `task_ids` is empty). Before writing the handoff, compose a short `resolved_context` digest of what was already resolved during breakdown for this task — which `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)` fields apply, which skill precedent governs, which epic/story-placement decisions were already made — and persist it by calling `bash "$([ -f scripts/write-context-digest.sh ] && echo scripts/write-context-digest.sh || echo node_modules/@jenga-ai/agent/scripts/write-context-digest.sh)" --agent scrum-master --session-id <session_id> --task-id <task_id>` with that content (stays under the ~100-line/few-hundred-token cap defined in `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s `resolved_context` subsection; the script rejects oversized input rather than truncating it). Place the script's returned path in the handoff's `resolved_context` field. `on_session_end.sh` forwards the work to the developer queue:
 
 ```json
 {
@@ -414,12 +414,12 @@ When board items are committed **and the user intends them for immediate impleme
   "task_ids": ["<E##_S##_T##>", "..."],
   "story_id": "<E##_S##>",
   "epic_id": "<E##>",
-  "resolved_context": "<path returned by scripts/write-context-digest.sh, or omit if no digest was written>",
+  "resolved_context": "<path returned by write-context-digest.sh (see the Triggering the Developer resolution above), or omit if no digest was written>",
   "date": "<ISO 8601 UTC timestamp>"
 }
 ```
 
-This digest is a starting point only, never a restriction: the developer may and should still read the full `templates/SCRUM_BOARD_SCHEMA.md`, relevant skill docs, or `CLAUDE.md` when the digest doesn't cover what it needs.
+This digest is a starting point only, never a restriction: the developer may and should still read the full `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`, relevant skill docs, or `CLAUDE.md` when the digest doesn't cover what it needs.
 
 If the user wants to defer implementation (e.g., brainstorming only, or items are backlogged for later), do **not** write the handoff file.
 

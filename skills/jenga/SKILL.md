@@ -1,6 +1,9 @@
 ---
 name: j.jenga
 description: Interactive-by-default board orchestrator with a fully automated escape hatch. Bare `/jenga` renders a picker and confirmation tree before scoping the run; `/jenga <ids>` resolves an explicit fuzzy-ID scope and confirms it; `/jenga *` reproduces the original zero-prompt behavior — decomposing any unbroken Epics into Stories, any unbroken Stories into Tasks, queuing all unqueued Tasks into todo.md, then executing every eligible item with no user prompts — until the board is fully started.
+output_types:
+  - when: detect-nl-intent
+    type: id_list
 keywords:
   - jenga
   - orchestrate
@@ -96,7 +99,7 @@ Do not proceed with this task.
 
 #### Rule 4 — crucial_level: locked forces execution_scope: inline
 
-If the task frontmatter contains `crucial_level: locked` (per `templates/SCRUM_BOARD_SCHEMA.md`'s Crucial Flag Fields), `execution_scope` for that task MUST be `inline` — only the current foreground/inline session can pause mid-run for a live confirmation; a backgrounded subagent has no live channel back to the user.
+If the task frontmatter contains `crucial_level: locked` (per `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s Crucial Flag Fields), `execution_scope` for that task MUST be `inline` — only the current foreground/inline session can pause mid-run for a live confirmation; a backgrounded subagent has no live channel back to the user.
 
 This rule **auto-corrects and continues**; unlike Rules 1-3, it never halts.
 
@@ -235,7 +238,7 @@ For each in-scope story that has one or more tasks listed in `todo.md`:
 2. **Guard: empty task list** — if the `tasks:` list is empty (zero entries), this story is **not** eligible for the bundle path. Skip to per-task dispatch in Phase 4.
 3. **Read each task file** — for every task ID in the `tasks:` list, read the corresponding task file from `project/board/tasks/`.
 4. **Collect `execution_scope`** — extract the `execution_scope` field from each task's YAML frontmatter. If the field is absent or has any value other than `story`, treat that task as **not** story-scoped.
-5. **Guard: locked-task disqualifier (defense-in-depth)** — for each task file already read in step 3, also read `crucial_level` (per `templates/SCRUM_BOARD_SCHEMA.md`'s Crucial Flag Fields). If **any** task in the story's `tasks:` list has `crucial_level: locked`, this story is **not** eligible for the bundle path — skip to per-task dispatch in Phase 4 for this story, **regardless of that task's `execution_scope` value**, even if it already reads `inline`. This check is defense-in-depth alongside Phase 0.5's Rule 4 (which forces a locked task's own `execution_scope` to `inline` when Rule 4 processes it): it exists for the race window where Rule 4 hasn't (yet) corrected the task — e.g. the task was added to the story's `tasks:` list after Rule 4 last ran, or the file was edited by hand after validation. It is not a replacement for Rule 4.
+5. **Guard: locked-task disqualifier (defense-in-depth)** — for each task file already read in step 3, also read `crucial_level` (per `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s Crucial Flag Fields). If **any** task in the story's `tasks:` list has `crucial_level: locked`, this story is **not** eligible for the bundle path — skip to per-task dispatch in Phase 4 for this story, **regardless of that task's `execution_scope` value**, even if it already reads `inline`. This check is defense-in-depth alongside Phase 0.5's Rule 4 (which forces a locked task's own `execution_scope` to `inline` when Rule 4 processes it): it exists for the race window where Rule 4 hasn't (yet) corrected the task — e.g. the task was added to the story's `tasks:` list after Rule 4 last ran, or the file was edited by hand after validation. It is not a replacement for Rule 4.
 6. **Apply the all-or-nothing rule** — a story qualifies for the bundle path **only if every task** in its `tasks:` list has `execution_scope: story`. A single task with a different scope (or a missing field) disqualifies the entire story.
 7. **Route bundle candidates** — if all tasks in the story are `execution_scope: story` and the list is non-empty:
    a. Emit:

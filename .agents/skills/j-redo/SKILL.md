@@ -45,7 +45,7 @@ If either part is missing, ask the user to provide it before proceeding.
 - Run `git --no-pager show <SHA>` to inspect the full diff.
 
 **Epic / Story number:**
-- Read the matching file under `$(bash scripts/board_resolver.sh)epics/` or `$(bash scripts/board_resolver.sh)stories/` to understand the scope.
+- Read the matching file under `$(bash "$([ -f scripts/board_resolver.sh ] && echo scripts/board_resolver.sh || echo node_modules/@jenga-ai/agent/scripts/board_resolver.sh)")epics/` or `$(bash "$([ -f scripts/board_resolver.sh ] && echo scripts/board_resolver.sh || echo node_modules/@jenga-ai/agent/scripts/board_resolver.sh)")stories/` to understand the scope.
 - Use `git --no-pager log --all --oneline --grep="<epic or story title>"` to locate related commits and their diffs.
 
 Collect the list of **files originally changed** and the **original intent** of the implementation.

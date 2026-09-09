@@ -215,6 +215,7 @@ examples:                            # optional — natural-language prompts for
   - "<example prompt 1>"
   - "<example prompt 2>"
 minimum_permission_level: <1-5>       # optional — minimum session permission level required to run this skill
+output_types: <type> | [{when, type}] # optional — declares this skill's forwardable output type(s) for playbooks (E53_S03_T02)
 ---
 ```
 
@@ -228,6 +229,7 @@ minimum_permission_level: <1-5>       # optional — minimum session permission 
 | `keywords` | string[] | ❌ | Short words or phrases (1–3 words) strongly associated with this skill. Used by the Jenga Router for keyword matching. |
 | `examples` | string[] | ❌ | Natural-language prompt strings that should trigger this skill. Used by the Jenga Router for semantic matching. |
 | `minimum_permission_level` | integer | ❌ | Minimum session permission level (`1`-`5`) required to run this skill. Skills that set this field must gate execution via `scripts/check-permission-level.sh`. |
+| `output_types` | string \| `{when, type}`[] | ❌ | Declares what type(s) of forwardable output this skill produces, for `/jenga` playbook `forward_from` steps to reference. See "Playbooks — StepObject Schema and `output_types`" below. |
 
 ---
 
@@ -292,6 +294,45 @@ minimum_permission_level: 4
 
 ---
 
+### `output_types`
+
+An optional field (`E53_S03_T02`) declaring what type(s) of forwardable output this skill produces,
+so a `/jenga` playbook step can name this skill as a `forward_from` source (see "Playbooks —
+StepObject Schema and `output_types`" below for the full playbook-side contract). Takes one of two
+shapes:
+
+- a **single static type string** — this skill always produces the same output type, regardless of
+  how it's invoked:
+  ```yaml
+  output_types: text
+  ```
+- a **list of `{when, type}` objects** — this skill's output type depends on how it was invoked.
+  Each `when` is either one of the two built-in predicates (`argument_empty` / `argument_nonempty`),
+  or a named reference to this skill's own classifier script (a skill with its own argument
+  grammar, e.g. `j.jenga`'s Phase 0.75 entry-mode resolution):
+  ```yaml
+  output_types:
+    - when: detect-nl-intent
+      type: id_list
+  ```
+  A classifier-script `when` value must match an executable script's basename under this skill's
+  own `scripts/` directory (e.g. `detect-nl-intent` → `skills/jenga/scripts/detect-nl-intent.sh`) —
+  `skills/jenga/scripts/load-playbooks.sh` checks that the script exists on disk at load time, but
+  never runs it to determine which branch would actually fire. See "Playbooks — StepObject Schema
+  and `output_types`" below for exactly what claim this load-time check does and does not make.
+
+**Guidelines:**
+- The declared type value(s) should be one of the entries in the canonical type vocabulary,
+  `templates/playbook-types.json` (`text`, `id_list`, `file_list` as of this writing) — see
+  "Playbook Type Registry Governance" below before adding a new type.
+- Only declare `output_types` if this skill genuinely produces output another playbook step could
+  meaningfully consume. Partial adoption is intentional and expected: as of `E53_S03`, only
+  `j.status`, `j.uncharted`, `j.jenga`, and `j.reconcile` declare it. A skill with no declared
+  `output_types` simply cannot be a playbook `forward_from` source — this is not a defect to fix
+  proactively for every skill.
+
+---
+
 ## Complete Example
 
 ```yaml
@@ -349,6 +390,145 @@ inside scripts themselves (`skills/init/scripts/init.sh`'s `PKG_ROOT` resolution
 `skills/uncharted/scripts/elicitation-state.sh`'s `WITH_LOCK` resolution) — just expressed as a
 self-contained prose idiom since a `SKILL.md` instruction has no `$SCRIPT_DIR` of its own to climb
 from.
+
+### Invoking a root-level `templates/` file
+
+`postinstall.js` mirrors only `skills/` and `agents/` into a consumer's `.claude/`/`.agents/` —
+`templates/` (like `scripts/`) is never copied there either. A `SKILL.md` or `agents/*.md`
+instruction written as a bare `templates/<name>` reference assumes the executing agent's cwd has
+its own `templates/` directory, which is true only inside this monorepo's own dev checkout (where
+`templates/` sits at the repo root). For a genuine npm consumer, that same file lives at
+`node_modules/@jenga-ai/agent/templates/<name>` instead, so the bare form resolves to nothing the
+first time a consumer's agent tries to read it — the `templates/` counterpart of the same defect
+already fixed above for `scripts/`.
+
+Unlike a `.sh` script, a `templates/` file is never executed — it is read as a document (a schema
+reference such as `templates/SCRUM_BOARD_SCHEMA.md`), used as a scaffold to copy from (e.g.
+`templates/USER_INSTRUCTIONS_TEMPLATE.md`, `templates/EXECUTION_PLAN_TEMPLATE.md`,
+`templates/EXECUTION_SUMMARY_TEMPLATE.md`, `templates/PROBLEM_RAPPORT_TEMPLATE.md`,
+`templates/CHANGELOG_TEMPLATE.md`), or copied wholesale over a settings file (e.g.
+`templates/permission-levels/level-<n>-<name>.json`) — and a `SKILL.md`/`agents/*.md` instruction
+has no `$SCRIPT_DIR` of its own to climb from regardless. The fix is the same inline
+bash-substitution shape used for `scripts/` above, adapted to check for the specific target file
+(not bare directory presence, since a consumer's own unrelated project may already have its own
+unrelated `templates/` dir):
+
+```bash
+$([ -f templates/<name> ] && echo templates/<name> || echo node_modules/@jenga-ai/agent/templates/<name>)
+```
+
+For example, a reference to the board schema resolves as:
+
+```
+$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)
+```
+
+Every prose reference to a specific root-level `templates/` file must resolve through this idiom
+rather than the bare path — whether the reference reads the file's contents, copies it as a
+scaffold, or overwrites another file with it.
+
+**Out of scope:** `skills/self-sync/SKILL.md`'s own mentions of `templates/` as one of the
+directories it mirrors (alongside `skills/`, `agents/`, `scripts/`, etc.) are not single-file
+references and are not part of this idiom — that skill's entire job is to operate on the
+monorepo's own root-level `templates/` directory as a whole, which by definition only exists in
+this monorepo's own dev checkout (there is no consumer-side installation for `/self-sync` to run
+against in the first place).
+
+---
+
+## Playbooks — StepObject Schema and `output_types`
+
+A `/jenga` playbook (`skills/jenga/playbooks/*.json`) is an ordered chain of steps that `/jenga`'s
+natural-language branch may propose as an editable, confirmable numbered list. This section
+documents the `StepObject` step shape and its load-time validation, added by `E53_S03` on top of
+the playbook mechanism `E53_S02` shipped. The single source of truth for this validation is
+`skills/jenga/scripts/load-playbooks.sh` — its own header comment is the authoritative, most
+detailed reference; this section is a skill-author-facing summary of that same contract, written
+against the actual landed implementation (not the original design proposal).
+
+### The `StepObject` schema
+
+Each entry in a playbook's `steps` array is either a **bare string** or a **`StepObject`**:
+
+- A **bare string** (e.g. `"brainstorm"`) is unchanged, original behavior — shorthand for
+  `{"skill": "brainstorm"}`. No migration is ever required: an all-bare-string playbook loads
+  byte-for-byte the same as before `E53_S03`, and a bare-string step is never rewritten into an
+  object form in the loader's output.
+
+- A **`StepObject`** is a JSON object with exactly one of these two target fields (mutually
+  exclusive — a step naming both, or naming neither, is rejected):
+  - `skill: "<name>"` — invokes a single skill, same as a bare string.
+  - `playbook: "<id>"` — composes in another playbook by ID (full composition semantics, cycle
+    detection, and depth limiting are `E53_S05`'s scope; this story only accepts the shape).
+
+  Plus these optional fields:
+  - `instruction: "<text>"` — static natural-language text appended to this step's own invocation
+    message.
+  - `forward_from: "<name>"` — names an **earlier** step in the *same* playbook (by that step's
+    skill name) whose typed output becomes this step's actual invocation input. See "forward_from
+    resolution" below for the load-time rules this triggers.
+  - `resolve: "<text>"` — natural-language instructions for reshaping/filtering/type-bridging the
+    value forwarded into this step (e.g. "pick the first three items"). See "The `resolve` /
+    confirmation-gate rule" below for the one load-time rejection this field triggers. `E53_S06`
+    owns `resolve`'s actual runtime behavior — this story only validates it at load time.
+  - `version` / `schema_version` (either key name) — **reserved, currently a no-op.** Accepted and
+    passed through unchanged; not yet acted upon by anything. Exists so a future schema revision
+    has a place to declare itself without every existing playbook needing a retroactive migration.
+
+```json
+{
+  "steps": [
+    "brainstorm",
+    {"skill": "todo", "forward_from": "brainstorm", "instruction": "capture as a task"},
+    {"playbook": "some-other-playbook-id"}
+  ]
+}
+```
+
+### `forward_from` resolution
+
+A step's `forward_from: "<name>"` is validated entirely at load time, entirely from files already
+on disk:
+
+1. **Existence** — `<name>` must equal the skill name of some earlier step in the same playbook. A
+   `playbook`-type step never satisfies this (it has no single skill name).
+2. **Declared output** — the named source skill's own `SKILL.md` must declare a non-empty
+   `output_types` (see the frontmatter field above). A skill with no declared `output_types` can
+   never be a forward source — this is the type registry's partial-adoption rule made
+   load-time-enforced.
+3. **The Blocker 1 structural check**, for classifier-script sources only — when the source's
+   `output_types` is the `{when, type}` list form and a given entry's `when` is a classifier-script
+   reference (not one of the two built-in predicates), the loader checks only that a script
+   matching that reference actually exists on disk
+   (`skills/<name>/scripts/<when>.sh`) — it never runs that script, and never claims to know which
+   branch would fire at real invocation time. The honest claim this check makes is: *if* this
+   classifier-based source continues at all (produces output rather than halting), *then* its
+   declared type applies. `j.jenga`'s own classifier (`detect-nl-intent.sh`) is the concrete
+   example this check was built against — see `skills/jenga/scripts/load-playbooks.sh`'s header for
+   the full end-to-end trace this claim is based on.
+
+A `forward_from` failing any of these three checks causes the **whole playbook** to be
+rejected (stderr warning, skipped) — never just the offending step, consistent with this loader's
+existing "a chain with a broken link is not a usable chain" granularity.
+
+### The `resolve` / confirmation-gate rule
+
+`resolve` ships, as of `E53_S03`, for reshaping/filtering/type-bridging a forwarded value **only**
+— never for pre-authorizing a downstream confirmation. Concretely: a step carrying both `resolve`
+and `playbook` is rejected at load time. The loader's documented convention for what counts as a
+"downstream confirmation gate" is exactly this — any `playbook`-composition step, since entering a
+nested playbook always passes through that playbook's own up-front confirmation
+(`render-playbook-confirmation.sh`) before any of its steps run. `resolve` may only ever shape a
+value flowing into an ordinary `skill` step.
+
+### Playbook Type Registry Governance
+
+The canonical playbook type vocabulary lives in `templates/playbook-types.json` (currently `text`,
+`id_list`, `file_list`). It is **owned by the Scrum Master**, mirroring the same ownership pattern
+already established for `PROJECT_SUMMARY.md`. Registry additions or changes route through the
+normal board-item (task) process — never an ungoverned direct edit to that file. If a skill you're
+authoring needs a type the registry doesn't yet have, raise it as a task rather than adding the
+entry yourself.
 
 ---
 

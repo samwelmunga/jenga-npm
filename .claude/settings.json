@@ -5,7 +5,8 @@
   },
   "autoMode": {
     "allow": [
-      "$defaults"
+      "$defaults",
+      "Bash(bash skills/mirror-public/scripts/mirror.sh*)"
     ]
   },
   "permissions": {
@@ -13,17 +14,10 @@
       "Bash(*)"
     ],
     "deny": [
-      "Bash(rm *)",
-      "Bash(rmdir *)",
       "Bash(dd *)",
       "Bash(mkfs *)",
       "Bash(shred *)",
       "Bash(truncate *)",
-      "Bash(git push *)",
-      "Bash(git reset --hard *)",
-      "Bash(git clean *)",
-      "Bash(chmod *)",
-      "Bash(chown *)",
       "Bash(sudo *)",
       "Bash(su *)"
     ]

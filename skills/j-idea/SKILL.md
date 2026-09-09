@@ -36,7 +36,7 @@ This file is generated/synced by `scripts/generate-j-alias.sh idea` from `skills
 
 3. **Add to `project/ideas.md`** by running:
    ```
-   bash scripts/idea_manager.sh add '<idea>'
+   bash "$([ -f scripts/idea_manager.sh ] && echo scripts/idea_manager.sh || echo node_modules/@jenga-ai/agent/scripts/idea_manager.sh)" add '<idea>'
    ```
 
 4. **Ask the user**: "Capture another idea, or done?"

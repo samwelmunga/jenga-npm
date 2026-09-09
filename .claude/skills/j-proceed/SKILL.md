@@ -30,7 +30,7 @@ This file is generated/synced by `scripts/generate-j-alias.sh proceed` from `ski
 
 3. **Determine the next action**:
    - If there are tasks in `Pending` or `In Progress` status that have not yet been assigned to the developer, identify them.
-   - If outstanding tasks are ready for implementation, write a session handoff to `project/queue/handoffs/scrum-master-<session_id>-<task_id>.json` (per-session path — see `templates/SCRUM_BOARD_SCHEMA.md`'s `handoffs/` section; use the first task ID, or `batch` if several) with `"status": "planning_complete"` so that `on_session_end.sh` routes them to the developer queue.
+   - If outstanding tasks are ready for implementation, write a session handoff to `project/queue/handoffs/scrum-master-<session_id>-<task_id>.json` (per-session path — see `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s `handoffs/` section; use the first task ID, or `batch` if several) with `"status": "planning_complete"` so that `on_session_end.sh` routes them to the developer queue.
    - If all tasks are complete, check for epic/story rollup and update board statuses accordingly.
 
 4. **Report** a clear summary to the user: what is done, what is in progress, what is next — and which agent will handle it.

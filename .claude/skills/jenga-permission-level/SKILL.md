@@ -28,7 +28,7 @@ examples:
 | 4 | Elevated | |
 | 5 | Unrestricted | |
 
-`defaultMode` stays `acceptEdits` at every level; only the `permissions` block changes. Levels are backed by template files at `templates/permission-levels/level-<n>-<name>.json`, e.g. `templates/permission-levels/level-4-elevated.json` (naming convention: `<name>` is the lowercase level name from the table above — Locked/Guarded/Standard/Elevated/Unrestricted). Those templates are owned by story E33_S01 and are the input the switch script (see below) copies from.
+`defaultMode` stays `acceptEdits` at every level; only the `permissions` block changes. Levels are backed by template files at `$([ -f templates/permission-levels/level-<n>-<name>.json ] && echo templates/permission-levels/level-<n>-<name>.json || echo node_modules/@jenga-ai/agent/templates/permission-levels/level-<n>-<name>.json)`, e.g. `$([ -f templates/permission-levels/level-4-elevated.json ] && echo templates/permission-levels/level-4-elevated.json || echo node_modules/@jenga-ai/agent/templates/permission-levels/level-4-elevated.json)` (naming convention: `<name>` is the lowercase level name from the table above — Locked/Guarded/Standard/Elevated/Unrestricted). Those templates are owned by story E33_S01 and are the input the switch script (see below) copies from.
 
 ---
 
@@ -59,18 +59,18 @@ Before doing anything else, validate the argument:
 Do not inline the copy/update logic here — per this repo's scripts-over-inline-logic convention, the switch is owned entirely by a dedicated script:
 
 ```bash
-bash scripts/jenga-permission-level-switch.sh <n>
+bash "$([ -f scripts/jenga-permission-level-switch.sh ] && echo scripts/jenga-permission-level-switch.sh || echo node_modules/@jenga-ai/agent/scripts/jenga-permission-level-switch.sh)" <n>
 ```
 
 This script (created by a separate task, E33_S02_T02) is responsible for:
-- Copying `templates/permission-levels/level-<n>-<name>.json` over both `.claude/settings.json` and `.agents/settings.json` as a **whole-file overwrite** — not a merge of the `permissions` block alone. Two fields vary by level and are expected to change on a switch: `permissions.deny` and `autoMode.allow`. All 5 templates carry byte-identical `defaultMode`, `env`, `hooks`, and `permissions.allow`; that invariant is what keeps the overwrite safe. Two consequences follow: any top-level key present in a destination file but absent from the templates is **silently dropped** by a switch, and any future per-level difference in `defaultMode`/`env`/`hooks` would take effect without warning. Keep the templates in sync with root `settings.json` for everything except those two varying fields.
+- Copying `$([ -f templates/permission-levels/level-<n>-<name>.json ] && echo templates/permission-levels/level-<n>-<name>.json || echo node_modules/@jenga-ai/agent/templates/permission-levels/level-<n>-<name>.json)` over both `.claude/settings.json` and `.agents/settings.json` as a **whole-file overwrite** — not a merge of the `permissions` block alone. Two fields vary by level and are expected to change on a switch: `permissions.deny` and `autoMode.allow`. All 5 templates carry byte-identical `defaultMode`, `env`, `hooks`, and `permissions.allow`; that invariant is what keeps the overwrite safe. Two consequences follow: any top-level key present in a destination file but absent from the templates is **silently dropped** by a switch, and any future per-level difference in `defaultMode`/`env`/`hooks` would take effect without warning. Keep the templates in sync with root `settings.json` for everything except those two varying fields.
 - Creating or updating `.jenga-permission-level.json` at the repo root to `{"session_level": <n>}`.
 
 Relay the script's stdout to the user and honor its exit code:
 - Exit code `0` — report success, e.g. `Switched to level <n> (<name>).`
 - Non-zero exit code — report the script's error output verbatim and treat the switch as failed; do not claim success.
 
-If `scripts/jenga-permission-level-switch.sh` does not exist yet (e.g. E33_S02_T02 has not landed), report that clearly as a missing dependency rather than attempting to reimplement its logic inline.
+If neither `scripts/jenga-permission-level-switch.sh` nor `node_modules/@jenga-ai/agent/scripts/jenga-permission-level-switch.sh` exists yet (e.g. E33_S02_T02 has not landed), report that clearly as a missing dependency rather than attempting to reimplement its logic inline.
 
 ### Session End
 
