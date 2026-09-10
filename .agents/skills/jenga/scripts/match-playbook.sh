@@ -63,7 +63,7 @@
 # stdout is always a single JSON object, one of:
 #
 #   {"classification": "playbook_match", "playbook_id": "brainstorm-to-mirror",
-#    "name": "Idea to Public Release", "steps": ["brainstorm", "todo", "do", "dev-done", "mirror-public"]}
+#    "name": "Idea to Public Release", "steps": ["j-brainstorm", "j-todo", "j-do", "j-dev-done", "j-mirror-public"]}
 #
 #   {"classification": "ambiguous", "candidates": [{"playbook_id": "...", "name": "..."}, ...]}
 #

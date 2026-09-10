@@ -318,7 +318,7 @@
 #       "description": "...",
 #       "keywords":    ["..."],
 #       "examples":    ["..."],
-#       "steps":       ["brainstorm", "todo", "do", "dev-done", "mirror-public"]
+#       "steps":       ["j-brainstorm", "j-todo", "j-do", "j-dev-done", "j-mirror-public"]
 #     },
 #     ...
 #   ]

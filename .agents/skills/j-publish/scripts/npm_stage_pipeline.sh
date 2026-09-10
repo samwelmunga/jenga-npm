@@ -360,58 +360,98 @@ if (( DRY_RUN )); then
 fi
 
 # ---------------------------------------------------------------------------
+# Stage-id parsing helper — shared between the `npm` target's locally
+# captured STAGE_OUTPUT and the `npm-ci` target's fetched CI run log. Tries
+# direct-output regex parsing first, then treats the text as JSON. Echoes
+# the recovered id, or nothing if neither matches.
+# ---------------------------------------------------------------------------
+parse_stage_id_from_text() {
+  local text="$1"
+  local id=""
+
+  # Direct-output parsing. Tolerant of label variants npm may use
+  # ("stage id:", "stageId:", "stage_id="), case-insensitive.
+  id="$(printf '%s\n' "${text}" \
+    | grep -Eio '\bstage[ _-]?id["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"']?[A-Za-z0-9._-]+' \
+    | head -n 1 \
+    | grep -Eo '[A-Za-z0-9._-]+$' || true)"
+
+  # The text is itself JSON (e.g. if npm's stage publish supports --json the
+  # way `npm publish --json` does, or a fenced JSON blob in a CI log).
+  if [[ -z "${id}" ]] && printf '%s' "${text}" | jq -e . >/dev/null 2>&1; then
+    id="$(printf '%s' "${text}" | jq -r '.id // .stageId // .stage_id // empty' 2>/dev/null || true)"
+  fi
+
+  printf '%s' "${id}"
+}
+
+# ---------------------------------------------------------------------------
 # Phase 5: capture — parse the stage id
 # ---------------------------------------------------------------------------
 log_info "[capture] parsing stage id from stage output..."
 
 STAGE_ID=""
 
-# Attempt 1: direct-output parsing. Tolerant of label variants npm may use
-# ("stage id:", "stageId:", "stage_id="), case-insensitive.
-STAGE_ID="$(printf '%s\n' "${STAGE_OUTPUT}" \
-  | grep -Eio '\bstage[ _-]?id["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"']?[A-Za-z0-9._-]+' \
-  | head -n 1 \
-  | grep -Eo '[A-Za-z0-9._-]+$' || true)"
+if [[ "${TARGET_TYPE}" == "npm-ci" ]]; then
+  # STAGE_OUTPUT for npm-ci is the fixed one-line dispatch-summary string set
+  # in Phase 4 above ("staged via GitHub Actions workflow run: <url>") —
+  # never npm's real output — so Attempt 1/2 can never match against it. The
+  # actual `npm stage publish --provenance` output (including whatever
+  # "stage id: ..." line npm prints) lands in the workflow run's own log
+  # instead. Fetch it and apply the same parsing logic used for the `npm`
+  # target's local STAGE_OUTPUT. `npm stage list --json` (Attempt 3) is
+  # never invoked for npm-ci — there is no local npm auth for this target
+  # type, so it would only ever produce a misleading secondary failure.
+  log_info "[capture] fetching CI run log for run ${RUN_ID}..."
+  CI_LOG_OUTPUT="$(gh run view "${RUN_ID}" --repo "${GITHUB_REPO}" --log 2>&1)" || true
+  STAGE_ID="$(parse_stage_id_from_text "${CI_LOG_OUTPUT}")"
 
-# Attempt 2: the captured output is itself JSON (e.g. if npm's stage publish
-# supports --json the way `npm publish --json` does).
-if [[ -z "${STAGE_ID}" ]] && printf '%s' "${STAGE_OUTPUT}" | jq -e . >/dev/null 2>&1; then
-  STAGE_ID="$(printf '%s' "${STAGE_OUTPUT}" | jq -r '.id // .stageId // .stage_id // empty' 2>/dev/null || true)"
-fi
-
-# Attempt 3: fall back to `npm stage list <package> --json` and extract the
-# most recent matching entry's id. `npm stage list` rejects a version-
-# qualified spec ("Version specifiers are not supported for listing staged
-# packages") — it only accepts a bare package name — so this must pass
-# PACKAGE_NAME, never PACKAGE_SPEC; the version match happens client-side via
-# jq below instead (confirmed live on jenga-npm during v1.3.0 staging on
-# 2026-09-01, project/todo.md).
-if [[ -z "${STAGE_ID}" ]]; then
-  log_warn "could not parse a stage id directly from stage output; falling back to 'npm stage list --json'..."
-
-  LIST_STATUS=0
-  LIST_OUTPUT="$(npm stage list "${PACKAGE_NAME}" --json 2>&1)" || LIST_STATUS=$?
-
-  if [[ ${LIST_STATUS} -ne 0 ]]; then
-    printf '%s\n' "${LIST_OUTPUT}" >&2
-    printf 'npm stage pipeline: staged successfully but stage id capture failed (npm stage list also exited %s).\n' "${LIST_STATUS}" >&2
+  if [[ -z "${STAGE_ID}" ]]; then
+    {
+      printf 'npm stage pipeline: the GitHub Actions workflow run completed successfully, so staging on the registry likely SUCCEEDED — but the stage id could not be parsed from the run log.\n'
+      printf 'Run "gh run view %s --repo %s --log" (or open %s) to find the "stage id: ..." line by hand in the "npm stage publish" step output, then record it manually:\n' "${RUN_ID}" "${GITHUB_REPO}" "${RUN_URL}"
+      printf '  bash skills/j-publish/scripts/write_ledger_entry.sh %s %s staged "" --version %s --config %s --stage-id <recovered-id> --dist-tag %s\n' "${TARGET_NAME}" "${TARGET_TYPE}" "${PACKAGE_VERSION}" "${CONFIG_PATH}" "${DIST_TAG}"
+    } >&2
     exit "${EXIT_STAGE_FAILURE}"
   fi
+else
+  STAGE_ID="$(parse_stage_id_from_text "${STAGE_OUTPUT}")"
 
-  if printf '%s' "${LIST_OUTPUT}" | jq -e . >/dev/null 2>&1; then
-    STAGE_ID="$(printf '%s' "${LIST_OUTPUT}" | jq -r --arg pkg "${PACKAGE_NAME}" --arg ver "${PACKAGE_VERSION}" '
-      ( if (type == "array") then . else (.stages? // .items? // []) end ) as $entries
-      | [ $entries[]? | select(((.name // .package // "") == $pkg) and ((.version // "") == $ver)) ]
-      | sort_by(.stagedAt // .staged_at // .created // .createdAt // "")
-      | last
-      | (.id // .stageId // .stage_id // empty)
-    ' 2>/dev/null || true)"
+  # Attempt 3: fall back to `npm stage list <package> --json` and extract the
+  # most recent matching entry's id. `npm stage list` rejects a version-
+  # qualified spec ("Version specifiers are not supported for listing staged
+  # packages") — it only accepts a bare package name — so this must pass
+  # PACKAGE_NAME, never PACKAGE_SPEC; the version match happens client-side
+  # via jq below instead (confirmed live on jenga-npm during v1.3.0 staging
+  # on 2026-09-01, project/todo.md). `npm` target only — npm-ci never
+  # reaches here (see the branch above).
+  if [[ -z "${STAGE_ID}" ]]; then
+    log_warn "could not parse a stage id directly from stage output; falling back to 'npm stage list --json'..."
+
+    LIST_STATUS=0
+    LIST_OUTPUT="$(npm stage list "${PACKAGE_NAME}" --json 2>&1)" || LIST_STATUS=$?
+
+    if [[ ${LIST_STATUS} -ne 0 ]]; then
+      printf '%s\n' "${LIST_OUTPUT}" >&2
+      printf 'npm stage pipeline: staged successfully but stage id capture failed (npm stage list also exited %s).\n' "${LIST_STATUS}" >&2
+      exit "${EXIT_STAGE_FAILURE}"
+    fi
+
+    if printf '%s' "${LIST_OUTPUT}" | jq -e . >/dev/null 2>&1; then
+      STAGE_ID="$(printf '%s' "${LIST_OUTPUT}" | jq -r --arg pkg "${PACKAGE_NAME}" --arg ver "${PACKAGE_VERSION}" '
+        ( if (type == "array") then . else (.stages? // .items? // []) end ) as $entries
+        | [ $entries[]? | select(((.name // .package // "") == $pkg) and ((.version // "") == $ver)) ]
+        | sort_by(.stagedAt // .staged_at // .created // .createdAt // "")
+        | last
+        | (.id // .stageId // .stage_id // empty)
+      ' 2>/dev/null || true)"
+    fi
   fi
-fi
 
-if [[ -z "${STAGE_ID}" ]]; then
-  printf 'npm stage pipeline: staged successfully but the stage id could not be captured from either the direct output or "npm stage list --json". Run "npm stage list %s --json" manually to recover it (bare package name — a version-qualified spec is rejected by npm).\n' "${PACKAGE_NAME}" >&2
-  exit "${EXIT_STAGE_FAILURE}"
+  if [[ -z "${STAGE_ID}" ]]; then
+    printf 'npm stage pipeline: staged successfully but the stage id could not be captured from either the direct output or "npm stage list --json". Run "npm stage list %s --json" manually to recover it (bare package name — a version-qualified spec is rejected by npm).\n' "${PACKAGE_NAME}" >&2
+    exit "${EXIT_STAGE_FAILURE}"
+  fi
 fi
 
 echo ""

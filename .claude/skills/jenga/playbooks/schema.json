@@ -34,7 +34,7 @@
     },
     "steps": {
       "type": "array",
-      "description": "Ordered list of bare skill names (the directory name under skills/<name>/SKILL.md, e.g. \"brainstorm\", not \"j.brainstorm\" or \"/brainstorm\") that make up this playbook's chain, in the exact execution order. Each entry MUST resolve to an existing skills/<name>/SKILL.md at load time -- load-playbooks.sh skips (with a stderr warning) any playbook referencing a nonexistent skill rather than silently including a broken chain in the catalog.",
+      "description": "Ordered list of canonical skill DIRECTORY names (the directory under skills/<dir>/SKILL.md, e.g. \"j-brainstorm\", not the \"j.brainstorm\" frontmatter/invocation form and not the retired bare \"brainstorm\") that make up this playbook's chain, in the exact execution order. Per E50_S10's canonical naming contract the canonical directory is skills/j-<name>/, so a step value carries the j- prefix; the three permanent exceptions (jenga, jenga-permission-level, index) keep their bare directory names and are written bare. Each entry MUST resolve to an existing skills/<dir>/SKILL.md at load time -- load-playbooks.sh skips (with a stderr warning) any playbook referencing a nonexistent skill rather than silently including a broken chain in the catalog.",
       "items": { "type": "string" },
       "minItems": 2
     }

@@ -42,7 +42,7 @@ Jenga AI supports two distribution paths:
 - **E16** — Multi-Platform Agent Config Parity *(Reopened 2026-09-07 — In Progress. E16_S05 (Copilot Sub-Agent Delegation Parity) rolled up to `Passed` 2026-09-07: T01 confirmed Copilot CLI has a native `--agent`/`/agent` agent loader (`.github/agents/` and `.claude/agents/` are live discovery paths, `.agents/agents/` is not); T02 wired a new `.github/agents/` mirror into `skills/self-sync/scripts/run.js` and documented `prefered_agent` routing in `templates/copilot-instructions.md.tpl`. Epic stays `In Progress`, gated on E16_S04: `/reconcile` found E26 silently reverted E16_S04's `.agents/settings.json` dual-write; new task E16_S04_T04 (fix stale docs, record the decision) is still `Pending`, T01–T03 keep their original `Passed` status)*
 - **E17** — Workflow Quality Enforcement *(Reopened 2026-09-09, fourth time — In Progress. E17_S08 added: `agents/tester.md` step 6d — authored by this epic's own `E17_S01` — forces `status: Failed` on any story with an unverifiable DoD item, but the tester runs **per task**, so mid-story the DoD items gated on later tasks are necessarily unverifiable. The rule is unsatisfiable for every multi-task story. Two tester runs in the 2026-09-09 `E50_S10` session hit it and both declined to follow their own contract, leaving the story `Pending` instead — correct judgment, but it means 6d is enforced by agent discretion rather than by its text. S08 must narrow *when* 6d applies without weakening *what* it does, or the fix re-opens this epic's own `S03`/`S04` false-completion failure mode)*
 - **E18** — README & Documentation Overhaul
-- **E19** — Train Skill Enhancement
+- **E19** — Train Skill Enhancement *(Rejected 2026-09-10 — superseded by E57; never started, premise reversed)*
 - **E20** — Knowledge Graph
 - **E21** — Clarify Skill *(Passed with remarks)*
 - **E22** — Publish Skill *(Passed)*
@@ -73,6 +73,34 @@ Jenga AI supports two distribution paths:
 - **E48** — Agent Dashboard — Live AI Item Review *(Pending, blocked on E47)*
 - **E50** — Skill Namespace Prefix & Anti-Masquerading Allow-List *(In Progress — reopened 2026-09-09 to hard-break the bare `/<name>` form, see below)*
 - **E53** — Jenga Natural-Language Dispatcher & Playbooks *(Passed with remarks — Playbooks v2 shipped 2026-09-09, epic rolled up 2026-09-10, see below)*
+- **E57** — Train Skill Deprecation & Package Extraction *(Pending — supersedes E19, see below)*
+
+## Train Skill Deprecation & Package Extraction (E57) — supersedes E19
+Captured via `/btw` on 2026-09-10 by direct user instruction: `/train` is disabled and deprecated in
+both the private repo and the public mirror, but **preserved** — it is being moved to its own package
+later, so deprecation here means "stop offering it as a Jenga skill", never "delete it".
+
+This reverses `E19`'s premise wholesale. E19 (`/train` Skill Enhancement — Production-Grade ML
+Orchestration) sat at `Backlog` with 7 decomposed stories and a 12-item DoD aimed at growing `/train`
+inside this repo; it is now closed `Rejected` — the schema's deliberate, non-failure closure, same
+usage as `E53_S07` — with `E19_S01`–`S06` left as written so the abandoned plan stays readable.
+`E19_S07` (*"Document that `/train` is excluded from the public npm package"*) was already `Passed`
+and its outcome carries forward.
+
+Two findings shaped the scope. First, **most of "remove it from public" was already true**:
+`check-publicignore-match.sh` reports `BLOCKED` for both `skills/train/SKILL.md` and
+`skills/j-train/SKILL.md`, since `train` sits in `.publicignore`'s "Private Claude / agent skills"
+block alongside `mirror-public` and `self-sync`. It has never shipped publicly in either form and is
+absent from `CLAUDE.md`'s skill table, so the public deliverable is a deprecation *notice*, not a
+removal. Second, **`.training/` (100K, repo root) has no board provenance** — the 2026-09-10 reconcile
+scan reported 9 fully-unlinked groups under `.training/template/…`, which blocks confident extraction
+until ownership is established (`E57_S02`).
+
+Interaction with `E50_S15` is settled by user decision 2026-09-10: **let `E50_S15` run normally.** It
+deletes `skills/train/` as one of the 40 bare-name directories while `skills/j-train/` survives, and
+extraction sources from the twin. E57 therefore adds no prerequisite to `E50_S15` and does not grow
+its permanent-exception list — at the cost of depending on twin completeness, which `E50_S19_T04`'s
+audit gate is meant to guarantee.
 
 ## Skill Namespace Prefix & Anti-Masquerading Allow-List (E50) — bare-form hard-break reopening
 E50 originally decided (DoD, checked off) to keep the old bare `/<name>` form as a permanent,

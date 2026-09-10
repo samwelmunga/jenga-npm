@@ -8,9 +8,9 @@ VISIBILITY_SCRIPT="$SCRIPT_DIR/apply-project-visibility.sh"
 # ─── Resolve the package root that owns templates/ and lib/ ──────────────────
 # postinstall.js mirrors only skills/ and agents/ into .claude/ and .agents/ —
 # templates/ and lib/ are never copied there, so a script running from a
-# mirrored copy (.claude/skills/init/scripts/ or .agents/skills/init/scripts/)
+# mirrored copy (.claude/skills/j-init/scripts/ or .agents/skills/j-init/scripts/)
 # cannot reach its siblings via a fixed ../../../ climb the way it can in this
-# monorepo checkout, where init.sh actually lives at skills/init/scripts/ with
+# monorepo checkout, where init.sh actually lives at skills/j-init/scripts/ with
 # templates/ and lib/ three levels up. Consumers instead have them inside the
 # installed npm package.
 if [[ -d "$SCRIPT_DIR/../../../templates" ]]; then

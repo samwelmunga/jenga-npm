@@ -1,0 +1,20 @@
+{
+  "id": "idea-to-committed",
+  "name": "Idea to Committed",
+  "description": "Takes a rough idea through planning, board capture, implementation, and a commit -- the end-to-end Jenga workflow chain, stopping at the commit rather than at a release.",
+  "keywords": [
+    "idea to commit",
+    "plan build commit",
+    "brainstorm to commit",
+    "capture and implement",
+    "start to commit"
+  ],
+  "examples": [
+    "I have an idea, help me plan it, build it, and commit it",
+    "take this feature from a rough idea through to a commit",
+    "plan this out, put it on the board, implement it, and commit the work",
+    "walk this through planning, implementation, and committing",
+    "help me think this through, break it down, build it, and commit"
+  ],
+  "steps": ["j-brainstorm", "j-todo", "j-do", "j-commit"]
+}

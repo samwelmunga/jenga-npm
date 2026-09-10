@@ -1,6 +1,7 @@
 ---
 name: j.status
 description: Polyfill alias of the status skill under a collision-safe directory name. Identical behavior to /status — Print a human-readable summary of the entire scrum board — all epics, stories, and tasks with their statuses — plus any open rapports and unprocessed queue triggers. Use when you want a quick overview of project state without reading raw files. Use when the bare /status form is shadowed by another tool's own built-in command of the same name.
+output_types: text
 keywords:
   - status
   - board summary
@@ -38,3 +39,14 @@ This file is generated/synced by `scripts/generate-j-alias.sh status` from `skil
 7. **Print the summary** following the layout and icon conventions in `assets/output_format.md`.
 
 8. If no epics exist, print: `No board items found. Run /pi-plan to define epics or /todo to add items.`
+
+## Scope note: playbook step status (E53_S04_T03 audit)
+
+This skill reports board-level status only (steps 2-4 above: epic/story/task `status` from
+`project/board/`). It never reads or reports `/jenga` playbook run state
+(`skills/jenga/scripts/run-playbook-step.sh`'s temp state file, its `step_ready`/`complete`/
+`halted` reports, or per-step `passed`/`failed`/`skipped` outcomes) — a playbook run is ephemeral,
+session-local execution state, not a board item, and has no representation in
+`project/board/`. This is confirmed as intentional, not a gap: `skipped` is scoped strictly to
+playbook-step context and is never written to a task/story's board-level `status` field (see
+`templates/SCRUM_BOARD_SCHEMA.md`'s Status Values table, unmodified by `E53_S04`).

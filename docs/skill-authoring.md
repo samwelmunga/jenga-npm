@@ -595,8 +595,11 @@ against the actual landed implementation (not the original design proposal).
 
 Each entry in a playbook's `steps` array is either a **bare string** or a **`StepObject`**:
 
-- A **bare string** (e.g. `"brainstorm"`) is unchanged, original behavior — shorthand for
-  `{"skill": "brainstorm"}`. No migration is ever required: an all-bare-string playbook loads
+- A **bare string** (e.g. `"j-brainstorm"`) is unchanged, original behavior — shorthand for
+  `{"skill": "j-brainstorm"}`. "Bare" here describes the **JSON shape** (a string rather than a
+  `StepObject`), not a bare *skill name*: the value is always a canonical directory name, which
+  under `E50_S10`'s naming contract is `j-<name>`. No migration is ever required: an all-bare-string
+  playbook loads
   byte-for-byte the same as before `E53_S03`, and a bare-string step is never rewritten into an
   object form in the loader's output.
 
@@ -624,8 +627,8 @@ Each entry in a playbook's `steps` array is either a **bare string** or a **`Ste
 ```json
 {
   "steps": [
-    "brainstorm",
-    {"skill": "todo", "forward_from": "brainstorm", "instruction": "capture as a task"},
+    "j-brainstorm",
+    {"skill": "j-todo", "forward_from": "j-brainstorm", "instruction": "capture as a task"},
     {"playbook": "some-other-playbook-id"}
   ]
 }

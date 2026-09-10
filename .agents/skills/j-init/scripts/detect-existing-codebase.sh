@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# skills/init/scripts/detect-existing-codebase.sh
+# skills/j-init/scripts/detect-existing-codebase.sh
 #
 # Deterministic front half of the /init "detect existing project state" step.
 # /init currently always scaffolds as though the target directory were empty.
@@ -12,7 +12,7 @@
 # This script answers exactly one question -- "what kind of directory is
 # this?" -- and nothing else. It never scaffolds, never prompts, never runs
 # /uncharted, and never modifies anything on disk. Deciding what to DO with
-# the verdict is agent judgement and lives in skills/init/SKILL.md.
+# the verdict is agent judgement and lives in skills/j-init/SKILL.md.
 #
 # ---------------------------------------------------------------------------
 # VERDICTS -- exactly one is printed on stdout, nothing else

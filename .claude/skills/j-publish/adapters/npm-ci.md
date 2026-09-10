@@ -240,6 +240,35 @@ automated and human halves of the flow:
   `bash skills/j-publish/scripts/npm_stage_inspect.sh approve <stage-id> --otp <otp>`
   from their own machine. `reject` (same script) is available to either
   side to discard a staged candidate.
+- **Stage-id capture reads the CI run's own log, not a local `npm stage
+  list` call.** Because the actual `npm stage publish --provenance` call
+  runs inside the dispatched Actions run, the local `npm_stage_pipeline.sh`
+  process never sees npm's real stage-publish output — `STAGE_OUTPUT` for
+  an `npm-ci` target is only ever the fixed dispatch-summary string ("staged
+  via GitHub Actions workflow run: `<url>`"). Once `gh run watch` reports
+  the run finished successfully, phase 5 instead fetches the full run log
+  via `gh run view <run-id> --repo <github_repo> --log` and parses that
+  text for a `stage id: ...` line (or a JSON payload), using the same
+  parsing logic the `npm` target applies to its local output. **`npm stage
+  list ... --json` (the `npm` target's third fallback attempt) is never
+  invoked for `npm-ci`** — there is no local npm credential for this target
+  type, so a local `npm stage list` call would only ever fail with an
+  unrelated auth error.
+- **Manual recovery when the log can't be parsed.** If no stage id can be
+  parsed from the run log, `npm_stage_pipeline.sh` exits `3`
+  (`EXIT_STAGE_FAILURE`) with a message stating that staging on the
+  registry likely **succeeded** — the workflow run itself exited 0, so the
+  `npm stage publish --provenance` step almost certainly ran — pointing at
+  `gh run view <run-id> --repo <github_repo> --log` (or the printed run
+  URL) to find the id by hand in the `npm stage publish` step output, and
+  printing an already-filled-in recovery command:
+  ```
+  bash skills/j-publish/scripts/write_ledger_entry.sh <target> npm-ci staged "" \
+    --version <version> --config <config> --stage-id <recovered-id> --dist-tag <tag>
+  ```
+  `<target>`, `<version>`, `<config>`, and `<tag>` are the real, already-known
+  values for the run that just happened — only `--stage-id` is left for the
+  operator to fill in by hand after reading it out of the run log.
 
 Same registry-existence precondition as a normal `npm-ci` deploy: staged
 publishing only applies to a package that has already had at least one

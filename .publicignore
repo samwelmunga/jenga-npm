@@ -7,6 +7,15 @@
 # Policy: over-block, don't under-block. Anything missed is a private leak;
 # anything extra is merely an unshipped file. Add new private paths as they
 # appear — this file is the single source of truth for public-mirror scope.
+#
+# Rule (user, 2026-09-10): a test may never outlive its subject in the mirror.
+# If a test exercises a skill that is not available publicly, it must EITHER be
+# blocklisted here alongside that subject, OR be conditioned to skip when the
+# subject is absent. Choosing neither produces a test that passes privately and
+# fails only in the public mirror — found by a stage-deploy gate rather than by
+# anyone running tests. See docs/public-mirror-content-parity.md, "Rule: a test
+# may never outlive its subject in the mirror", for the two sanctioned options
+# and the list of skills that are never public in either naming form.
 # ---------------------------------------------------------------------------
 
 # --- Private scrum board (epics, stories, tasks, indices) ---
@@ -219,6 +228,32 @@ tests/mirror-orphaned-twin-rewrite.bats
 tests/helpers/mirror-orphaned-twin-rewrite.sh
 # tests/helpers/router-route.mjs: drives the router that router-prefix-guard.bats imports
 tests/helpers/router-route.mjs
+
+# --- Private-tooling playbooks and their tests (E50_S13, user decision 2026-09-10) ---
+# brainstorm-to-mirror terminates in `mirror-public`, a deliberately private skill blocklisted
+# above in BOTH its bare and j- form. No step-name cutover can make this playbook load in the
+# public mirror, because skills/j-mirror-public/SKILL.md is never shipped there — load-playbooks.sh
+# requires every step's skills/<dir>/SKILL.md to exist or it skips the whole playbook. Rather than
+# publish mirror-public or swap the terminal step for a public skill, the playbook itself is
+# private tooling and is blocklisted. The loader's skip behaviour was never the defect.
+skills/jenga/playbooks/brainstorm-to-mirror.json
+.claude/skills/jenga/playbooks/brainstorm-to-mirror.json
+.agents/skills/jenga/playbooks/brainstorm-to-mirror.json
+# understand-then-ship composes brainstorm-to-mirror via {"playbook": "brainstorm-to-mirror"}.
+# Once the parent stops shipping, that reference resolves to a nonexistent playbook id and the
+# child is dropped anyway — the behaviour tests/load-playbooks-composition.bats already asserts.
+# Blocklisting the parent alone would leave this one broken rather than absent.
+skills/jenga/playbooks/understand-then-ship.json
+.claude/skills/jenga/playbooks/understand-then-ship.json
+.agents/skills/jenga/playbooks/understand-then-ship.json
+# The two real-catalog tests assert those now-private playbooks load against the real skills tree,
+# so they follow their subjects out of the mirror per the E50_S07_T11 rule directly above. This is
+# what turns the public suite's two failures green — because their subjects are private, NOT by
+# weakening either assertion; both still run in full in the private repo.
+# tests/load-playbooks-stepobject.bats: asserts the real brainstorm-to-mirror.json loads
+tests/load-playbooks-stepobject.bats
+# tests/load-playbooks-composition.bats: asserts the real understand-then-ship.json composes it
+tests/load-playbooks-composition.bats
 
 # --- Scratch worktree used by /mirror-public itself ---
 .mirror-worktrees/
