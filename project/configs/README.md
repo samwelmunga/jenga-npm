@@ -34,3 +34,27 @@ This ensures every threshold change is a distinct, reviewable commit — no sile
 - `skills/do/SKILL.md` — reads all threshold fields at Step 0 startup
 
 Both skills halt with a clear error if this file is missing or contains invalid JSON.
+
+---
+
+## playbook-config.json
+
+Deliberately a **separate file** from `scope-thresholds.json` (`E53_S05_T01`) — the fields above
+are specifically `/jenga`/`/do` task **execution-scope** thresholds, a different concern from
+playbook nesting-depth safety limits. Read by `skills/jenga/scripts/load-playbooks.sh` only.
+
+### Fields
+
+| Field | Type | Current Value | Description |
+|-------|------|---------------|-------------|
+| `config_version` | integer | 1 | Version counter for this config, mirroring `scope-thresholds.json`'s own `threshold_version` convention. Increment whenever a value below changes. |
+| `max_composition_depth` | integer | 3 | Maximum playbook-to-playbook composition nesting depth `load-playbooks.sh` allows before dropping a playbook (with a stderr warning) at load time. A **tunable safety default**, not an architectural ceiling — depth 1 is a playbook's own steps; depth 2 is one level of composition; a chain nesting deeper than this value is rejected. Missing file, missing field, or a non-positive-integer value all fall back to the hardcoded default of 3. |
+
+### Consuming Skills
+
+- `skills/jenga/scripts/load-playbooks.sh` — reads `max_composition_depth` once per invocation,
+  resolving the project root the same way `skills/jenga/scripts/run-playbook-step.sh` already does
+  (`JENGA_PROJECT_DIR` -> `CLAUDE_PROJECT_DIR` -> `git rev-parse --show-toplevel` -> `pwd`; the
+  existing `JENGA_PLAYBOOKS_TEST_ROOT` fixture override is reused for this lookup too — see that
+  script's own header). Missing or invalid config is a soft fallback to the default, never a halt
+  (composition depth-limiting is a safety default, not a required setup file).

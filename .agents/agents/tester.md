@@ -381,6 +381,16 @@ After every status update to a task or story, check whether a parent rollup is w
 
 2. The scrum master processes rollup triggers from the queue at its next session start and updates story and epic statuses accordingly.
 
+**Playbook step status is out of scope for this rollup (E53_S04_T03 audit).** `/jenga` playbook
+runs (`skills/jenga/scripts/run-playbook-step.sh`) track their own separate step-level status
+vocabulary (`step_ready`/`complete`/`halted`, and per-step `passed`/`failed`/`skipped`) in an
+ephemeral, session-local temp state file — never in `project/board/`. This rollup logic never
+reads that state file and never needs to special-case `skipped`: it is scoped strictly to playbook
+steps and is never a valid value for a task or story's board-level `status` frontmatter field (see
+`$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s Status Values table, intentionally unmodified by that story). If a `status` field on a
+task or story file is ever found holding `skipped`, treat that as invalid board data, not as a
+legitimate rollup input.
+
 ---
 
 ## Rapport System

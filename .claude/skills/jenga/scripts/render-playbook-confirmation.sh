@@ -23,15 +23,68 @@
 # ---------------------------------------------------------------------------
 # USAGE
 # ---------------------------------------------------------------------------
-#   render-playbook-confirmation.sh "<playbook_id>" "<name>" "<comma-separated ordered step names>"
+#   render-playbook-confirmation.sh "<playbook_id>" "<name>" "<comma-separated ordered step names>" ["<json-conditionals>" ["<json-origins>"]]
 #       Start a new confirmation session. `<playbook_id>` and `<name>` come straight from
 #       `match-playbook.sh`'s `playbook_match` output; `<comma-separated ordered step names>` is
 #       that same output's `steps` array joined with commas, in original playbook order.
 #
+#       `<json-conditionals>` is OPTIONAL (E53_S04_T04). When given, it is a JSON object mapping a
+#       conditional step's name -> the name of the EARLIER step it depends on, e.g.
+#       `{"stepC": "stepA"}`. Only steps that actually carry a conditional (per `load-playbooks.sh`'s
+#       StepObject `conditional` field, resolved by the calling agent from the playbook's raw
+#       StepObject data before invoking this script -- this script owns only the RENDERING side of
+#       that contract, never the resolution of it) appear as keys. Omitting this argument (the
+#       original 3-arg form) renders the chain exactly as before this task -- fully backward
+#       compatible.
+#
+#       `<json-origins>` is OPTIONAL (E53_S05_T03), and may only be given when `<json-conditionals>`
+#       is also given (pass `"{}"` for conditionals if there are none, to reach the 5th slot). It is
+#       a JSON object mapping a composed/nested step's name -> `{"playbook_id": "...", "depth": N}`,
+#       for every step whose `_origin_depth` (per `load-playbooks.sh`'s catalog output, E53_S05_T01)
+#       is greater than 1. Steps absent from this object are depth-1 (the top-level playbook's own
+#       steps) and render exactly as before this task. The calling agent (`/jenga`'s
+#       natural-language branch, wired in E53_S05_T07) resolves this metadata from
+#       `load-playbooks.sh`'s catalog output before invoking this script -- this script owns only
+#       the RENDERING side of that contract, mirroring `<json-conditionals>`'s own scope boundary.
+#       Omitting this argument entirely reproduces the exact pre-this-task behavior, fully backward
+#       compatible.
+#
 #   render-playbook-confirmation.sh <state_file> "<raw_reply>"
 #       Continue an existing confirmation session. <state_file> is the path printed on STDERR by
 #       the start-mode invocation (or by any prior continue-mode invocation). <raw_reply> is the
-#       user's raw chat text for this turn.
+#       user's raw chat text for this turn. The conditional markers and origin/nesting annotations
+#       (if any) persist across continue-mode re-renders automatically -- they are stored in the
+#       state file, computed once at start, and never recomputed from arguments.
+#
+# ---------------------------------------------------------------------------
+# CONDITIONAL MARKER DISPLAY (E53_S04_T02 / E53_S04_T04)
+# ---------------------------------------------------------------------------
+# A step whose name is a key in the conditionals map gets a visible suffix appended to its line in
+# the rendered chain: " (may be skipped depending on step N's result)", where N is the 1-indexed
+# DISPLAY POSITION (per this session's `order`, not necessarily the original playbook array index)
+# of the step it depends on. This makes the chain's real conditional structure visible before
+# confirmation, per the story's explicit requirement that confirming a chain never hides its real
+# step count or conditional structure from the user. This is display-only: it does not change
+# checked/unchecked mechanics, does not add a new toggle command, and unchecking a conditional step
+# (or the step it depends on) behaves exactly like unchecking any other step -- the ACTUAL runtime
+# skip decision is `run-playbook-step.sh should-skip`'s job, entirely independent of what a user
+# checks/unchecks here.
+#
+# ---------------------------------------------------------------------------
+# NESTED/ORIGIN DISPLAY (E53_S05_T03)
+# ---------------------------------------------------------------------------
+# A step whose name is a key in the origins map (depth > 1, i.e. it was spliced in from a composed
+# playbook) gets TWO visual treatments on its rendered line, applied together:
+#   - two extra leading spaces of indentation before the checkbox, visually grouping it apart from
+#     depth-1 (top-level) steps, and
+#   - a trailing annotation: " (from playbook: <playbook_id>, depth <N>)".
+# This is display-only, exactly like the conditional marker, and composes freely with it on the
+# same line (origin annotation first, conditional marker after) -- both are independent,
+# orthogonal annotations. Numbering stays FLAT 1..N across the WHOLE list regardless of nesting --
+# there is still exactly ONE overall numbered, editable, confirmable list, never a separate
+# confirmation per nested playbook, per `CLAUDE.md`'s Interaction Pattern. A playbook with no
+# depth > 1 steps (the `origins` map is empty or the argument was omitted) renders identically to
+# before this task -- no indentation, no annotation, byte-for-byte unchanged.
 #
 # ---------------------------------------------------------------------------
 # TOGGLE COMMAND GRAMMAR (identical to render-confirmation.sh — no cascade, since steps are flat)
@@ -89,19 +142,21 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 2
 fi
 
-if [ $# -eq 3 ]; then
+if [ $# -eq 3 ] || [ $# -eq 4 ] || [ $# -eq 5 ]; then
   MODE="start"
   PLAYBOOK_ID="$1"
   PLAYBOOK_NAME="$2"
   RAW_STEPS="$3"
+  RAW_CONDITIONALS="${4:-}"
+  RAW_ORIGINS="${5:-}"
 elif [ $# -eq 2 ]; then
   MODE="continue"
   STATE_FILE="$1"
   RAW_REPLY="$2"
 else
   echo "Usage:" >&2
-  echo "  render-playbook-confirmation.sh \"<playbook_id>\" \"<name>\" \"<comma-separated ordered step names>\"   # start" >&2
-  echo "  render-playbook-confirmation.sh <state_file> \"<raw_reply>\"                                            # continue" >&2
+  echo "  render-playbook-confirmation.sh \"<playbook_id>\" \"<name>\" \"<comma-separated ordered step names>\" [\"<json-conditionals>\" [\"<json-origins>\"]]   # start" >&2
+  echo "  render-playbook-confirmation.sh <state_file> \"<raw_reply>\"                                                                                          # continue" >&2
   exit 2
 fi
 
@@ -125,6 +180,8 @@ state_file_path = sys.argv[1]
 playbook_id = sys.argv[2]
 playbook_name = sys.argv[3]
 raw_steps = sys.argv[4]
+raw_conditionals = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5] != "" else None
+raw_origins = sys.argv[6] if len(sys.argv) > 6 and sys.argv[6] != "" else None
 
 steps = [s.strip() for s in raw_steps.split(",") if s.strip() != ""]
 
@@ -138,6 +195,56 @@ for i, step in enumerate(steps, start=1):
 
 total = len(numbering)
 
+conditionals = {}
+if raw_conditionals is not None:
+    try:
+        parsed = json.loads(raw_conditionals)
+    except Exception as e:
+        print(f"Error: <json-conditionals> is not valid JSON: {e}", file=sys.stderr)
+        sys.exit(2)
+    if not isinstance(parsed, dict):
+        print("Error: <json-conditionals> must be a JSON object", file=sys.stderr)
+        sys.exit(2)
+    for step_name, depends_on in parsed.items():
+        if step_name not in steps:
+            print(f"Error: conditional given for '{step_name}', which is not in the step list", file=sys.stderr)
+            sys.exit(2)
+        if not isinstance(depends_on, str) or depends_on not in steps:
+            print(f"Error: conditional for '{step_name}' depends_on '{depends_on}', which is not a step in this playbook", file=sys.stderr)
+            sys.exit(2)
+        conditionals[step_name] = depends_on
+
+# --- E53_S05_T03: origin/nesting metadata (depth > 1 steps only) ---
+origins = {}
+if raw_origins is not None:
+    try:
+        parsed = json.loads(raw_origins)
+    except Exception as e:
+        print(f"Error: <json-origins> is not valid JSON: {e}", file=sys.stderr)
+        sys.exit(2)
+    if not isinstance(parsed, dict):
+        print("Error: <json-origins> must be a JSON object", file=sys.stderr)
+        sys.exit(2)
+    for step_name, meta in parsed.items():
+        if step_name not in steps:
+            print(f"Error: origin metadata given for '{step_name}', which is not in the step list", file=sys.stderr)
+            sys.exit(2)
+        if (
+            not isinstance(meta, dict)
+            or not isinstance(meta.get("playbook_id"), str)
+            or not meta.get("playbook_id")
+            or not isinstance(meta.get("depth"), int)
+            or isinstance(meta.get("depth"), bool)
+            or meta.get("depth") <= 1
+        ):
+            print(
+                f"Error: origin metadata for '{step_name}' must be an object with a non-empty "
+                f"string 'playbook_id' and an integer 'depth' > 1",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        origins[step_name] = {"playbook_id": meta["playbook_id"], "depth": meta["depth"]}
+
 state = {
     "version": 1,
     "created_at": datetime.now(timezone.utc).isoformat(),
@@ -146,6 +253,8 @@ state = {
     "total_steps": total,
     "order": [str(i) for i in range(1, total + 1)],
     "numbering": numbering,
+    "conditionals": conditionals,
+    "origins": origins,
 }
 
 with open(state_file_path, "w", encoding="utf-8") as f:
@@ -153,12 +262,34 @@ with open(state_file_path, "w", encoding="utf-8") as f:
     f.write("\n")
 
 
+def conditional_marker(step_name):
+    """" (may be skipped depending on step N's result)" for a conditional step, else ''."""
+    depends_on = conditionals.get(step_name)
+    if not depends_on:
+        return ""
+    for n in state["order"]:
+        if numbering[n]["step"] == depends_on:
+            return f" (may be skipped depending on step {n}'s result)"
+    return ""  # depends_on step not found in this display's order -- defensive, should not happen
+
+
+def origin_indent_and_marker(step_name):
+    """(indent, suffix) for a depth>1 (composed/nested) step, else ('', ''). See header 'NESTED/
+    ORIGIN DISPLAY' -- indentation groups nested steps visually; the suffix names the originating
+    playbook and depth. Numbering itself is never affected -- still flat 1..N."""
+    meta = origins.get(step_name)
+    if not meta:
+        return "", ""
+    return "  ", f" (from playbook: {meta['playbook_id']}, depth {meta['depth']})"
+
+
 def render_body():
     lines = []
     for n in state["order"]:
         rec = numbering[n]
         box = "[x]" if rec["checked"] else "[ ]"
-        lines.append(f"  {box} {n}. {rec['step']}")
+        indent, origin_suffix = origin_indent_and_marker(rec["step"])
+        lines.append(f"{indent}  {box} {n}. {rec['step']}{origin_suffix}{conditional_marker(rec['step'])}")
     return lines
 
 
@@ -203,7 +334,7 @@ print("\n".join(header + body + footer))
 print(f"STATE_FILE: {state_file_path}", file=sys.stderr)
 PY
 
-  python3 "$PY_SCRIPT" "$STATE_FILE" "$PLAYBOOK_ID" "$PLAYBOOK_NAME" "$RAW_STEPS"
+  python3 "$PY_SCRIPT" "$STATE_FILE" "$PLAYBOOK_ID" "$PLAYBOOK_NAME" "$RAW_STEPS" "$RAW_CONDITIONALS" "$RAW_ORIGINS"
   exit 0
 fi
 
@@ -242,6 +373,28 @@ order = state["order"]
 total = state["total_steps"]
 playbook_id = state["playbook_id"]
 playbook_name = state["playbook_name"]
+conditionals = state.get("conditionals", {})
+origins = state.get("origins", {})
+
+
+def conditional_marker(step_name):
+    """" (may be skipped depending on step N's result)" for a conditional step, else ''."""
+    depends_on = conditionals.get(step_name)
+    if not depends_on:
+        return ""
+    for n in order:
+        if numbering[n]["step"] == depends_on:
+            return f" (may be skipped depending on step {n}'s result)"
+    return ""  # depends_on step not found in this display's order -- defensive, should not happen
+
+
+def origin_indent_and_marker(step_name):
+    """(indent, suffix) for a depth>1 (composed/nested) step, else ('', ''). Read from the state
+    file's persisted `origins` map -- never recomputed from arguments on a continue-mode turn."""
+    meta = origins.get(step_name)
+    if not meta:
+        return "", ""
+    return "  ", f" (from playbook: {meta['playbook_id']}, depth {meta['depth']})"
 
 
 def render_body():
@@ -249,7 +402,8 @@ def render_body():
     for n in order:
         rec = numbering[n]
         box = "[x]" if rec["checked"] else "[ ]"
-        lines.append(f"  {box} {n}. {rec['step']}")
+        indent, origin_suffix = origin_indent_and_marker(rec["step"])
+        lines.append(f"{indent}  {box} {n}. {rec['step']}{origin_suffix}{conditional_marker(rec['step'])}")
     return lines
 
 

@@ -40,7 +40,7 @@ Jenga AI supports two distribution paths:
 - **E14** — Config & Skill Metadata
 - **E15** — Multi-Project Router & Attach *(Reopened 2026-09-01 — In Progress, E15_S04 added: jenga attach was found clobbering the WorktreeCreate commit-guard hook)*
 - **E16** — Multi-Platform Agent Config Parity *(Reopened 2026-09-07 — In Progress. E16_S05 (Copilot Sub-Agent Delegation Parity) rolled up to `Passed` 2026-09-07: T01 confirmed Copilot CLI has a native `--agent`/`/agent` agent loader (`.github/agents/` and `.claude/agents/` are live discovery paths, `.agents/agents/` is not); T02 wired a new `.github/agents/` mirror into `skills/self-sync/scripts/run.js` and documented `prefered_agent` routing in `templates/copilot-instructions.md.tpl`. Epic stays `In Progress`, gated on E16_S04: `/reconcile` found E26 silently reverted E16_S04's `.agents/settings.json` dual-write; new task E16_S04_T04 (fix stale docs, record the decision) is still `Pending`, T01–T03 keep their original `Passed` status)*
-- **E17** — Workflow Quality Enforcement *(In Progress)*
+- **E17** — Workflow Quality Enforcement *(Reopened 2026-09-09, fourth time — In Progress. E17_S08 added: `agents/tester.md` step 6d — authored by this epic's own `E17_S01` — forces `status: Failed` on any story with an unverifiable DoD item, but the tester runs **per task**, so mid-story the DoD items gated on later tasks are necessarily unverifiable. The rule is unsatisfiable for every multi-task story. Two tester runs in the 2026-09-09 `E50_S10` session hit it and both declined to follow their own contract, leaving the story `Pending` instead — correct judgment, but it means 6d is enforced by agent discretion rather than by its text. S08 must narrow *when* 6d applies without weakening *what* it does, or the fix re-opens this epic's own `S03`/`S04` false-completion failure mode)*
 - **E18** — README & Documentation Overhaul
 - **E19** — Train Skill Enhancement
 - **E20** — Knowledge Graph
@@ -71,8 +71,26 @@ Jenga AI supports two distribution paths:
 - **E45** — Interactive Scope Selection for /jenga *(Pending)*
 - **E47** — Distributable Project Dashboard *(Pending)*
 - **E48** — Agent Dashboard — Live AI Item Review *(Pending, blocked on E47)*
-- **E50** — Skill Namespace Prefix & Anti-Masquerading Allow-List *(In Progress)*
-- **E53** — Jenga Natural-Language Dispatcher & Playbooks *(In Progress — reopened 2026-09-09 for Playbooks v2, see below)*
+- **E50** — Skill Namespace Prefix & Anti-Masquerading Allow-List *(In Progress — reopened 2026-09-09 to hard-break the bare `/<name>` form, see below)*
+- **E53** — Jenga Natural-Language Dispatcher & Playbooks *(Passed with remarks — Playbooks v2 shipped 2026-09-09, epic rolled up 2026-09-10, see below)*
+
+## Skill Namespace Prefix & Anti-Masquerading Allow-List (E50) — bare-form hard-break reopening
+E50 originally decided (DoD, checked off) to keep the old bare `/<name>` form as a permanent,
+never-deprecated alias alongside the `j.<name>`/`j:<name>` canonical form, with `j-<name>` directory
+twins (E50_S05) documented as a purely complementary, collision-safety-only duplicate — never a
+replacement for the canonical bare-name directory. Reopened 2026-09-09 after a `/j-error` session
+traced a public-mirror stage-deploy gate failure (`tests/load-playbooks-stepobject.bats`) to that very
+split: `E28_S09`/`E28_S10` blocklisted 34 canonical bare-name skill directories in `.publicignore`, so
+the public mirror carries only their `j-<name>` twins, while `skills/jenga/playbooks/brainstorm-to-mirror.json`
+still references those skills by bare name in its `steps` array — `load-playbooks.sh` requires every
+step's `skills/<name>/SKILL.md` to exist or silently skips the whole playbook, so it fails to load in
+the public mirror (the private repo is unaffected; its bare-name directories were never removed).
+Rather than patch `.publicignore` to restore parity with the original policy, the user chose to invert
+it: bare-name directories are retired everywhere — private repo included — `j-<name>` is promoted from
+twin to the sole canonical form, and bare `/<name>` hard-breaks once its directory is deleted, with no
+redirect or deprecation shim. Amended in place rather than filed as a new epic, since it reverses
+rather than extends E50's original DoD decision (see new DoD bullets in `project/board/epics/E50_skill-namespace-prefix-and-allow-list.md`).
+Story breakdown for this reopening is left to `/jenga`'s decomposition pass.
 
 ## Distributable Project Dashboard (E47)
 E05–E09 built a working local dashboard (Express API + Vite/React UI, `project/app/api` + `project/app/ui`), but it only ever worked against this monorepo's own `project/` directory and is excluded from the published npm package's `files` list (confirmed via `npm pack --dry-run`) — a consumer who runs `npm install @jenga-ai/agent` has no access to it at all, despite E09's own story titles (`jenga dashboard start`, `jenga dashboard open`) already naming it as a CLI feature it never became. Filed via `/btw` (2026-08-31) after a session that fixed three bugs blocking the dashboard from working even in this repo: a nested-`npm run` flag-forwarding bug, a missing `express` dependency unreachable from `project/app/ui/scripts/dashboard-start.cjs`, and a route-shadowing bug where the API server's catch-all 404 (registered at module-require time) silently defeated `--serve-app`'s static/SPA-fallback middleware. This epic generalizes the now-working dashboard into a real per-consumer-project feature: S01 ships it in the npm package, S02 resolves its data source against the *invoking* project rather than this repo, and S03 wires actual `jenga dashboard start`/`open` CLI subcommands into `bin/jenga.js` (currently only `init`, `start`, `attach`, `status` exist). S02 explicitly reuses E46's path-resolution precedent (fail loudly rather than assume monorepo-relative paths) instead of rediscovering the same defect pattern independently. Scoped by the user as a generalization/relocation of existing working code, not a rewrite.
@@ -146,6 +164,21 @@ cross-reference note already written into `E53_S05`'s own Definition of Done.
 `resolve` (logged in `project/ideas.md`) and the post-output intercept/countdown mechanic
 (board stub `E44_S04`).
 
+**Epic closed 2026-09-10 — rolled up to `Passed with remarks`.** All 7 stories reached a terminal
+state (S01/S02 `Passed with remarks`, S03-S06 `Passed`, S07 `Rejected` as a deliberate,
+non-failure safety-review outcome — its own DoD explicitly names `Rejected` as a valid closure,
+not a failure to reach `Passed`). `Passed with remarks` was chosen at the epic level to carry that
+mixed-but-fully-resolved picture forward rather than either burying S07's decision under a plain
+`Passed` or misrepresenting a fully-delivered epic as unfinished; full reasoning recorded in the
+epic file's own "Rollup Notes" section (`project/board/epics/E53_jenga-nl-dispatcher-and-playbooks.md`).
+All six "Playbooks v2 extension" DoD lines plus all six original DoD lines are now ticked, verified
+against each story's own Definition of Done and the tester rollup-trigger messages already in
+`project/queue/scrum_triggers.jsonl` — except `E53_S02`, which has no Definition of Done section
+at all (see the Known Gaps entry on pre-existing stories missing this section) and was instead
+verified via its own "Remarks Triage" section's live re-run of `match-playbook.sh` against the
+real catalog, plus three independently-tested downstream stories (S03/S05/S06) explicitly
+describing themselves as extending "E53_S02's shipped playbook mechanism."
+
 **Mechanics note:** per `/todo`'s normal (non-`--trivial`) flow, only story-level board files were
 written for S03-S07 — task-level decomposition is deferred to `/do`'s own breakdown pass when each
 story is picked up. No `crucial_level` was proposed for any of the five new stories: none of them
@@ -156,7 +189,7 @@ batch — its risk is instead controlled narratively, via the hard safety-review
 its own first Acceptance Criterion.
 
 ## Skill Namespace Prefix & Anti-Masquerading Allow-List (E50)
-The canonical skill-namespace separator changed from `j:` (colon, E50_S01) to `j.` (dot, E50_S07_T01): every `skills/*/SKILL.md` frontmatter now reads `name: j.<name>` (twins: `j.j-<name>`). Reason: GitHub Copilot CLI validates the frontmatter `name` *value* and rejects any character outside `[A-Za-z0-9]`, hyphen, underscore, dot, space — the colon made all 82 skills fail to load there, a total Copilot outage. Directory names are unchanged (Claude Code resolves by directory name, unaffected). The old bare `/<name>` form remains a permanent, never-deprecated alias — see `CLAUDE.md`'s "Invocation Convention" note.
+The canonical skill-namespace separator changed from `j:` (colon, E50_S01) to `j.` (dot, E50_S07_T01): every `skills/*/SKILL.md` frontmatter now reads `name: j.<name>` (twins: `j.j-<name>`). Reason: GitHub Copilot CLI validates the frontmatter `name` *value* and rejects any character outside `[A-Za-z0-9]`, hyphen, underscore, dot, space — the colon made all 82 skills fail to load there, a total Copilot outage. **Both of the two claims this paragraph originally closed with were reversed by the 2026-09-09 reopening of E50 and are no longer true.** (1) Directory names are *not* unchanged: the canonical directory is now `skills/j-<name>/`, and the 40 bare directories are deleted by `E50_S15`. (2) The bare `/<name>` form is *not* a permanent, never-deprecated alias: it **hard-breaks** — no redirect, no alias, no deprecation shim. The canonical frontmatter value stays `name: j.<name>` on the surviving twin (**not** `j.j-<name>`), and the surviving invocation forms are `j.<name>` and `/j-<name>`. **The authoritative contract is `docs/skill-authoring.md` → "The Canonical Naming Contract"** — read it there rather than trusting any restatement here or in `CLAUDE.md`, both of which have now drifted once. `E50_S11`–`E50_S18` implement against that contract; `E50_S18` owns proving this summary and the shipped behaviour agree at cutover. (Corrected 2026-09-09 by scrum-master from a developer proposal queued during `E50_S10_T01`; the developer correctly refused to edit this scrum-master-owned file directly.)
 
 **Coupling to sweep on any future separator change.** The `j` prefix separator is consumed by at least four normalizers, not just the two generator scripts: `scripts/apply-j-prefix.sh`, `scripts/generate-j-alias.sh`, `lib/generate-skill-allow-list.js` (E50_S02 anti-masquerading allow-list), and `mcp/router/skill-index.js` — plus `tests/generate-j-alias.bats`, which asserts the emitted value. `lib/generate-skill-allow-list.js` silently populated the security allow-list with prefixed identifiers when its `/^j:/i` regex stopped matching the new `j.` form; fixed to `/^j[.:]/i` (accepts both separators — the policy choice for that file).
 
@@ -222,4 +255,4 @@ unrelated in-flight work at the time. Epic rolled back up to `Passed` the same s
 ### Known Gaps
 - Root `AGENT.md`/`AGENTS.md` still carry a stale, older `/jenga` description ("Gather project description and goals from the user; define initial epics in PROJECT_SUMMARY.md") that predates `/jenga` becoming the board orchestrator — `CLAUDE.md` carried the same stale text until E45_S03_T02 corrected it there (scope: `CLAUDE.md`, `README.md` only; `AGENT.md`/`AGENTS.md` deliberately left untouched since they don't make the "zero-prompt" claim that task was fixing). Same drift pattern already flagged under Launch & Discoverability (E41) as a proven failure mode. Follow-up: sync `AGENT.md`/`AGENTS.md`'s `/jenga` row to match `CLAUDE.md`'s corrected three-mode description. Not yet filed as a board item.
 - `project/.wiki/documentation.md` and `project/documentation/documentation.md` each still carry ~41 bare `/skill-name` invocation references, now stale relative to the `j:<name>` canonical form adopted in E50_S01 across `CLAUDE.md`, `README.md`, and `docs/skill-authoring.md` (flagged by a doc-sync report scoped to E50_S01_T05, which deliberately left these two files untouched since its task frontmatter pinned scope to the three files above). Same drift-pattern class as the `AGENT.md`/`AGENTS.md` gap above. Follow-up: a small task to bring both wiki-doc copies' invocation forms in line with the `j:` convention — note E38_S01's still-pending consolidation of the two files onto one canonical copy should probably land first or alongside, to avoid fixing the same drift twice. Not yet filed as a board item.
-- `scripts/validate-story-format.sh` (added E17_S01, 2026-06-06) hard-requires every story to carry a `## Definition of Done` section, but at least 17 pre-existing stories authored before that date lack one entirely (e.g. `E03_S01`-`S03`, `E15_S01`-`S03`, `E16_S01`, `E16_S02`, `E16_S03`, `E23_S01`-`S05`, `E29_S03`, `E29_S04`, `E33_S06`). Surfaced by the tester on `E16_S03` (`project/rapports/problems/E16_S03-story-format-invalid.md`, 2026-09-07), since the tester workflow now runs this validator as a mandatory gate before any `Passed` status — `E16_S03` retrofitted its own DoD inline to clear the gate, but the other ~16 stories remain unretrofitted and will hit the same blocker whenever they're next touched. Follow-up: a Maintenance task to retrofit `## Definition of Done` sections onto the remaining pre-existing stories. Not yet filed as a board item.
+- `scripts/validate-story-format.sh` (added E17_S01, 2026-06-06) hard-requires every story to carry a `## Definition of Done` section, but at least 17 pre-existing stories authored before that date lack one entirely (e.g. `E03_S01`-`S03`, `E15_S01`-`S03`, `E16_S01`, `E16_S02`, `E16_S03`, `E23_S01`-`S05`, `E29_S03`, `E29_S04`, `E33_S06`, `E53_S02`). Surfaced by the tester on `E16_S03` (`project/rapports/problems/E16_S03-story-format-invalid.md`, 2026-09-07), since the tester workflow now runs this validator as a mandatory gate before any `Passed` status — `E16_S03` retrofitted its own DoD inline to clear the gate, but the other ~16 stories remain unretrofitted and will hit the same blocker whenever they're next touched. Follow-up: a Maintenance task to retrofit `## Definition of Done` sections onto the remaining pre-existing stories. Not yet filed as a board item.

@@ -214,6 +214,16 @@ setup() {
 # -----------------------------------------------------------------------------
 # The one deliberate real-catalog check the story's AC requires: the committed
 # brainstorm-to-mirror.json (all bare-string steps) still loads unchanged.
+#
+# NOTE (E53_S05_T05/T06): the real catalog now also contains a SECOND playbook,
+# understand-then-ship.json, which composes brainstorm-to-mirror -- so the full catalog output
+# legitimately DOES contain '"skill": "brainstorm"' as part of THAT OTHER entry's flattened,
+# origin-annotated steps (depth > 1 steps are annotated objects by design, see
+# load-playbooks.sh's header "COMPOSITION RESOLUTION"). A whole-output substring check can no
+# longer distinguish "brainstorm-to-mirror's own bare-string steps" from "understand-then-ship's
+# composed copy of the same skill name" -- so this assertion is scoped to brainstorm-to-mirror's
+# OWN catalog entry specifically, via a small JSON-parsing check, rather than a blanket substring
+# search over the entire multi-playbook catalog.
 # -----------------------------------------------------------------------------
 
 @test "the real committed brainstorm-to-mirror.json still loads unchanged (no fixture override)" {
@@ -223,6 +233,21 @@ setup() {
   assert_output_contains '"steps": ['
   assert_output_contains '"brainstorm",'
   assert_output_contains '"mirror-public"'
-  # Bare-string steps must stay bare strings -- never rewritten into {"skill": "..."} objects.
-  assert_output_not_contains '"skill": "brainstorm"'
+
+  # Bare-string steps in brainstorm-to-mirror's OWN entry must stay bare strings -- never
+  # rewritten into {"skill": "..."} objects. Scoped to that one entry (see NOTE above). Written
+  # to a temp file first, rather than interpolated into a python -c string, to avoid any shell/
+  # JSON quoting hazard.
+  CATALOG_FILE="$BATS_TEST_TMPDIR/real_catalog_$$.json"
+  printf '%s' "$output" > "$CATALOG_FILE"
+  run python3 -c "
+import json
+with open('$CATALOG_FILE', encoding='utf-8') as f:
+    catalog = json.load(f)
+entry = next(pb for pb in catalog if pb['id'] == 'brainstorm-to-mirror')
+assert all(isinstance(s, str) for s in entry['steps']), entry['steps']
+print('all bare strings')
+"
+  [ "$status" -eq 0 ]
+  assert_output_contains "all bare strings"
 }

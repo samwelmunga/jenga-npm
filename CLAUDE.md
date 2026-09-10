@@ -12,11 +12,29 @@
 
 ## Workflow Lifecycle
 
-> **Invocation convention (`E50_S01`, separator revised by `E50_S07`):** every skill's canonical invocation form is now `j.<name>`
-> (e.g. `j.init`, `j.jenga`) rather than the old bare `/<name>`. The old bare `/<name>` form is a
-> **permanent alias** — it keeps resolving indefinitely on every routing surface, is never
-> deprecated, and is never scheduled for removal. Full rationale in
-> `docs/skill-authoring.md`'s "Invocation Convention" section.
+> **Invocation convention (`E50_S01`, separator revised by `E50_S07`, bare-form policy reversed by the
+> `E50` reopening of 2026-09-09):** `skills/j-<name>/` is the **sole canonical form** of a skill
+> directory, and `name: j.<name>` (e.g. `j.init`, `j.commit`) is its canonical frontmatter identifier.
+> Those are two separable identifiers, and only the directory changed: a skill is invoked as
+> **`j.<name>`** — the form these docs have always taught, which survives untouched — or as the
+> directory-resolved slash form **`/j-<name>`**.
+>
+> The old bare `/<name>` form is **hard-broken: no redirect, no alias, no deprecation shim, no
+> warning.** Its directory is deleted, and since Claude Code resolves skills by literal directory
+> name, the command simply stops resolving — no Jenga skill runs and nothing points the user at
+> `/j-<name>`. The earlier policy, which guaranteed the bare form would keep resolving indefinitely on
+> every routing surface, was reversed on 2026-09-09 and is retained in `docs/skill-authoring.md` only
+> as superseded history.
+>
+> **Three permanent exceptions** keep their bare directory names and are never renamed, deleted, or
+> twinned: `skills/jenga/` and `skills/jenga-permission-level/` (deliberately excluded from twin
+> generation by `E50_S06`) and `skills/index/` (not a skill — no `SKILL.md`, not part of routing).
+> Consequently `/jenga` and `/jenga-permission-level` do keep working — they are the only surviving
+> bare slash forms, and they survive because those directories were always the canonical ones, not
+> because any alias was kept.
+>
+> Full contract in `docs/skill-authoring.md`'s "The Canonical Naming Contract" section; the mechanical
+> cutover (directory renames, frontmatter rewrites, reference updates) is owned by `E50_S11`–`E50_S18`.
 
 1. **`j.init`** — Scaffold the project: git init, directories, `workflow.json`, `PROJECT_SUMMARY.md` stub.
 2. **`j.jenga`** — Interactive-by-default board orchestrator: bare shows a picker + confirmation tree, `<ids>` scopes and confirms, `*` runs the original fully automated pipeline with no prompts.
@@ -64,25 +82,43 @@
 
 ## Skills (Slash Commands)
 
-Skills are stored in `skills/<name>/SKILL.md`. Invoke them with `j.<name>` in a Claude Code session
-— the bare `/<name>` form also keeps working permanently as an alias (see the Invocation Convention
-note under Workflow Lifecycle above).
+Skills are stored in `skills/j-<name>/SKILL.md`. Invoke them with `j.<name>` in a Claude Code session,
+or as the directory-resolved slash form `/j-<name>`. The bare `/<name>` form does not resolve (see the
+Invocation Convention note under Workflow Lifecycle above).
 
-> **`j-<name>` directory twins (`E50_S05`):** separately from the `j.<name>` prefix convention above,
-> every skill — except `init`/`j-init` (already paired, the original precedent set in `E50_S04`) and
-> `index` (a non-skill directory) — also has a `skills/j-<name>/` directory twin, invocable as
-> `/j-<name>`. This is a complementary mechanism, not a replacement: it gives collision safety via a
-> real duplicate directory under a distinct name, rather than a routing/frontmatter alias, for cases
-> where a host tool ships its own same-named built-in command (e.g. GitHub Copilot's own `/init`,
-> which motivated `j-init` in the first place) and would otherwise shadow the bare `/<name>` form.
-> Twins are generated and kept in lockstep exclusively via `scripts/generate-j-alias.sh` — never
-> hand-edit a `skills/j-<name>/` directory directly. Full rationale in `docs/skill-authoring.md`'s
-> "Invocation Convention" section.
+> ⚠️ **Target state, not yet on disk.** The bare-name directories are **still present** in this repo
+> and are deleted by `E50_S15`, which lands that deletion in the same change as the
+> `j.j-<name>` → `j.<name>` frontmatter rewrite. Until it does, both forms exist side by side. This
+> block and the Invocation Convention note above describe the ratified end state that `E50_S11`–`E50_S18`
+> implement — do not read either as a description of the current directory listing.
+
+> **`skills/j-<name>/` is the canonical skill directory (`E50_S05`, promoted from twin to sole
+> canonical form by the `E50` reopening of 2026-09-09):** it is the hand-edited source of truth — the
+> directory you create, edit, and commit — not a generated duplicate of a bare-name directory. Once
+> `E50_S15` lands, no bare-name directory will remain to generate it from or keep it in lockstep
+> with. Its `j-` prefix
+> exists for collision safety: a real directory under a distinct name, rather than a
+> routing/frontmatter alias, for cases where a host tool ships its own same-named built-in command
+> (e.g. GitHub Copilot's own `/init`, which motivated `j-init` in the first place) and would otherwise
+> shadow a bare `/<name>` form. Note the directory name (`j-<name>`) and the frontmatter `name:`
+> (`j.<name>`) are deliberately different — see the Skill Frontmatter table below.
+>
+> `skills/jenga/`, `skills/jenga-permission-level/`, and `skills/index/` are the three permanent
+> exceptions that keep their bare directory names (see the Invocation Convention note above).
+> `skills/init/` is **not** an exception — `skills/j-init/` is simply already at its canonical name.
+>
+> `scripts/generate-j-alias.sh`'s bare-name-source → `j-<name>`-twin generation relationship no longer
+> applies as written, since both ends of it are invalidated by this contract. Retiring or inverting
+> that generator is `E50_S14`'s scope; until it lands, do not run it against a canonical
+> `skills/j-<name>/` directory — it would reintroduce the doubled `j.j-<name>` frontmatter value this
+> contract removes. Full contract in `docs/skill-authoring.md`'s "The Canonical Naming Contract"
+> section.
 
 | Command | Description |
 |---|---|
 | `j.init` | Scaffold project directories, `workflow.json`, `PROJECT_SUMMARY.md`, initial commit. |
 | `j.jenga` | Interactive-by-default board orchestrator with a fully automated escape hatch: bare `j.jenga` renders a picker + confirmation tree, `j.jenga <ids>` resolves an explicit scope + confirms, `j.jenga *` reproduces the original zero-prompt, fully automated run. |
+| `j.playbook <id>` | Invoke a specific `/jenga` playbook directly by ID — skips natural-language matching entirely and goes straight to chain confirmation and execution, reusing `/jenga`'s own playbook confirmation/runner scripts. |
 | `j.jbp` | Scaffold the project using the [JengaBasePlate](https://github.com/samwelmunga/JengaBasePlate.git) boilerplate. |
 | `j.brainstorm` | Focused planning session with the Scrum Master to define and refine features before committing to the board. |
 | `j.btw` | Capture a mid-flow mission, classify into epic/story structure, implement now or defer. |
@@ -109,7 +145,7 @@ Each `SKILL.md` starts with a YAML frontmatter block. Supported fields:
 
 ```yaml
 ---
-name: <skill-name>
+name: j.<skill-name>
 description: <one-sentence description>
 metadata:
   prefered_agent: <agent_name>   # optional
@@ -122,7 +158,7 @@ examples:                        # optional
 
 | Field | Required | Purpose |
 |---|---|---|
-| `name` | ✅ | Skill name — `j.` + the directory name under `skills/` (see `docs/skill-authoring.md`'s "Invocation Convention"). |
+| `name` | ✅ | Canonical skill identifier — `j.` + the skill's bare name (e.g. `j.commit`). **Not** a mechanical derivation of the directory name: the canonical directory is `skills/j-<name>/`, so `skills/j-commit/SKILL.md` carries `name: j.commit`, never `j.j-commit` (see `docs/skill-authoring.md`'s "The Canonical Naming Contract"). |
 | `description` | ✅ | Shown in `j.help` listings and the skill registry. |
 | `metadata.prefered_agent` | ❌ | Sub-agent to delegate to (`scrum-master`, `developer`, `tester`). |
 | `keywords` | ❌ | Short phrases (1–3 words) for Jenga Router keyword matching. |
@@ -142,7 +178,7 @@ Skills without this property are executed directly without delegating to a sub-a
 
 ## Skill Implementation Principle — Scripts Over Inline Logic
 
-When implementing or authoring a skill, **offload deterministic, repeatable steps to shell scripts or other static tooling** (e.g., bash scripts in `skills/<name>/scripts/`, shared scripts in `scripts/`) rather than encoding them as agent instructions inside `SKILL.md`.
+When implementing or authoring a skill, **offload deterministic, repeatable steps to shell scripts or other static tooling** (e.g., bash scripts in `skills/j-<name>/scripts/`, shared scripts in `scripts/`) rather than encoding them as agent instructions inside `SKILL.md`.
 
 **Why:**
 - Scripts execute consistently regardless of model, context length, or session state
