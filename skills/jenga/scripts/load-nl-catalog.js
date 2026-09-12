@@ -11,10 +11,16 @@
  * inventory (`readSkillAllowList()`, which reads the committed `lib/skill-allow-list.json`
  * artifact) — this script does not independently re-scan `skills/` for a name list of its own,
  * per E53_S01_T02's acceptance criteria and the drift lesson E41_S04 already documented for that
- * generator. For each name in that inventory, this script reads exactly one file —
- * `skills/<name>/SKILL.md` — to populate the remaining catalog fields: `description`, `keywords`,
- * `examples`, and `metadata.prefered_agent`. These are the same fields `/route`'s Step 1
- * ("Discover Available Skills") collects.
+ * generator. That inventory holds bare identifiers (e.g. "brainstorm"), stripped of the `j.`
+ * frontmatter prefix — but per docs/skill-authoring.md's Canonical Naming Contract, the actual
+ * on-disk directory is `skills/j-<name>/`, except the three permanent exceptions (`jenga`,
+ * `jenga-permission-level`, `index`) which keep their bare directory name. For each name in the
+ * inventory, this script re-derives that canonical directory name, reads exactly one file —
+ * `skills/<dirName>/SKILL.md` — to populate the remaining catalog fields: `description`,
+ * `keywords`, `examples`, and `metadata.prefered_agent`, and emits `dirName` (not the bare
+ * identifier) as the catalog entry's `name` — callers like `/jenga`'s Skill invocation and
+ * `playbook-new.sh`'s `validate-skill` need the real, invokable directory name. These are the
+ * same fields `/route`'s Step 1 ("Discover Available Skills") collects.
  *
  * ---------------------------------------------------------------------------
  * USAGE
@@ -60,6 +66,15 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { pathToFileURL } from "url";
+
+// The three permanent exceptions to the `j-<name>` canonical directory convention — see
+// docs/skill-authoring.md's Canonical Naming Contract and scripts/audit-twin-divergence.sh's
+// NEVER_TWINNED list, which this mirrors.
+const NEVER_TWINNED = new Set(["jenga", "jenga-permission-level", "index"]);
+
+function canonicalSkillDir(name) {
+  return NEVER_TWINNED.has(name) ? name : `j-${name}`;
+}
 
 /**
  * Parses YAML frontmatter from a SKILL.md's content into a plain object. This is a hand-rolled,
@@ -161,7 +176,8 @@ async function main() {
 
   const catalog = [];
   for (const name of names) {
-    const skillMdPath = join(pkgRoot, "skills", name, "SKILL.md");
+    const dirName = canonicalSkillDir(name);
+    const skillMdPath = join(pkgRoot, "skills", dirName, "SKILL.md");
     if (!existsSync(skillMdPath)) {
       process.stderr.write(
         `Warning: ${skillMdPath} not found for allow-listed skill '${name}' — skipped\n`
@@ -186,7 +202,7 @@ async function main() {
     }
 
     catalog.push({
-      name,
+      name: dirName,
       description: fm.description,
       keywords: Array.isArray(fm.keywords) ? fm.keywords : [],
       examples: Array.isArray(fm.examples) ? fm.examples : [],
