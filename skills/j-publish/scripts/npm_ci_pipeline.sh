@@ -191,6 +191,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install project/app workspace dependencies (E29_S05_T01)
+        run: npm ci --prefix project/app
+
       - name: Regenerate lib/legacy-shipped-paths.json (E26_S08_T03)
         run: node scripts/generate-legacy-shipped-paths.js || echo "::warning::legacy-shipped-paths generation failed; publishing without an updated list"
 
@@ -223,6 +226,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install project/app workspace dependencies (E29_S05_T01)
+        run: npm ci --prefix project/app
 
       - name: Stage to npm
         run: npm stage publish --provenance --access ${NPM_ACCESS} --tag ${DIST_TAG}

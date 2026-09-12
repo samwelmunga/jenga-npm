@@ -21,6 +21,11 @@ Usage:
   jenga status    Show router status and active session
   jenga doctor    Scan .agents/ and .claude/ for orphaned package files and clean up
                   interactively (alias: jenga clean). Add --dry-run to preview only.
+  jenga dashboard start [--port <n>] [--serve-app]
+                  Start the project dashboard API server (and optionally serve the
+                  built UI). Port defaults to 3001, or JENGA_API_PORT if set.
+  jenga dashboard open [--port <n>]
+                  Health-check the dashboard and open it in your browser.
 
 Options:
   --version, -v   Print version
@@ -65,6 +70,11 @@ async function main() {
       // intentionally interchangeable, never two implementations.
       const { runDoctor } = await import("../lib/commands/doctor.js");
       await runDoctor(args);
+      break;
+    }
+    case "dashboard": {
+      const { runDashboard } = await import("../lib/commands/dashboard.js");
+      await runDashboard(args);
       break;
     }
     default:
