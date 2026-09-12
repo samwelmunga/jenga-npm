@@ -128,7 +128,7 @@ Invocation Convention note under Workflow Lifecycle above).
 | `j.publish` | Configure, validate, and orchestrate scaffolded release workflows (`setup`, `deploy`, `stage`, `history`, `release-notes`) across `mobile-ios`, `npm`, `npm-ci`, and `droplet` targets. `stage` (`npm`/`npm-ci` only) rehearses and smoke-tests a release before it goes live. |
 | `j.uncharted` | Entry point for code with no board provenance — three modes: `segment` (a file or directory), `import` (an external source), `onboard` (a whole pre-existing codebase). |
 | `j.do` | Execute tasks from the scrum board. Resolves each entry to full board context and drives the Developer agent. |
-| `j.dashboard` | Launch the local project dashboard (API + UI) by delegating to `project/app`'s existing `dashboard:start`/`dashboard:open` npm scripts — `--port <n>` is forwarded unchanged. `--snapshot` (single-file export) is not yet implemented. |
+| `j.dashboard` | Launch the local project dashboard (API + UI) by delegating to `project/app`'s existing `dashboard:start`/`dashboard:open` npm scripts — `--port <n>` is forwarded unchanged. `--snapshot [--out <path>]` captures a point-in-time data snapshot and bundles the UI into a single self-contained HTML file (e.g. `jenga.html`), viewable via `file://` with no running server. |
 | `j.status` | Overview of epics, stories, and tasks with statuses, open rapports, and queue depth. |
 | `j.jenga-permission-level` | Report or switch the current session's 5-tier permission level (Locked/Guarded/Standard/Elevated/Unrestricted) without hand-editing settings.json. |
 | `j.commit` | Commit completed work using the EST naming convention (`epic(...)`, `story(...)`). |

@@ -32,6 +32,83 @@ use more than one.
 The consumer's own `project/` directory (board, queue, logs, rapports) is never touched by
 install.
 
+### Dashboard packaging decision (`project/app`) — E47_S01
+
+The local project dashboard (`j.dashboard`, API server + React UI) lives at `project/app/` —
+a nested npm workspace (`project/app/api`, `project/app/ui`) used for this repo's own
+development. Prior to `E47_S01`, root `package.json`'s `files` field excluded `project/app/`
+entirely, so a real `npm install @jenga-ai/agent` consumer got none of it.
+
+**Decision: keep `project/app` where it is; whitelist narrowly rather than relocate.**
+`project/app` is working, already-tested code with its own test suite and its own nested
+`package.json`/`package-lock.json` for local development. Relocating it to a new top-level
+directory would churn every internal reference (imports, `--prefix project/app` script
+invocations, test paths) for no functional benefit — the "generalization, not a rewrite"
+framing this epic (`E47`) was scoped under. Root `package.json`'s `files` array instead
+whitelists exactly the runtime paths a consumer needs:
+
+```
+"project/app/api/**/*.js",
+"project/app/api/routes/**",
+"project/app/api/lib/**",
+"project/app/api/parsers/**",
+"project/app/api/package.json",
+"project/app/ui/scripts/**",
+"project/app/ui/dist/**",
+"!project/app/api/**/*.test.js",
+"!project/app/api/node_modules/**",
+"!project/app/ui/node_modules/**"
+```
+
+`project/app/ui/src` (source — only the built `dist/` ships) is excluded simply by never
+being added to `files` in the first place; no negated pattern is needed for it.
+
+**Empirical finding — a bare `**/*.js` glob reaches into `node_modules` too, and npm then
+bundles the whole nested package.** The two `!…/node_modules/**` negations above are not
+defensive boilerplate — they fix a real leak found while verifying `E47_S01_T02`'s `prepack`
+step against a maintainer checkout that had `project/app/api/node_modules` installed (the
+normal state for anyone doing local dashboard development before a publish). `**` in a `files`
+glob does not stop at a `node_modules` boundary, so `project/app/api/**/*.js` matched
+`project/app/api/node_modules/cors/lib/index.js`; and once npm's packer sees any file inside a
+`node_modules/<pkg>/` directory selected by an explicit `files` pattern, it packs that nested
+package's other files too (`LICENSE`, `README.md`, `package.json`) — the same way it packs a
+real bundled dependency — not just the one literally-matched file. Root `.npmignore`'s own
+`**/node_modules/` pattern does **not** catch this either: as established above, an explicit
+`files` allow-list entry takes precedence over a blanket `.npmignore` pattern, and the `**/*.js`
+entry counts as such an entry even though matching `node_modules` content was never the intent.
+The two negated entries close this off explicitly. Verified via a real (non-dry-run) `npm pack`
+against a scratch copy with `project/app/api/node_modules` and `project/app/ui/node_modules`
+both actually present on disk: without the negations, `cors` and its `object-assign` dependency
+leaked into the tarball; with them, `tar -tzf` on the resulting tarball shows zero
+`node_modules` paths.
+
+**Empirical finding — the `dist/`-vs-`.gitignore` interaction.** `project/app/ui/dist/` is
+listed in `.gitignore` (`project/app/ui/.gitignore` contains `dist/` and `node_modules/`) and
+is only produced by running `npm run ui:build`. A scratch `npm pack --dry-run` rehearsal
+(package copied via `git archive HEAD` into a `mktemp -d`, `files` patched in the scratch copy
+only) showed that **an explicit `files` entry alone is *not* sufficient**: even with a real,
+already-built `dist/` present on disk and `project/app/ui/dist/**` in `files`, npm's packer
+(`npm-packlist`) still filtered it out. Root cause: npm's packer walks per-directory ignore
+files, and `project/app/ui/`'s own `.gitignore` still applies to that directory even though
+the repo root has an `.npmignore` and even though the path is explicitly allow-listed in
+`files` — a nested `.gitignore` is not overridden by a root-level `.npmignore` or by
+`files` allow-listing on its own.
+
+**Fix:** an empty (comment-only) `project/app/ui/.npmignore` was added. npm prefers a
+directory's own `.npmignore` over its `.gitignore` when both exist, so this replaces
+`project/app/ui/.gitignore`'s effect *for packing purposes only* with nothing — the sibling
+`.gitignore` is untouched and keeps governing `git status`/`git add` normally. Re-running the
+scratch rehearsal with this fix in place confirmed `dist/` (once built) packs correctly, while
+`project/app/ui/node_modules/` (npm's packer unconditionally excludes any `node_modules`
+directory, independent of any ignore file) and `project/app/ui/src/` (never in `files` to
+begin with) still do not.
+
+This means the `files`/`.npmignore` change alone makes a *pre-built* `dist/` packable, but
+does not itself guarantee `dist/` exists or is fresh at pack time — that is `E47_S01_T02`'s
+job (a `prepack` build step). Verified end to end in this worktree: after running
+`npm run ui:build --prefix project/app --` once, `npm pack --dry-run` correctly lists
+`project/app/ui/dist/index.html` and its built assets.
+
 ---
 
 ## 2. The install path

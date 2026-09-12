@@ -14,6 +14,7 @@
   },
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
+    "prepack": "npm run ui:build --prefix project/app --",
     "generate:legacy-paths": "node scripts/generate-legacy-shipped-paths.js",
     "graph:populate": "node scripts/populate-knowledge-graph.js",
     "test": "bats tests/*.bats",
@@ -45,7 +46,17 @@
     "mcp/training_runner/package.json",
     "mcp/training_runner/package-lock.json",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "project/app/api/**/*.js",
+    "project/app/api/routes/**",
+    "project/app/api/lib/**",
+    "project/app/api/parsers/**",
+    "project/app/api/package.json",
+    "project/app/ui/scripts/**",
+    "project/app/ui/dist/**",
+    "!project/app/api/**/*.test.js",
+    "!project/app/api/node_modules/**",
+    "!project/app/ui/node_modules/**"
   ],
   "repository": {
     "type": "git",
@@ -83,6 +94,11 @@
     "url": "https://knappkod.se/jenga-ai"
   },
   "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "gray-matter": "^4.0.3"
+  },
   "devDependencies": {
     "bats": "^1.13.0"
   }

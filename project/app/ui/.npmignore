@@ -1,0 +1,19 @@
+# Intentionally near-empty (comment-only).
+#
+# This file exists solely to neutralize the sibling `.gitignore` in this same directory for
+# npm packing purposes. npm's packer (npm-packlist) reads ignore rules per directory and
+# prefers a directory's own `.npmignore` over its `.gitignore` when both exist — so this file
+# does not add any new exclusions, it *replaces* `.gitignore`'s `dist/`/`node_modules/` rules
+# with nothing, for packing only. `.gitignore` in this directory is untouched and keeps
+# governing `git status`/`git add` normally.
+#
+# Without this file, root `package.json`'s explicit `files` entry for
+# `project/app/ui/dist/**` (E47_S01_T01) would be silently filtered back out by this
+# directory's own `.gitignore` at `npm pack`/`npm publish` time, even though `dist/` is
+# allow-listed — confirmed empirically, see docs/distribution.md's "Dashboard packaging
+# decision" section for the full investigation.
+#
+# `node_modules/` still never ships regardless of this file: npm's packer unconditionally
+# excludes any `node_modules` directory, and `project/app/ui/src` still never ships because
+# it was never added to `files` in the first place — neither exclusion depends on the
+# sibling `.gitignore` this file overrides.
