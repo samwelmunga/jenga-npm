@@ -11,6 +11,10 @@ const TYPE_COLORS = {
   dependency: '#6b7280', // grey
 }
 
+// Fallback fill for any node type not present in TYPE_COLORS (e.g. free-text
+// types sourced from knowledge-graph/graph.json such as 'module' or 'function').
+const DEFAULT_TYPE_COLOR = '#94a3b8' // slate
+
 const NODE_W = 140
 const NODE_H = 40
 const H_GAP = 60
@@ -24,9 +28,14 @@ function layoutNodes(nodes) {
     groups[n.type].push(n)
   }
   const typeOrder = ['epic', 'story', 'service', 'dependency']
+  const knownTypes = new Set(typeOrder)
+  // Any type not in the known set (free-text types from graph.json) still
+  // needs a layout row, or its nodes would never receive a position and
+  // would silently fail to render.
+  const otherTypes = Object.keys(groups).filter(t => !knownTypes.has(t))
   const positions = {}
   let y = PAD
-  for (const type of typeOrder) {
+  for (const type of [...typeOrder, ...otherTypes]) {
     const group = groups[type] || []
     group.forEach((n, i) => {
       positions[n.id] = { x: PAD + i * (NODE_W + H_GAP), y }
@@ -104,7 +113,7 @@ export default function SADMap({ nodes, edges }) {
       {visibleNodes.map(n => {
         const pos = positions[n.id]
         if (!pos) return null
-        const fill = TYPE_COLORS[n.type] || '#6b7280'
+        const fill = TYPE_COLORS[n.type] || DEFAULT_TYPE_COLOR
         const label = n.label.length > 18 ? n.label.slice(0, 17) + '…' : n.label
         const opacity = selectedId === null ? 0.85 : 1.0
         return (

@@ -4,9 +4,11 @@
  */
 
 const { execFile } = require('child_process');
-const path = require('path');
+const { resolveProjectRoot } = require('../lib/resolve-project-root');
 
-const REPO_ROOT = path.resolve(__dirname, '../../../..');
+// Resolved relative to the invoking project's own root (E47_S02_T01/T02), not a fixed __dirname
+// climb — see project/app/api/lib/resolve-project-root.js.
+const REPO_ROOT = resolveProjectRoot();
 const SEP = '|||';
 const FORMAT = `%H${SEP}%an${SEP}%aI${SEP}%s${SEP}%b`;
 

@@ -6,8 +6,12 @@
 const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
+const { resolveProjectRoot } = require('../lib/resolve-project-root');
 
-const BOARD_ROOT = path.resolve(__dirname, '../../../board');
+// Resolved relative to the invoking project's own root (E47_S02_T01/T02), not a fixed __dirname
+// climb — the old `path.resolve(__dirname, '../../../board')` only ever landed correctly when this
+// module ran from this monorepo's own checkout.
+const BOARD_ROOT = path.join(resolveProjectRoot(), 'project', 'board');
 
 /**
  * Read all .md files from a directory (non-recursive).

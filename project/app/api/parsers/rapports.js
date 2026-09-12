@@ -6,8 +6,11 @@
 const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
+const { resolveProjectRoot } = require('../lib/resolve-project-root');
 
-const RAPPORTS_ROOT = path.resolve(__dirname, '../../../rapports');
+// Resolved relative to the invoking project's own root (E47_S02_T01/T02), not a fixed __dirname
+// climb — see project/app/api/lib/resolve-project-root.js.
+const RAPPORTS_ROOT = path.join(resolveProjectRoot(), 'project', 'rapports');
 const DATE_PATTERN = /(\d{4}-\d{2}-\d{2})/;
 
 /**

@@ -9,6 +9,29 @@
 
 'use strict';
 
+const { resolveProjectRoot } = require('./lib/resolve-project-root');
+
+// Pin the resolved project root as an explicit override *before* any router/parser module loads —
+// each parser (board.js, git-log.js, rapports.js, architecture.js, knowledge-graph.js) computes its
+// own root via resolveProjectRoot() at its own module-load time, so this must run first.
+//
+// Deliberately calls resolveProjectRoot() rather than setting a raw `process.cwd()` literal: the
+// real launch paths in this repo (root `npm run dashboard:start`/`api:start`, both of which use
+// `--prefix project/app`) run with `cwd` set to `project/app` by npm, not the repo root — and
+// `project/app` itself has no `project/board` two levels below it (`project/board` is a *sibling*
+// of `project/app`). A raw `cwd` override would incorrectly `throw` in that case. Calling
+// resolveProjectRoot() here performs the same override-else-walk-up resolution the module already
+// does (walk-up from `cwd` correctly finds `project/board` above `project/app`), then pins that
+// *resolved* value into the env var — every parser's own subsequent call becomes a cheap env-var
+// read instead of repeating the walk, and every parser is guaranteed to agree on the same root even
+// if `process.cwd()` changes later in this process's lifetime. If a caller already set an override
+// (e.g. a future `jenga dashboard start` CLI subcommand that knows the user's true invocation
+// directory more reliably than this process's own `cwd`), this is a no-op — resolveProjectRoot()
+// already treats an explicit override as authoritative over any walk-up.
+if (!process.env.JENGA_PROJECT_ROOT) {
+  process.env.JENGA_PROJECT_ROOT = resolveProjectRoot();
+}
+
 const express = require('express');
 const cors    = require('cors');
 

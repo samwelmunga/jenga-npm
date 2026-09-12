@@ -40,7 +40,7 @@
 
 ---
 
-## Provenance Field — `source: human | ast`
+## Provenance Field — `source: human | ast | board`
 
 Every stub node declares how it came to exist:
 
@@ -52,10 +52,17 @@ Every stub node declares how it came to exist:
   node: it reflects what the code mechanically, verifiably does. No such pipeline exists yet as of
   this stub (it is scoped to E20_S02's prospective AST-diff maintenance work); the `ast` value is
   defined here so the conflict rule below has both sides of the conflict to refer to from day one.
+- **`board`** — written by the mechanical, non-conversational board-to-graph populator (E20_S09):
+  one node per Epic/Story, derived directly from `project/board/` frontmatter with no human
+  confirmation step and no code inspection. This is a **coarse** node, like `human`, but its
+  evidence is project-management metadata (an Epic/Story's own title and description) rather than
+  either a person's confirmed understanding of the code or a mechanical read of the code itself.
+  Because it is unconfirmed, a `board` node carries no default precedence over anything — see the
+  Evidence-Wins Conflict Rule below for how it behaves in a conflict.
 
-There is no third value. A node's `source` is fixed at creation time and is not itself mutated by
-conflict resolution — conflict resolution only ever adds `status`/`superseded_by` to a `human` node
-(see below); it never rewrites a node's `source`.
+A node's `source` is fixed at creation time and is not itself mutated by conflict resolution —
+conflict resolution only ever adds `status`/`superseded_by` to a superseded node (see below); it
+never rewrites a node's `source`.
 
 ## Evidence-Wins Conflict Rule
 
@@ -118,6 +125,19 @@ does not retry charges) and the conflict is resolved:
 
 `node-042` remains in the graph, readable, and traceable to what replaced it — it is superseded, not
 gone.
+
+### Where `board` Fits
+
+`board` is the lowest-precedence source. It carries no human confirmation and no code inspection —
+it is a mechanical restatement of an Epic/Story's own board metadata. When a `board`-sourced node
+and a `human`- or `ast`-sourced node describe the same underlying thing and disagree, the
+`human`/`ast` node wins under the same mechanism as above: the `board` node's `status` is set to
+`superseded` and its `superseded_by` points at the winning node. A `board` node is never used to
+supersede a `human` or `ast` node, in either direction — the rule is one-way, not symmetric.
+
+Two `board` nodes never conflict with each other in the sense this rule addresses: the populator
+that writes them (E20_S09) is idempotent on `id`, so a re-run updates an existing `board` node in
+place rather than creating a competing one.
 
 ---
 

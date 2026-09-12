@@ -771,6 +771,41 @@ section) is the authoritative, most detailed reference; this is the skill-author
   that resolve to the same skill name is dropped with a stderr warning rather than silently
   corrupting that addressing.
 
+### Project-Local Playbooks (`E53_S09_T01`)
+
+`skills/jenga/scripts/load-playbooks.sh` scans a SECOND, project-owned directory,
+`project/.playbooks/`, in addition to the built-in `skills/jenga/playbooks/` tree, and merges both
+into the exact same catalog and validation pipeline described above — a project playbook is never
+subject to a separate or weaker validation path than a built-in one. This lets a user author their
+own recurring multi-skill workflows local to their project without hand-writing JSON against the
+schema and upstreaming it into the framework itself — `j.playbook-new`
+(`skills/j-playbook-new/SKILL.md`, `E53_S09_T02`) is the dedicated guided-wizard skill that writes
+these files for you: it prompts, in order, for an id (validated slug-safe and unique against the
+full merged catalog), a name, a description, keywords, examples, and an ordered list of skill
+names (each validated against the real generated skill catalog, `load-nl-catalog.sh` — never a
+hand-maintained list), writes `project/.playbooks/<id>.json`, and re-validates its own output via
+`load-playbooks.sh lookup` before ever reporting success. Its v1 scope cut matches this story's:
+bare-string `steps` only — no `forward_from`/`resolve`/`conditional`/`playbook`-type fields are
+authored by the wizard; hand-edit the written file directly for those. A project with no
+`project/.playbooks/` directory at all is unaffected: this is a silent no-op, not an error.
+
+- **Id collision with a built-in playbook** — if a project playbook's `id` (which, like a built-in
+  playbook, must equal its own filename's basename) matches a SUCCESSFULLY LOADED built-in
+  playbook's id, the project playbook is skipped: a stderr warning names both the project file's
+  path and the built-in file's path, and the built-in entry is the one that survives into the
+  catalog. This is never a silent override in either direction — if you need to customize a
+  built-in playbook's behavior, give your project-local version a different id.
+- **The `source` field** — every catalog entry, from either directory, carries a `source` field:
+  `"builtin"` for anything loaded from `skills/jenga/playbooks/`, `"project"` for anything loaded
+  from `project/.playbooks/`. `load-playbooks.sh lookup <id>` (see above) resolves against this
+  same merged catalog and includes `source` on its returned `playbook` object too.
+- **Composition works across the boundary** — because both directories are merged into one lookup
+  map before composition resolution runs, a project playbook may compose a built-in one (or vice
+  versa) using an ordinary `{"playbook": "<id>"}` step, with no special-casing.
+- `j.playbook`'s bare-invocation table (`E53_S06_T06`) will render this field as a `Source` column
+  (`Built-in` / `Project`) for each listed row once `E53_S09_T03` lands — as of this writing that
+  task is still `Pending`, and the table lists only `Id`/`Name`/`Steps`.
+
 ### Playbook Type Registry Governance
 
 The canonical playbook type vocabulary lives in `templates/playbook-types.json` (currently `text`,

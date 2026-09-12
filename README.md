@@ -35,7 +35,7 @@ Jenga AI solves each of these with structure: persistent engineering context mai
 
 - **Three specialised agents** — Scrum Master, Developer, Tester — each with a distinct role and no self-graded work
 - **A persistent, Kanban-style scrum board** — Epics, Stories, and Tasks tracked as Markdown files with structured frontmatter, surviving every session boundary
-- **A coordinated skill pipeline — one agentic workflow, not a command list** — planning skills (`j.pi-plan`, `j.todo`) hand off to execution skills (`j.do`, `j.dooo`), which hand off to review skills (`j.status`, `j.reconcile`), each stage reading and writing the same board state — the old bare `/<name>` form still works everywhere as a permanent alias
+- **A coordinated skill pipeline — one agentic workflow, not a command list** — planning skills (`j.pi-plan`, `j.todo`) hand off to execution skills (`j.do`, `j.dooo`), which hand off to review skills (`j.status`, `j.reconcile`), each stage reading and writing the same board state
 - **An event-driven trigger queue** — async handoffs between agents with a full audit trail in `project/logs/events.json`
 - **Isolated git worktrees per task** — the Developer never works directly on your main branch
 - **Works with any AI coding agent or AI-native IDE** — Claude Code, GitHub Copilot, and Codex CLI are all supported today
@@ -56,7 +56,7 @@ The Tester doesn't read your code and form an opinion about it. It executes the 
 
 `CLAUDE.md` and `AGENTS.md` are generated unconditionally by `j.init` — every agent gets a real, populated root-level context file, not just a pointer. If either file already exists as a genuine pre-existing user file, Jenga leaves it untouched, writes its own copy as `J-CLAUDE.md` / `J-AGENTS.md`, and inserts a short reference line into the original.
 
-`.github/copilot-instructions.md` follows a different path, because Copilot needs it before `j.init` may ever run: `npm install` triggers `scripts/postinstall.js`, which writes it unconditionally and non-interactively, so `j.<name>` routing (the bare `/<name>` form still resolves too, as a permanent alias) works from a consumer's very first Copilot command. A later `jenga init` run refines that same file using the project's actual chosen skills path.
+`.github/copilot-instructions.md` follows a different path, because Copilot needs it before `j.init` may ever run: `npm install` triggers `scripts/postinstall.js`, which writes it unconditionally and non-interactively, so `j.<name>` (and `/j-<name>`) routing works from a consumer's very first Copilot command. A later `jenga init` run refines that same file using the project's actual chosen skills path.
 
 ---
 
@@ -171,6 +171,8 @@ Or clone directly:
 
 Run `j.status` at any time to see where the project stands.
 
+📖 **New to Jenga AI?** The [Intro Guide](https://samwelmunga.github.io/jenga-npm/getting-started.html) walks through the philosophy, the three pillars (role separation, board hierarchy, session continuity), and a full first-15-minutes walkthrough for both a new project and an existing codebase — mirrored at [project/.wiki/intro-guide.md](project/.wiki/intro-guide.md).
+
 **CLI maintenance commands.** The `jenga` binary installed alongside the package (`jenga --help`)
 also ships a couple of maintenance commands, distinct from the in-agent `j.<name>` skills above:
 
@@ -196,26 +198,64 @@ The framework is platform-agnostic by design — any AI agent that can read Mark
 
 ## Skills (Slash Commands)
 
-Skills live in `.agents/skills/<name>/SKILL.md`. Invoke with `j.<name>` in your AI agent or IDE's command interface — the old bare `/<name>` form also keeps working permanently as an alias. A handful of the most foundational commands:
+Skills live in `.agents/skills/<name>/SKILL.md`. Invoke with `j.<name>` in your AI agent or IDE's command interface, or with its `/j-<name>` directory form (e.g. `/j-init`) — both resolve to the same skill. A handful of the most foundational commands:
 
-> ⚠️ **Command collision with a host tool?** Some host tools ship their own built-in command that can
-> shadow one of Jenga's — e.g. GitHub Copilot's own built-in `/init`, which could silently shadow
-> Jenga's `/init` skill. Every skill (except `init`, already handled) has a collision-safe `/j-<name>`
-> directory-twin form — e.g. `/j-init` — that always resolves to the genuine Jenga skill regardless of
-> what else is installed. This is separate from the `j.<name>` prefix form above: it's a real duplicate
-> directory under a distinct name, not a routing alias, generated and kept in sync via
-> `scripts/generate-j-alias.sh`. If a `j.<name>` or bare `/<name>` command isn't behaving as
-> documented, try its `/j-<name>` form instead.
+> **Why `/j-<name>`, not a bare `/<name>`?** Some host tools ship their own built-in command that can
+> shadow one of Jenga's — e.g. GitHub Copilot's own built-in `/init`. Jenga sidesteps this
+> structurally: every skill ships under the collision-safe `/j-<name>` directory name, so there's no
+> bare `/<name>` directory for a host tool's own command to collide with in the first place.
+> `/j-<name>` isn't a fallback to reach for when something misbehaves — it's simply how the skill is
+> named. Two permanent exceptions ship bare-only, with no `/j-<name>` form: `/jenga` and
+> `/jenga-permission-level` — deliberately excluded, since neither is the kind of skill a host tool's
+> own built-in command is likely to name-collide with.
 
 | Command | Description |
 |---|---|
 | `j.init` | Scaffold project directories, `workflow.json`, `PROJECT_SUMMARY.md`, initial git commit |
-| `j.jenga` | Interactive-by-default board orchestrator — bare shows a picker + confirmation tree, `<ids>` scopes and confirms, `*` runs fully automated with no prompts |
 | `j.todo` | Add missions to `project/todo.md` linked to epics and stories |
 | `j.do` | Execute tasks from the scrum board, drives the Developer agent through the full loop |
 | `j.status` | Print a full scrum board overview — epics, stories, tasks, rapports, queue depth |
 
+### `/jenga` — one command, several behaviors
+
+`/jenga` doesn't fit the table above, because what it does depends entirely on how it's invoked:
+
+| Invocation | Behavior |
+|---|---|
+| `/jenga` (bare) | Renders a picker + confirmation tree before scoping the run |
+| `/jenga <ids>` | Resolves an explicit fuzzy-ID scope and confirms it |
+| `/jenga *` | Fully automated — decomposes, queues, and executes everything eligible, no prompts |
+| `/jenga <free text>` | Natural-language dispatch — matches a single skill directly, or proposes a multi-skill [playbook](#playbooks) when the request spans more than one |
+
+It's one of the two permanent bare-only exceptions noted above — there's no `/j-jenga` form.
+
 > 📖 **Full skill list** (planning, review, committing & maintenance commands): [Docs site](https://samwelmunga.github.io/jenga-npm/skills.html) — mirrored at [project/.wiki/documentation.md#skills](project/.wiki/documentation.md#skills)
+
+---
+
+## Playbooks
+
+Some workflows are always the same sequence of skills — plan it, build it, commit it. A **playbook** is a named, pre-defined chain of skills, run and confirmed as one unit instead of typed out one skill at a time.
+
+Invoke one by describing what you want in plain language to `j.jenga` — it proposes a matching playbook as a numbered, editable list before anything runs — or name one directly:
+
+```
+j.playbook idea-to-committed
+```
+
+which resolves to:
+
+```
+j.brainstorm → j.todo → j.do → j.commit
+```
+
+Calling `j.playbook` with no id prints a table of every available playbook (id, name, and steps) instead of resolving one.
+
+Nothing executes until you confirm the chain, and any step can be unchecked first. `brainstorm-to-mirror` extends the same chain through `j.dev-done` and `j.mirror-public` for a full public release; `understand-then-ship` prepends `j.uncharted` investigation for unfamiliar code before running the same pipeline.
+
+When a step forwards its result into the next one, that value has a declared **output type** (a plain string, a list of board IDs, a list of files) so the chain can be validated before it runs. See [Getting Started](https://samwelmunga.github.io/jenga-npm/getting-started.html#how-playbooks-know-what-a-skill-produces) for how that works.
+
+Want your own recurring chain? `j.playbook-new` walks you through authoring one — id, name, description, keywords, examples, and an ordered list of skills — writes it to `project/.playbooks/<id>.json` alongside the built-in ones, and self-validates the result before reporting success.
 
 ---
 

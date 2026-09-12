@@ -161,6 +161,8 @@ Skills are slash commands stored in `.agents/skills/<name>/SKILL.md`. Invoke the
 
 **Description:** Initialize a new project with the standard directory structure, `PROJECT_SUMMARY.md`, `workflow.json`, git repo, and gitignore.
 
+**Output type:** `any`
+
 **When to use:** At the start of a new project — run this first, before anything else.
 
 **What it creates:**
@@ -184,6 +186,8 @@ Skills are slash commands stored in `.agents/skills/<name>/SKILL.md`. Invoke the
 
 **Description:** Scaffold the project using the [JengaBasePlate](https://github.com/samwelmunga/JengaBasePlate.git) boilerplate.
 
+**Output type:** `any`
+
 **When to use:** When you want a full project starter (not just the workflow scaffold). JBP includes opinionated structure for apps built with Jenga AI from the start.
 
 **Example:**
@@ -199,6 +203,8 @@ Skills are slash commands stored in `.agents/skills/<name>/SKILL.md`. Invoke the
 #### `/jenga`
 
 **Description:** Interactive-by-default board orchestrator with a fully automated escape hatch. Bare `/jenga` renders a picker and confirmation tree before scoping the run; `/jenga <ids>` resolves an explicit fuzzy-ID scope and confirms it; `/jenga *` reproduces the original zero-prompt behavior — decomposing any unbroken Epics into Stories, any unbroken Stories into Tasks, queuing all unqueued Tasks into `todo.md`, then executing every eligible item with no user prompts — until the board is fully started.
+
+**Output type:** `id_list`
 
 **When to use:** When you want to review and scope a run before it executes (bare `/jenga` or `/jenga <ids>`), or hands-free execution across the whole board via `/jenga *`. Jenga will read existing epics, decompose anything incomplete, and start executing.
 
@@ -221,6 +227,8 @@ Skills are slash commands stored in `.agents/skills/<name>/SKILL.md`. Invoke the
 
 **Description:** Define or expand project Epics in `PROJECT_SUMMARY.md`. Use at the start of a project to establish its foundation, or whenever adding major new features.
 
+**Output type:** `any`
+
 **When to use:** When starting a new project, or when the user wants to plan a significant new area of work (new epic). Triggers on phrases like "new feature area", "big change", "expand the project".
 
 **Delegates to:** Scrum Master
@@ -241,6 +249,8 @@ You: "It's a habit tracker with social sharing and analytics"
 #### `/brainstorm`
 
 **Description:** Focused planning session with the Scrum Master before committing anything to the board. Explores, challenges, and refines ideas in dialogue.
+
+**Output type:** `any`
 
 **When to use:** Before you know exactly what you want to build. The Scrum Master will ask pointed questions, surface assumptions, and propose board mappings — but nothing is written until you say so.
 
@@ -264,6 +274,8 @@ Scrum Master: "That touches E02 (Social Sharing). Should this be a new story
 #### `/deep-dive`
 
 **Description:** Multi-phase investigation workflow. Orchestrates information gathering, brainstorming, scrutiny, and solution assessment to produce a refined output document.
+
+**Output type:** `any`
 
 **When to use:** When a request needs thorough analysis before committing to a plan. Trigger phrases: "deep dive", "investigate thoroughly", "think this through properly", "analyze this in depth".
 
@@ -291,6 +303,8 @@ Phase 4 — Produces: docs/auth-strategy-analysis.md with recommendation
 
 **Description:** Add missions to `project/todo.md`, optionally linking them to epics and stories. Loops until done, then optionally executes the list.
 
+**Output type:** `any`
+
 **When to use:** When you have specific features or tasks to add and want them tracked on the board.
 
 **Delegates to:** Scrum Master
@@ -312,6 +326,8 @@ Done. Run /do now? → Yes
 
 **Description:** Capture a new mission mid-flow. Fits it into the Epic/Story structure and lets you choose to implement now or defer.
 
+**Output type:** `any`
+
 **When to use:** When you think of something important while working on something else and don't want to lose the idea but also don't want to derail your current work.
 
 **Delegates to:** Scrum Master
@@ -331,6 +347,8 @@ Done. Run /do now? → Yes
 #### `/spinoff`
 
 **Description:** Capture a diverging topic mid-conversation. Collects context, optionally runs `/brainstorm` for prerequisites, saves a `/todo` entry, and returns focus to the primary thread.
+
+**Output type:** `any`
 
 **When to use:** When the conversation drifts to a new topic and you want to preserve both threads without losing context.
 
@@ -357,6 +375,8 @@ You: "Oh, we should also think about caching strategy"
 
 **Description:** Execute tasks from the scrum board. Reads from `project/todo.md`, resolves each entry to its full board context, and drives the Developer agent through implementation with the correct sender object and communication contract.
 
+**Output type:** `any`
+
 **When to use:** When you're ready to implement. The main execution skill.
 
 **Delegates to:** Developer
@@ -376,6 +396,8 @@ You: "Oh, we should also think about caching strategy"
 #### `/dooo`
 
 **Description:** Parallel execution orchestrator. Calls `/do` to start implementations via sub-agents, then loops back to identify and offer parallelisable tasks until the user selects "Done".
+
+**Output type:** `any`
 
 **When to use:** When multiple independent tasks are ready and you want to run them simultaneously to save time.
 
@@ -398,6 +420,8 @@ You: "Oh, we should also think about caching strategy"
 
 **Description:** Rework a previous implementation by commit SHA or Epic/Story number. Includes scope assessment, plan, and doc updates.
 
+**Output type:** `any`
+
 **When to use:** When previously completed work needs to be revisited — incorrect implementation, changed requirements, or a bug found post-release.
 
 **Delegates to:** Scrum Master (scope assessment), Developer (implementation)
@@ -417,6 +441,8 @@ You: "Oh, we should also think about caching strategy"
 #### `/error`
 
 **Description:** Guided troubleshooting flow that gathers context about an error — where it occurs, what was attempted, what went wrong, and what was expected.
+
+**Output type:** `any`
 
 **When to use:** When something is broken and you need structured help diagnosing it.
 
@@ -444,6 +470,8 @@ You: "Oh, we should also think about caching strategy"
 #### `/train`
 
 **Description:** Scaffold and run ML training jobs. Use `new <type> <job-name>` to scaffold from a template, or `run <job-dir>` to execute the validate → train pipeline.
+
+**Output type:** `any`
 
 **When to use:** When working on machine learning components within a Jenga AI project.
 
@@ -473,6 +501,8 @@ You: "Oh, we should also think about caching strategy"
 
 **Description:** Print a human-readable summary of the entire scrum board — all epics, stories, and tasks with their statuses — plus any open rapports and unprocessed queue triggers.
 
+**Output type:** `text`
+
 **When to use:** Any time you want a quick overview without reading raw board files.
 
 **Example:**
@@ -496,6 +526,8 @@ Queue depth: 2 triggers pending
 
 **Description:** Check project status across `PROJECT_SUMMARY.md`, epics, and stories to determine what should be done next. Reports "All done!" if everything is complete.
 
+**Output type:** `any`
+
 **When to use:** At the start of a session when you want the system to orient you and pick up where you left off.
 
 **Example:**
@@ -511,6 +543,8 @@ Queue depth: 2 triggers pending
 #### `/proceed`
 
 **Description:** Review project progress by checking epics and stories, optionally consulting `PROJECT_SUMMARY.md` and `WARP.md`, then continue executing the project plan.
+
+**Output type:** `any`
 
 **When to use:** Similar to `/continue` but more assertive — it reviews progress and immediately resumes execution rather than just recommending.
 
@@ -530,6 +564,8 @@ Queue depth: 2 triggers pending
 #### `/reconcile`
 
 **Description:** Reconcile the scrum board with actual implementation state. Cross-checks every task's board status against git history and worktrees, merges orphaned worktree branches, demotes unimplemented "Done" items, and promotes secretly-implemented items.
+
+**Output type:** `text`
 
 **When to use:** When the board feels out of sync — after a big merge session, when tasks were completed outside the normal workflow, or when `todo.md` has grown stale.
 
@@ -563,6 +599,8 @@ Queue depth: 2 triggers pending
 
 **Description:** Commit implemented epic, story, or task work using the EST naming convention. Also handles user-action prerequisites and new-epic boundaries.
 
+**Output type:** `any`
+
 **When to use:** After completing any EST work item — when you want a structured, trackable commit message.
 
 **Naming convention:** `epic(E##): <title>`, `story(E##_S##): <title>`, `task(E##_S##_T##): <title>`
@@ -581,6 +619,8 @@ Queue depth: 2 triggers pending
 
 **Description:** Approve and commit the current work, then continue to the next task. Shortcut that chains `/commit` followed by `/continue`.
 
+**Output type:** `any`
+
 **When to use:** When you've reviewed the work and want to quickly commit and move on.
 
 **Example:**
@@ -596,6 +636,8 @@ Queue depth: 2 triggers pending
 #### `/distribute`
 
 **Description:** Propagate the latest workflow changes to all consumer projects registered in `.jenga_paths`.
+
+**Output type:** `any`
 
 **What it is:** `/distribute` treats this repository as the master copy of your Jenga AI workflow and each registered consumer project as a versioned snapshot of that workflow. You maintain one shared set of skills, agents, hooks, scripts, and supporting files here, then `/distribute` copies them into each consumer project's configured `target_dir`, updates projects that are behind, and protects projects that are already ahead on `workflow_version`.
 
@@ -638,6 +680,8 @@ Release type? → minor
 
 **Description:** Generate or update a documentation file by resolving a target path to a clear documentation objective before writing.
 
+**Output type:** `any`
+
 **When to use:** When you want to create or refresh a specific doc file — "update the docs", "write docs for X", "the README is stale", "generate documentation for X". Pass an optional target path (e.g. `/doc docs/API.md`); omit it to default to `README.md`.
 
 **Example:**
@@ -655,6 +699,8 @@ Release type? → minor
 #### `/doc-sync`
 
 **Description:** Compare the current state of a project with its documentation and update any documentation that is stale, incomplete, or missing.
+
+**Output type:** `any`
 
 **When to use:** When documentation may have drifted from the implementation, or after a big implementation sprint.
 
@@ -679,6 +725,8 @@ Release type? → minor
 #### `/skillify`
 
 **Description:** Refactor one or more existing skills into a cleaner structure — extracting hardcoded content into asset files, moving deterministic steps into scripts, and simplifying the skill body.
+
+**Output type:** `any`
 
 **When to use:** When a skill has grown large, contains hardcoded templates, or has multi-step logic that would be more reliable as a shell script.
 
@@ -705,6 +753,8 @@ Release type? → minor
 
 **Description:** Intelligently route a prompt to the best-matching skill. Reads available skills, matches semantically and by keyword, enriches the prompt with board context, then invokes the matched skill.
 
+**Output type:** `any`
+
 **When to use:** When you know what you want to do but don't know which skill handles it — or just want to describe your intent naturally.
 
 **Example:**
@@ -723,6 +773,8 @@ Release type? → minor
 #### `/improve`
 
 **Description:** Analyse a codebase and produce a structured improvement plan toward a defined goal.
+
+**Output type:** `any`
 
 **When to use:** When you want a systematic review of what can be improved in a specific area (performance, maintainability, test coverage, etc.).
 
@@ -744,6 +796,8 @@ Release type? → minor
 
 **Description:** Analyse example files against a target goal and produce a structured evaluation rapport.
 
+**Output type:** `any`
+
 **When to use:** When you have example outputs or implementations and want them measured against a defined quality goal.
 
 **Inputs:** A filled `eval_invokation_template.yml` with a `goal` and a list of `paths` to example files.
@@ -764,6 +818,8 @@ paths: [examples/auth-error.json, examples/rate-limit-error.json]
 #### `/examplify`
 
 **Description:** Explain a concept, feature, use case, or pattern with grounded examples — what it is, why it exists, how it works, when to use it, and a concrete example.
+
+**Output type:** `any`
 
 **When to use:** When you want to understand something (a pattern, a Jenga AI concept, a piece of code) without digging through docs.
 
@@ -787,6 +843,8 @@ Example: [before/after showing agent call with and without sender object]
 
 **Description:** List all available skills with a short description of each.
 
+**Output type:** `any`
+
 **When to use:** When you want a quick overview of what skills are available in the current project.
 
 **Example:**
@@ -804,6 +862,8 @@ Example: [before/after showing agent call with and without sender object]
 #### `/customize-cloud-agent`
 
 **Description:** Configure the Copilot cloud agent environment — `copilot-setup-steps.yml`, preinstalled tools and dependencies, runners, and settings.
+
+**Output type:** `any`
 
 **When to use:** When you need to configure the GitHub Copilot coding agent's cloud environment for your project.
 

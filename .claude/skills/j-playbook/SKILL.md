@@ -32,6 +32,18 @@ this skill is id resolution (step 1 below).
 
 ## Instructions
 
+0. **Bare invocation — no id given.** If this skill was invoked with no argument at all, do not
+   proceed to step 1. Instead:
+   a. Invoke `skills/jenga/scripts/load-playbooks.sh` with no arguments (its existing full-catalog
+      mode — the same call step 1's `"not_found"` branch already uses for its "did you mean"
+      nudge; no new script is introduced for this).
+   b. Render the returned JSON array as a Markdown table with columns `Id`, `Name`, `Source`, and
+      `Steps`. For the `Source` column, render `Built-in` for a `source` field of `"builtin"` and
+      `Project` for `"project"`. For the `Steps` column, render each entry in that playbook's
+      `steps` array joined by `->`: a bare string step renders as itself; a StepObject step
+      renders its `skill` or `playbook` field value (whichever is present).
+   c. Halt this invocation after rendering the table — do not proceed to step 1.
+
 1. **Resolve the id** — invoke `skills/jenga/scripts/load-playbooks.sh lookup "<id>"`
    (`E53_S06_T02`), where `<id>` is this skill's argument. Branch on the returned `status` field:
 

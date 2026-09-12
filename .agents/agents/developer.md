@@ -225,6 +225,21 @@ This list is fixed and verbatim across both this file and `agents/tester.md` —
 
 You do not run tests. Before calling the tester agent, **write an execution summary** to `project/documentation/summaries/<E##_S##_T##>-summary.md` using `$([ -f templates/EXECUTION_SUMMARY_TEMPLATE.md ] && echo templates/EXECUTION_SUMMARY_TEMPLATE.md || echo node_modules/@jenga-ai/agent/templates/EXECUTION_SUMMARY_TEMPLATE.md)`. Fill in all sections — what was implemented, files changed, commit SHAs, acceptance criteria coverage, and any concerns for the tester. This step is mandatory before every tester invocation.
 
+### Tester Concurrency Cap (acquire before invoking, release on every exit)
+
+Before any in-session tester invocation described below, acquire a tester slot:
+
+```
+scripts/acquire-concurrency-slot.sh tester <task_id> <orchestrator_session_id>
+```
+
+`<orchestrator_session_id>` is the same session-id concept already used elsewhere in this file to name `project/queue/concurrency-slots-<session_id>.json` and `project/queue/handoffs/developer-<session_id>-<task_id>.json` — thread through that same value rather than inventing a new one (when this developer session is itself the orchestrating session, that is simply the current session's `session_id`).
+
+- **On success (exit 0):** proceed with the tester invocation exactly as documented below, in-session. When the tester's session ends — regardless of outcome (`Passed`, `Failed`, `Rejected`, or `"error"`) — call `scripts/release-concurrency-slot.sh tester <task_id> <orchestrator_session_id>`. Every exit path out of the tester invocation releases the slot; a failed or errored tester run is not an exception to this.
+- **On a full cap (non-zero exit):** do not poll or wait for a slot to free up — the "Prohibited — ad-hoc completion-polling loops" rule (Session Start — Queue Processing, above) applies here without exception; a retry loop waiting on the counter file would be exactly the kind of ad-hoc polling that rule forbids. Instead, skip the in-session tester invocation entirely and fall back to the existing mandatory mechanism in "Session End — Handoff" above: write `project/queue/handoffs/developer-<session_id>-<task_id>.json` in its documented shape (`status: "implementation_complete"`), unchanged from what's already specified there. A later tester session picks up the work via `on_session_end.sh`'s normal routing to the tester queue. A routine cap-full condition is expected flow control, not a blocking issue — do not write a problem rapport for it.
+
+This gate governs only the in-session tester call described in this section; it does not change worktree creation, commit discipline, or the handoff file's shape.
+
 When you reach a meaningful milestone within a task where verification is appropriate — or when the task is complete — call the tester agent. Before invoking the tester, compose a short `resolved_context` digest of what you already resolved during implementation — which files you touched and why, which acceptance criteria map to which changes, any conventions or precedent you followed — and persist it by calling `bash "$([ -f scripts/write-context-digest.sh ] && echo scripts/write-context-digest.sh || echo node_modules/@jenga-ai/agent/scripts/write-context-digest.sh)" --agent developer --session-id <session_id> --task-id <task_id>` with that content (stays under the ~100-line/few-hundred-token cap defined in `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s `resolved_context` subsection; the script rejects oversized input rather than truncating it). Place the script's returned path in the sender object's `resolved_context` field. Always pass the following sender object when invoking the tester:
 
 ```json
@@ -245,7 +260,7 @@ When you reach a meaningful milestone within a task where verification is approp
 
 All fields must be present except `resolved_context`, which is optional. This digest is a starting point only, never a restriction: the tester may and should still read the full execution summary, the diff itself, or any other source file when the digest doesn't cover what it needs. In addition to the sender object, include a short plain-text implementation summary: what was implemented, which files changed, and any known edge cases or concerns. Reference the execution summary at `project/documentation/summaries/<E##_S##_T##>-summary.md` for full detail.
 
-Wait for the tester's response before continuing. If the tester returns `"failed"` or `"error"`, address the findings before proceeding.
+Wait for the tester's response before continuing. If the tester returns `"failed"` or `"error"`, address the findings before proceeding. Either way — pass, fail, or error — release the tester slot now per "Tester Concurrency Cap" above; the slot must not remain held once the tester's response has been received.
 
 ---
 

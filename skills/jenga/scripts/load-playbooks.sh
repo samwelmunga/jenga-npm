@@ -256,10 +256,30 @@
 # ---------------------------------------------------------------------------
 # DATA SOURCE
 # ---------------------------------------------------------------------------
-# Every `*.json` file directly under `skills/jenga/playbooks/`, EXCLUDING `schema.json` (which
-# documents the required shape — see that file's own header — but is never itself a playbook
-# entry). See `schema.json` for the authoritative field list; this script's validation below is
-# a runtime mirror of that schema, not a substitute for it.
+# TWO directories are scanned and MERGED into one catalog (E53_S09_T01):
+#
+#   1. `skills/jenga/playbooks/` (BUILTIN, framework-owned) — every `*.json` file directly under
+#      it, EXCLUDING `schema.json` (which documents the required shape — see that file's own
+#      header — but is never itself a playbook entry). See `schema.json` for the authoritative
+#      field list; this script's validation below is a runtime mirror of that schema, not a
+#      substitute for it.
+#
+#   2. `project/.playbooks/` (PROJECT, project-owned, resolved relative to this script's own
+#      `PROJECT_DIR` — see its resolution below, including the `JENGA_PLAYBOOKS_TEST_ROOT`
+#      override) — every `*.json` file directly under it, same `schema.json`-exclusion rule.
+#      A MISSING `project/.playbooks/` directory is a SILENT NO-OP: no warning, no error — a
+#      project with no custom playbooks is the common case, not an exceptional one.
+#
+# The builtin directory is scanned and locally validated FIRST, in full, before the project
+# directory is touched at all. Every project-directory file is then checked for an `id` collision
+# against the already-loaded builtin set: if a project playbook's basename/id matches a
+# SUCCESSFULLY LOADED builtin playbook's id, the project playbook is SKIPPED — a stderr warning
+# names BOTH the project file's path and the builtin file's path — and the builtin entry is the
+# one that survives into the catalog. This is never a silent override in either direction. A
+# project playbook whose id does not collide goes through the exact same local validation,
+# composition resolution, and `forward_from`/`conditional` validation as a builtin one — no
+# separate or weaker path. See "VALIDATION / SKIP CONDITIONS" below for the exact collision rule,
+# and "OUTPUT SCHEMA" for the `source` field every catalog entry gains as a result of this merge.
 #
 # ---------------------------------------------------------------------------
 # USAGE
@@ -273,8 +293,10 @@
 #
 # Additive sibling mode (E53_S06_T02), for direct-by-id lookup (`j.playbook <id>`,
 # `skills/j-playbook/SKILL.md`, E53_S06_T03) — runs the SAME PASS 1-3 pipeline as the no-argument
-# mode above (never a separate implementation), then emits exactly ONE JSON object to stdout
-# (never the full catalog, never warnings about OTHER playbooks) and exits 0:
+# mode above (never a separate implementation), against the SAME MERGED builtin+project catalog
+# (E53_S09_T01) — an id may resolve from either source, and the returned `playbook` object carries
+# the same `source` field a full-catalog entry would — then emits exactly ONE JSON object to
+# stdout (never the full catalog, never warnings about OTHER playbooks) and exits 0:
 #
 #   {"status": "valid", "playbook": {...}}    -- <id> resolved to a real file and passed every
 #                                                 validation pass; `playbook` has the same field
@@ -306,6 +328,11 @@
 # asserting on candidate sets never targets the repository root. Never set this variable in a real
 # invocation.
 #
+# Because the SAME override also becomes the PROJECT root (see "DATA SOURCE" above), a fixture
+# wanting project-local playbook coverage places its files at
+# `<value>/project/.playbooks/<id>.json` — no second, project-specific test variable is
+# introduced (E53_S09_T01, `tests/load-playbooks-project-source.bats`).
+#
 # ---------------------------------------------------------------------------
 # OUTPUT SCHEMA
 # ---------------------------------------------------------------------------
@@ -318,10 +345,15 @@
 #       "description": "...",
 #       "keywords":    ["..."],
 #       "examples":    ["..."],
-#       "steps":       ["j-brainstorm", "j-todo", "j-do", "j-dev-done", "j-mirror-public"]
+#       "steps":       ["j-brainstorm", "j-todo", "j-do", "j-dev-done", "j-mirror-public"],
+#       "source":      "builtin"
 #     },
 #     ...
 #   ]
+#
+# `source` (E53_S09_T01) is `"builtin"` for anything loaded from `skills/jenga/playbooks/`, or
+# `"project"` for anything loaded from `project/.playbooks/` — present on EVERY catalog entry,
+# regardless of source, additive to the pre-existing field shape.
 #
 # `steps` entries are emitted exactly as validated/resolved: a depth-1 bare string stays a bare
 # string; a depth-1 StepObject is emitted as an object carrying only its recognized fields (`skill`
@@ -347,6 +379,11 @@
 #   - `id` does not equal the filename's basename without `.json`          -> skipped
 #     (prevents a playbook's identity from silently drifting from its
 #     file location)
+#   - A PROJECT playbook's id/basename matches a SUCCESSFULLY LOADED
+#     BUILTIN playbook's id                                    (E53_S09_T01) -> project playbook
+#     skipped; stderr warning names BOTH the project file's path and the
+#     builtin file's path; the builtin entry is the one that survives into
+#     the catalog (never a silent override in either direction)
 #   - A `steps` entry is neither a string nor an object, or is an empty
 #     string                                                               -> skipped
 #   - A StepObject step carries BOTH `skill` and `playbook`, or NEITHER    -> skipped
@@ -466,6 +503,12 @@ project_dir = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else None
 # --- E53_S06_T02: additive `lookup <id>` CLI mode --------------------------------------------
 mode = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else "catalog"
 lookup_id = sys.argv[5] if len(sys.argv) > 5 else ""
+
+# --- E53_S09_T01: project-local playbook source directory ------------------------------------
+# `project/.playbooks/`, resolved relative to the SAME project_dir already threaded above (which
+# already honors JENGA_PLAYBOOKS_TEST_ROOT -- see header "TESTING OVERRIDE"). A missing directory
+# is a silent no-op, not an error -- see header "DATA SOURCE".
+project_playbooks_dir = os.path.join(project_dir, "project", ".playbooks") if project_dir else None
 
 REQUIRED_FIELDS = ["id", "name", "description", "keywords", "examples", "steps"]
 LIST_FIELDS = ["keywords", "examples", "steps"]
@@ -673,7 +716,7 @@ def extract_output_types(skill_md_path):
 
 
 try:
-    filenames = sorted(
+    builtin_filenames = sorted(
         f for f in os.listdir(playbooks_dir)
         if f.endswith(".json") and f != "schema.json"
     )
@@ -681,17 +724,41 @@ except OSError as e:
     print(f"Error: could not list {playbooks_dir}: {e}", file=sys.stderr)
     sys.exit(2)
 
+# --- E53_S09_T01: project-local playbook directory listing --------------------------------------
+# Non-fatal, unlike the builtin listing above: a missing directory (the common case -- most
+# projects have no custom playbooks) or an OSError while listing it both yield an empty list,
+# never a setup-error exit. See header "DATA SOURCE".
+project_filenames = []
+if project_playbooks_dir and os.path.isdir(project_playbooks_dir):
+    try:
+        project_filenames = sorted(
+            f for f in os.listdir(project_playbooks_dir)
+            if f.endswith(".json") and f != "schema.json"
+        )
+    except OSError as e:
+        print(f"Warning: could not list {project_playbooks_dir}: {e}", file=sys.stderr)
+        project_filenames = []
+
 # --- PASS 1: local (non-composition) validation -------------------------------------------------
 # Builds `raw[pid]` for every playbook that passes purely local validation (parse/shape/id-match/
 # step-shape/skill-existence) -- independent of any OTHER playbook. Composition resolution (PASS
 # 2, below) needs this map fully populated before it can recurse into a referenced playbook.
+#
+# As of E53_S09_T01, `raw`/`order` are populated from BOTH the builtin and project directories
+# (builtin first, in full, then project -- see the id-collision check below). Every playbook run
+# through `process_playbook_file()` carries a `source` tag ("builtin" or "project") in its `raw`
+# entry, which flows through unchanged into the final catalog entry (PASS 3, below).
 raw = {}
-order = []  # preserves the original sorted-filename order for stable catalog/warning output
+order = []  # preserves the original builtin-then-project, sorted-within-source filename order
 
-for filename in filenames:
-    path = os.path.join(playbooks_dir, filename)
-    basename = filename[: -len(".json")]
 
+def process_playbook_file(path, basename, source):
+    """Runs PASS 1's local validation for one playbook file (identical logic regardless of which
+    source directory it came from -- see header 'DATA SOURCE': project playbooks go through the
+    exact same pipeline as builtin ones, never a separate or weaker path). On success, populates
+    `raw[basename]` (tagged with `source`) and appends to `order`. On failure, prints the same
+    stderr warning this script has always printed for that condition and records the reason in
+    `skip_reasons[basename]`."""
     try:
         with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
@@ -699,20 +766,20 @@ for filename in filenames:
         reason = f"is not valid JSON ({e})"
         print(f"Warning: {path} {reason} — skipped", file=sys.stderr)
         skip_reasons[basename] = reason
-        continue
+        return
 
     if not isinstance(data, dict):
         reason = "is not a JSON object"
         print(f"Warning: {path} {reason} — skipped", file=sys.stderr)
         skip_reasons[basename] = reason
-        continue
+        return
 
     missing = [f for f in REQUIRED_FIELDS if f not in data]
     if missing:
         reason = f"missing required field(s) {missing}"
         print(f"Warning: {path} {reason} — skipped", file=sys.stderr)
         skip_reasons[basename] = reason
-        continue
+        return
 
     bad_list = [
         f for f in LIST_FIELDS
@@ -722,7 +789,7 @@ for filename in filenames:
         reason = f"field(s) {bad_list} must be non-empty lists"
         print(f"Warning: {path} {reason} — skipped", file=sys.stderr)
         skip_reasons[basename] = reason
-        continue
+        return
 
     if data["id"] != basename:
         reason = (
@@ -730,7 +797,7 @@ for filename in filenames:
         )
         print(f"Warning: {path} {reason} — skipped", file=sys.stderr)
         skip_reasons[basename] = reason
-        continue
+        return
 
     # --- E53_S03_T01: StepObject shape acceptance + bare-string back-compat ---
     normalized_steps = []
@@ -745,7 +812,7 @@ for filename in filenames:
     if step_error:
         print(f"Warning: {path} {step_error} — skipped", file=sys.stderr)
         skip_reasons[basename] = step_error
-        continue
+        return
 
     # Existence check for skill-type steps only (bare string, or StepObject with `skill`).
     # `playbook`-type steps have no single skill name (step_skill_name returns None for them) and
@@ -766,10 +833,11 @@ for filename in filenames:
         )
         print(f"Warning: {path} {reason} — playbook skipped", file=sys.stderr)
         skip_reasons[basename] = reason
-        continue
+        return
 
     raw[basename] = {
         "path": path,
+        "source": source,
         "name": data["name"],
         "description": data["description"],
         "keywords": data["keywords"],
@@ -777,6 +845,36 @@ for filename in filenames:
         "normalized_steps": normalized_steps,
     }
     order.append(basename)
+
+
+for filename in builtin_filenames:
+    path = os.path.join(playbooks_dir, filename)
+    basename = filename[: -len(".json")]
+    process_playbook_file(path, basename, "builtin")
+
+# --- E53_S09_T01: project playbooks, id-collision check against the already-loaded builtin set --
+# Runs AFTER the builtin loop above has fully populated `raw`, so a collision check here is
+# checking against every SUCCESSFULLY LOADED builtin playbook -- never a builtin file that itself
+# failed validation (that basename never made it into `raw`, so a project playbook may legitimately
+# claim that id instead). See header 'VALIDATION / SKIP CONDITIONS'.
+for filename in project_filenames:
+    path = os.path.join(project_playbooks_dir, filename)
+    basename = filename[: -len(".json")]
+
+    if basename in raw:
+        builtin_path = raw[basename]["path"]
+        reason = (
+            f"id '{basename}' collides with a built-in playbook already loaded from "
+            f"{builtin_path} — the built-in entry is retained, never silently overridden"
+        )
+        print(
+            f"Warning: {path} {reason} (project file skipped)",
+            file=sys.stderr,
+        )
+        skip_reasons[basename] = reason
+        continue
+
+    process_playbook_file(path, basename, "project")
 
 # --- PASS 2: composition resolution (E53_S05_T01) ------------------------------------------------
 # Recursively resolves `{"playbook": "<id>"}` steps into a flat, fully-spliced step list. See
@@ -987,6 +1085,7 @@ for pid in order:
         "keywords": entry["keywords"],
         "examples": entry["examples"],
         "steps": flattened_steps,
+        "source": entry["source"],
     })
 
 # --- E53_S06_T02: `lookup <id>` mode output ------------------------------------------------------
@@ -1001,11 +1100,11 @@ if mode == "lookup":
     if result is None:
         if lookup_id in skip_reasons:
             result = {"status": "invalid", "reason": skip_reasons[lookup_id]}
-        elif f"{lookup_id}.json" in filenames:
-            # Defensive fallback -- should not normally happen, since every basename scanned
-            # into `filenames` either lands in `catalog` (valid) or `skip_reasons` (invalid) by
-            # this point. Guards against ever silently reporting `not_found` for a file that
-            # does exist on disk.
+        elif f"{lookup_id}.json" in builtin_filenames or f"{lookup_id}.json" in project_filenames:
+            # Defensive fallback -- should not normally happen, since every basename scanned from
+            # EITHER source directory (E53_S09_T01) either lands in `catalog` (valid) or
+            # `skip_reasons` (invalid) by this point. Guards against ever silently reporting
+            # `not_found` for a file that does exist on disk.
             result = {
                 "status": "invalid",
                 "reason": "failed validation (no specific reason captured)",

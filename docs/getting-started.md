@@ -21,11 +21,15 @@ For the full command reference, see [reference.md](./reference.md).
    - [Board Hierarchy](#board-hierarchy)
    - [Session Continuity](#session-continuity)
 3. [Your First 15 Minutes](#3-your-first-15-minutes)
+   - [New Project](#new-project)
+   - [Starting From an Existing Project](#starting-from-an-existing-project)
 4. [Common Patterns](#4-common-patterns)
    - [Building a Feature End-to-End](#building-a-feature-end-to-end)
    - [Working Across Sessions](#working-across-sessions)
    - [Capturing Mid-Flow Ideas](#capturing-mid-flow-ideas)
    - [Running Tasks in Parallel](#running-tasks-in-parallel)
+   - [Chaining Workflows with Playbooks](#chaining-workflows-with-playbooks)
+   - [How Playbooks Know What a Skill Produces](#how-playbooks-know-what-a-skill-produces)
 5. [Where to Go Next](#5-where-to-go-next)
 
 ---
@@ -102,7 +106,12 @@ When a session ends, `on_session_end.sh` writes triggers for the Scrum Master. W
 
 ## 3. Your First 15 Minutes
 
-Here's how to go from an empty board to your first task executing.
+Here's how to go from an empty board to your first task executing. Where you start depends on what you're bringing to Jenga AI:
+
+- **Nothing built yet** — follow [New Project](#new-project) below.
+- **An existing codebase, with no board history** — skip to [Starting From an Existing Project](#starting-from-an-existing-project). You'll still end up with the same Epic → Story → Task board; the first step is investigation instead of planning from scratch.
+
+### New Project
 
 **Step 1 — Define your project (2–5 min)**
 
@@ -150,9 +159,35 @@ Select a task. The Developer agent takes over: creates a worktree, writes a plan
 
 See what passed, what's pending, and what (if anything) needs attention. If a task failed, the Tester will have written a rapport explaining why — the Scrum Master will surface it next session.
 
+Two more ways to verify a fresh task actually did what it was supposed to:
+- **See it running** — `/run` launches the app itself so you can exercise the new behavior directly, not just trust a green test result.
+- **Something looks wrong** — `/error` is guided troubleshooting: it gathers what broke, what you expected, and where it happens, then turns that into a fix task instead of leaving you to debug from scratch.
+
 ---
 
 That's the core loop. Everything else is a variation on it.
+
+---
+
+### Starting From an Existing Project
+
+If you're adopting Jenga AI into a codebase that already exists — no board, no Epics, nothing tracked yet — don't start with `/brainstorm`. Start with `/uncharted`, which is built specifically for code with no board provenance.
+
+**Step 1 — Onboard the whole codebase**
+
+```
+/uncharted onboard .
+```
+
+By default this is conversational: it discovers the project's subsystems and walks you through confirming what each one does, writing `[ARCH]`-tagged board items as you go. It never touches your application code — its entire output is board files, an analysis rapport, and (in conversational mode) knowledge-graph nodes. If you'd rather skip the back-and-forth and get an automated best-guess pass instead, use `/uncharted onboard . --legacy`.
+
+**Step 2 — Or onboard just one part**, if you'd rather understand a single file or directory before committing to a whole-codebase pass:
+
+```
+/uncharted segment path/to/directory
+```
+
+**Step 3 — From here, you're on the New Project path.** Once the board reflects what already exists, add your next feature the same way a new project would — pick up at [Step 2](#new-project) above with `/todo`.
 
 ---
 
@@ -165,7 +200,7 @@ That's the core loop. Everything else is a variation on it.
 The full cycle from idea to tested, committed code:
 
 ```
-/brainstorm → /todo → /do → /status
+/brainstorm → /todo → /do → /commit
 ```
 
 Use `/brainstorm` before every non-trivial feature. It takes a few minutes and prevents scope creep, missing acceptance criteria, and mid-implementation surprises.
@@ -217,6 +252,52 @@ This orchestrates parallel sub-agents, each running a separate task simultaneous
 
 ---
 
+### Chaining Workflows with Playbooks
+
+Some workflows are always the same sequence of skills — plan it, build it, commit it. A **playbook** is a named, pre-defined chain of skills you can invoke as one unit instead of typing each skill separately.
+
+Playbooks surface two ways:
+
+- **Describe what you want, in plain language, to `/jenga`.** If your request spans more than one skill and matches a playbook, `/jenga` proposes the whole chain — a numbered, editable list — before running anything.
+- **Name a playbook directly**, once you know which one you want:
+  ```
+  /playbook idea-to-committed
+  ```
+
+Either way, nothing executes until you confirm the chain, and you can uncheck individual steps before accepting.
+
+**A basic example.** `idea-to-committed` chains exactly the core loop from [Your First 15 Minutes](#3-your-first-15-minutes) into a single call:
+
+```
+/playbook idea-to-committed
+```
+
+resolves to:
+
+```
+/brainstorm → /todo → /do → /commit
+```
+
+— planning, board capture, implementation, and a commit, run as one confirmed sequence. Two related playbooks build on the same idea: `brainstorm-to-mirror` extends it through `/dev-done` and `/mirror-public` for a full public release, and `understand-then-ship` prepends `/uncharted` investigation before running the same pipeline — useful when the feature touches code you don't fully understand yet.
+
+---
+
+### How Playbooks Know What a Skill Produces
+
+A playbook step can name an earlier step as its `forward_from` source, so its output feeds directly into the next step's input. For that to work safely, something needs to know what *shape* of value each step actually produces — a plain string, a list of board IDs, a list of files — before the chain runs, not partway through it.
+
+That's what a skill's **output type** declares. The vocabulary is small and fixed:
+
+- **`text`** — a plain string
+- **`id_list`** — a list of board IDs
+- **`file_list`** — a list of file paths
+
+**Adoption is partial by design.** Most skills don't declare an output type, and that's expected — it doesn't mean the skill is broken or unfinished. Only a skill that declares one can be named as a `forward_from` source in a playbook step; skills with no declared type simply aren't eligible for that role.
+
+This section explains the concept once. For which specific skills declare an output type today, see the **Skills** section of the [full reference](./documentation.md#skills) — each skill's entry there shows its Output type, or `any` if it doesn't declare one.
+
+---
+
 ## 5. Where to Go Next
 
 **Full reference:** [reference.md](./reference.md) — every skill, every agent, MCP tools, hooks, and the inter-agent communication contract.
@@ -233,6 +314,8 @@ This orchestrates parallel sub-agents, each running a separate task simultaneous
 | Sync documentation with code | `/doc-sync` |
 | Clean up a messy board | `/reconcile` |
 | Propagate workflow changes | `/distribute` |
+| Bring an existing codebase onto the board | `/uncharted` |
+| Run a pre-defined multi-skill chain | `/jenga` (plain language) or `/playbook <id>` |
 
 **When something breaks:** `/error` — guided troubleshooting that gathers context, diagnoses the issue, and creates a fix task.
 

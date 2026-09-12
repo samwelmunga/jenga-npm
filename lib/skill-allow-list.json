@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-10T17:03:15.911Z",
-  "skill_count": 37,
+  "generated_at": "2026-09-12T00:46:44.049Z",
+  "skill_count": 39,
   "skills": [
     "brainstorm",
     "btw",
@@ -8,6 +8,7 @@
     "close-story",
     "commit",
     "continue",
+    "dashboard",
     "deep-dive",
     "dev-done",
     "distribute",
@@ -28,6 +29,7 @@
     "lgtm",
     "pi-plan",
     "playbook",
+    "playbook-new",
     "proceed",
     "publish",
     "reconcile",
