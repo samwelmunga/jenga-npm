@@ -153,6 +153,9 @@ tasks:
 # The whole reason this class went unnoticed for 36 files is that nothing ran
 # the validator across the board. This test does, so a regression fails here.
 @test "every board file in this repo passes validation" {
+  # project/board/ is blocklisted by .publicignore, so it is absent in the
+  # public mirror. Nothing to validate there -- skip rather than fail.
+  [ -d "$REPO_ROOT/project/board" ] || skip "no project/board in this repo (public mirror)"
   run bash -c "bash '$VALIDATE' '$REPO_ROOT'/project/board/epics/*.md '$REPO_ROOT'/project/board/stories/*.md '$REPO_ROOT'/project/board/tasks/*.md 2>&1 | grep '❌' | grep -v 'unknown frontmatter field' | grep -v 'docs must be a YAML list'"
   # grep exits 1 when it finds nothing -- which is the passing condition here.
   # The two exclusions above are pre-existing, non-YAML schema violations
