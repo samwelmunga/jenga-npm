@@ -23,6 +23,15 @@
  * below excludes all Pending items from the result set — it will therefore
  * always render empty/collapsed as a natural consequence of that filter, not
  * a special case. Pending items still appear in the Backlog tab (E06_S05_T01).
+ *
+ * A second, independent exclusion (E06_S05_T03) applies only to the
+ * `Deployed to Prod` column: an item whose `date_deployed_prod` frontmatter
+ * field (written by `scripts/mark-deployed.sh`, see E51_S05) is more than 10
+ * days before today is excluded from the Active Sprint view entirely. An
+ * item with no `date_deployed_prod` set is treated as not stale (rendered
+ * normally) rather than excluded — see `isStaleDeployedProd` below. This
+ * filter is scoped to this module only; the Backlog tab (E06_S05_T01) does
+ * not import kanbanColumns.js and is unaffected.
  */
 
 export const KANBAN_COLUMNS = [
@@ -46,6 +55,54 @@ export const KANBAN_COLUMNS = [
 function columnKeyForStatus(status) {
   const col = KANBAN_COLUMNS.find((c) => c.statuses.includes(status))
   return col ? col.key : null
+}
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+/**
+ * Returns true when `dateValue` (the `date_deployed_prod` frontmatter field,
+ * as written by `scripts/mark-deployed.sh`) is more than `thresholdDays` days
+ * before `now`. A missing/falsy `dateValue` is treated as NOT stale (returns
+ * false) per the story's AC — an item that hasn't had the field written yet
+ * (or predates E51_S05) should still render normally rather than be silently
+ * excluded.
+ *
+ * `dateValue` arrives as EITHER a plain ISO 8601 `YYYY-MM-DD` string OR a
+ * native JS `Date` instance, depending on the caller: gray-matter/js-yaml
+ * (the parser `parseBoard()` actually uses in production) auto-parses an
+ * unquoted `YYYY-MM-DD` YAML scalar into a `Date` object, not a string — a
+ * real defect found by the tester (see
+ * project/rapports/problems/E06_S05_T03-stale-filter-fails-on-real-gray-matter-date-objects.md):
+ * the original string-only implementation silently fell into the
+ * "unparseable → not stale" fail-safe for every real board item, making the
+ * filter a no-op in production. Both shapes are handled explicitly here
+ * rather than assuming one.
+ *
+ * Dates are compared at UTC-midnight granularity (both `dateValue` and `now`
+ * are floored to their UTC calendar day) so the result doesn't depend on the
+ * server's local timezone, and a same-day boundary can't tip over from an
+ * unrelated few hours of clock drift.
+ *
+ * @param {string|Date|undefined|null} dateValue - ISO 8601 `YYYY-MM-DD` string, or a Date (as produced by gray-matter/js-yaml)
+ * @param {number} [thresholdDays=10]
+ * @param {Date} [now=new Date()]
+ * @returns {boolean}
+ */
+export function isStaleDeployedProd(dateValue, thresholdDays = 10, now = new Date()) {
+  if (!dateValue) return false
+
+  const parsed = dateValue instanceof Date ? dateValue : new Date(`${dateValue}T00:00:00Z`)
+  if (Number.isNaN(parsed.getTime())) return false
+
+  // Floor `parsed` to its own UTC calendar day too — defensive against a
+  // Date instance that isn't exactly UTC midnight (gray-matter/js-yaml's
+  // default schema does produce UTC midnight for a bare `YYYY-MM-DD` scalar,
+  // but flooring here costs nothing and removes the assumption).
+  const parsedUTC = Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate())
+  const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  const diffDays = (todayUTC - parsedUTC) / MS_PER_DAY
+
+  return diffDays > thresholdDays
 }
 
 /**
@@ -73,9 +130,12 @@ export function flattenBoardItems(epics) {
 /**
  * Buckets a flat item list into the kanban columns above. Items with
  * `status: Pending` are excluded entirely (Active Sprint tab's own filter —
- * they still appear in the Backlog tab). Items whose status doesn't map to
- * any known column (unrecognized/non-schema status) are silently dropped
- * from the view rather than crashing the render.
+ * they still appear in the Backlog tab). Items with `status: Deployed to
+ * Prod` whose `date_deployed_prod` is more than 10 days old are also
+ * excluded entirely (E06_S05_T03) — an absent `date_deployed_prod` is not
+ * treated as stale. Items whose status doesn't map to any known column
+ * (unrecognized/non-schema status) are silently dropped from the view
+ * rather than crashing the render.
  * @param {Object[]} items
  * @returns {Object.<string, Object[]>} column key -> items in that column
  */
@@ -85,6 +145,7 @@ export function bucketIntoColumns(items) {
 
   for (const item of items || []) {
     if (item.status === 'Pending') continue
+    if (item.status === 'Deployed to Prod' && isStaleDeployedProd(item.date_deployed_prod)) continue
     const key = columnKeyForStatus(item.status)
     if (key) buckets[key].push(item)
   }

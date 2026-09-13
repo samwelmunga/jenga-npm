@@ -23,8 +23,18 @@
 # Either step failing hard-fails this script (set -e) with no output file
 # written — matching capture-snapshot.js's own "no partial artifact" contract.
 #
+# --data-url (E47_S04_T04): remote-delivery mode for sessions that cannot
+#   assume a shared filesystem with the user. After the existing build/copy
+#   step, base64-encodes the final output HTML and prints a
+#   `data:text/html;base64,...` URI to stdout, additive to (not a replacement
+#   for) the existing "Snapshot dashboard written to: <path>" line. Refuses
+#   (hard-fail, no partial output) if the post-encoding size exceeds
+#   MAX_DATA_URL_BYTES (default ~25MB, overridable via
+#   SNAPSHOT_MAX_DATA_URL_BYTES for testing/tuning). No effect at all on the
+#   plain-path behavior when --data-url is not passed.
+#
 # Usage:
-#   snapshot.sh [--out <path>] [--project-root <path>]
+#   snapshot.sh [--out <path>] [--project-root <path>] [--data-url]
 #
 #   --out <path>            Final output HTML path. Default: <cwd>/jenga.html
 #                            (cwd at invocation time, i.e. the invoking project's
@@ -34,16 +44,30 @@
 #                            --project-root override. Default: let
 #                            capture-snapshot.js resolve it from the invocation
 #                            cwd (no override).
+#   --data-url               After writing --out, also print a
+#                            `data:text/html;base64,...` URI of the same file
+#                            to stdout. Refuses (non-zero exit, no URI printed)
+#                            if the base64-encoded size exceeds
+#                            SNAPSHOT_MAX_DATA_URL_BYTES (default ~25MB).
 # -----------------------------------------------------------------------------
 
 set -euo pipefail
 
+# Post-encoding size threshold for --data-url, in bytes. Overridable via
+# SNAPSHOT_MAX_DATA_URL_BYTES (used by tests to exercise the refusal path
+# without generating a real multi-megabyte fixture).
+MAX_DATA_URL_BYTES="${SNAPSHOT_MAX_DATA_URL_BYTES:-26214400}" # 25 * 1024 * 1024
+
 usage() {
   cat <<'EOF'
-Usage: snapshot.sh [--out <path>] [--project-root <path>]
+Usage: snapshot.sh [--out <path>] [--project-root <path>] [--data-url]
 
   --out <path>            Final output HTML path. Default: <cwd>/jenga.html
   --project-root <path>   Forwarded to capture-snapshot.js's --project-root override.
+  --data-url              Also print a data:text/html;base64,... URI of the
+                          output file to stdout (for remote/no-shared-filesystem
+                          sessions). Refuses if the encoded size exceeds ~25MB
+                          (SNAPSHOT_MAX_DATA_URL_BYTES).
 EOF
 }
 
@@ -54,6 +78,7 @@ die() {
 
 OUT_PATH=""
 PROJECT_ROOT_ARG=""
+DATA_URL=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -66,6 +91,10 @@ while [ $# -gt 0 ]; do
       [ $# -ge 2 ] || die "--project-root requires a value"
       PROJECT_ROOT_ARG="$2"
       shift 2
+      ;;
+    --data-url)
+      DATA_URL=1
+      shift
       ;;
     -h|--help)
       usage
@@ -162,3 +191,29 @@ mkdir -p "$(dirname "$OUT_PATH")"
 cp "$SNAPSHOT_DIST/index.html" "$OUT_PATH"
 
 echo "Snapshot dashboard written to: $OUT_PATH"
+
+# -----------------------------------------------------------------------------
+# Step 4 — optional data: URL delivery mode (E47_S04_T04).
+#
+# For sessions that cannot assume a shared filesystem with the user (e.g. a
+# remote/cloud agent session), base64-encode the just-written output file and
+# print a data:text/html;base64,... URI any browser can open directly — no
+# hosting, third-party service, or git round-trip required. Additive to the
+# plain-path report above, never a replacement for it.
+# -----------------------------------------------------------------------------
+
+if [ "$DATA_URL" -eq 1 ]; then
+  [ -f "$OUT_PATH" ] || die "--data-url: expected output file missing at $OUT_PATH after write step"
+
+  # `base64` without newline-wrapping flags (GNU's -w0 and BSD/macOS's -b are
+  # not portable across each other), then strip embedded newlines with `tr` --
+  # portable everywhere and avoids the platform-specific flag entirely.
+  ENCODED="$(base64 <"$OUT_PATH" | tr -d '\n')"
+  ENCODED_BYTES="${#ENCODED}"
+
+  if [ "$ENCODED_BYTES" -gt "$MAX_DATA_URL_BYTES" ]; then
+    die "--data-url: encoded size ($ENCODED_BYTES bytes) for $OUT_PATH exceeds the $MAX_DATA_URL_BYTES-byte threshold; refusing to emit an oversized data: URI. Use the plain --out file path instead, or raise SNAPSHOT_MAX_DATA_URL_BYTES if you understand the tradeoff."
+  fi
+
+  echo "data:text/html;base64,${ENCODED}"
+fi

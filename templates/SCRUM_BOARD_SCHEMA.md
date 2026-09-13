@@ -209,7 +209,7 @@ crucial_declined_note:           # required when crucial_declined: true; free-te
 
 ### Runtime-written task fields
 
-These four fields are **not authored by hand**. They are appended to a task's frontmatter after execution and are absent from any task that has not yet run. They are listed here so that tooling — in particular `scripts/validate-board.sh` — recognises them as valid rather than unknown.
+These five fields are **not authored by hand**. They are appended to a task's frontmatter after execution and are absent from any task that has not yet run. They are listed here so that tooling — in particular `scripts/validate-board.sh` — recognises them as valid rather than unknown.
 
 | Field | Written by | Meaning |
 |---|---|---|
@@ -217,8 +217,9 @@ These four fields are **not authored by hand**. They are appended to a task's fr
 | `actual_lines_delta` | `/close-story` | Net line delta for the task, from the same extraction |
 | `scope_divergence_flag` | `/close-story` | Set when actual diff stats exceed the thresholds that justified the assigned `execution_scope` |
 | `divergence_flag` | `/do` | Set to `true` by the intent-vs-diff check when a `needs_docs: false` task touched unregistered files |
+| `date_deployed_prod` | `scripts/mark-deployed.sh` | ISO 8601 date (e.g. `2026-09-12`) written in the same locked write window a ticket is set to `status: Deployed to Prod`. Never written on a `Deployed to Stage`-only write. |
 
-All four are advisory and non-blocking — they record evidence for later review and never change a task's Passed/Failed outcome.
+All five are advisory and non-blocking — they record evidence for later review and never change a task's Passed/Failed outcome. `date_deployed_prod` is allow-listed in `scripts/validate-board.sh`'s `ALLOWED_KEYS` for `epic`, `story`, and `task` (a new `DEPLOY_KEYS` group), even though in practice only tasks (and occasionally stories) are expected to ever carry it — `mark-deployed.sh` only ever writes it to a task/story board file, never to an epic.
 
 > `task_changed_files` is **not** a frontmatter field despite the similar name. It lives in the bundle manifest at `project/queue/bundle-<E##_S##>.json`, keyed by task ID.
 

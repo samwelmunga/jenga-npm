@@ -1,6 +1,6 @@
 ---
 name: j.dashboard
-description: Launch the local Jenga project dashboard (API + UI) by delegating to project/app's existing npm scripts — no new server or build logic. Also supports --snapshot, a single self-contained HTML export with a point-in-time data snapshot baked in.
+description: Launch the local Jenga project dashboard (API + UI) by delegating to project/app's existing npm scripts — no new server or build logic. Also supports --snapshot, a single self-contained HTML export with a point-in-time data snapshot baked in, and --data-url for remote/no-shared-filesystem delivery.
 keywords:
   - dashboard
   - launch dashboard
@@ -16,6 +16,7 @@ examples:
   - "start the dashboard on port 4000"
   - "export a snapshot of the dashboard"
   - "j.dashboard --snapshot"
+  - "j.dashboard --snapshot --data-url"
 ---
 
 # Dashboard — Local Launch & Single-File Snapshot Export
@@ -34,7 +35,11 @@ implementation lives in the two `.cjs` scripts this skill wraps; do not duplicat
 `/v1/history`, and `/v1/architecture` responses once, bakes that data inline into the UI build, and
 inlines all JS/CSS into a single, fully self-contained HTML file (default `jenga.html`) — viewable
 via `file://` with no running server, so it can be handed to someone on another device. It does not
-start a long-running server and does not open a browser; it is a one-shot export.
+start a long-running server and does not open a browser; it is a one-shot export. `--data-url`
+(E47_S04_T04) is an additive delivery mode for `--snapshot`: since the output file is already fully
+self-contained, it can be base64-encoded into a `data:text/html;base64,...` URI that any browser can
+open directly — no shared filesystem, hosting, or git round-trip needed, which matters when the
+agent is running remotely (e.g. a cloud/remote session) and cannot hand the user a local path.
 
 ## Instructions
 
@@ -78,7 +83,7 @@ start a long-running server and does not open a browser; it is a one-shot export
      underlying npm script itself fails (e.g. `--port` validation, missing dependencies).
 
 4. **`--snapshot` form — run the snapshot script.** Invoke
-   `skills/j-dashboard/scripts/snapshot.sh [--out <path>]`. The script:
+   `skills/j-dashboard/scripts/snapshot.sh [--out <path>] [--data-url]`. The script:
    - Captures the invoking directory (before any internal `cd`) so data is resolved against the
      *invoking* project, per `E47_S02`'s generalized data-source resolution — not this repo's own
      data, unless that happens to be the invoking project.
@@ -92,8 +97,25 @@ start a long-running server and does not open a browser; it is a one-shot export
      overridable via `--out <path>`).
    - Fails loudly with no output file written if either the capture or bundling step fails — never
      a partial/broken snapshot.
+   - With `--data-url` (E47_S04_T04): after the copy step above, base64-encodes the output file and
+     also prints a `data:text/html;base64,...` URI to stdout — additive to, not a replacement for,
+     the plain-path report. Refuses (non-zero exit, no URI printed) if the encoded size exceeds a
+     ~25MB threshold rather than silently emitting an oversized URI.
 
-5. **Relay output.** Print the script's stdout/stderr back to the user as-is — do not
+5. **Relay output — pick the delivery mode based on filesystem sharing.** Before invoking the
+   snapshot script, judge whether this session can assume a shared filesystem with the user:
+   - **Shared filesystem (default — a normal local/IDE session):** run `snapshot.sh [--out <path>]`
+     without `--data-url` and report the local file path exactly as the script prints it (e.g.
+     "Snapshot dashboard written to: <path>") — the user can open that path directly.
+   - **No shared filesystem assumable (e.g. a remote/cloud agent session):** run `snapshot.sh
+     [--out <path>] --data-url` and relay the printed `data:text/html;base64,...` URI back to the
+     user as a **clickable markdown link**, e.g. `[Open dashboard snapshot](data:text/html;base64,...)`,
+     since the user has no way to fetch the file's bytes off this session's filesystem otherwise. If
+     the script refuses due to the size threshold, relay that refusal message as-is rather than
+     falling back to the plain path silently — the plain path is not reachable by this user in this
+     scenario either.
+
+   In both cases, print the rest of the script's stdout/stderr back to the user as-is — do not
    reinterpret, summarize away, or suppress error output from the underlying scripts; they already
    produce user-facing messages (e.g. "Dashboard API running at http://localhost:3001",
    "⚠ Warning: Dashboard server does not appear to be running at ...", "Snapshot dashboard written

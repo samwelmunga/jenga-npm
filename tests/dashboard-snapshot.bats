@@ -266,3 +266,67 @@ EOF
   assert_output_contains "Snapshot dashboard written to: $INVOKE_DIR/relative-result.html"
   [ -f "$INVOKE_DIR/relative-result.html" ]
 }
+
+# -----------------------------------------------------------------------------
+# --data-url delivery mode (E47_S04_T04)
+# -----------------------------------------------------------------------------
+
+@test "--data-url prints a data:text/html;base64 URI in addition to the plain path" {
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html' --data-url"
+  [ "$status" -eq 0 ]
+  assert_output_contains "Snapshot dashboard written to: $BATS_TEST_TMPDIR/result.html"
+  assert_output_contains "data:text/html;base64,"
+}
+
+@test "--data-url payload round-trips to the exact same bytes as the on-disk output file" {
+  OUT_FILE="$BATS_TEST_TMPDIR/roundtrip-result.html"
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$OUT_FILE' --data-url"
+  [ "$status" -eq 0 ]
+
+  # Extract the data: URI line, strip the prefix, decode it, and compare
+  # against the actual on-disk file byte-for-byte.
+  uri_line="$(printf '%s\n' "$output" | grep '^data:text/html;base64,')"
+  [ -n "$uri_line" ]
+  encoded="${uri_line#data:text/html;base64,}"
+  echo -n "$encoded" | base64 -d > "$BATS_TEST_TMPDIR/decoded.html" 2>/dev/null \
+    || echo -n "$encoded" | base64 --decode > "$BATS_TEST_TMPDIR/decoded.html"
+
+  run diff "$OUT_FILE" "$BATS_TEST_TMPDIR/decoded.html"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "--data-url without --out still encodes the default jenga.html correctly" {
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --data-url"
+  [ "$status" -eq 0 ]
+  assert_output_contains "data:text/html;base64,"
+  [ -f "$INVOKE_DIR/jenga.html" ]
+}
+
+@test "--data-url refuses with no URI printed when the encoded size exceeds the threshold" {
+  # Force a near-zero threshold via the testability override documented in
+  # snapshot.sh's header -- avoids generating a real multi-megabyte fixture
+  # just to exercise the refusal branch.
+  run bash -c "cd '$INVOKE_DIR' && SNAPSHOT_MAX_DATA_URL_BYTES=1 '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/oversized-result.html' --data-url"
+  [ "$status" -ne 0 ]
+  assert_output_contains "exceeds the 1-byte threshold"
+  # No data: URI should ever be printed on the refusal path.
+  ! printf '%s\n' "$output" | grep -q '^data:text/html;base64,'
+  # The plain --out file itself is still written by Step 3, which runs
+  # before the --data-url branch -- only the URI emission is refused, not
+  # the whole snapshot. Confirm that distinction explicitly.
+  [ -f "$BATS_TEST_TMPDIR/oversized-result.html" ]
+}
+
+@test "--data-url is not implied by default -- plain invocation prints no data: URI" {
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/no-data-url-result.html'"
+  [ "$status" -eq 0 ]
+  ! printf '%s\n' "$output" | grep -q '^data:text/html;base64,'
+}
+
+@test "bundling step failure with --data-url still hard-fails before any data: URI is printed" {
+  run bash -c "cd '$INVOKE_DIR' && FAKE_BUILD_FAIL=1 '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/fail-result.html' --data-url"
+  [ "$status" -ne 0 ]
+  [ ! -f "$BATS_TEST_TMPDIR/fail-result.html" ]
+  ! printf '%s\n' "$output" | grep -q '^data:text/html;base64,'
+}

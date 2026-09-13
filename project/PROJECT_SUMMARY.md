@@ -69,8 +69,8 @@ Jenga AI supports two distribution paths:
 - **E43** — Shell Test Harness — Make the Declared bats Suite Real *(Pending)*
 - **E44** — Execution Control — /break, Stop-the-Line & Scoped Run Status *(Pending)*
 - **E45** — Interactive Scope Selection for /jenga *(Pending)*
-- **E47** — Distributable Project Dashboard *(Passed — rolled up 2026-09-12, see below)*
-- **E48** — Agent Dashboard — Live AI Item Review *(Pending — unblocked, E47 now Passed)*
+- **E47** — Distributable Project Dashboard *(Passed with remarks — re-rolled up 2026-09-12 after `E47_S04`'s reopen for `E47_S04_T04` (`data:` URL delivery mode for `j.dashboard --snapshot`) also landed `Passed with remarks`; one non-blocking remark carried forward, `CLAUDE.md`'s `j.dashboard` row doesn't yet mention `--data-url`)*
+- **E48** — Agent Dashboard — Live AI Item Review *(Pending — unblocked when E47's productization DoD was satisfied 2026-09-12; E47's subsequent `E47_S04` reopen/re-close for a remote-delivery addendum doesn't touch that DoD, so the unblock still holds)*
 - **E50** — Skill Namespace Prefix & Anti-Masquerading Allow-List *(In Progress — reopened 2026-09-09 to hard-break the bare `/<name>` form, see below)*
 - **E53** — Jenga Natural-Language Dispatcher & Playbooks *(Passed with remarks — Playbooks v2 shipped 2026-09-09, epic rolled up 2026-09-10, see below)*
 - **E57** — Train Skill Deprecation & Package Extraction *(Pending — supersedes E19, see below)*
@@ -171,17 +171,41 @@ days old from the Active Sprint view only (`E06_S05_T03`, `task` scope, `depends
 that field doesn't exist yet). `E06_S05` gained `depends_on: E51_S05` at the story level for the
 same reason.
 
-`E51_S05` ("Deployed to Stage"/"Deployed to Prod" Consumption, `Pending`) gained a new Acceptance
+`E51_S05` ("Deployed to Stage"/"Deployed to Prod" Consumption) gained a new Acceptance
 Criterion in the same session: when its reactive script sets a ticket to `Deployed to Prod`, it
 must also write `date_deployed_prod: <ISO 8601 date>` to that ticket's frontmatter in the same
 write — including adding the field to `templates/SCRUM_BOARD_SCHEMA.md` and
 `scripts/validate-board.sh`'s `ALLOWED_KEYS`. This is the source of `E06_S05`'s new dependency.
 Because the change touches the schema/frontmatter-contract heuristic, the user confirmed a
 `crucial_level: advisory` tier in-session (`crucial_set_by: user`) — purely additive (new
-allow-listed key, no existing validation logic changed), so no escalation to `gated`. No task was
-created under `E51_S05` for this AC bullet; the story remains otherwise undecomposed pending its
-own future `/do`-driven breakdown pass, per this repo's normal deferred-decomposition convention
-(see `E53`'s "Mechanics note" for the same pattern applied elsewhere).
+allow-listed key, no existing validation logic changed), so no escalation to `gated`.
+
+**Update 2026-09-12 (later same day) — decomposed and rolled up `Passed with remarks`:** `E51_S05`
+was subsequently decomposed into three tasks (discovery/marker script, ticket-matching/write script
++ schema support, and wiring into `/self-sync`/`/status` + verification) and all three passed
+tester verification (`T01`/`T02` clean `Passed`, `T03` `Passed with remarks`). The story rolled up
+to `Passed with remarks`: everything works end-to-end against a realistic hand-tagged fixture, but
+the one DoD line requiring verification against a **real** public stage/prod tag remains open — no
+such tag has been pushed to `jenga-npm` yet, and `E51_S04_T02` (real end-to-end tagging
+verification) is still `Pending`. See
+`project/rapports/problems/E51_S05_T03-real-tag-verification-still-open.md`. This does not block
+`E06_S05_T03`, whose `depends_on: E51_S05` is satisfied by `E51_S05` reaching a terminal status —
+`date_deployed_prod` is fully implemented and verified, which is all `E06_S05_T03` consumes.
+
+**`E06_S05` rolled up `Passed` 2026-09-13.** All three tasks (`T01`, `T02`, `T03`) reached terminal
+`Passed`. `T03` briefly went `Failed` mid-flight: the tester's first verification pass found
+`isStaleDeployedProd()` fail-safe-passing every real `Deployed to Prod` item silently, because
+gray-matter/js-yaml parses unquoted `YYYY-MM-DD` frontmatter into a native `Date` object rather than
+the plain string the function assumed, so its string-template date reconstruction produced an
+unparseable value and fell into the "not stale" fail-safe on every real item (see
+`project/rapports/problems/E06_S05_T03-stale-filter-fails-on-real-gray-matter-date-objects.md`). The
+developer reworked `isStaleDeployedProd()` to branch on `Date` vs. string input, and the tester
+independently re-verified against genuine scratch board fixtures round-tripped through the real
+`parseBoard()`/`bucketIntoColumns()` pipeline (not just the developer's hand-constructed fixture
+script) before re-passing `T03`. Since the defect was caught and fully resolved pre-merge with no
+surviving caveat, the story rolled up to a clean `Passed` rather than `Passed with remarks`. Parent
+epic `E06` does not roll up yet — `E06_S04` (Collapsible Epic → Story → Task Tree) is still
+`Pending`.
 
 ## Launch & Discoverability (E41)
 E26 built the npm distribution pipeline and is marked `Passed`, but `jenga-agent` was never actually published — `npm view jenga-agent` returns 404, so there is no registry page and no download history. Every discovery-driving field is simultaneously empty or wrong: `package.json` carries `keywords: []`, `author: ""`, and no `repository`, `homepage`, `bugs`, or `engines`; the description contains none of the terms the target audience searches for; and the public-facing `samwelmunga/jenga-npm` repo has an empty description, zero topics, and no homepage, while the richer `samwelmunga/Jenga AI` repo is private. E41 fixes the whole in-our-control discovery surface and ships the first public release at **v1.1.0**. Keywords are deliberately broad rather than brand-led — `npm search jenga` is already contested by an unrelated z-index library and Equity Bank's payments API, and nobody searches the brand yet — spanning generic agentic terms, multi-vendor ecosystem terms (`claude-code`, `copilot`, `codex`, `agents-md`), and category terms (`scrum`, `project-management`). The multi-vendor claim is grounded in real architecture: `postinstall.js` mirrors `skills/` and `agents/` into both `.claude/` and `.agents/`, and `lib/commands/init.js` already generates `.github/copilot-instructions.md`. One gap is closed first, and it turned out to be a `/init` setup miss rather than a Codex-only one: `/init` scaffolds no root-level agent context file at all — Copilot alone gets a pointer via `.github/copilot-instructions.md`, while Claude Code and Codex receive a fully populated framework their agents cannot see. S04 makes `/init` generate `CLAUDE.md` and `AGENTS.md` from a single source template (this repo's own `CLAUDE.md` and `AGENT.md` have already drifted by one skills-table row, so two hand-maintained copies is a proven failure mode), writes the Jenga copy as `J-<NAME>.md` with a reference inserted into the user's existing file when one is already present, and adds `codex` to the `agentTarget` enum — so no shipped keyword outruns the implementation. S05 gates on S01–S04 and publishes; S06 tracks off-npm channels while stating plainly that npm ranking is driven by download volume that only off-registry attention produces. Separately flagged for `/reconcile`: E16 is marked `Done` with every DoD checkbox unticked despite the work appearing implemented — since resolved by the 2026-09-07 reopening below, which also added a new DoD line rather than only reticking the old ones, so the checkbox/implementation gap this flag pointed at is now folded into E16's own tracked scope instead of living only in this paragraph.
