@@ -1,0 +1,24 @@
+{
+  "id": "improve-to-commit",
+  "name": "Improve to Committed",
+  "description": "Analyzes existing code to produce a structured improvement plan, captures that plan on the board, implements it, and commits -- the improvement-first counterpart to idea-to-committed.",
+  "keywords": [
+    "improve to commit",
+    "improvement plan",
+    "analyze then build",
+    "plan improvements",
+    "harden and commit"
+  ],
+  "examples": [
+    "analyze this codebase for improvements, put them on the board, build them, and commit",
+    "produce an improvement plan and take it all the way through to a commit",
+    "find what should be improved here, break it into tasks, implement them, and commit the work",
+    "walk an improvement plan through planning, implementation, and committing"
+  ],
+  "steps": [
+    "j-improve",
+    "j-todo",
+    "j-do",
+    "j-commit"
+  ]
+}

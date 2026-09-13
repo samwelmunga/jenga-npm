@@ -12,28 +12,30 @@ export default function DependencyTable({ dependencies }) {
   }
 
   return (
-    <table className="dep-table">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Version</th>
-          <th>Type</th>
-        </tr>
-      </thead>
-      <tbody>
-        {dependencies.map((dep, i) => {
-          const cfg = TYPE_CONFIG[dep.type] || { label: dep.type || '—', badgeClass: '' }
-          return (
-            <tr key={dep.name || i}>
-              <td className="dep-name">{dep.name}</td>
-              <td className="dep-version">{dep.version || '—'}</td>
-              <td>
-                <span className={`dep-badge ${cfg.badgeClass}`}>{cfg.label}</span>
-              </td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
+    <div className="dep-table-wrap">
+      <table className="dep-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Version</th>
+            <th>Type</th>
+          </tr>
+        </thead>
+        <tbody>
+          {dependencies.map((dep, i) => {
+            const cfg = TYPE_CONFIG[dep.type] || { label: dep.type || '—', badgeClass: '' }
+            return (
+              <tr key={dep.name || i}>
+                <td className="dep-name">{dep.name}</td>
+                <td className="dep-version">{dep.version || '—'}</td>
+                <td>
+                  <span className={`dep-badge ${cfg.badgeClass}`}>{cfg.label}</span>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
   )
 }

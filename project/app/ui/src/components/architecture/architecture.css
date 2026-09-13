@@ -1,4 +1,8 @@
 /* ── Architecture Tab ─────────────────────────────────────────────────────── */
+.architecture-tab {
+  overflow-x: hidden;
+}
+
 .architecture-tab h2 {
   margin-bottom: 1rem;
 }
@@ -104,11 +108,16 @@
   color: #4b5563;
 }
 
+.dep-table-wrap {
+  overflow-x: auto;
+}
+
 /* SAD Map */
 .sad-map-scroll {
   width: 100%;
   min-height: 320px;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--border, #e2e8f0);
   border-radius: 8px;
   background: var(--bg-secondary, #f8fafc);
@@ -123,4 +132,31 @@
 .sad-empty {
   color: var(--text-muted, #94a3b8);
   font-style: italic;
+}
+
+/* ── Mobile (<= 480px, matches tokens.css --breakpoint-mobile) ───────────────── */
+@media (max-width: 480px) {
+  .architecture-tab {
+    padding-bottom: var(--space-sm);
+  }
+
+  .arch-section {
+    margin-bottom: var(--space-lg);
+  }
+
+  .arch-section h3 {
+    padding-bottom: var(--space-xs);
+  }
+
+  .tech-grid {
+    gap: var(--space-sm);
+  }
+
+  .tech-card {
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .sad-map-scroll {
+    min-height: 180px;
+  }
 }

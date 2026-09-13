@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import EpicCard from './EpicCard'
+import EntryDetailPanel from '../history/EntryDetailPanel'
 import './board.css'
 
 // Canonical status values per templates/SCRUM_BOARD_SCHEMA.md's Status Values
@@ -57,6 +58,14 @@ function filterEpics(epics, selected) {
 
 export default function BoardView({ epics }) {
   const [selectedStatuses, setSelectedStatuses] = useState(() => new Set())
+  // E06_S07_T01 — lifted selection state for the content overlay, mirroring
+  // HistoryTab.jsx's lifted `selected` useState pattern. `kind` distinguishes
+  // epic/story/task so EntryDetailPanel can render the right label/meta.
+  const [selected, setSelected] = useState(null)
+
+  function onSelect(kind, item) {
+    setSelected({ type: 'board_item', kind, ...item })
+  }
 
   if (!epics || epics.length === 0) {
     return <div className="empty-state">No board data available.</div>
@@ -93,8 +102,9 @@ export default function BoardView({ epics }) {
       {visibleEpics.length === 0 ? (
         <div className="empty-state">No items match the selected filters.</div>
       ) : (
-        visibleEpics.map(epic => <EpicCard key={epic.id} epic={epic} />)
+        visibleEpics.map(epic => <EpicCard key={epic.id} epic={epic} onSelect={onSelect} />)
       )}
+      <EntryDetailPanel entry={selected} onClose={() => setSelected(null)} />
     </div>
   )
 }

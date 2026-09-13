@@ -216,3 +216,39 @@
   padding-left: 1.5em;
   margin: 0.5em 0;
 }
+
+/* ── Mobile (<= 480px, matches tokens.css --breakpoint-mobile) ───────────────── */
+/* Shared by E59_S02/E59_S03/E59_S04 for the .detail-panel/.panel-backdrop overlay
+   (E06_S07's board/kanban triggers reuse the same panel) — extend this block for
+   any further overlay mobile work rather than adding a second @media rule for the
+   same selectors. */
+@media (max-width: 480px) {
+  .history-entry {
+    flex-wrap: wrap;
+    row-gap: var(--space-xs);
+  }
+
+  .history-subject {
+    flex-basis: 100%;
+    order: 3;
+    white-space: normal;
+  }
+
+  .detail-panel {
+    padding: var(--space-md);
+  }
+
+  .panel-close {
+    padding: var(--space-sm);
+    font-size: 1.5rem;
+  }
+
+  .panel-meta {
+    grid-template-columns: 1fr;
+    gap: 0.15rem 0;
+  }
+
+  .panel-meta dt {
+    margin-top: var(--space-xs);
+  }
+}

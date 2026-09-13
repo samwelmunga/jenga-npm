@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node parsers/knowledge-graph.test.js && node lib/resolve-project-root.test.js"
+    "test": "node parsers/knowledge-graph.test.js && node lib/resolve-project-root.test.js && node parsers/lib/markdown-dir-reader.test.js && node parsers/todo.test.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

@@ -1,7 +1,12 @@
 /**
  * @file kanbanColumns.manual-verify.mjs
  * Manual verification script for E06_S05_T03's 10-day-stale
- * Deployed-to-Prod filter (AC #1, #2, #4). Run directly via:
+ * Deployed-to-Prod filter (AC #1, #2, #4) and, appended at the bottom of this
+ * file, E06_S05_T04's `project/todo.md` promotion rule (its final AC bullet's
+ * four fixture cases, plus the promoted-Backlog, ordering, and
+ * no-`todo.md`-equivalence cases). The T03 section is unchanged — both run in
+ * one invocation so a T04 change can never silently regress T03. Run directly
+ * via:
  *
  *   node project/app/ui/src/components/board/kanbanColumns.manual-verify.mjs
  *
@@ -219,3 +224,191 @@ try {
     throw err
   }
 }
+
+// ===========================================================================
+// E06_S05_T04 — project/todo.md-queued items promoted into In Progress
+// ===========================================================================
+//
+// Covers the four fixture cases the task's final AC bullet names — a promoted
+// Pending item, an unreferenced Pending item, a terminal item still named in
+// todo.md, and an unresolvable ref — plus three more the other AC bullets
+// imply: a promoted Backlog item, the native-before-promoted ordering, and the
+// "no todo.md ⇒ identical to pre-T04 behavior" equivalence case.
+//
+// The queued flags are derived by running the REAL parser
+// (project/app/api/parsers/todo.js) over fixture todo.md content, rather than
+// hand-setting `_queued` — so this harness exercises the actual comment
+// stripping and ref extraction, not a restatement of them. That parser needs
+// no third-party dependency (built-ins only), so unlike the gray-matter block
+// above it runs even inside a git worktree with no node_modules.
+
+import { createRequire } from 'node:module'
+
+const requireCjs = createRequire(import.meta.url)
+const { parseTodoContent } = requireCjs('../../../../api/parsers/todo.js')
+
+// Mirrors project/app/api/parsers/board.js's queuedFlagFor(): tag an item with
+// `_queued: true` iff its id is in the ref set (case-insensitive), and add no
+// field at all otherwise.
+function applyQueuedFlags(epics, refs) {
+  const queued = new Set(refs.map((r) => r.toUpperCase()))
+  const flag = (item) => (item.id && queued.has(item.id.toUpperCase()) ? { ...item, _queued: true } : item)
+  return epics.map((epic) => ({
+    ...flag(epic),
+    stories: (epic.stories || []).map((story) => ({
+      ...flag(story),
+      tasks: (story.tasks || []).map(flag),
+    })),
+  }))
+}
+
+// Fixture todo.md content, covering every line shape the real file contains.
+const FIXTURE_TODO_MD = `# Todo
+
+<!-- Format: <mission title>: <E##_S##> (epic/story ref optional) -->
+
+Promote this pending task: E98_S01_T01
+Promote this backlog task: E98_S01_T04
+Terminal item still named by a stale line: E98_S01_T03
+invoke /brainstorm project/rapports/analysis/some-eval.md
+A deleted/renamed item that no longer exists on the board: E98_S99_T99
+Epic-only ref, deliberately not promoted (see todo.js header): E98
+<!-- RECONCILED: Already done, must never be promoted: E98_S01_T02 ✅ -->
+Cites a rapport filename mid-line (project/rapports/problems/E98_S01_T05-some-note.md) but queues nothing.
+`
+
+const fixtureRefs = parseTodoContent(FIXTURE_TODO_MD).refs
+
+assert.deepEqual(
+  fixtureRefs,
+  ['E98_S01_T01', 'E98_S01_T04', 'E98_S01_T03', 'E98_S99_T99'],
+  'T04 parser: only the four trailing story/task refs on active lines should be extracted — not the commented E98_S01_T02, not the epic-only E98, not the mid-line filename E98_S01_T05'
+)
+
+console.log('todo.md ref extraction (comment skipping, no-ref lines, mid-line filename, epic-only ref): PASS')
+
+function buildT04FixtureEpics() {
+  return [
+    {
+      id: 'E98',
+      title: 'Synthetic todo.md-promotion epic',
+      status: 'In Progress',
+      stories: [
+        {
+          id: 'E98_S01',
+          epic_id: 'E98',
+          title: 'Synthetic todo.md-promotion story',
+          status: 'In Progress',
+          tasks: [
+            {
+              id: 'E98_S01_T01',
+              story_id: 'E98_S01',
+              title: 'Pending task queued in todo.md (must be promoted)',
+              status: 'Pending',
+            },
+            {
+              id: 'E98_S01_T02',
+              story_id: 'E98_S01',
+              title: 'Pending task NOT queued in todo.md (must stay excluded)',
+              status: 'Pending',
+            },
+            {
+              id: 'E98_S01_T03',
+              story_id: 'E98_S01',
+              title: 'Terminal (Merged) task still named in todo.md (must NOT be promoted)',
+              status: 'Merged',
+            },
+            {
+              id: 'E98_S01_T04',
+              story_id: 'E98_S01',
+              title: 'Backlog task queued in todo.md (must be promoted)',
+              status: 'Backlog',
+            },
+            {
+              id: 'E98_S01_T05',
+              story_id: 'E98_S01',
+              title: 'Natively In Progress task, not queued (must render unmarked)',
+              status: 'In Progress',
+            },
+          ],
+        },
+      ],
+    },
+  ]
+}
+
+// --- With a todo.md present -------------------------------------------------
+
+const t04Flat = flattenBoardItems(applyQueuedFlags(buildT04FixtureEpics(), fixtureRefs))
+const t04Buckets = bucketIntoColumns(t04Flat)
+const inProgressIds = t04Buckets['in-progress'].map((i) => i.id)
+
+// AC: a todo.md-referenced item that T02's Pending exclusion would have
+// dropped is shown in In Progress — promotion wins over the exclusion.
+assert.ok(inProgressIds.includes('E98_S01_T01'), 'AC FAILED: queued Pending task must appear in In Progress (promotion wins over the Pending exclusion)')
+assert.ok(inProgressIds.includes('E98_S01_T04'), 'AC FAILED: queued Backlog task must appear in In Progress')
+
+// AC: an unreferenced Pending item stays excluded from the whole view.
+const t04AllIds = Object.values(t04Buckets).flat().map((i) => i.id)
+assert.ok(!t04AllIds.includes('E98_S01_T02'), 'AC FAILED: unreferenced Pending task must remain excluded from every column')
+
+// AC: an item past Pending/Backlog keeps its own status column even though a
+// stale todo.md line still names it.
+assert.ok(!inProgressIds.includes('E98_S01_T03'), 'AC FAILED: Merged task named by a stale todo.md line must NOT be pulled into In Progress')
+assert.ok(t04Buckets['merged'].map((i) => i.id).includes('E98_S01_T03'), 'AC FAILED: Merged task must stay in the Merged column')
+assert.equal(t04Buckets['merged'][0]._promotedFromStatus, undefined, 'a non-promoted item must never carry _promotedFromStatus')
+
+// AC: a ref resolving to nothing on the board (E98_S99_T99) is ignored without
+// breaking the render — it matches no item, so no phantom card appears.
+assert.ok(fixtureRefs.includes('E98_S99_T99'), 'fixture sanity: the unresolvable ref should have been parsed out of todo.md')
+assert.ok(!t04AllIds.includes('E98_S99_T99'), 'AC FAILED: an unresolvable todo.md ref must not produce a phantom card')
+// The fixture's own epic and story are themselves natively In Progress, so the
+// column holds 5 items: E98, E98_S01, E98_S01_T05 (native) + T01, T04 (promoted).
+assert.deepEqual(
+  inProgressIds.slice().sort(),
+  ['E98', 'E98_S01', 'E98_S01_T01', 'E98_S01_T04', 'E98_S01_T05'],
+  'In Progress should contain exactly the three natively-In Progress items plus the two promoted tasks — no extras, no duplicates'
+)
+
+// AC: promoted items are distinguishable from natively-In Progress ones.
+const byId = Object.fromEntries(t04Buckets['in-progress'].map((i) => [i.id, i]))
+assert.equal(byId['E98_S01_T01']._promotedFromStatus, 'Pending', 'promoted card must record the status it was promoted from (render marker depends on it)')
+assert.equal(byId['E98_S01_T04']._promotedFromStatus, 'Backlog', 'promoted Backlog card must record Backlog as its origin status')
+assert.equal(byId['E98_S01_T05']._promotedFromStatus, undefined, 'natively-In Progress card must carry no promotion marker')
+assert.equal(byId['E98_S01_T01'].status, 'Pending', 'promotion must not rewrite the item\'s real status (StatusBadge still shows it)')
+
+// Ordering: native In Progress work reads before merely-queued items.
+assert.deepEqual(
+  inProgressIds,
+  ['E98', 'E98_S01', 'E98_S01_T05', 'E98_S01_T01', 'E98_S01_T04'],
+  'natively-In Progress items must sort ahead of promoted ones, with board order preserved inside each group (stable sort)'
+)
+
+// The source items must never be mutated by bucketing.
+const pristine = flattenBoardItems(applyQueuedFlags(buildT04FixtureEpics(), fixtureRefs))
+assert.ok(pristine.every((i) => i._promotedFromStatus === undefined), 'bucketIntoColumns must not mutate its input items')
+
+console.log('todo.md promotion checks (promoted Pending, promoted Backlog, unreferenced Pending, terminal item, unresolvable ref, marker, ordering, no-mutation): PASS')
+console.log('In Progress column with a todo.md present:', inProgressIds)
+
+// --- With NO todo.md present (no item carries _queued) ----------------------
+// Byte-identical-to-pre-T04 case: the Pending items are excluded again, the
+// Backlog item returns to the Backlog column, In Progress holds only native
+// work, and nothing is marked as promoted.
+
+const noTodoBuckets = bucketIntoColumns(flattenBoardItems(buildT04FixtureEpics()))
+const noTodoIdsByColumn = Object.fromEntries(
+  Object.entries(noTodoBuckets).map(([key, items]) => [key, items.map((i) => i.id)])
+)
+
+assert.deepEqual(noTodoIdsByColumn['in-progress'], ['E98', 'E98_S01', 'E98_S01_T05'], 'no-todo.md case: In Progress must contain only the natively-In Progress epic, story and task')
+assert.deepEqual(noTodoIdsByColumn['backlog'], ['E98_S01_T04'], 'no-todo.md case: the Backlog task must stay in the Backlog column')
+assert.deepEqual(noTodoIdsByColumn['merged'], ['E98_S01_T03'], 'no-todo.md case: the Merged task must stay in the Merged column')
+assert.deepEqual(noTodoIdsByColumn['pending'], [], 'no-todo.md case: the Pending column stays empty (both Pending tasks excluded from the view)')
+assert.ok(
+  Object.values(noTodoBuckets).flat().every((i) => i._promotedFromStatus === undefined),
+  'no-todo.md case: no card may be marked as promoted'
+)
+
+console.log('no-todo.md equivalence checks (Active Sprint renders exactly as pre-T04): PASS')
+console.log('\nAll E06_S05_T04 checks passed.')

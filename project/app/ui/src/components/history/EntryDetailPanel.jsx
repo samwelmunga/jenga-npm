@@ -19,6 +19,16 @@ function renderMarkdown(md) {
   return DOMPurify.sanitize(marked.parse(md))
 }
 
+// E06_S07_T01 — board-item overlay. Board entries are wrapped as
+// `{ type: 'board_item', kind: 'epic' | 'story' | 'task', ...item }` by
+// BoardView.jsx's onSelect handler, where `...item` is the raw epic/story/task
+// object returned by GET /v1/board (including its `_content` markdown body).
+const BOARD_KIND_LABELS = {
+  epic: 'Epic',
+  story: 'Story',
+  task: 'Task',
+}
+
 export default function EntryDetailPanel({ entry, onClose }) {
   const panelRef = useRef(null)
 
@@ -72,6 +82,27 @@ export default function EntryDetailPanel({ entry, onClose }) {
               <div
                 className="markdown-body"
                 dangerouslySetInnerHTML={{ __html: renderMarkdown(entry.content_summary) }}
+              />
+            ) : (
+              <p className="panel-empty">No content available.</p>
+            )}
+          </>
+        )}
+
+        {entry.type === 'board_item' && (
+          <>
+            <h3 className="panel-title">{BOARD_KIND_LABELS[entry.kind] || entry.kind}</h3>
+            <dl className="panel-meta">
+              <dt>ID</dt>
+              <dd><code>{entry.id}</code></dd>
+              <dt>Status</dt>
+              <dd>{entry.status || '—'}</dd>
+            </dl>
+            <h4>{entry.title}</h4>
+            {entry._content ? (
+              <div
+                className="markdown-body"
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(entry._content) }}
               />
             ) : (
               <p className="panel-empty">No content available.</p>

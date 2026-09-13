@@ -32,6 +32,39 @@
  * normally) rather than excluded — see `isStaleDeployedProd` below. This
  * filter is scoped to this module only; the Backlog tab (E06_S05_T01) does
  * not import kanbanColumns.js and is unaffected.
+ *
+ * A third rule (E06_S05_T04) runs in the opposite direction — it *adds*
+ * items rather than removing them. `project/app/api/parsers/board.js` tags
+ * any item named by an active (non-comment) entry in the project's
+ * `project/todo.md` with `_queued: true` (see `project/app/api/parsers/todo.js`
+ * for the line shapes involved). Queueing an item for execution is the point
+ * at which it becomes in-flight, but its board status doesn't move until a
+ * developer/tester run flips it — so such an item would otherwise stay
+ * invisible here, removed by the `Pending` exclusion above. `_queued` items
+ * are therefore **promoted** into the `In Progress` column, and that
+ * promotion deliberately runs *before* the `Pending` exclusion so it wins
+ * over it.
+ *
+ * Promotion is one-directional and narrow, mirroring how T03's stale filter
+ * was scoped — a rule that is explainable in one sentence rather than a
+ * blanket override:
+ *   - Only `Pending` and `Backlog` items are promotable (`PROMOTABLE_STATUSES`).
+ *     An item already past that point keeps its own status column even if a
+ *     stale `todo.md` line still names it — nothing is ever yanked backwards
+ *     out of `Blocked`/`Failed`/`Done`/`Merged`/a `Deployed` column.
+ *   - A promoted item is *moved*, not duplicated: it appears once, in
+ *     `In Progress` only.
+ *   - The promoted copy carries `_promotedFromStatus: <original status>` so
+ *     the card can render a "queued" marker and stay visually distinguishable
+ *     from a natively-`In Progress` item (the column must not imply a
+ *     developer is actively working something merely queued). The original
+ *     item object is never mutated.
+ *   - Natively-`In Progress` items sort ahead of promoted ones within the
+ *     column, so real in-flight work reads first.
+ * A `todo.md` ref that resolves to no board item simply never becomes a
+ * `_queued` flag on anything, so it disappears harmlessly — no phantom cards.
+ * With no `todo.md` present, no item carries `_queued` and this module's
+ * output is identical to its pre-T04 behavior.
  */
 
 export const KANBAN_COLUMNS = [
@@ -55,6 +88,28 @@ export const KANBAN_COLUMNS = [
 function columnKeyForStatus(status) {
   const col = KANBAN_COLUMNS.find((c) => c.statuses.includes(status))
   return col ? col.key : null
+}
+
+/**
+ * The only statuses a `project/todo.md`-queued item can be promoted *from*
+ * (E06_S05_T04). Anything else keeps its own status column — a queued item
+ * that has already started, failed, or shipped is not dragged back into
+ * In Progress by a stale todo.md line.
+ */
+export const PROMOTABLE_STATUSES = ['Pending', 'Backlog']
+
+/** The column key promoted items land in. */
+const IN_PROGRESS_KEY = 'in-progress'
+
+/**
+ * True when `item` is queued in `project/todo.md` (flagged `_queued` by
+ * project/app/api/parsers/board.js) AND its board status is one this view is
+ * willing to promote.
+ * @param {Object} item
+ * @returns {boolean}
+ */
+export function isPromotedToInProgress(item) {
+  return Boolean(item && item._queued === true && PROMOTABLE_STATUSES.includes(item.status))
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
@@ -136,6 +191,11 @@ export function flattenBoardItems(epics) {
  * treated as stale. Items whose status doesn't map to any known column
  * (unrecognized/non-schema status) are silently dropped from the view
  * rather than crashing the render.
+ *
+ * Before either exclusion, a `_queued` item whose status is in
+ * `PROMOTABLE_STATUSES` is promoted into the In Progress column
+ * (E06_S05_T04) — so the todo.md promotion wins over the Pending exclusion.
+ * See this file's header comment for the full rule.
  * @param {Object[]} items
  * @returns {Object.<string, Object[]>} column key -> items in that column
  */
@@ -144,11 +204,26 @@ export function bucketIntoColumns(items) {
   for (const col of KANBAN_COLUMNS) buckets[col.key] = []
 
   for (const item of items || []) {
+    // E06_S05_T04 — checked first so a queued Pending/Backlog item is promoted
+    // rather than dropped by the Pending exclusion below.
+    if (isPromotedToInProgress(item)) {
+      buckets[IN_PROGRESS_KEY].push({ ...item, _promotedFromStatus: item.status })
+      continue
+    }
+
     if (item.status === 'Pending') continue
     if (item.status === 'Deployed to Prod' && isStaleDeployedProd(item.date_deployed_prod)) continue
     const key = columnKeyForStatus(item.status)
     if (key) buckets[key].push(item)
   }
+
+  // Natively-In Progress items read first; promoted (merely queued) ones
+  // follow. Array.prototype.sort is stable in every engine this runs on
+  // (Node >= 11 / all modern browsers), so relative board order is preserved
+  // within each of the two groups.
+  buckets[IN_PROGRESS_KEY].sort(
+    (a, b) => Number(Boolean(a._promotedFromStatus)) - Number(Boolean(b._promotedFromStatus))
+  )
 
   return buckets
 }

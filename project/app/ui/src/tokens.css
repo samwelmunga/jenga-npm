@@ -1,0 +1,22 @@
+/*
+ * Shared responsive design tokens for the Jenga dashboard.
+ *
+ * Spacing scale: use `var(--space-*)` anywhere padding/margin/gap is needed.
+ * Breakpoints: documented here for reference only — CSS custom properties
+ * cannot be referenced inside an `@media` condition, so any `@media` rule
+ * (in this file or elsewhere) must hardcode the matching literal pixel
+ * value and note in a comment which `--breakpoint-*` token it corresponds to.
+ *
+ * Future mobile-retrofit work should reuse these tokens rather than
+ * inventing new spacing/breakpoint values per component.
+ */
+:root {
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+
+  --breakpoint-mobile: 480px;
+  --breakpoint-tablet: 768px;
+}

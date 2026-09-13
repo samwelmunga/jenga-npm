@@ -94,3 +94,33 @@
   font-size: 0.85rem;
   color: #111827;
 }
+
+/* E06_S05_T04 — a card promoted into In Progress only because
+   project/todo.md queues it (board status is still Pending/Backlog). Marked
+   with a dashed border + "queued" chip so it is visually distinguishable from
+   natively-In Progress work at a glance. */
+.kanban-card-queued {
+  border-style: dashed;
+  border-color: #c4b5fd;
+  background: #fdfcff;
+}
+
+.kanban-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.kanban-card-queued-marker {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #6d28d9;
+  background: #ede9fe;
+  border: 1px solid #ddd6fe;
+  border-radius: 9999px;
+  padding: 0.05rem 0.4rem;
+  white-space: nowrap;
+  cursor: help;
+}

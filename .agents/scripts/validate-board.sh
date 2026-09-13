@@ -66,6 +66,14 @@ CLOSE_STORY_KEYS = {
     "actual_files_changed", "actual_lines_delta", "scope_divergence_flag", "divergence_flag",
 }
 
+# E51_S05_T02. Written by scripts/mark-deployed.sh in the same locked write window a ticket is
+# set to status: Deployed to Prod (never on a Deployed to Stage-only write). Allow-listed for
+# epic, story, AND task per this field's own AC, even though in practice only tasks (and
+# occasionally stories) are expected to ever carry it.
+DEPLOY_KEYS = {
+    "date_deployed_prod",
+}
+
 # E39 tiered item-level caution/escalation fields. OPTIONAL and story/task-only — epics do not
 # carry these; an epic's risk gating is already handled by epic_scope_approval. See
 # templates/SCRUM_BOARD_SCHEMA.md.
@@ -90,18 +98,19 @@ ALLOWED_KEYS = {
         # (value: backfilled). Absence means the epic was authored normally, so every existing
         # epic that omits it stays valid. See templates/SCRUM_BOARD_SCHEMA.md.
         "provenance",
+        *DEPLOY_KEYS,
     },
     "story": {
         "id", "epic_id", "title", "status", "date_created", "date_started", "date_completed",
         "dates_previously_completed", "reopened_on", "reopened_reason", "tasks", "docs",
         "priority", "depends_on",
-        *CRUCIAL_KEYS,
+        *CRUCIAL_KEYS, *DEPLOY_KEYS,
     },
     "task": {
         "id", "story_id", "epic_id", "title", "status", "date_created", "date_started", "date_completed",
         "dates_previously_completed", "reopened_on", "reopened_reason", "assigned_to", "docs",
         "depends_on",
-        *EXECUTION_SCOPE_KEYS, *CLOSE_STORY_KEYS, *CRUCIAL_KEYS,
+        *EXECUTION_SCOPE_KEYS, *CLOSE_STORY_KEYS, *CRUCIAL_KEYS, *DEPLOY_KEYS,
     },
 }
 

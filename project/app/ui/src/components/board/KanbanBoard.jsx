@@ -4,15 +4,31 @@ import './kanban.css'
 
 const TYPE_LABELS = { epic: 'Epic', story: 'Story', task: 'Task' }
 
+// `_promotedFromStatus` is set by bucketIntoColumns() on an item that reached
+// the In Progress column only because project/todo.md queues it (E06_S05_T04),
+// not because its board status says In Progress. The card is marked so the
+// column never implies a developer is actively working something that is
+// merely queued — the item's real status still renders in its StatusBadge.
 function KanbanCard({ item }) {
+  const promotedFrom = item._promotedFromStatus
   return (
-    <div className="kanban-card">
+    <div className={`kanban-card${promotedFrom ? ' kanban-card-queued' : ''}`}>
       <div className="kanban-card-header">
         <span className="kanban-card-type">{TYPE_LABELS[item._itemType] ?? item._itemType}</span>
         <span className="kanban-card-id">{item.id}</span>
       </div>
       <div className="kanban-card-title">{item.title}</div>
-      <StatusBadge status={item.status} />
+      <div className="kanban-card-footer">
+        <StatusBadge status={item.status} />
+        {promotedFrom && (
+          <span
+            className="kanban-card-queued-marker"
+            title={`Queued in project/todo.md — board status is still ${promotedFrom}`}
+          >
+            queued
+          </span>
+        )}
+      </div>
     </div>
   )
 }
@@ -20,7 +36,9 @@ function KanbanCard({ item }) {
 // Read-only kanban rendering of the board (E06_S05_T02) — one column per
 // status per the story's Acceptance Criteria, Pending items excluded from
 // the whole view, empty columns collapsed. No drag-and-drop (board stays
-// read-only per E06_S02).
+// read-only per E06_S02). E06_S05_T04 additionally promotes
+// project/todo.md-queued Pending/Backlog items into In Progress, marked
+// "queued" — todo.md is only ever read, never written.
 export default function KanbanBoard({ epics }) {
   if (!epics || epics.length === 0) {
     return <div className="empty-state">No board data available.</div>
