@@ -163,3 +163,31 @@
   color: #374151;
   cursor: pointer;
 }
+
+/* ── Mobile (<= 480px, matches tokens.css --breakpoint-mobile) ───────────────── */
+@media (max-width: 480px) {
+  .epic-header,
+  .story-header {
+    flex-wrap: wrap;
+    row-gap: var(--space-xs);
+  }
+
+  .epic-title,
+  .story-title {
+    flex-basis: 100%;
+  }
+
+  .task-card {
+    flex-wrap: wrap;
+    row-gap: var(--space-xs);
+  }
+
+  .task-card .task-title {
+    flex-basis: 100%;
+  }
+
+  .stories-list,
+  .tasks-list {
+    padding-left: var(--space-sm);
+  }
+}

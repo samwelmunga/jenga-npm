@@ -1,0 +1,72 @@
+/*
+ * RapportsTab search input styling — E58_S02_T02.
+ *
+ * Uses the shared spacing tokens from `../tokens.css` (`--space-*`) per E58/E59's mobile-readiness
+ * convention. Kept in its own file (rather than folded into `../components/shared/entry-list.css`)
+ * since the search input belongs to the tab, not the reusable list component.
+ *
+ * ── Mobile verification (E58_S02_T04) — no functional change, verification record only ──────
+ * This task's own note anticipated that the full Rapports tab (list, search, pagination, detail
+ * panel) might need zero new CSS if its sibling tasks already built their pieces mobile-ready —
+ * confirmed true. Every surface this tab renders already had its own `<=480px` block before this
+ * task started:
+ *   - `.rapports-search-input` — this file, from `E58_S02_T02`.
+ *   - `.entry-list`/`.entry-list-item` — `../components/shared/entry-list.css`.
+ *   - `.pagination-controls` — `../components/shared/pagination-controls.css`, from `E58_S02_T03`.
+ *   - `.detail-panel`/`.panel-*`/`.markdown-body` — `../components/history/history.css`'s shared
+ *     overlay block, iterated across `E59_S02_T02`/`E59_S03_T02`/`E59_S04_T02`. The Rapports tab's
+ *     `EntryDetailPanel.jsx` `library_entry` render branch reuses the exact same generic classes
+ *     those tasks already fixed and verified (box-sizing clipping, 44x44 close button, single-
+ *     column `panel-meta`, code/table overflow) — no Rapports-specific branch exists that isn't
+ *     already covered.
+ *
+ * Verified empirically (not source-inspection-only) via a real Playwright harness driving the
+ * live dev-mode dashboard against the actual `project/rapports/*` dataset (907 real entries,
+ * ~37 pages at `PAGE_SIZE=25`) at 320/375/480px: no horizontal page overflow at any stage (list
+ * loaded, after clearing a search filter, with the detail panel open — measured only *after* the
+ * `slideIn` animation settles, per the lesson already logged from `E59_S02_T02`'s earlier
+ * measure-before-settle clipping bug), search input/pagination controls/detail panel all render
+ * fully within the viewport, and the panel's close button (44x44) reliably dismisses via both
+ * click and `Escape` at every mobile width tested.
+ *
+ * Interaction pattern (documented per `needs_docs: true`): the detail panel is a full-viewport
+ * slide-in **overlay** at mobile widths (inherits `.detail-panel`'s `width: min(480px, 100vw)`
+ * base rule, which resolves to `100vw` at `<=480px`) — it does not replace the list in the DOM,
+ * it stacks visually on top of it via `.panel-backdrop`, identical to how the same component
+ * already behaves for the Board/History/Kanban tabs. One pre-existing, non-blocking, shared
+ * limitation applies equally here and is not introduced or fixed by this task: at `<=480px` the
+ * panel's full-viewport width leaves zero exposed `.panel-backdrop` pixels to tap-dismiss (see
+ * `project/rapports/problems/E59_S03_T02-backdrop-dismiss-unreachable-mobile.md`, still open,
+ * affects every `EntryDetailPanel` consumer) — the close button remains a fully usable, correctly
+ * sized dismiss affordance regardless.
+ *
+ * No tab-specific CSS change was needed to satisfy this task's Acceptance Criteria — this comment
+ * is the verification record, mirroring the precedent set by `E59_S03_T02`'s equivalent
+ * no-changes-needed comment in `../components/history/history.css`.
+ */
+
+.rapports-search-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.55rem 0.75rem;
+  margin-bottom: var(--space-md);
+  font-size: 0.9rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  color: #1f2937;
+}
+
+.rapports-search-input:focus {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+/* ── Mobile (<= 480px, matches tokens.css --breakpoint-mobile) ────────────────── */
+@media (max-width: 480px) {
+  .rapports-search-input {
+    font-size: 1rem;
+    padding: 0.65rem 0.75rem;
+  }
+}

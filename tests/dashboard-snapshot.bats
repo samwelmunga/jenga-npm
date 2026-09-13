@@ -1,24 +1,37 @@
 #!/usr/bin/env bats
 #
-# Regression coverage for skills/j-dashboard/scripts/snapshot.sh (E47_S04_T03).
+# Regression coverage for skills/j-dashboard/scripts/snapshot.sh (E47_S04_T03)
+# and its bundling step, project/app/ui/scripts/build-snapshot-html.cjs.
 #
 # Why this file exists
 # ---------------------
 # snapshot.sh orchestrates `j.dashboard --snapshot`: capture (E47_S04_T02's
-# capture-snapshot.js) -> bundle (project/app/ui's `build:snapshot` npm
-# script) -> copy the result to the final --out path and report it. This
-# suite pins snapshot.sh's OWN orchestration logic -- argument parsing,
-# repo-root/API_DIR/UI_DIR resolution, running capture from the ORIGINAL
-# invocation cwd (not REPO_ROOT) per E47_S02's "resolve against the invoking
-# project" contract, forwarding SNAPSHOT_DATA_FILE and --project-root,
-# hard-failing with no output file on either step failing, and the final
-# copy + report-path step. It deliberately does NOT exercise the real
-# capture-snapshot.js HTTP-capture behavior (E47_S04_T02's own scope, already
-# covered by that task's tests) or the real vite single-file bundling
-# (verified manually against real repo data during T03 tester verification,
-# since it needs a real Vite/React build and isn't practical to fake
-# meaningfully in bats) -- a fixture capture-snapshot.js and a fake `npm` on
-# PATH stand in for both, so these tests run fast with no real build.
+# capture-snapshot.js) -> bundle (inline the built dist/ plus the captured
+# JSON into one self-contained HTML) -> copy to the final --out path and
+# report it. This suite pins snapshot.sh's OWN orchestration logic --
+# argument parsing, project/app resolution, running capture from the ORIGINAL
+# invocation cwd (not the resolved app dir) per E47_S02's "resolve against the
+# invoking project" contract, forwarding --project-root, hard-failing with no
+# output file when a step fails, and the final copy + report-path step.
+#
+# What changed, and why it matters for these tests
+# ------------------------------------------------
+# The bundling step used to be `npm run build:snapshot` (vite build --mode
+# snapshot), and THIS SUITE FAKED `npm` ON PATH to stand in for it. That fake
+# is precisely why a total, shipped-to-users breakage stayed invisible: the
+# published tarball carries project/app/ui/dist/** and scripts/** but no
+# package.json, vite.config.js, or src/, so there was no vite to run on any
+# consumer install and `--snapshot` failed 100% of the time there -- while
+# every test here passed, because the fake npm cheerfully wrote an index.html.
+#
+# So the fixture is now shaped like a CONSUMER install by default (prebuilt
+# dist/, no UI sources, no node_modules) and runs the REAL
+# build-snapshot-html.cjs. The fake npm is still on PATH, but only so tests can
+# assert that npm is *not* invoked. Faking less is the whole point.
+#
+# It still deliberately does NOT exercise the real capture-snapshot.js
+# HTTP-capture behavior (E47_S04_T02's own scope, covered by that task's
+# tests) -- a fixture capture-snapshot.js stands in for it.
 #
 # Every test runs against a throwaway git repo under $BATS_TEST_TMPDIR, never
 # against this repository's own project/app.
@@ -27,6 +40,32 @@ load helpers/assertions
 
 REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
 SNAPSHOT_SRC="$REPO_ROOT/skills/j-dashboard/scripts/snapshot.sh"
+RESOLVER_SRC="$REPO_ROOT/skills/j-dashboard/scripts/resolve-app-dir.sh"
+BUNDLER_SRC="$REPO_ROOT/project/app/ui/scripts/build-snapshot-html.cjs"
+
+# Writes a minimal but REALISTIC prebuilt dist/ into $1 -- the same shape vite
+# actually emits: root-absolute /assets/ refs, a type="module" script, and a
+# crossorigin stylesheet link.
+write_fixture_dist() {
+  local ui_dir="$1"
+  mkdir -p "$ui_dir/dist/assets"
+  cat > "$ui_dir/dist/index.html" <<'EOF'
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Jenga AI Dashboard</title>
+    <script type="module" crossorigin src="/assets/index-fixture.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-fixture.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
+EOF
+  echo 'console.log("fixture bundle marker");' > "$ui_dir/dist/assets/index-fixture.js"
+  echo '.fixture-style-marker { color: red; }' > "$ui_dir/dist/assets/index-fixture.css"
+}
 
 setup() {
   # pwd -P for the same macOS /tmp -> /private/tmp symlink reason as
@@ -37,14 +76,20 @@ setup() {
   git -C "$TMP_REPO" init -q
 
   cp "$SNAPSHOT_SRC" "$TMP_REPO/skills/j-dashboard/scripts/snapshot.sh"
+  # snapshot.sh delegates project/app resolution to its sibling
+  # resolve-app-dir.sh, exactly as the real skill directory ships both.
+  cp "$RESOLVER_SRC" "$TMP_REPO/skills/j-dashboard/scripts/resolve-app-dir.sh"
   chmod +x "$TMP_REPO/skills/j-dashboard/scripts/snapshot.sh"
   SNAPSHOT="$TMP_REPO/skills/j-dashboard/scripts/snapshot.sh"
 
   mkdir -p "$TMP_REPO/project/app/api/scripts"
-  mkdir -p "$TMP_REPO/project/app/ui"
-  cat > "$TMP_REPO/project/app/ui/package.json" <<'EOF'
-{ "name": "fixture-ui" }
-EOF
+  mkdir -p "$TMP_REPO/project/app/ui/scripts"
+
+  # The REAL bundler, not a fake -- see the header. Consumer-shaped fixture:
+  # a prebuilt dist/ and no UI sources/node_modules, so the rebuild sub-step
+  # is skipped and the inliner is what actually produces the output.
+  cp "$BUNDLER_SRC" "$TMP_REPO/project/app/ui/scripts/build-snapshot-html.cjs"
+  write_fixture_dist "$TMP_REPO/project/app/ui"
 
   # Fixture capture-snapshot.js -- a real (tiny) node script, not a faked
   # `node` binary, since we want snapshot.sh's actual `node <script>` call
@@ -76,14 +121,17 @@ if (!outPath) {
   console.error('missing --out');
   process.exit(1);
 }
-fs.writeFileSync(outPath, JSON.stringify({ schema_version: 1, fixture: true }));
+fs.writeFileSync(outPath, JSON.stringify({
+  schema_version: 1,
+  fixture: true,
+  routes: { board: { data: ['fixture-board-entry'] } },
+}));
 console.log('fake capture ok');
 EOF
 
-  # Fake `npm` ahead of the real one on PATH -- stands in for the
-  # `npm run build:snapshot -- --outDir <dir> --emptyOutDir` bundling step.
-  # Logs cwd/args/SNAPSHOT_DATA_FILE, then writes a recognizable
-  # index.html into the requested --outDir (unless FAKE_BUILD_FAIL=1).
+  # Fake \`npm\` ahead of the real one on PATH. In the consumer-shaped default
+  # fixture nothing should invoke it at all -- tests assert that. The
+  # monorepo-shaped test below opts into it deliberately.
   FAKE_BIN="$BATS_TEST_TMPDIR/bin"
   mkdir -p "$FAKE_BIN"
   NPM_LOG="$BATS_TEST_TMPDIR/npm.log"
@@ -92,32 +140,15 @@ EOF
 #!/usr/bin/env bash
 echo "CWD:$(pwd)" >> "$NPM_LOG"
 echo "ARGS:$*" >> "$NPM_LOG"
-echo "SNAPSHOT_DATA_FILE:${SNAPSHOT_DATA_FILE:-}" >> "$NPM_LOG"
-# Check existence NOW, while the scratch dir snapshot.sh created it in is
-# still alive -- by the time this test's `run` returns, snapshot.sh's own
-# `trap ... EXIT` has already deleted it, so a post-hoc `[ -f ... ]` in the
-# test itself would always fail regardless of whether the file was ever
-# really there.
-if [ -n "${SNAPSHOT_DATA_FILE:-}" ] && [ -f "${SNAPSHOT_DATA_FILE:-}" ]; then
-  echo "SNAPSHOT_DATA_FILE_EXISTS:1" >> "$NPM_LOG"
-else
-  echo "SNAPSHOT_DATA_FILE_EXISTS:0" >> "$NPM_LOG"
-fi
 if [ "${FAKE_BUILD_FAIL:-0}" = "1" ]; then
   echo "fake build failure" >&2
   exit 1
 fi
-outdir=""
-prev=""
-for a in "$@"; do
-  if [ "$prev" = "--outDir" ]; then
-    outdir="$a"
-  fi
-  prev="$a"
-done
-if [ -n "$outdir" ]; then
-  mkdir -p "$outdir"
-  echo "<html><!-- fixture snapshot build --></html>" > "$outdir/index.html"
+# Stand in for `vite build`: refresh dist/ with a distinguishable marker so
+# tests can tell a rebuilt dist from the pre-existing fixture one.
+if [ "$1" = "run" ] && [ "$2" = "build" ]; then
+  mkdir -p "$(pwd)/dist/assets"
+  echo 'console.log("REBUILT bundle marker");' > "$(pwd)/dist/assets/index-fixture.js"
 fi
 exit 0
 EOF
@@ -128,12 +159,15 @@ EOF
 
   # A separate "invoking project" directory, distinct from both TMP_REPO and
   # the CWD bats itself runs tests from -- exercises that snapshot.sh
-  # resolves REPO_ROOT/API_DIR/UI_DIR from the script's own location (via
-  # git -C "$SKILL_DIR" rev-parse --show-toplevel), completely independent of
-  # invocation cwd, while capture still runs from that invocation cwd.
+  # resolves the app dir from the script's own location, completely
+  # independent of invocation cwd, while capture still runs from that cwd.
   mkdir -p "$BATS_TEST_TMPDIR/invoking-project"
   INVOKE_DIR="$(cd "$BATS_TEST_TMPDIR/invoking-project" && pwd -P)"
 }
+
+# -----------------------------------------------------------------------------
+# Orchestration
+# -----------------------------------------------------------------------------
 
 @test "happy path: captures, bundles, copies to --out, and reports the final path" {
   run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
@@ -142,10 +176,10 @@ EOF
 
   [ -f "$BATS_TEST_TMPDIR/result.html" ]
   run cat "$BATS_TEST_TMPDIR/result.html"
-  assert_output_contains "fixture snapshot build"
+  assert_output_contains "fixture bundle marker"
 }
 
-@test "capture runs from the original invocation cwd, not REPO_ROOT or UI_DIR" {
+@test "capture runs from the original invocation cwd, not the resolved app dir" {
   run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
   [ "$status" -eq 0 ]
 
@@ -161,24 +195,6 @@ EOF
   [ -f "$INVOKE_DIR/jenga.html" ]
 }
 
-@test "SNAPSHOT_DATA_FILE is forwarded to the bundling step and points at the captured artifact" {
-  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
-  [ "$status" -eq 0 ]
-
-  run cat "$NPM_LOG"
-  [ "$status" -eq 0 ]
-  assert_output_contains "ARGS:run build:snapshot -- --outDir"
-  assert_output_contains "--emptyOutDir"
-  # The captured artifact path is a mktemp -d scratch file, but it must at
-  # least be a real, non-blank path that existed (and was readable) at the
-  # moment the bundling step ran -- checked by the fake npm itself, since
-  # snapshot.sh's own EXIT trap deletes the scratch dir before this test's
-  # `run` returns.
-  captured_data_file="$(grep '^SNAPSHOT_DATA_FILE:' "$NPM_LOG" | cut -d: -f2-)"
-  [ -n "$captured_data_file" ]
-  assert_output_contains "SNAPSHOT_DATA_FILE_EXISTS:1"
-}
-
 @test "--project-root is forwarded unchanged to capture-snapshot.js" {
   run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html' --project-root /some/explicit/root"
   [ "$status" -eq 0 ]
@@ -188,62 +204,11 @@ EOF
   assert_output_contains "PROJECT_ROOT_ARG:/some/explicit/root"
 }
 
-@test "missing capture-snapshot.js exits non-zero with a clear message, no npm invocation" {
-  rm "$TMP_REPO/project/app/api/scripts/capture-snapshot.js"
-
-  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
-  [ "$status" -ne 0 ]
-  assert_output_contains "capture script not found"
-
-  run cat "$NPM_LOG"
+@test "a relative --out is resolved against the invocation cwd, not the app dir" {
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out relative-result.html"
   [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  [ ! -f "$BATS_TEST_TMPDIR/result.html" ]
-}
-
-@test "missing project/app/ui/package.json exits non-zero with a clear message" {
-  rm "$TMP_REPO/project/app/ui/package.json"
-
-  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
-  [ "$status" -ne 0 ]
-  assert_output_contains "dashboard UI not found"
-  [ ! -f "$BATS_TEST_TMPDIR/result.html" ]
-}
-
-@test "capture step failure hard-fails with no output file written, npm never invoked" {
-  export FAKE_CAPTURE_FAIL=1
-
-  run bash -c "cd '$INVOKE_DIR' && FAKE_CAPTURE_FAIL=1 '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
-  [ "$status" -ne 0 ]
-  [ ! -f "$BATS_TEST_TMPDIR/result.html" ]
-
-  run cat "$NPM_LOG"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "bundling step failure hard-fails with no output file copied to the final path" {
-  run bash -c "cd '$INVOKE_DIR' && FAKE_BUILD_FAIL=1 '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
-  [ "$status" -ne 0 ]
-  [ ! -f "$BATS_TEST_TMPDIR/result.html" ]
-}
-
-@test "bundling step reporting success but producing no index.html is treated as a failure" {
-  # Fake npm that "succeeds" (exit 0) without writing index.html anywhere --
-  # pins snapshot.sh's own post-bundle existence check, independent of the
-  # real vite-plugin-singlefile's behavior.
-  cat > "$FAKE_BIN/npm" <<'EOF'
-#!/usr/bin/env bash
-echo "CWD:$(pwd)" >> "$NPM_LOG"
-echo "ARGS:$*" >> "$NPM_LOG"
-exit 0
-EOF
-  chmod +x "$FAKE_BIN/npm"
-
-  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
-  [ "$status" -ne 0 ]
-  assert_output_contains "no index.html was produced"
-  [ ! -f "$BATS_TEST_TMPDIR/result.html" ]
+  assert_output_contains "Snapshot dashboard written to: $INVOKE_DIR/relative-result.html"
+  [ -f "$INVOKE_DIR/relative-result.html" ]
 }
 
 @test "-h/--help prints usage and exits 0 without invoking capture or npm" {
@@ -260,11 +225,185 @@ EOF
   [ -z "$output" ]
 }
 
-@test "a relative --out is resolved against the invocation cwd, not REPO_ROOT" {
-  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out relative-result.html"
+# -----------------------------------------------------------------------------
+# project/app resolution -- the consumer-install defect
+# -----------------------------------------------------------------------------
+
+# The defect this pins: snapshot.sh used to compute API_DIR/UI_DIR as
+# "$(git rev-parse --show-toplevel)/project/app/...", which is only ever
+# correct inside this monorepo. On a consumer install the dashboard lives at
+# <consumer>/node_modules/@jenga-ai/agent/project/app, so `--snapshot` died
+# with "capture script not found" 100% of the time there.
+@test "consumer install: resolves project/app from node_modules/@jenga-ai/agent" {
+  # Shape the fixture like a real consumer: the skill was mirrored into
+  # .claude/skills/ by postinstall, and the app only exists inside the package.
+  PKG_ROOT="$TMP_REPO/node_modules/@jenga-ai/agent"
+  mkdir -p "$PKG_ROOT/project/app"
+  cp -R "$TMP_REPO/project/app/api" "$PKG_ROOT/project/app/api"
+  cp -R "$TMP_REPO/project/app/ui" "$PKG_ROOT/project/app/ui"
+  rm -rf "$TMP_REPO/project"
+
+  mkdir -p "$TMP_REPO/.claude/skills/j-dashboard/scripts"
+  cp "$SNAPSHOT_SRC" "$TMP_REPO/.claude/skills/j-dashboard/scripts/snapshot.sh"
+  cp "$RESOLVER_SRC" "$TMP_REPO/.claude/skills/j-dashboard/scripts/resolve-app-dir.sh"
+  chmod +x "$TMP_REPO/.claude/skills/j-dashboard/scripts/snapshot.sh"
+
+  run bash -c "cd '$INVOKE_DIR' && '$TMP_REPO/.claude/skills/j-dashboard/scripts/snapshot.sh' --out '$BATS_TEST_TMPDIR/consumer.html'"
   [ "$status" -eq 0 ]
-  assert_output_contains "Snapshot dashboard written to: $INVOKE_DIR/relative-result.html"
-  [ -f "$INVOKE_DIR/relative-result.html" ]
+  assert_output_contains "Snapshot dashboard written to: $BATS_TEST_TMPDIR/consumer.html"
+
+  run cat "$BATS_TEST_TMPDIR/consumer.html"
+  assert_output_contains "fixture bundle marker"
+  assert_output_contains "jenga-dashboard-data"
+}
+
+@test "consumer install: no npm is invoked at all when the UI has no sources" {
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
+  [ "$status" -eq 0 ]
+
+  # The whole point of the rewrite: with only a prebuilt dist/ present there is
+  # nothing to build, so no build tooling may be required.
+  run cat "$NPM_LOG"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "monorepo: rebuilds dist first when UI sources and node_modules are present" {
+  # Opt the fixture into the monorepo shape: sources + an installed vite.
+  cat > "$TMP_REPO/project/app/ui/package.json" <<'EOF'
+{ "name": "fixture-ui", "scripts": { "build": "vite build" } }
+EOF
+  mkdir -p "$TMP_REPO/project/app/ui/node_modules/vite"
+
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
+  [ "$status" -eq 0 ]
+
+  run cat "$NPM_LOG"
+  [ "$status" -eq 0 ]
+  assert_output_contains "ARGS:run build"
+  assert_output_contains "CWD:$TMP_REPO/project/app/ui"
+
+  # A snapshot must never be taken from a stale dist -- the rebuilt marker,
+  # not the pre-existing fixture one, must be what got inlined.
+  run cat "$BATS_TEST_TMPDIR/result.html"
+  assert_output_contains "REBUILT bundle marker"
+}
+
+# -----------------------------------------------------------------------------
+# Failure modes -- never a partial or broken snapshot
+# -----------------------------------------------------------------------------
+
+@test "missing capture-snapshot.js exits non-zero with a clear message, no output file" {
+  rm "$TMP_REPO/project/app/api/scripts/capture-snapshot.js"
+
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
+  [ "$status" -ne 0 ]
+  assert_output_contains "dashboard app not found"
+  [ ! -f "$BATS_TEST_TMPDIR/result.html" ]
+}
+
+@test "an unbuilt UI (no dist/index.html) exits non-zero with an actionable message" {
+  rm -rf "$TMP_REPO/project/app/ui/dist"
+
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
+  [ "$status" -ne 0 ]
+  assert_output_contains "has not been built"
+  [ ! -f "$BATS_TEST_TMPDIR/result.html" ]
+}
+
+@test "capture step failure hard-fails with no output file written" {
+  run bash -c "cd '$INVOKE_DIR' && FAKE_CAPTURE_FAIL=1 '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
+  [ "$status" -ne 0 ]
+  [ ! -f "$BATS_TEST_TMPDIR/result.html" ]
+}
+
+@test "bundling step failure hard-fails with no output file copied to the final path" {
+  # A dist/ whose index.html references an asset that is not on disk -- the
+  # real inliner must refuse rather than emit a half-inlined file.
+  rm "$TMP_REPO/project/app/ui/dist/assets/index-fixture.js"
+
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
+  [ "$status" -ne 0 ]
+  assert_output_contains "not found on disk"
+  [ ! -f "$BATS_TEST_TMPDIR/result.html" ]
+}
+
+# -----------------------------------------------------------------------------
+# Bundling output -- is the artifact actually self-contained?
+# -----------------------------------------------------------------------------
+
+@test "output inlines JS and CSS and leaves no local asset references behind" {
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
+  [ "$status" -eq 0 ]
+
+  run cat "$BATS_TEST_TMPDIR/result.html"
+  assert_output_contains "fixture bundle marker"
+  assert_output_contains "fixture-style-marker"
+  # The <script src>/<link href> pointing at /assets/ must be gone entirely --
+  # a file:// recipient has no server to fetch them from.
+  ! grep -q 'src="/assets/' "$BATS_TEST_TMPDIR/result.html"
+  ! grep -q 'href="/assets/' "$BATS_TEST_TMPDIR/result.html"
+}
+
+@test "output preserves type=\"module\" on the inlined bundle" {
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
+  [ "$status" -eq 0 ]
+  # The dist bundle is ESM; inlining it as a classic script silently breaks it.
+  run grep -c '<script type="module">' "$BATS_TEST_TMPDIR/result.html"
+  [ "$status" -eq 0 ]
+}
+
+@test "output embeds the captured data as parseable JSON the UI can read" {
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
+  [ "$status" -eq 0 ]
+
+  # Parse it the same way src/api/client.js does, so a malformed or
+  # double-escaped payload fails here rather than in the recipient's browser.
+  run node -e "
+    const fs = require('fs');
+    const html = fs.readFileSync('$BATS_TEST_TMPDIR/result.html', 'utf8');
+    const m = html.match(/<script id=\"jenga-dashboard-data\" type=\"application\/json\">([\s\S]*?)<\/script>/);
+    if (!m) { console.error('no embedded snapshot tag'); process.exit(1); }
+    const data = JSON.parse(m[1]);
+    if (data.routes.board.data[0] !== 'fixture-board-entry') {
+      console.error('unexpected payload'); process.exit(1);
+    }
+    console.log('embedded data ok');
+  "
+  [ "$status" -eq 0 ]
+  assert_output_contains "embedded data ok"
+}
+
+@test "embedded data containing '</script>' cannot break out of its own tag" {
+  # Board content legitimately contains HTML-ish text. If it is not escaped it
+  # closes the JSON tag early and the whole page stops parsing.
+  cat > "$TMP_REPO/project/app/api/scripts/capture-snapshot.js" <<'EOF'
+#!/usr/bin/env node
+const fs = require('fs');
+const args = process.argv.slice(2);
+const outPath = args[args.indexOf('--out') + 1];
+fs.writeFileSync(outPath, JSON.stringify({
+  routes: { board: { data: ['</script><img src=x onerror=alert(1)>'] } },
+}));
+EOF
+
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
+  [ "$status" -eq 0 ]
+
+  # The raw sequence must not appear inside the JSON payload -- only escaped.
+  run node -e "
+    const fs = require('fs');
+    const html = fs.readFileSync('$BATS_TEST_TMPDIR/result.html', 'utf8');
+    const m = html.match(/<script id=\"jenga-dashboard-data\" type=\"application\/json\">([\s\S]*?)<\/script>/);
+    if (!m) { console.error('no embedded snapshot tag'); process.exit(1); }
+    const data = JSON.parse(m[1]);
+    if (data.routes.board.data[0] !== '</script><img src=x onerror=alert(1)>') {
+      console.error('payload did not round-trip'); process.exit(1);
+    }
+    console.log('escaped payload round-tripped');
+  "
+  [ "$status" -eq 0 ]
+  assert_output_contains "escaped payload round-tripped"
 }
 
 # -----------------------------------------------------------------------------
@@ -283,8 +422,6 @@ EOF
   run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$OUT_FILE' --data-url"
   [ "$status" -eq 0 ]
 
-  # Extract the data: URI line, strip the prefix, decode it, and compare
-  # against the actual on-disk file byte-for-byte.
   uri_line="$(printf '%s\n' "$output" | grep '^data:text/html;base64,')"
   [ -n "$uri_line" ]
   encoded="${uri_line#data:text/html;base64,}"
@@ -310,11 +447,10 @@ EOF
   run bash -c "cd '$INVOKE_DIR' && SNAPSHOT_MAX_DATA_URL_BYTES=1 '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/oversized-result.html' --data-url"
   [ "$status" -ne 0 ]
   assert_output_contains "exceeds the 1-byte threshold"
-  # No data: URI should ever be printed on the refusal path.
   ! printf '%s\n' "$output" | grep -q '^data:text/html;base64,'
-  # The plain --out file itself is still written by Step 3, which runs
-  # before the --data-url branch -- only the URI emission is refused, not
-  # the whole snapshot. Confirm that distinction explicitly.
+  # The plain --out file itself is still written by Step 3, which runs before
+  # the --data-url branch -- only the URI emission is refused, not the whole
+  # snapshot. Confirm that distinction explicitly.
   [ -f "$BATS_TEST_TMPDIR/oversized-result.html" ]
 }
 
@@ -325,7 +461,9 @@ EOF
 }
 
 @test "bundling step failure with --data-url still hard-fails before any data: URI is printed" {
-  run bash -c "cd '$INVOKE_DIR' && FAKE_BUILD_FAIL=1 '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/fail-result.html' --data-url"
+  rm "$TMP_REPO/project/app/ui/dist/assets/index-fixture.js"
+
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/fail-result.html' --data-url"
   [ "$status" -ne 0 ]
   [ ! -f "$BATS_TEST_TMPDIR/fail-result.html" ]
   ! printf '%s\n' "$output" | grep -q '^data:text/html;base64,'

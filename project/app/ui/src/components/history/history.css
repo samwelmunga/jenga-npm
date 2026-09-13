@@ -221,7 +221,19 @@
 /* Shared by E59_S02/E59_S03/E59_S04 for the .detail-panel/.panel-backdrop overlay
    (E06_S07's board/kanban triggers reuse the same panel) — extend this block for
    any further overlay mobile work rather than adding a second @media rule for the
-   same selectors. */
+   same selectors.
+
+   E59_S03_T02 — verified this block is ALSO sufficient when the overlay is opened
+   from a Kanban card (KanbanBoard.jsx's KanbanCard -> onSelect -> the same
+   `{ type: 'board_item', kind: item._itemType, ...item }` entry shape BoardView.jsx
+   already produces, per E06_S07_T02's wiring). Since the entry shape and therefore
+   the rendered panel content are structurally identical to what E59_S02_T02 already
+   fixed (box-sizing clipping, long inline `code` wrapping, table overflow, 44x44
+   `.panel-close`), no Kanban-specific gap was found — confirmed via a Playwright
+   harness driving a real click on a Kanban card title at 320/375/480px (post-
+   slideIn-settle measurements: no overflow, backdrop covers viewport, close button
+   44x44) plus a 1280px desktop regression check. No changes made; this comment is
+   the verification record. */
 @media (max-width: 480px) {
   .history-entry {
     flex-wrap: wrap;
@@ -235,12 +247,28 @@
   }
 
   .detail-panel {
+    /* E59_S02_T02 rework — without box-sizing: border-box, this padding is
+       added on top of the width: min(480px, 100vw) content-box declared in
+       the base rule above, making the rendered box 32px wider than the
+       viewport at every width this block targets. Since the base rule pins
+       right: 0, that excess bleeds off the left edge as a negative offset —
+       invisible, unscrollable content clipping (see
+       project/rapports/problems/E59_S02_T02-detail-panel-mobile-content-clipped.md).
+       Mirrors App.css's .app { box-sizing: border-box; } fix for the same
+       class of bug. Scoped to this mobile block only — desktop sizing is
+       unaffected. */
+    box-sizing: border-box;
     padding: var(--space-md);
   }
 
   .panel-close {
     padding: var(--space-sm);
     font-size: 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .panel-meta {
@@ -250,5 +278,22 @@
 
   .panel-meta dt {
     margin-top: var(--space-xs);
+  }
+
+  /* E59_S02_T02 — board-item _content (task/story/epic markdown bodies) surfaces
+     constructs the commit/rapport content this block was originally verified
+     against doesn't exercise as heavily: long inline `code` spans (often full
+     file paths with no natural break opportunity) and, occasionally, GFM
+     tables. Both can push .detail-panel into horizontal scroll at narrow
+     widths without this. */
+  .markdown-body code {
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  .markdown-body table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
   }
 }

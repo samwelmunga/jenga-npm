@@ -63,14 +63,30 @@ case "$LEVEL" in
   5) NAME="unrestricted" ;;
 esac
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
-TEMPLATE="$REPO_ROOT/templates/permission-levels/level-${LEVEL}-${NAME}.json"
+# PACKAGE_ROOT locates package-shipped assets (templates/). This script always
+# lives at scripts/, one level below the package root, in both layouts:
+#   - this monorepo checkout
+#   - a consumer install, inside node_modules/@jenga-ai/agent/
+# BASH_SOURCE-derived resolution is exact in both cases — no probing needed.
+PACKAGE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TEMPLATE="$PACKAGE_ROOT/templates/permission-levels/level-${LEVEL}-${NAME}.json"
+
+# REPO_ROOT locates the consumer's own repo — always the destination for
+# .claude/settings.json, .agents/settings.json, and .jenga-permission-level.json,
+# never node_modules/. Guarded against a non-git directory (set -euo pipefail
+# would otherwise abort on git's raw stderr) following the existing pattern in
+# scripts/check-public-playbook-steps.sh.
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+if [[ ! -d "$REPO_ROOT" ]]; then
+  echo "Error: could not resolve a repository root (not a git repository and pwd is unusable): $REPO_ROOT" >&2
+  exit 2
+fi
 CLAUDE_SETTINGS="$REPO_ROOT/.claude/settings.json"
 AGENTS_SETTINGS="$REPO_ROOT/.agents/settings.json"
 LEVEL_FILE="$REPO_ROOT/.jenga-permission-level.json"
 
 if [[ ! -f "$TEMPLATE" ]]; then
-  echo "Error: template file not found for level $LEVEL: $TEMPLATE" >&2
+  echo "Error: template file not found for level $LEVEL. Searched: $TEMPLATE (resolved from PACKAGE_ROOT: $PACKAGE_ROOT)" >&2
   exit 2
 fi
 

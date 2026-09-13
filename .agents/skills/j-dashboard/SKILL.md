@@ -70,17 +70,17 @@ agent is running remotely (e.g. a cloud/remote session) and cannot hand the user
 
 3. **Default/launch form — run the wrapper script.** Invoke `skills/j-dashboard/scripts/launch.sh
    <mode> [--port <n>] [--serve-app]` with the resolved mode and any forwarded flags. The script:
-   - Resolves `project/app` relative to the repo root (works whether this skill is run from this
-     monorepo or a mirrored/distributed copy — same resolution pattern as
-     `skills/j-mirror-public/scripts/compute-publicize-diff.sh`).
    - Delegates to `npm run dashboard:start` / `npm run dashboard:open` inside `project/app` — the
      exact same commands `npm run dashboard:start` / `dashboard:open` at the repo root already run.
    - For `both`, backgrounds the (long-running) server, waits briefly, then runs `open` — which
      itself health-checks before opening the browser and always exits `0` regardless of outcome
      (that is `dashboard-open.cjs`'s own documented contract, unchanged by this skill).
-   - Exits non-zero with a clear message if `project/app/package.json` is missing (e.g. a consumer
-     install where the dashboard package hasn't shipped yet — see epic `E47_S01`) or if the
-     underlying npm script itself fails (e.g. `--port` validation, missing dependencies).
+   - Resolves `project/app` via the shared `resolve-app-dir.sh`, which checks this package's own
+     root, the git repo root, and `node_modules/@jenga-ai/agent/project/app` — the last of these is
+     where the dashboard actually lives in a **consumer install**, and assuming the repo root (as
+     this script originally did) broke `j.dashboard` on every consumer.
+   - Exits non-zero with a clear message if no `project/app` can be resolved, or if the underlying
+     npm script itself fails (e.g. `--port` validation, missing dependencies).
 
 4. **`--snapshot` form — run the snapshot script.** Invoke
    `skills/j-dashboard/scripts/snapshot.sh [--out <path>] [--data-url]`. The script:
@@ -90,9 +90,14 @@ agent is running remotely (e.g. a cloud/remote session) and cannot hand the user
    - Runs `E47_S04_T02`'s capture step
      (`project/app/api/scripts/capture-snapshot.js`) to collect `/v1/board`, `/v1/history`, and
      `/v1/architecture` into one JSON artifact.
-   - Runs the UI's `build:snapshot` script (`vite build --mode snapshot`), which embeds that JSON
-     inline as a `<script id="jenga-dashboard-data">` tag and inlines all JS/CSS into a single
-     `index.html` (via `vite-plugin-singlefile`).
+   - Runs `project/app/ui/scripts/build-snapshot-html.cjs`, which inlines the built `dist/`
+     (JS + CSS) into a single `index.html` and embeds that JSON as a
+     `<script id="jenga-dashboard-data">` tag. It has **zero dependencies**, so it behaves
+     identically here and in a consumer install — which only ever receives the prebuilt `dist/`.
+     Where the UI sources and `node_modules` are present, `dist/` is rebuilt first so a snapshot is
+     never taken from a stale build. (This replaced a `vite build --mode snapshot` step that could
+     only ever run inside this monorepo; the tarball ships no vite and no UI sources, so
+     `--snapshot` previously failed on 100% of consumer installs.)
    - Copies the result to the final output path (default `jenga.html` in the invoking directory,
      overridable via `--out <path>`).
    - Fails loudly with no output file written if either the capture or bundling step fails — never
@@ -134,6 +139,6 @@ agent is running remotely (e.g. a cloud/remote session) and cannot hand the user
 - Resolving dashboard data against a *consumer* project's own `project/` directory rather than this
   monorepo's — that's `E47_S02`'s scope (already reused, not duplicated, by both `launch.sh` and
   `snapshot.sh`'s capture step).
-- Any new capture/bundling logic beyond invoking `capture-snapshot.js` and `vite build --mode
-  snapshot` — those live in `project/app/api/scripts/capture-snapshot.js` and
-  `project/app/ui/vite.config.js`/`package.json` respectively.
+- Any new capture/bundling logic beyond invoking `capture-snapshot.js` and
+  `build-snapshot-html.cjs` — those live in `project/app/api/scripts/capture-snapshot.js` and
+  `project/app/ui/scripts/build-snapshot-html.cjs` respectively.

@@ -225,6 +225,56 @@ FIXTURE
     && git add -A \
     && git commit -q -m "ZZZ_FIXTURE_COMMIT: scratch consumer project init" )
 
+  # E33_S07_T02: jenga-permission-level-switch.sh consumer-layout coverage. E33_S07_T01 fixed
+  # this script to resolve its level templates from the package root
+  # (node_modules/@jenga-ai/agent/templates/permission-levels/) rather than the consumer's git
+  # root, since that's exactly where a consumer install's templates actually ship. This
+  # regressed silently once already (exit 2, zero files changed, in every real consumer
+  # install) precisely because no layout like this one exercised it. Independent of the
+  # dashboard server, so it runs here rather than waiting on wait_for_health below.
+  PERM_SWITCH="$CONSUMER/node_modules/@jenga-ai/agent/scripts/jenga-permission-level-switch.sh"
+  if [ ! -f "$PERM_SWITCH" ]; then
+    fail "consumer install: jenga-permission-level-switch.sh not found in installed tarball at $PERM_SWITCH"
+  else
+    for n in 1 2 3 4 5; do
+      case "$n" in
+        1) name="locked" ;;
+        2) name="guarded" ;;
+        3) name="standard" ;;
+        4) name="elevated" ;;
+        5) name="unrestricted" ;;
+      esac
+      PERM_LOG="$SCRATCH/perm-switch-level-$n.log"
+      if ( cd "$CONSUMER" && bash "$PERM_SWITCH" "$n" >"$PERM_LOG" 2>&1 ); then
+        if grep -q "Switched to level $n ($name)\.\$" "$PERM_LOG"; then
+          pass "consumer install: jenga-permission-level-switch.sh level $n exits 0 with the expected message"
+        else
+          fail "consumer install: jenga-permission-level-switch.sh level $n exited 0 but did not print the expected message (see $PERM_LOG)"
+        fi
+      else
+        fail "consumer install: jenga-permission-level-switch.sh level $n exited non-zero (see $PERM_LOG)"
+      fi
+
+      if [ -f "$CONSUMER/.claude/settings.json" ] && [ -f "$CONSUMER/.agents/settings.json" ]; then
+        pass "consumer install: level $n wrote .claude/settings.json and .agents/settings.json into the CONSUMER project root"
+      else
+        fail "consumer install: level $n did not write both settings files into the consumer project root"
+      fi
+
+      if [ -f "$CONSUMER/node_modules/@jenga-ai/agent/.claude/settings.json" ] || [ -f "$CONSUMER/node_modules/@jenga-ai/agent/.agents/settings.json" ]; then
+        fail "consumer install: level $n wrote settings files under node_modules/ instead of the consumer root"
+      else
+        pass "consumer install: level $n did not write settings files under node_modules/"
+      fi
+
+      if grep -q "\"session_level\": $n" "$CONSUMER/.jenga-permission-level.json" 2>/dev/null; then
+        pass "consumer install: level $n's .jenga-permission-level.json reflects session_level $n"
+      else
+        fail "consumer install: level $n's .jenga-permission-level.json does not reflect session_level $n (see $CONSUMER/.jenga-permission-level.json)"
+      fi
+    done
+  fi
+
   PORT_C=41003
   DASHBOARD_START="$CONSUMER/node_modules/@jenga-ai/agent/project/app/ui/scripts/dashboard-start.cjs"
   ( cd "$CONSUMER" && JENGA_API_PORT="$PORT_C" node "$DASHBOARD_START" --port "$PORT_C" >"$SCRATCH/server-c.log" 2>&1 & )

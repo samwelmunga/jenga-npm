@@ -93,6 +93,9 @@
 .kanban-card-title {
   font-size: 0.85rem;
   color: #111827;
+  /* E06_S07_T02 — clickability affordance, matching board.css's equivalent
+     addition on .epic-title/.story-title/.task-title in E06_S07_T01. */
+  cursor: pointer;
 }
 
 /* E06_S05_T04 — a card promoted into In Progress only because
@@ -123,4 +126,58 @@
   padding: 0.05rem 0.4rem;
   white-space: nowrap;
   cursor: help;
+}
+
+/* E59_S03_T01 — Mobile (<= 480px, matches tokens.css --breakpoint-mobile):
+   fixed 220px columns + bare `overflow-x: auto` gave no touch-scroll
+   affordance and no signal that more columns existed off-screen. Below the
+   breakpoint, columns become touch-friendly scroll-snap panes sized to a
+   large fraction of the viewport so the next column visibly peeks in, and a
+   sticky edge-fade overlay (`.kanban-board::after`) reinforces that more
+   content is scrollable. `.kanban-column-empty` and desktop/wide-viewport
+   layout are intentionally untouched. */
+@media (max-width: 480px) {
+  .kanban-board {
+    position: relative;
+    gap: var(--space-sm);
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .kanban-column {
+    flex: 0 0 85%;
+    width: 85%;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  /* Tester-found regression (E59_S03_T01 rapport): an empty column carries
+     BOTH `kanban-column` and `kanban-column-empty` classes (KanbanBoard.jsx),
+     and the two base rules share specificity (0,1,0) — without this,
+     source order lets the mobile `.kanban-column` rule above silently win,
+     stretching empty columns to the same 85% width as populated ones.
+     Re-declared here (same 140px fixed width as the non-mobile rule at line
+     21-24) so empty-column behavior stays genuinely "unchanged" at mobile,
+     per the task's own Acceptance Criteria — not narrowed further, since
+     the AC's literal wording is "unchanged", not "also treated". No
+     scroll-snap-align: an empty column is a deliberately minor, easy-to-
+     skip-past placeholder, not a snap destination. */
+  .kanban-column-empty {
+    flex: 0 0 140px;
+    width: 140px;
+  }
+
+  /* Sticky (not absolute) so the fade stays pinned to the visible scrollport
+     edge as the user scrolls horizontally, rather than scrolling away with
+     the column content. Purely decorative — never intercepts input. */
+  .kanban-board::after {
+    content: '';
+    position: sticky;
+    top: 0;
+    right: 0;
+    flex: 0 0 var(--space-xl);
+    align-self: stretch;
+    background: linear-gradient(to right, transparent, rgba(249, 250, 251, 0.95));
+    pointer-events: none;
+  }
 }

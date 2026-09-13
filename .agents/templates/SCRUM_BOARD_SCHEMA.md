@@ -105,7 +105,9 @@ date_started:
 date_completed:
 dates_previously_completed:  # comma-separated list, e.g. 2026-01-15, 2026-03-22
 reopened_on:                 # comma-separated list, e.g. 2026-02-01, 2026-04-10
-reopened_reason:             # comma-separated list, e.g. "Scope expanded", "Bug found post-release"
+reopened_reason:             # YAML list, one entry per reopen cycle; see Reopen Tracking Fields
+  - "Scope expanded"
+  - "Bug found post-release"
 docs: []                     # optional list of repo-relative documentation paths, e.g. ["README.md", "docs/API.md"]
 epic_scope_approval: false     # set to true by the human operator only when any task in this epic has execution_scope: epic
 provenance:                  # optional; only valid value is `backfilled` (epic reverse-engineered from pre-existing code by `/uncharted onboard`). Omit for normally-authored epics.
@@ -139,7 +141,9 @@ date_started:
 date_completed:
 dates_previously_completed:  # comma-separated list, e.g. 2026-01-15, 2026-03-22
 reopened_on:                 # comma-separated list, e.g. 2026-02-01, 2026-04-10
-reopened_reason:             # comma-separated list, e.g. "Scope expanded", "Bug found post-release"
+reopened_reason:             # YAML list, one entry per reopen cycle; see Reopen Tracking Fields
+  - "Scope expanded"
+  - "Bug found post-release"
 docs: []                     # optional list of repo-relative documentation paths, e.g. ["README.md", "docs/API.md"]
 crucial_level:                # optional; advisory | gated | locked; absence means no elevated caution
 crucial_set_by:                # required when crucial_level is set; user | scrum-master | <agent>-escalation
@@ -177,7 +181,9 @@ date_started:
 date_completed:
 dates_previously_completed:  # comma-separated list, e.g. 2026-01-15, 2026-03-22
 reopened_on:                 # comma-separated list, e.g. 2026-02-01, 2026-04-10
-reopened_reason:             # comma-separated list, e.g. "Scope expanded", "Bug found post-release"
+reopened_reason:             # YAML list, one entry per reopen cycle; see Reopen Tracking Fields
+  - "Scope expanded"
+  - "Bug found post-release"
 assigned_to: developer | tester | scrum-master
 docs: []                     # optional list of repo-relative documentation paths, e.g. ["README.md", "docs/API.md"]
 execution_scope: task          # task | story | epic | inline | light; omit for legacy tasks (defaults to task)
@@ -229,7 +235,12 @@ All five are advisory and non-blocking — they record evidence for later review
 
 ## Reopen Tracking Fields
 
-**`dates_previously_completed`, `reopened_on`, `reopened_reason`** — These fields are **only populated when a previously completed item is being reopened and modified**. Leave them blank on first-run items. Each value is a comma-separated list to support multiple reopen cycles.
+**`dates_previously_completed`, `reopened_on`, `reopened_reason`** — These fields are **only populated when a previously completed item is being reopened and modified**. Leave them blank on first-run items. All three support multiple reopen cycles, but they are **not written the same way**:
+
+- `dates_previously_completed` and `reopened_on` hold a plain comma-separated string, e.g. `reopened_on: 2026-02-01, 2026-04-10`. Bare dates need no quoting, so this parses fine.
+- `reopened_reason` **must be a YAML list** (a block sequence, one `- "reason"` per line). It cannot be comma-separated, because reopen reasons are free text that routinely contains colons and commas and therefore has to be quoted — and a run of comma-separated quoted strings (`reopened_reason: "A", "B"`) is not valid YAML. This schema previously documented exactly that invalid form, and every board file that followed it became unparseable: the board parser skipped those files silently, so the board under-reported itself with no error surfaced anywhere. 14 files were repaired on 2026-09-13; do not reintroduce the comma-separated form here.
+
+Note the resulting asymmetry is deliberate and load-bearing, not an oversight: the first two fields stay strings because migrating them would churn every existing file for no parsing benefit.
 
 ## Planning Fields
 

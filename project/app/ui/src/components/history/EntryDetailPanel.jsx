@@ -29,6 +29,14 @@ const BOARD_KIND_LABELS = {
   task: 'Task',
 }
 
+// E58_S01_T06 — generic "markdown library" entry overlay, consumed by E58_S02 (Rapports) and
+// E58_S03 (Documentation). Raw entries from `readRapportsFull()`/`readDocumentation()` are shaped
+// `{ file, data, content, category, date }` with no `type` field of their own — the consuming tab
+// wraps the selected entry before handing it here, mirroring this file's existing `board_item`
+// precedent from `BoardView.jsx`:
+//   onSelect={entry => setSelected({ type: 'library_entry', ...entry })}
+// See `../shared/EntryListItem.jsx` for the full entry-shape contract.
+
 export default function EntryDetailPanel({ entry, onClose }) {
   const panelRef = useRef(null)
 
@@ -103,6 +111,28 @@ export default function EntryDetailPanel({ entry, onClose }) {
               <div
                 className="markdown-body"
                 dangerouslySetInnerHTML={{ __html: renderMarkdown(entry._content) }}
+              />
+            ) : (
+              <p className="panel-empty">No content available.</p>
+            )}
+          </>
+        )}
+
+        {entry.type === 'library_entry' && (
+          <>
+            <h3 className="panel-title">{entry.category || 'Entry'}</h3>
+            <dl className="panel-meta">
+              <dt>File</dt>
+              <dd>{entry.file || '—'}</dd>
+              <dt>Category</dt>
+              <dd>{entry.category || '—'}</dd>
+              <dt>Date</dt>
+              <dd>{formatDate(entry.date)}</dd>
+            </dl>
+            {entry.content ? (
+              <div
+                className="markdown-body"
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(entry.content) }}
               />
             ) : (
               <p className="panel-empty">No content available.</p>

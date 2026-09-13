@@ -3,6 +3,8 @@ import BoardTab from './tabs/BoardTab'
 import ActiveSprintTab from './tabs/ActiveSprintTab'
 import HistoryTab from './tabs/HistoryTab'
 import ArchitectureTab from './tabs/ArchitectureTab'
+import RapportsTab from './tabs/RapportsTab'
+import DocumentationTab from './tabs/DocumentationTab'
 import './App.css'
 
 const TABS = [
@@ -10,6 +12,8 @@ const TABS = [
   { id: 'active-sprint', label: 'Active Sprint' },
   { id: 'history', label: 'History' },
   { id: 'architecture', label: 'Architecture' },
+  { id: 'rapports', label: 'Rapports' },
+  { id: 'documentation', label: 'Documentation' },
 ]
 
 export default function App() {
@@ -33,6 +37,8 @@ export default function App() {
         {activeTab === 'active-sprint' && <ActiveSprintTab />}
         {activeTab === 'history' && <HistoryTab />}
         {activeTab === 'architecture' && <ArchitectureTab />}
+        {activeTab === 'rapports' && <RapportsTab />}
+        {activeTab === 'documentation' && <DocumentationTab />}
       </div>
     </div>
   )

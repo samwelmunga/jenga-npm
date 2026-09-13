@@ -1,0 +1,56 @@
+/*
+ * PaginationControls layout — E58_S02_T03.
+ *
+ * Uses the shared spacing tokens from `../../tokens.css` (`--space-*`) per E58/E59's
+ * mobile-readiness convention, matching `../../tabs/rapports-tab.css`'s existing pattern.
+ */
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  margin-top: var(--space-md);
+}
+
+.pagination-btn {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+  color: #1f2937;
+  cursor: pointer;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #f0f7ff;
+  border-color: #93c5fd;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pagination-status {
+  font-size: 0.82rem;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+/* ── Mobile (<= 480px, matches tokens.css --breakpoint-mobile) ────────────────── */
+@media (max-width: 480px) {
+  .pagination-controls {
+    gap: var(--space-sm);
+  }
+
+  .pagination-btn {
+    padding: 0.5rem 0.85rem;
+    font-size: 0.9rem;
+  }
+
+  .pagination-status {
+    font-size: 0.78rem;
+  }
+}

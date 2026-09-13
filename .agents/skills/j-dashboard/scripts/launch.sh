@@ -74,14 +74,14 @@ done
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-REPO_ROOT="$(git -C "$SKILL_DIR" rev-parse --show-toplevel 2>/dev/null || true)"
-[ -n "$REPO_ROOT" ] || die "could not locate repo root (git rev-parse failed from $SKILL_DIR)"
-
-APP_DIR="$REPO_ROOT/project/app"
-
-if [ ! -f "$APP_DIR/package.json" ]; then
-  die "dashboard app not found at $APP_DIR (expected project/app/package.json). If this is a consumer install, the dashboard may not yet be shipped in this package version (see epic E47_S01)."
-fi
+# project/app is NOT always at the repo root: in a consumer install it ships
+# inside the package, under node_modules/@jenga-ai/agent/. resolve-app-dir.sh
+# owns that whole search (and is shared with snapshot.sh) — see its header.
+# Invoked via `bash`, not executed directly: a shipped script losing its
+# executable bit is exactly the packaging defect this change also fixes, and
+# resolving the app dir must not be the thing that breaks when it happens.
+APP_DIR="$(bash "$SCRIPT_DIR/resolve-app-dir.sh" --marker "package.json" --from "$(pwd)")" \
+  || die "could not locate the dashboard app directory (see message above)"
 
 # Remaining args (--port <n>, --serve-app) are forwarded verbatim via the
 # "${EXTRA_ARGS[@]:-}" default-expansion form, not the bare "${EXTRA_ARGS[@]}"

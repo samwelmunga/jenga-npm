@@ -205,9 +205,58 @@ def validate_docs(source: Path, docs):
         ):
             raise ValueError(f"{source}: docs entry must be repo-relative without leading './' or '/' ({entry})")
 
+def assert_parses_as_yaml(lines: list[str], source: Path) -> None:
+    """Reject frontmatter that a real YAML parser cannot read.
+
+    parse_frontmatter() below is a hand-rolled line splitter, and it is far more
+    lenient than YAML itself. That gap was not theoretical: 36 board files
+    accumulated frontmatter this script called valid but every real consumer --
+    the dashboard's board parser among them -- silently skipped, so the board
+    under-reported itself with no error surfaced anywhere. The three shapes that
+    got through were an unquoted colon in a scalar (`title: Adopt j: prefix`), a
+    value merely starting with a quote (`title: "Merged" Status via /self-sync`),
+    and a duplicated key.
+
+    PyYAML is stdlib-adjacent but not guaranteed present on every consumer, so a
+    missing import degrades to a skip rather than a hard failure -- the targeted
+    checks below still run either way.
+    """
+    body = "\n".join(lines)
+    try:
+        import yaml
+    except ImportError:
+        pass
+    else:
+        try:
+            yaml.safe_load(body)
+        except yaml.YAMLError as exc:
+            detail = str(exc).splitlines()[0]
+            raise ValueError(
+                f"{source}: frontmatter is not valid YAML ({detail}). "
+                "Free-text values containing ':' must be quoted, and multiple "
+                "reopen reasons must be a YAML list -- see "
+                "templates/SCRUM_BOARD_SCHEMA.md's Reopen Tracking Fields."
+            )
+
+    # Duplicate keys are legal-ish to some YAML loaders (last wins) but always a
+    # board-authoring bug: one of the two values is being silently discarded.
+    seen = set()
+    for line in lines:
+        match = re.match(r"^([A-Za-z_][A-Za-z0-9_]*):", line)
+        if not match:
+            continue
+        key = match.group(1)
+        if key in seen:
+            raise ValueError(
+                f"{source}: duplicated frontmatter key '{key}' -- one of its two "
+                "values is silently discarded; merge them into a single entry"
+            )
+        seen.add(key)
+
 def validate_file(source: Path):
     text = source.read_text(encoding="utf-8")
     frontmatter_lines = extract_frontmatter(text, source)
+    assert_parses_as_yaml(frontmatter_lines, source)
     data = parse_frontmatter(frontmatter_lines, source)
 
     item_id = data.get("id")

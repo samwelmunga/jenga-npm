@@ -14,11 +14,17 @@
 #   resolves the *invoking* project's root (E47_S02's contract) — not this
 #   framework repo's, and not project/app/ui's.
 #
-# Step 2 — bundle: npm run build:snapshot (vite build --mode snapshot) inside
-#   project/app/ui, with SNAPSHOT_DATA_FILE pointed at the captured JSON.
-#   vite.config.js's snapshot-mode-only plugins inject that JSON as an inline
-#   <script id="jenga-dashboard-data"> tag and inline all JS/CSS
-#   (vite-plugin-singlefile) into a single index.html.
+# Step 2 — bundle: project/app/ui/scripts/build-snapshot-html.cjs inlines the
+#   built dist/ (JS + CSS) into a single index.html and injects the captured
+#   JSON as an inline <script id="jenga-dashboard-data"> tag. Zero dependencies
+#   and no build tooling, so it behaves identically in this monorepo and in a
+#   consumer install, which only ever receives the prebuilt dist/. Where the UI
+#   sources and node_modules are available, dist/ is rebuilt first so a
+#   snapshot is never taken from a stale build.
+#
+# project/app itself is located by resolve-app-dir.sh, which also knows to look
+#   inside node_modules/@jenga-ai/agent — this script previously assumed the
+#   repo root, which is wrong for every consumer install.
 #
 # Either step failing hard-fails this script (set -e) with no output file
 # written — matching capture-snapshot.js's own "no partial artifact" contract.
@@ -139,14 +145,21 @@ done
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-REPO_ROOT="$(git -C "$SKILL_DIR" rev-parse --show-toplevel 2>/dev/null || true)"
-[ -n "$REPO_ROOT" ] || die "could not locate repo root (git rev-parse failed from $SKILL_DIR)"
+# project/app is NOT always at the repo root: in a consumer install it ships
+# inside the package, under node_modules/@jenga-ai/agent/. resolve-app-dir.sh
+# owns that whole search (and is shared with launch.sh) — see its header.
+# Invoked via `bash`, not executed directly: a shipped script losing its
+# executable bit is exactly the packaging defect this change also fixes, and
+# resolving the app dir must not be the thing that breaks when it happens.
+APP_DIR="$(bash "$SCRIPT_DIR/resolve-app-dir.sh" --marker "api/scripts/capture-snapshot.js" --from "$ORIG_CWD")" \
+  || die "could not locate the dashboard app directory (see message above)"
 
-API_DIR="$REPO_ROOT/project/app/api"
-UI_DIR="$REPO_ROOT/project/app/ui"
+API_DIR="$APP_DIR/api"
+UI_DIR="$APP_DIR/ui"
 
 [ -f "$API_DIR/scripts/capture-snapshot.js" ] || die "capture script not found at $API_DIR/scripts/capture-snapshot.js"
-[ -f "$UI_DIR/package.json" ] || die "dashboard UI not found at $UI_DIR (expected project/app/ui/package.json). If this is a consumer install, the dashboard may not yet be shipped in this package version (see epic E47_S01)."
+# The built UI, not its sources: bundling no longer needs vite (see Step 2).
+[ -f "$UI_DIR/dist/index.html" ] || die "dashboard UI has not been built — no $UI_DIR/dist/index.html. In this monorepo run: npm run ui:build --prefix project/app. In a consumer install this means the package shipped without project/app/ui/dist (a packaging regression)."
 
 # -----------------------------------------------------------------------------
 # Scratch workspace — always cleaned up, success or failure.
@@ -173,13 +186,33 @@ fi
 
 # -----------------------------------------------------------------------------
 # Step 2 — bundle: single-file build with the captured data embedded inline.
+#
+# Two sub-steps, deliberately split so the second one is identical everywhere:
+#
+#   2a. If the UI sources AND its node_modules are present (i.e. this monorepo,
+#       or a dev checkout), refresh dist/ first so a snapshot never silently
+#       ships a stale build. Skipped entirely in a consumer install, which has
+#       only the prebuilt dist/ the package shipped — and needs nothing more.
+#   2b. Inline that dist/ into one self-contained HTML file with the captured
+#       JSON embedded, via the dependency-free build-snapshot-html.cjs.
+#
+# This used to be `npm run build:snapshot` (vite build --mode snapshot), which
+# only ever worked here: the tarball ships dist/ and scripts/ but no
+# package.json, vite.config.js, or src/, so there was no vite to run on any
+# consumer. Inlining a prebuilt dist needs no build tooling, so one code path
+# now serves both — and every local run exercises the consumer path too.
 # -----------------------------------------------------------------------------
 
-(
-  cd "$UI_DIR" && \
-  SNAPSHOT_DATA_FILE="$SNAPSHOT_JSON" \
-  npm run build:snapshot -- --outDir "$SNAPSHOT_DIST" --emptyOutDir
-)
+if [ -f "$UI_DIR/package.json" ] && [ -d "$UI_DIR/node_modules/vite" ]; then
+  (cd "$UI_DIR" && npm run build)
+  [ -f "$UI_DIR/dist/index.html" ] || die "UI rebuild reported success but produced no $UI_DIR/dist/index.html"
+fi
+
+mkdir -p "$SNAPSHOT_DIST"
+node "$UI_DIR/scripts/build-snapshot-html.cjs" \
+  --dist "$UI_DIR/dist" \
+  --data "$SNAPSHOT_JSON" \
+  --out "$SNAPSHOT_DIST/index.html"
 
 [ -f "$SNAPSHOT_DIST/index.html" ] || die "bundling step reported success but no index.html was produced in $SNAPSHOT_DIST"
 

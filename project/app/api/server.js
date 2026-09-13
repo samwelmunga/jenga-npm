@@ -35,10 +35,12 @@ if (!process.env.JENGA_PROJECT_ROOT) {
 const express = require('express');
 const cors    = require('cors');
 
-const healthRouter       = require('./routes/health');
-const boardRouter        = require('./routes/board');
-const historyRouter      = require('./routes/history');
-const architectureRouter = require('./routes/architecture');
+const healthRouter        = require('./routes/health');
+const boardRouter         = require('./routes/board');
+const historyRouter       = require('./routes/history');
+const architectureRouter  = require('./routes/architecture');
+const rapportsRouter      = require('./routes/rapports');
+const documentationRouter = require('./routes/documentation');
 
 const { API_VERSION } = require('./response');
 
@@ -51,10 +53,12 @@ app.use(cors());
 app.use(express.json());
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
-app.use('/v1/health',       healthRouter);
-app.use('/v1/board',        boardRouter);
-app.use('/v1/history',      historyRouter);
-app.use('/v1/architecture', architectureRouter);
+app.use('/v1/health',        healthRouter);
+app.use('/v1/board',         boardRouter);
+app.use('/v1/history',       historyRouter);
+app.use('/v1/architecture',  architectureRouter);
+app.use('/v1/rapports',      rapportsRouter);
+app.use('/v1/documentation', documentationRouter);
 
 // ── Fallback routes ────────────────────────────────────────────────────────────
 // Registered on demand (not at require-time) so callers that mount additional

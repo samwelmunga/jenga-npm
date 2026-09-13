@@ -25,6 +25,7 @@ load helpers/assertions
 
 REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
 LAUNCH_SRC="$REPO_ROOT/skills/j-dashboard/scripts/launch.sh"
+RESOLVER_SRC="$REPO_ROOT/skills/j-dashboard/scripts/resolve-app-dir.sh"
 
 setup() {
   # Resolve via `pwd -P` (not just string-concatenated from
@@ -39,6 +40,11 @@ setup() {
   cp "$LAUNCH_SRC" "$TMP_REPO/skills/j-dashboard/scripts/launch.sh"
   chmod +x "$TMP_REPO/skills/j-dashboard/scripts/launch.sh"
   LAUNCH="$TMP_REPO/skills/j-dashboard/scripts/launch.sh"
+
+  # launch.sh delegates project/app resolution to its sibling resolve-app-dir.sh,
+  # so the fixture skill directory must carry it too -- exactly as the real
+  # skills/j-dashboard/scripts/ directory ships both together.
+  cp "$RESOLVER_SRC" "$TMP_REPO/skills/j-dashboard/scripts/resolve-app-dir.sh"
 
   mkdir -p "$TMP_REPO/project/app"
   cat > "$TMP_REPO/project/app/package.json" <<'EOF'
@@ -117,8 +123,44 @@ EOF
   [ -z "$output" ]
 }
 
+# The defect this pins: launch.sh used to compute APP_DIR as
+# "$(git rev-parse --show-toplevel)/project/app", which is only ever correct
+# inside this monorepo. A consumer installs the dashboard as a dependency, so
+# it lives at <consumer>/node_modules/@jenga-ai/agent/project/app and the old
+# resolution died with "dashboard app not found" on every consumer install.
+@test "consumer install: resolves project/app from node_modules/@jenga-ai/agent" {
+  # Shape the fixture like a real consumer: the skill was mirrored into
+  # .claude/skills/ by postinstall, and the app only exists inside the package.
+  rm -rf "$TMP_REPO/project"
+  mkdir -p "$TMP_REPO/.claude/skills/j-dashboard/scripts"
+  cp "$LAUNCH_SRC" "$TMP_REPO/.claude/skills/j-dashboard/scripts/launch.sh"
+  cp "$RESOLVER_SRC" "$TMP_REPO/.claude/skills/j-dashboard/scripts/resolve-app-dir.sh"
+  chmod +x "$TMP_REPO/.claude/skills/j-dashboard/scripts/launch.sh"
+
+  PKG_APP="$TMP_REPO/node_modules/@jenga-ai/agent/project/app"
+  mkdir -p "$PKG_APP"
+  cat > "$PKG_APP/package.json" <<'EOF'
+{ "name": "fixture-packaged-app" }
+EOF
+
+  run "$TMP_REPO/.claude/skills/j-dashboard/scripts/launch.sh" start
+  [ "$status" -eq 0 ]
+
+  run cat "$NPM_LOG"
+  [ "$status" -eq 0 ]
+  assert_output_contains "CWD:$PKG_APP"
+  assert_output_contains "ARGS:run dashboard:start"
+}
+
 @test "missing project/app/package.json exits non-zero with a clear message, no npm invocation" {
   rm "$TMP_REPO/project/app/package.json"
+
+  # Run from a directory with no jenga install anywhere above it. Without this
+  # the resolver's walk-up could climb out of the fixture entirely and find an
+  # unrelated checkout's project/app -- which is exactly why that walk-up only
+  # ever accepts an installed node_modules/@jenga-ai/agent, never a bare
+  # project/app. Asserting from a neutral cwd pins that narrowing.
+  cd "$BATS_TEST_TMPDIR"
 
   run "$LAUNCH" start
   [ "$status" -ne 0 ]

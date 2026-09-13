@@ -1,0 +1,93 @@
+/*
+ * Shared "markdown library" list styles — E58_S01_T06.
+ *
+ * Deliberately decoupled from `../history/history.css`'s `.history-list`/`.history-entry` rules
+ * (distinct class names throughout) so this task never touches the History tab's existing
+ * styling. `EntryDetailPanel.jsx`'s `.panel-*`/`.markdown-body` styles are still reused as-is from
+ * `history.css` for the new `library_entry` branch — only the list/row styling is duplicated
+ * here, generalized for consumers with a `category` badge instead of a fixed commit/rapport
+ * type map.
+ *
+ * Uses the shared spacing tokens from `../../tokens.css` (`--space-*`) per E58/E59's
+ * mobile-readiness convention.
+ */
+
+.entry-list-empty {
+  color: #888;
+  padding: 2rem;
+  text-align: center;
+}
+
+.entry-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.entry-list-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background 0.12s;
+}
+
+.entry-list-item:last-child {
+  border-bottom: none;
+}
+
+.entry-list-item:hover,
+.entry-list-item:focus {
+  background: #f0f7ff;
+  outline: none;
+}
+
+.entry-list-item.selected {
+  background: #dbeafe;
+}
+
+.entry-badge {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  text-transform: capitalize;
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.entry-title {
+  flex: 1;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #1f2937;
+}
+
+.entry-date {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  color: #9ca3af;
+}
+
+/* ── Mobile (<= 480px, matches tokens.css --breakpoint-mobile) ────────────────── */
+@media (max-width: 480px) {
+  .entry-list-item {
+    flex-wrap: wrap;
+    row-gap: var(--space-xs);
+  }
+
+  .entry-title {
+    flex-basis: 100%;
+    order: 3;
+    white-space: normal;
+  }
+}

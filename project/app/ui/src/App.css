@@ -37,3 +37,23 @@ body {
 .tab-content {
   padding: 1rem 0;
 }
+
+/* ── Mobile (<= 480px, matches tokens.css --breakpoint-mobile) ───────────────── */
+@media (max-width: 480px) {
+  .app {
+    width: 100%;
+    box-sizing: border-box;
+    padding: var(--space-sm);
+  }
+
+  .tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tab-btn {
+    flex: 0 0 auto;
+    padding: var(--space-sm) var(--space-md);
+  }
+}
