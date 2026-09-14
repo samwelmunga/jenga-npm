@@ -69,13 +69,14 @@ Jenga AI supports two distribution paths:
 - **E43** — Shell Test Harness — Make the Declared bats Suite Real *(Pending)*
 - **E44** — Execution Control — /break, Stop-the-Line & Scoped Run Status *(Pending)*
 - **E45** — Interactive Scope Selection for /jenga *(Pending)*
-- **E47** — Distributable Project Dashboard *(Passed with remarks — re-rolled up 2026-09-12 after `E47_S04`'s reopen for `E47_S04_T04` (`data:` URL delivery mode for `j.dashboard --snapshot`) also landed `Passed with remarks`; one non-blocking remark carried forward, `CLAUDE.md`'s `j.dashboard` row doesn't yet mention `--data-url`)*
+- **E47** — Distributable Project Dashboard *(In Progress — reopened 2026-09-14 for `E47_S05` (Dashboard snapshot cloud sharing), see below; `E47_S01`-`E47_S04` keep their prior `Passed`/`Passed with remarks` status)*
 - **E48** — Agent Dashboard — Live AI Item Review *(Pending — unblocked when E47's productization DoD was satisfied 2026-09-12; E47's subsequent `E47_S04` reopen/re-close for a remote-delivery addendum doesn't touch that DoD, so the unblock still holds)*
 - **E50** — Skill Namespace Prefix & Anti-Masquerading Allow-List *(In Progress — reopened 2026-09-09 to hard-break the bare `/<name>` form, see below)*
 - **E53** — Jenga Natural-Language Dispatcher & Playbooks *(Passed with remarks — Playbooks v2 shipped 2026-09-09, epic rolled up 2026-09-10, see below)*
 - **E57** — Train Skill Deprecation & Package Extraction *(Pending — supersedes E19, see below)*
 - **E58** — Dashboard Markdown Library *(Pending — filed via `/brainstorm` 2026-09-13, see below)*
 - **E59** — Dashboard Mobile Responsive Rollout *(Pending — filed via `/brainstorm` 2026-09-13, see below)*
+- **E60** — Cloud Storage Connectivity *(Pending — filed via `/brainstorm` 2026-09-14, see below)*
 
 ## Train Skill Deprecation & Package Extraction (E57) — supersedes E19
 Captured via `/btw` on 2026-09-10 by direct user instruction: `/train` is disabled and deprecated in
@@ -157,6 +158,60 @@ pattern. Worth checking for on any future `files`-field change.
 **E47_S02 (generalize dashboard data-source resolution) shipped 2026-09-11 — `Passed`.** All four data-root call sites the story named (`BOARD_ROOT` in `parsers/board.js`, `REPO_ROOT` in `parsers/git-log.js`, `RAPPORTS_ROOT` in `parsers/rapports.js`, `ROOT` in `parsers/architecture.js`) computed their root via a fixed `path.resolve(__dirname, '../../../...')` climb — the same defect *pattern* `E46_S01` fixed for `/init`, and one that only resolves correctly from this monorepo's own checkout; from inside a real consumer's `node_modules/@jenga-ai/agent/`, that climb lands inside/above `node_modules`, never at the consumer's own root. `E47_S02_T01` added a shared `resolveProjectRoot()` (`project/app/api/lib/resolve-project-root.js`): explicit `JENGA_PROJECT_ROOT` override → `cwd` walk-up for a `project/board` marker (20-level bound) → fail loudly, with `fs.realpathSync` symlink resolution on both paths. `E47_S02_T02` wired all four parsers onto it, pinned `server.js` to resolve the root at load time via the same function (a raw `process.cwd()` literal would have broken self-hosting, since this repo's own `dashboard:start`/`api:start` scripts run with `cwd=project/app`), and added `scripts/verify-consumer-install.sh` — a reproducible 3-scenario harness (self-hosting, symlinked invocation, real `npm pack`/`npm install` consumer simulation) that both the developer and the tester independently ran clean (11/11). Two developer judgment calls, both reviewed and accepted by the tester: (1) a 5th file, `parsers/knowledge-graph.js`, was found with the identical `__dirname`-climb defect (feeding `architecture.js`'s `sad_map` field) and fixed the same way, since leaving it would have kept `/v1/architecture` reading this repo's own data even inside a real consumer install — a same-day/same-pattern extension, not scope creep; (2) `verify-consumer-install.sh`'s real-consumer scenario stands in for `E47_S01` (still `Pending` — the dashboard isn't in the npm `files` list yet) with a documented, scratch-copy-only `package.json` `files` patch, a reasonable simplification rather than scope avoidance. Epic `E47` stays `In Progress` (2026-09-12 rollup check) — `S01`, `S02`, and `S04` are now all `Passed`; only `S03` (`jenga dashboard` CLI subcommand, decomposed into `E47_S03_T01`/`T02` but not yet dispatched) remains `Pending`, and epic rollup is blocked purely on it.
 
 **E47_S03 (`jenga dashboard start`/`open` real CLI subcommands) shipped 2026-09-12 — `Passed`, and epic `E47` rolled up `Passed` the same day.** Both tasks (`E47_S03_T01`, `E47_S03_T02`) complete and merged to `main`; tester-verified via `scripts/verify-consumer-install.sh` (25/25 assertions across Scenarios A–F, including a new Scenario E that drives the installed tarball's own `bin/jenga.js` CLI entry point for `dashboard start`/`dashboard open` end-to-end, not just this monorepo's dev checkout). All story AC/DoD ticked. With `S01`, `S02`, `S03`, and `S04` all `Passed`, epic `E47`'s full Definition of Done is now satisfied — dashboard ships in the npm package, data source resolves against the invoking project, `jenga dashboard start`/`open` exist as real CLI subcommands, and the whole thing is verified end-to-end against a real consumer install simulation. Epic status set to `Passed`, `date_completed` 2026-09-12. This unblocks both `E06_S04` (Board tab collapse/expand) and `E48` (Agent Dashboard — Live AI Item Review), which were explicitly sequenced behind E47's productization per the user's 2026-08-31 brainstorm decision.
+
+## Cloud Storage Connectivity (E60) and Dashboard Snapshot Cloud Sharing (E47_S05)
+Filed via `/brainstorm` (2026-09-14), starting from a request to turn
+`project/documentation/examples/dashboard-cloud-sharing-google-drive-rclone.md` (a manual, Drive-only
+two-step recipe: `j.dashboard --snapshot` then `rclone copyto`, with `rclone link` as a separate,
+deliberate share-link step) into a repeatable capability. Extended dialogue narrowed several genuinely
+open questions before anything was written to the board:
+
+- **Upload only, no auto-link.** The new dashboard-sharing flow never runs `rclone link` or any other
+  share-link-creating command automatically — the source doc treats upload and link-creation as two
+  distinct actions with a real permission consequence (a link exposes the entire snapshot to anyone
+  with the URL), and that separation is preserved rather than collapsed into one auto-chained step.
+- **Split into two skills, not one.** `rclone` install/config/auth is generic infrastructure with no
+  dependency on the dashboard; bolting it onto `j-dashboard` would have coupled an external-network,
+  third-party-auth concern to what is otherwise a deterministic, self-contained local export. Scoped
+  as two skills instead: `j.cloud-connect` (new epic **E60**, generic setup wizard) and
+  `j.dashboard-share` (new story **E47_S05** on the existing dashboard epic, thin consumer of it).
+- **Real multi-backend support, not Drive-only.** The user confirmed "whatever cloud storages are
+  supported by rclone" is the actual target, not a curated subset — this is what pushed the setup
+  wizard into its own epic rather than a task bump on the dashboard epic. v1 scope is bounded
+  practically: the backend menu is sourced *dynamically* from rclone's own provider list (so
+  "supported by rclone" holds by construction, nothing hardcoded to go stale), and the same generic
+  config/auth-link/verify flow applies identically to every backend, Drive included — no
+  backend-specific hand-built guidance beyond what rclone's own `config create` already provides
+  per-backend.
+- **Setup is a wizard, not a check-and-bail.** Initial framing was a simple prerequisite check that
+  fails fast with a doc pointer; the user pushed back and asked for an actual guided flow instead:
+  automated `rclone` binary install (not just detection), a live backend picker, and — critically —
+  for the OAuth step specifically, forwarding whatever auth link the backend's config flow produces
+  and waiting for the user to confirm completion before verifying (`rclone about <remote>:`), rather
+  than just detecting "not configured" and stopping. Note the hard constraint this respects: no agent
+  session can complete a browser OAuth consent flow itself, so "automated setup" means automating
+  everything *around* that human step, never the consent step itself.
+- **Destination path is templated, not hardcoded.** The source doc's example path
+  (`gdrive:Skolkartan/snapshots/...`) was project-specific; the generalized upload script builds
+  `JengaAI/<repo-directory-name>/<datetime>-board-snapshot.html` instead, sourcing the project-name
+  segment from the repository directory name (deterministic, no parsing, immune to a project title
+  changing later) rather than any project metadata.
+
+**E60 — Cloud Storage Connectivity** (new epic, `Pending`): one story, `E60_S01` (`j-cloud-connect`
+setup wizard), decomposed into three tasks — `T01` automated cross-platform `rclone` install, `T02`
+the dynamic backend-selection + unified config/auth-link/verify flow (the core of the wizard), `T03`
+the `SKILL.md` wiring the two together. `T02` touches the "auth, secrets, or credentials" heuristic
+from the Crucial Level Heuristic Proposal (default tier `gated`) — this was surfaced during breakdown
+but not confirmed in-session before the board write, so no `crucial_level` was set on it per the
+confirm-before-write gate; it will be re-evaluated fresh on the next breakdown pass over this task.
+
+**E47_S05 — Dashboard snapshot cloud sharing** (new story on existing epic `E47`, `Pending`): two
+tasks — `T01` the templated-path `rclone copyto` upload script (depends on `E60_S01` for a configured
+remote; points the user at `j.cloud-connect` rather than surfacing a raw `rclone` error if none is
+configured), `T02` the `j-dashboard-share` `SKILL.md` wiring `j-dashboard`'s existing
+`scripts/snapshot.sh` to `T01`'s upload script. Epic `E47` — previously `Passed with remarks` — is
+reopened to `In Progress` for this story; `E47_S01`–`E47_S04` keep their prior terminal statuses
+unchanged.
 
 ## Agent Dashboard — Live AI Item Review (E48) and Board Tab reopening (E06_S04)
 Filed via `/brainstorm` (2026-08-31) as a two-part request. Part one, a collapsible epic→story→task tree in the dashboard's Board tab, is a genuine gap in the already-`Done` E06 epic (`BoardView.jsx` renders a flat, always-expanded list — zero collapse/expand logic in the UI source), so E06 was reopened for a fourth story, **E06_S04**: collapse at both epic→story and story→task levels, default fully collapsed on load, no persistence across reloads. Part two is new capability with no prior epic behind it: **E48** adds a click-to-score AI review of any board item (0–10 integer, no decimals, plus improvement suggestions) computed **live** on every click via a new skill shelled out to from the dashboard API, rather than precomputed by a background job. This breaks E05's original "read-only board parsing" design principle for the API layer, so E48_S02's new endpoint is guarded by a secret token generated at `jenga dashboard start` time (only the dashboard UI can trigger a review), and requires an already-authenticated `claude` CLI on the server's host machine — documented as a known current limitation, not a permanent lock-in. E48_S01 defines the rubric + skill (strict JSON output contract), E48_S03 persists each live result back to the reviewed item's own frontmatter (score + suggestions + timestamp, via `scripts/with-lock.sh`) so the board can passively show a "last reviewed" state, and E48_S04 is the UI (icon, loading state, score badge, suggestions panel, error/retry state). **Both E06_S04 and all of E48 were blocked on E47's Definition of Done; that block cleared 2026-09-12** when E47 rolled up `Passed` (see E47 section above) — productization was explicitly sequenced first by the user, since neither feature was meaningful to an actual npm consumer until the dashboard shipped in the package and resolved data against the consumer's own project rather than this repo's. Both are now eligible for decomposition/dispatch. The 3001→4305 port rename surfaced during the brainstorm has nowhere to live in E47's own stories (none name a specific port), so it is recorded as an explicit assumption in E48's Purpose section instead. Two open items were surfaced to the user during breakdown but not yet confirmed in-session, so no `crucial_level` was written to either story per the confirm-before-write gate: E48_S02 (generates and checks a secret token — touches the "auth, secrets, or credentials" heuristic) and E48_S03 (amends `templates/SCRUM_BOARD_SCHEMA.md` and `scripts/validate-board.sh` — touches the "schema or frontmatter contracts" heuristic). Both will be re-evaluated fresh on the next breakdown pass over these items.

@@ -268,6 +268,32 @@ EOF
   [ -z "$output" ]
 }
 
+# Pins the EXACT shape npm actually ships (root package.json's `files`
+# allowlist includes project/app/ui/package.json and dist/**/scripts/**, but
+# never src/** or node_modules/**) -- not just "no package.json at all" like
+# the test above. This is the case the E06_S07/snapshot-staleness fix
+# (guarding on `-d "$UI_DIR/src"`) must stay inert for: a shipped
+# package.json with no src/ and no node_modules/vite must neither attempt an
+# npm build (there is nothing installed to build with) nor trip the
+# staleness check (which would permanently block every consumer install,
+# with no way for them to "npm install" their way out of it).
+@test "published package shape: shipped ui/package.json with no src/ still skips npm and staleness check" {
+  cat > "$TMP_REPO/project/app/ui/package.json" <<'EOF'
+{ "name": "jenga-dashboard", "private": true, "scripts": { "build": "vite build" } }
+EOF
+
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
+  [ "$status" -eq 0 ]
+  assert_output_contains "Snapshot dashboard written to: $BATS_TEST_TMPDIR/result.html"
+
+  run cat "$NPM_LOG"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+
+  run cat "$BATS_TEST_TMPDIR/result.html"
+  assert_output_contains "fixture bundle marker"
+}
+
 @test "monorepo: rebuilds dist first when UI sources and node_modules are present" {
   # Opt the fixture into the monorepo shape: sources + an installed vite.
   cat > "$TMP_REPO/project/app/ui/package.json" <<'EOF'
@@ -287,6 +313,47 @@ EOF
   # not the pre-existing fixture one, must be what got inlined.
   run cat "$BATS_TEST_TMPDIR/result.html"
   assert_output_contains "REBUILT bundle marker"
+}
+
+# Regression coverage for the bug this suite originally missed: a dev checkout
+# (has UI sources) whose node_modules/vite is absent -- e.g. never installed,
+# or pruned -- used to silently skip the rebuild AND skip any staleness check,
+# so a stale dist/ got bundled into the snapshot with no warning at all. A
+# previously-generated jenga.html could permanently bake in a fixed-in-source
+# bug this way.
+@test "dev checkout with stale dist and no installed vite refuses to bundle silently" {
+  mkdir -p "$TMP_REPO/project/app/ui/src"
+  # dist/index.html (written by write_fixture_dist in setup) is pinned to a
+  # fixed old timestamp; the src file is left at "now", making it newer --
+  # touch -t is portable across macOS/BSD and GNU, unlike relative-touch flags.
+  touch -t 202001010000 "$TMP_REPO/project/app/ui/dist/index.html"
+  echo "export default 1" > "$TMP_REPO/project/app/ui/src/App.jsx"
+  # package.json present (looks buildable) but node_modules/vite is not --
+  # the rebuild sub-step is skipped, landing in the new staleness check.
+  cat > "$TMP_REPO/project/app/ui/package.json" <<'EOF'
+{ "name": "fixture-ui", "scripts": { "build": "vite build" } }
+EOF
+
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
+  [ "$status" -ne 0 ]
+  assert_output_contains "refusing to bundle a possibly-stale snapshot"
+  [ ! -f "$BATS_TEST_TMPDIR/result.html" ]
+
+  run cat "$NPM_LOG"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "dev checkout with no installed vite but dist is not stale proceeds normally" {
+  mkdir -p "$TMP_REPO/project/app/ui/src"
+  # src file pinned older than dist/index.html (created at "now" in setup) --
+  # dist is not stale, so the rebuild-less path should proceed normally.
+  echo "export default 1" > "$TMP_REPO/project/app/ui/src/App.jsx"
+  touch -t 202001010000 "$TMP_REPO/project/app/ui/src/App.jsx"
+
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
+  [ "$status" -eq 0 ]
+  assert_output_contains "Snapshot dashboard written to: $BATS_TEST_TMPDIR/result.html"
 }
 
 # -----------------------------------------------------------------------------

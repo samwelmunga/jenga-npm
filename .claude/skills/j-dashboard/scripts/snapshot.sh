@@ -193,6 +193,9 @@ fi
 #       or a dev checkout), refresh dist/ first so a snapshot never silently
 #       ships a stale build. Skipped entirely in a consumer install, which has
 #       only the prebuilt dist/ the package shipped — and needs nothing more.
+#       If sources are present but node_modules/vite isn't (so the rebuild
+#       above can't run), a dev checkout still refuses to bundle a dist/ that
+#       looks older than its own sources — see the staleness check below.
 #   2b. Inline that dist/ into one self-contained HTML file with the captured
 #       JSON embedded, via the dependency-free build-snapshot-html.cjs.
 #
@@ -206,6 +209,18 @@ fi
 if [ -f "$UI_DIR/package.json" ] && [ -d "$UI_DIR/node_modules/vite" ]; then
   (cd "$UI_DIR" && npm run build)
   [ -f "$UI_DIR/dist/index.html" ] || die "UI rebuild reported success but produced no $UI_DIR/dist/index.html"
+elif [ -d "$UI_DIR/src" ]; then
+  # This is a dev checkout (it has UI sources, unlike a consumer install which
+  # only ships prebuilt dist/ + scripts/), but node_modules/vite isn't present
+  # right now to rebuild with -- e.g. `npm install` hasn't been (re-)run for
+  # this package. The rebuild above was skipped, so dist/ may already be
+  # stale relative to src/. A stale snapshot must never ship silently (this is
+  # exactly how a fixed bug re-appeared in a previously-generated jenga.html):
+  # fail loudly instead of trusting an on-disk dist/ of unknown age.
+  STALE_SRC="$(find "$UI_DIR/src" -type f -newer "$UI_DIR/dist/index.html" -print -quit 2>/dev/null)"
+  if [ -n "$STALE_SRC" ]; then
+    die "$UI_DIR/dist is older than UI sources (e.g. $STALE_SRC) and node_modules/vite is not installed here to rebuild it -- refusing to bundle a possibly-stale snapshot. Run 'npm install' in $UI_DIR (or otherwise rebuild dist/), then retry."
+  fi
 fi
 
 mkdir -p "$SNAPSHOT_DIST"
