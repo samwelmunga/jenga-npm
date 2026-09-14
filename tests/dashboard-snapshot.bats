@@ -63,7 +63,15 @@ write_fixture_dist() {
   </body>
 </html>
 EOF
-  echo 'console.log("fixture bundle marker");' > "$ui_dir/dist/assets/index-fixture.js"
+  cat > "$ui_dir/dist/assets/index-fixture.js" <<'JSEOF'
+console.log("fixture bundle marker");
+// Mirrors DOMPurify's XHTML wrapper, verbatim in shape: a '</head>' living
+// inside a JS string literal. The real dist bundle ships this, so the fixture
+// must too -- without it, an injection anchored on the FIRST '</head>' looks
+// correct here and splices the payload into the bundle's source in production.
+var fixtureWrapper = '<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>' + "x" + "</body></html>";
+console.log("fixture bundle tail marker", fixtureWrapper);
+JSEOF
   echo '.fixture-style-marker { color: red; }' > "$ui_dir/dist/assets/index-fixture.css"
 }
 
@@ -471,6 +479,68 @@ EOF
   "
   [ "$status" -eq 0 ]
   assert_output_contains "escaped payload round-tripped"
+}
+
+@test "a '</head>' inside the inlined bundle cannot steal the payload's injection point" {
+  # Regression: the bundler injected the payload with a FIRST-match
+  # /<\/head>/i, but step 1 inlines the ESM bundle into the head, and that
+  # bundle carries its own '</head>' inside a JS string (DOMPurify's XHTML
+  # wrapper -- see write_fixture_dist). The payload therefore landed in the
+  # middle of the bundle's source, and its trailing '</script>' closed the
+  # module element early, spilling the rest of the bundle onto the page as
+  # visible text. Asserting only that the payload parses is NOT enough: it
+  # round-trips fine from inside the wreckage. Pin the structure instead.
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
+  [ "$status" -eq 0 ]
+
+  run node -e "
+    const fs = require('fs');
+    const html = fs.readFileSync('$BATS_TEST_TMPDIR/result.html', 'utf8');
+
+    // The module element must survive intact: it opens once, and its whole
+    // body -- including the bundle's '</head>' literal and everything after
+    // it -- must still be inside it.
+    const mod = html.match(/<script type=\"module\">([\s\S]*?)<\/script>/);
+    if (!mod) { console.error('no inlined module element'); process.exit(1); }
+    if (!mod[1].includes('<head></head>')) {
+      console.error('bundle body was truncated before its </head> literal');
+      process.exit(1);
+    }
+    if (!mod[1].includes('fixture bundle tail marker')) {
+      console.error('bundle tail escaped the module element');
+      process.exit(1);
+    }
+
+    // The payload must sit in the DOCUMENT head -- after the module closes and
+    // before the document's own </head> -- not nested inside the bundle.
+    const dataAt = html.indexOf('<script id=\"jenga-dashboard-data\"');
+    const modEndAt = html.indexOf('</script>', html.indexOf('<script type=\"module\">'));
+    const headEndAt = html.lastIndexOf('</head>');
+    if (dataAt < 0) { console.error('no embedded snapshot tag'); process.exit(1); }
+    if (!(modEndAt < dataAt && dataAt < headEndAt)) {
+      console.error('payload is not between the module close and </head>');
+      process.exit(1);
+    }
+
+    // And nothing may have leaked into the rendered body as text. Slice from
+    // the document's own </head> (headEndAt), NOT from the first '<body>':
+    // the bundle's XHTML wrapper string contains a literal '<body>' too, and
+    // indexOf would find THAT one and drag the whole bundle into this check.
+    const body = html.slice(headEndAt);
+    if (/fixtureWrapper|createHTML|\bvar \w+ =/.test(body)) {
+      console.error('bundle source leaked into the body as visible text');
+      process.exit(1);
+    }
+
+    // No placeholder may survive into the shipped file.
+    if (html.includes('__JENGA_SNAPSHOT_DATA__')) {
+      console.error('injection placeholder was not consumed');
+      process.exit(1);
+    }
+    console.log('payload landed in the document head, bundle intact');
+  "
+  [ "$status" -eq 0 ]
+  assert_output_contains "payload landed in the document head, bundle intact"
 }
 
 # -----------------------------------------------------------------------------

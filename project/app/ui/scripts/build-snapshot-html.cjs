@@ -125,6 +125,25 @@ function attr(tag, name) {
   return match ? match[1] : null;
 }
 
+// ── 0. Reserve the real </head> injection point ──────────────────────────────
+// This MUST run before step 1. Step 4 injects the payload before `</head>` with
+// a first-match regex, and step 1 inlines the ESM bundle INTO the head. The
+// bundle carries its own literal '</head>' -- DOMPurify builds an XHTML wrapper
+// string, `'<html xmlns="..."><head></head><body>' + dirty + '</body></html>'`
+// -- so after inlining, the first '</head>' in the document is that JS string
+// literal, not the document's own. Injecting there splices the payload into the
+// middle of the bundle's source, and the payload's trailing '</script>'
+// terminates the module element early, dumping the rest of the bundle onto the
+// page as visible text. Step 1 already escapes '</script' in inlined code for
+// the same class of reason; it cannot escape '</head>', because that sequence
+// is only dangerous to the anchor below, not to the script element itself.
+// Claiming the anchor up front makes the injection point order-independent.
+if (!/<\/head>/i.test(html)) {
+  die(`${INDEX_HTML} has no </head> to inject the snapshot data before`);
+}
+const DATA_PLACEHOLDER = '<!--__JENGA_SNAPSHOT_DATA__-->';
+html = html.replace(/<\/head>/i, () => `${DATA_PLACEHOLDER}\n  </head>`);
+
 // ── 1. Inline <script src="..."> ─────────────────────────────────────────────
 html = html.replace(/<script\b([^>]*)\bsrc=["']([^"']+)["']([^>]*)><\/script>/gi, (tag, pre, src, post) => {
   const code = readAsset(src, 'script');
@@ -155,14 +174,13 @@ html = html.replace(/<link\b[^>]*>/gi, (tag) => {
 const serialized = JSON.stringify(snapshotData).replace(/</g, '\\u003c');
 const dataTag = `<script id="jenga-dashboard-data" type="application/json">${serialized}</script>`;
 
-if (!/<\/head>/i.test(html)) {
-  die(`${INDEX_HTML} has no </head> to inject the snapshot data before`);
-}
 // A replacer FUNCTION, not a string: board content legitimately contains '$&',
 // '$`' and similar sequences (markdown code spans like `^[1-5]$`), which a
 // string replacement would interpret as backreferences and splice the document
 // into itself. A function's return value is used verbatim.
-html = html.replace(/<\/head>/i, () => `  ${dataTag}\n  </head>`);
+// The placeholder was claimed in step 0, before any inlining could contribute a
+// competing '</head>'; see there for why the anchor cannot be taken here.
+html = html.replace(DATA_PLACEHOLDER, () => `  ${dataTag}`);
 
 // ── 5. Refuse to emit a snapshot that still points at files it does not carry ─
 // Without this, adding (say) a background image to the UI would produce a
