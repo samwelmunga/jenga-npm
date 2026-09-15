@@ -104,10 +104,41 @@ run can never silently relocate directories or edit `.gitignore`.
 > `skills/distribute/CONFIG_SCHEMA.md` for the root-cause note and the tracked
 > follow-up to reintroduce it once fixed.
 
-Carry the chosen value into step 3. Do not apply it yourself — the script owns all
+Carry the chosen value into step 4. Do not apply it yourself — the script owns all
 of the mechanical work.
 
-### 3. Run the scaffold script
+### 3. Ask whether the distributed scaffold should be committed
+
+This is a **distinct** question from step 2 — `project_files_visibility` (step 2)
+covers only the `project/` working tree (the scrum board, `todo.md`, `queue/`,
+`rapports/`, `logs/`). It has no effect on `.claude/`/`.agents/`, the distributed
+framework scaffold (skill and agent definitions), which is a separate tree with a
+separate lifecycle — it gets overwritten wholesale by every `/distribute` run or npm
+upgrade, unlike `project/`. Kept as its own flag (`scaffold_visibility`) rather than
+folded into `project_files_visibility`'s enum; see
+`skills/distribute/CONFIG_SCHEMA.md`'s "Scaffold visibility" section for the full
+rationale.
+
+Ask the user this question, verbatim, before running any script:
+
+    Should the distributed .claude/.agents Jenga AI framework scaffold (skills, agent
+    definitions — implementation detail, not your own code) be committed into this
+    project's git history?
+    1. Yes, commit it — keep it tracked and visible, exactly like today
+    2. No, keep it on disk but add it to .gitignore so it's never committed
+    3. Not sure — explain the trade-offs and ask me again
+
+If the user picks option 3, explain the trade-offs and re-ask. Do not proceed until
+the answer maps to one of `visible` (option 1) or `ignored` (option 2).
+
+If the run is non-interactive (no user available to answer), use the default:
+**`visible`**. It is the only choice that changes nothing on disk, so an unattended
+run reproduces exactly today's behavior — the scaffold is still committed by default.
+
+Carry the chosen value into step 4 as well. Do not apply it yourself — the script
+owns all of the mechanical work.
+
+### 4. Run the scaffold script
 
 `init.sh` is not guaranteed to live at a single fixed path: in a project that
 installed Jenga via npm, it was mirrored to `.claude/skills/j-init/scripts/`
@@ -117,7 +148,7 @@ source checkout, where it lives at the bare `skills/j-init/scripts/` path
 instead. This step runs before `CLAUDE.md`/`AGENTS.md` exist, so it cannot
 rely on either file's routing instructions to resolve the path — it must
 locate its own script directly. Execute the init script from the project
-root, passing the choice from step 2:
+root, passing the choices from steps 2 and 3:
 
 ```bash
 INIT_SCRIPT=""
@@ -128,11 +159,14 @@ if [[ -z "$INIT_SCRIPT" ]]; then
   echo "Error: could not locate init.sh under .claude/skills/, .agents/skills/, or skills/" >&2
   exit 1
 fi
-chmod +x "$INIT_SCRIPT" && "$INIT_SCRIPT" --visibility <visible|ignored>
+chmod +x "$INIT_SCRIPT" && "$INIT_SCRIPT" --visibility <visible|ignored> --scaffold-visibility <visible|ignored>
 ```
 
 Omitting `--visibility` falls back to the `JENGA_PROJECT_FILES_VISIBILITY`
-environment variable, then to `visible`.
+environment variable, then to `visible`. Omitting `--scaffold-visibility` falls
+back to the `JENGA_SCAFFOLD_VISIBILITY` environment variable, then to `visible`
+— the same default-preserving fallback chain, applied independently to the
+distributed-scaffold question from step 3.
 
 This script handles all scaffolding in one step:
 1. Initializes the git repository
@@ -148,22 +182,27 @@ This script handles all scaffolding in one step:
 11. Creates `docs/STRATEGY.md` — a strategic brief stub intended for investors, partners, and the product team
 12. Creates `CHANGELOG.md` from the shared template — a running log of notable changes, seeded with an `[Unreleased]` section
 13. Applies the chosen visibility mode via `scripts/apply-project-visibility.sh`, which records it as `project_files_visibility` in `jenga.config.json` and performs any `.gitignore` change
-14. Stages and commits all files with the message `init: scaffold project structure and workflow config`
+14. Applies the chosen scaffold visibility mode via `scripts/apply-scaffold-visibility.sh`, which records it as `scaffold_visibility` in `jenga.config.json` and, when `ignored`, adds `.claude/` and `.agents/` to `.gitignore`
+15. Stages and commits all files with the message `init: scaffold project structure and workflow config`
 
-The visibility mode is validated before any scaffolding happens, so an invalid
-value fails fast and leaves nothing behind. It is applied before the commit, so
-the `.gitignore` entry is captured in the initial commit.
+Both visibility modes are validated before any scaffolding happens, so an invalid
+value fails fast and leaves nothing behind. Both are applied before the commit, so
+any resulting `.gitignore` entries are captured in the initial commit — this is what
+lets `scaffold_visibility: ignored` keep `.claude/`/`.agents/` out of the commit even
+though they may already exist on disk (from npm postinstall or a prior `/distribute`
+run) by the time `/init` runs `git add -A`.
 
 If the script fails, check that you are in the project root and that git and `jq`
 are available.
 
-See `skills/distribute/CONFIG_SCHEMA.md` for the full `project_files_visibility`
-field reference.
+See `skills/distribute/CONFIG_SCHEMA.md` for the full `project_files_visibility` and
+`scaffold_visibility` field reference.
 
-### 4. Prompt next step
+### 5. Prompt next step
 
 Inform the user that setup is complete, and state which visibility mode was applied
-and where the working files now live. Mention that `docs/STRATEGY.md` was created as
+for both `project_files_visibility` and `scaffold_visibility`, and where the working
+files and scaffold now live. Mention that `docs/STRATEGY.md` was created as
 a strategic brief stub for investors, partners, and the product team — they can fill
 it in now or return to it later. Suggest running `/pi-plan` to define project goals
 and epics.

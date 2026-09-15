@@ -175,6 +175,90 @@ assert_full_scaffold() {
   assert_full_scaffold "$CONSUMER_DIR"
 }
 
+# skills/j-init/ candidate paths only -- deliberately narrower than
+# INIT_SCRIPT_CANDIDATES above. mirror_as_npm_consumer mirrors BOTH the
+# skills/init/ and skills/j-init/ twins via the real postinstall.js, and
+# run_init_as_consumer's candidate order checks the bare `init` form first,
+# so reusing it would never actually exercise skills/j-init/'s own copy.
+# skills/j-init/ -- not skills/init/, which is blocked by .publicignore -- is
+# the copy that actually ships to real public-mirror/npm consumers, so a test
+# that only ever drives skills/init/'s copy would leave the real shipping
+# path completely uncovered (E31_S07_T03).
+J_INIT_SCRIPT_CANDIDATES=(
+  .claude/skills/j-init/scripts/init.sh
+  .agents/skills/j-init/scripts/init.sh
+  skills/j-init/scripts/init.sh
+)
+
+# Resolves and runs skills/j-init/'s own init.sh specifically, forwarding all
+# arguments (e.g. --visibility, --scaffold-visibility) unchanged.
+run_j_init_as_consumer() {
+  cd "$CONSUMER_DIR" || return 1
+  local script=""
+  for candidate in "${J_INIT_SCRIPT_CANDIDATES[@]}"; do
+    if [ -f "$candidate" ]; then script="$candidate"; break; fi
+  done
+  if [ -z "$script" ]; then echo "no skills/j-init/ init.sh found under .claude/, .agents/, or skills/" >&2; return 1; fi
+  bash "$script" "$@"
+}
+
+# E31_S07_T03: skills/j-init/ is a second, separate, hand-maintained copy of
+# skills/init/ (not auto-synced -- scripts/generate-j-alias.sh explicitly
+# excludes this pair) that never received E31_S07_T01/T02's
+# scaffold_visibility fix until this task. Since skills/j-init/, not
+# skills/init/, is the copy that actually ships to public-GitHub-mirror and
+# npm-package consumers, this test exercises that real shipping path
+# directly, rather than extending the skills/init/-only coverage above.
+@test "skills/j-init/scripts/init.sh honors --scaffold-visibility ignored, keeping .claude/.agents on disk but untracked by git (E31_S07_T03)" {
+  mirror_as_npm_consumer
+  run run_j_init_as_consumer --visibility visible --scaffold-visibility ignored
+  [ "$status" -eq 0 ]
+  assert_full_scaffold "$CONSUMER_DIR"
+
+  # .claude/ and .agents/ exist on disk (placed there by mirror_as_npm_consumer's
+  # postinstall.js run before init.sh ever ran)...
+  [ -d "$CONSUMER_DIR/.claude" ]
+  [ -d "$CONSUMER_DIR/.agents" ]
+
+  # ...but neither is tracked by git after the init commit.
+  run git -C "$CONSUMER_DIR" ls-files
+  [ "$status" -eq 0 ]
+  assert_output_not_contains ".claude/"
+  assert_output_not_contains ".agents/"
+
+  # Recorded in jenga.config.json, independent of project_files_visibility.
+  run cat "$CONSUMER_DIR/jenga.config.json"
+  [ "$status" -eq 0 ]
+  assert_output_contains '"scaffold_visibility": "ignored"'
+  assert_output_contains '"project_files_visibility": "visible"'
+
+  # .gitignore carries both entries.
+  run cat "$CONSUMER_DIR/.gitignore"
+  [ "$status" -eq 0 ]
+  assert_output_contains ".claude/"
+  assert_output_contains ".agents/"
+}
+
+# Omitting --scaffold-visibility must reproduce today's behavior exactly --
+# this is an additive capability, not a change to existing defaults (story
+# AC). Exercised against skills/j-init/'s own copy for the same
+# real-shipping-path reason as the test above.
+@test "skills/j-init/scripts/init.sh defaults scaffold_visibility to visible (committed scaffold) when the flag is omitted (E31_S07_T03)" {
+  mirror_as_npm_consumer
+  run run_j_init_as_consumer --visibility visible
+  [ "$status" -eq 0 ]
+  assert_full_scaffold "$CONSUMER_DIR"
+
+  run git -C "$CONSUMER_DIR" ls-files
+  [ "$status" -eq 0 ]
+  assert_output_contains ".claude/skills"
+  assert_output_contains ".agents/skills"
+
+  run cat "$CONSUMER_DIR/jenga.config.json"
+  [ "$status" -eq 0 ]
+  assert_output_contains '"scaffold_visibility": "visible"'
+}
+
 @test "init.sh fails loudly, not silently, when no package root (monorepo templates/ or node_modules/@jenga-ai/agent) can be found" {
   # No mirror_as_npm_consumer call: only .claude/ + .agents/ exist (from
   # postinstall), templates/ and node_modules/ are both absent.

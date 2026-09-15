@@ -54,7 +54,7 @@ Jenga AI supports two distribution paths:
 - **E28** — Public Mirror — One-Way Private → Public Repo Sync
 - **E29** — npm Trusted Publishers CI Adapter *(Reopened 2026-09-12 — In Progress: E29_S05 Passed with remarks, verified against a real public-repo CI run; E29_S06 added from the tester's rapport to fix npm_ci_pipeline.sh's trigger phase always defaulting to a live `mode: publish`, still Pending)*
 - **E30** — Strategy Brief Convention
-- **E31** — Restore /distribute Skill — Private Filesystem Distribution *(In Progress — E31_S07 added 2026-09-15 from a problem rapport: decide+implement scope for excluding the distributed `.claude`/`.agents` scaffold from consumer `/init` commits, plus a trivial `.gitignore_template` stray-`EOF`-line cleanup)*
+- **E31** — Restore /distribute Skill — Private Filesystem Distribution *(In Progress — E31_S07 added 2026-09-15 from a problem rapport: decide+implement scope for excluding the distributed `.claude`/`.agents` scaffold from consumer `/init` commits, plus a trivial `.gitignore_template` stray-`EOF`-line cleanup; T01/T02 shipped that fix to `skills/init/` only and rolled the story up `Passed`, then the story was reopened the same day for `E31_S07_T03` once it was found that `skills/j-init/` — the copy that actually ships to public/npm consumers — never received it)*
 - **E32** — Adaptive Execution Scope for /jenga + /do *(Passed)*
 - **E33** — `/jenga-permission-level` — 5-Tier Permission System *(Passed with remarks)*
 - **E34** — Working-File Path Centralisation — Single Source of Truth for `project/` Paths *(Pending)*
@@ -65,7 +65,7 @@ Jenga AI supports two distribution paths:
 - **E39** — Crucial Flag — Tiered Item-Level Caution & Escalation *(Pending)*
 - **E40** — `/uncharted` — Investigative Workflow for Foreign & Pre-Existing Code *(Passed with remarks)*
 - **E41** — Launch & Discoverability (npm + GitHub Go-to-Market) *(Pending)*
-- **E42** — Maintenance — Framework Hygiene & Schema Drift *(Passed)*
+- **E42** — Maintenance — Framework Hygiene & Schema Drift *(In Progress — reopened 2026-09-15 for E42_S06, a stray-`EOF`-line gitignore-template cleanup in `skillify`'s `init-new` scaffold, found while investigating E31_S07's `skills/j-init/` gap)*
 - **E43** — Shell Test Harness — Make the Declared bats Suite Real *(Pending)*
 - **E44** — Execution Control — /break, Stop-the-Line & Scoped Run Status *(Pending)*
 - **E45** — Interactive Scope Selection for /jenga *(Pending)*
@@ -406,6 +406,35 @@ Two incidents (a `.session_handoff.json` clobbering race and an orphaned ad-hoc 
 
 `project/data/rapport_manifest.json` (the committed seed `hooks/on_session_end.sh` diffs new rapports against) was found stale during the E39_S04_T04 walkthrough on 2026-08-27: two real, pre-existing rapports (`project/rapports/problems/E37_S02-tester-still-writes-legacy-handoff-path.md`, `project/rapports/problems/E37_S02_T01-claude-settings-json-not-synced.md`) were absent from it on `main`, so `on_session_end.sh` would re-flag both as new `rapport_review` items even though they already exist. Root cause: the manifest is only rewritten by the hook when *new* files are found, not on every rapport commit, so a rapport committed without a subsequent `on_session_end.sh` run in that session/worktree before merge silently drifts the baseline. Not yet fixed — run `bash scripts/generate-rapport-manifest.sh` on `main` to resync when picked up. Not filed as a board item.
 
+## Restore /distribute Skill — E31_S07 reopened for skills/j-init/ gap (2026-09-15)
+`E31_S07` (Distributed Scaffold Commit Scope Decision + Gitignore Template Cleanup) shipped
+`Passed` earlier the same day: `E31_S07_T01` decided and implemented a distinct `scaffold_visibility`
+config flag (kept separate from `project_files_visibility` per its documented boundary) so `/init`
+can exclude the distributed `.claude`/`.agents` scaffold from a consumer's git history, and
+`E31_S07_T02` removed a stray leftover-heredoc `EOF` line from `skills/init/assets/.gitignore_template`.
+Both tasks correctly scoped their fix to `skills/init/` only. Verification the same day found a gap
+neither task could have known to cover: `skills/j-init/` is a second, separate, hand-maintained
+directory — never auto-synced with `skills/init/` (`scripts/generate-j-alias.sh` explicitly excludes
+this pair as "hand-maintained") — and it is `skills/j-init/`, not `skills/init/`, that actually ships
+to public-GitHub-mirror and npm-package consumers (`skills/init/` is blocked by `.publicignore` and
+confirmed absent from the live public `jenga-npm` repo; `skills/j-init/` is confirmed present there).
+Concretely, `skills/j-init/scripts/init.sh` has no `--scaffold-visibility` flag at all, and
+`skills/j-init/assets/.gitignore_template` still carries the stray `EOF` line. The private-filesystem
+`/distribute` consumer path (`skills/distribute/scripts/distribute-changes.sh`, which has no
+`skills/init/` exclusion) almost certainly received the real fix correctly — the gap is specifically
+public-mirror and npm-package consumers who invoke `/j-init`. `E31_S07` was reopened the same day
+(`reopened_on: 2026-09-15`) for a new task, `E31_S07_T03`, which ports the already-decided
+`scaffold_visibility` implementation to `skills/j-init/` (adapted to that directory's own
+already-established path-resolution style, not copy-pasted), removes the same stray `EOF` line there,
+mirrors the doc update into `skills/j-init/SKILL.md` (a full duplicate of `skills/init/SKILL.md`, not
+a thin pointer), and adds new bats regression coverage exercising the mirrored npm-consumer install
+fixture pattern specifically against `skills/j-init/scripts/init.sh` — since no such coverage existed
+for `--scaffold-visibility` on either copy before this. A related-but-distinct stray-`EOF`-line defect
+in `skills/j-skillify/assets/init-new/assets/.gitignore_template` (a completely separate `skillify`
+scaffold asset, unrelated to `/init`'s `scaffold_visibility` work) was found in the same investigation
+and filed separately under the Maintenance epic as `E42_S06` rather than bundled into `E31_S07` — see
+below.
+
 ## Maintenance — Framework Hygiene & Schema Drift (E42)
 Standing home for chore-shaped work with no other epic to own it (`agents/scrum-master.md`'s
 "Maintenance epic is the default home for chore tasks" convention). Reopened 2026-08-30 for `E42_S03`,
@@ -419,6 +448,13 @@ scale, but the work is still chore-shaped by kind and has no other natural epic 
 rename, and not part of `E42_S03`'s scope: `E28_public-mirror.md`, `project/todo.md`, `publish` skill
 adapters/scripts, `settings.json`, and the untracked `E28_S06_*`/`E41_S01_T01` files — all separate,
 unrelated in-flight work at the time. Epic rolled back up to `Passed` the same session.
+
+**Reopened 2026-09-15 — E42_S06.** While investigating `E31_S07`'s `skills/j-init/` gap (see above
+and `E31_S07_T03`), a second, unrelated stray-`EOF`-line gitignore-template defect was found in
+`skills/j-skillify/assets/init-new/assets/.gitignore_template` — the same defect class as
+`E31_S07_T02`, but a distinct asset belonging to `skillify`'s own `init-new` scaffold with no
+relationship to `/init`'s `scaffold_visibility` work. Filed as its own one-line-to-one-file story/task
+(`E42_S06`/`E42_S06_T01`) rather than bundled into `E31_S07`.
 
 ## Dashboard Markdown Library (E58) and Dashboard Mobile Responsive Rollout (E59)
 Filed via `/brainstorm` (2026-09-13), following an evaluation rapport

@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ASSETS_DIR="$SCRIPT_DIR/../assets"
 VISIBILITY_SCRIPT="$SCRIPT_DIR/apply-project-visibility.sh"
+SCAFFOLD_VISIBILITY_SCRIPT="$SCRIPT_DIR/apply-scaffold-visibility.sh"
 
 # ─── Resolve the package root that owns templates/ and lib/ ──────────────────
 # postinstall.js mirrors only skills/ and agents/ into .claude/ and .agents/ —
@@ -22,23 +23,33 @@ else
   exit 1
 fi
 
-# ─── 0. Resolve project_files_visibility ─────────────────────────────────────
+# ─── 0. Resolve project_files_visibility and scaffold_visibility ─────────────
 # Defaults to `visible` — the only value that touches nothing on disk — so an
 # unattended run can never silently relocate directories or edit .gitignore.
+# project_files_visibility covers the project/ working tree (board, todo.md,
+# queue/, rapports/, logs/). scaffold_visibility is a distinct, independent
+# flag (E31_S07_T01, ported here in E31_S07_T03) covering the distributed
+# .claude/.agents framework scaffold — kept separate per
+# skills/distribute/CONFIG_SCHEMA.md's "Scaffold visibility" section, rather
+# than folded into project_files_visibility's existing enum.
 VISIBILITY="${JENGA_PROJECT_FILES_VISIBILITY:-visible}"
+SCAFFOLD_VISIBILITY="${JENGA_SCAFFOLD_VISIBILITY:-visible}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --visibility)   VISIBILITY="${2:-}"; shift 2 ;;
     --visibility=*) VISIBILITY="${1#*=}"; shift ;;
+    --scaffold-visibility)   SCAFFOLD_VISIBILITY="${2:-}"; shift 2 ;;
+    --scaffold-visibility=*) SCAFFOLD_VISIBILITY="${1#*=}"; shift ;;
     *) echo "Unknown argument: $1" >&2
-       echo "Usage: $(basename "$0") [--visibility <visible|ignored>]" >&2
+       echo "Usage: $(basename "$0") [--visibility <visible|ignored>] [--scaffold-visibility <visible|ignored>]" >&2
        exit 1 ;;
   esac
 done
 
 # Validate before scaffolding so a typo cannot leave a half-initialised project.
 bash "$VISIBILITY_SCRIPT" --check-only "$VISIBILITY"
+bash "$SCAFFOLD_VISIBILITY_SCRIPT" --check-only "$SCAFFOLD_VISIBILITY"
 
 # ─── 1. Initialize git repository ────────────────────────────────────────────
 echo "→ Initializing git repository..."
@@ -101,11 +112,14 @@ cp "$ASSETS_DIR/strategy_stub_template.md" docs/STRATEGY.md
 echo "→ Creating CHANGELOG.md from template..."
 cp "$PKG_ROOT/templates/CHANGELOG_TEMPLATE.md" CHANGELOG.md
 
-# ─── 11. Apply project_files_visibility ──────────────────────────────────────
-# Runs before the commit so the .gitignore entry (ignored) is captured in the
-# initial commit.
+# ─── 11. Apply project_files_visibility and scaffold_visibility ─────────────
+# Both run before the commit so any resulting .gitignore entries (ignored)
+# are captured in the initial commit rather than left for the user to notice
+# after the fact.
 echo "→ Applying project files visibility ($VISIBILITY)..."
 bash "$VISIBILITY_SCRIPT" "$VISIBILITY" "$PWD"
+echo "→ Applying scaffold visibility ($SCAFFOLD_VISIBILITY)..."
+bash "$SCAFFOLD_VISIBILITY_SCRIPT" "$SCAFFOLD_VISIBILITY" "$PWD"
 
 # ─── 12. Generate CLAUDE.md / AGENTS.md ──────────────────────────────────────
 # Unconditional — never gated on agentTarget (E41_S04). Applies the J-
