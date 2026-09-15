@@ -168,6 +168,7 @@ For genuinely undocumented code, there is often no reliable human oracle to conf
 
 - **The deterministic pipeline remains the tool of record for zero-oracle codebases.** `onboard --legacy` and `segment --mode delivery` never depend on anyone confirming intent — they ground everything in mechanical evidence (file structure, dependencies, test coverage) and say so explicitly under `Open Questions` when the evidence doesn't support a conclusion. When there is no one left who understands the code, reach for one of those, not the conversational flow.
 - **When running the conversational flow, do not manufacture confidence.** If the user's answer is uncertain, hedged, or contradicts what discovery/Investigative Mode found, write the node honestly — do not round an uncertain answer up to a confirmed one. There is no schema field yet to tag confidence (the stub schema is intentionally minimal); until one exists, say so in the node's `description` text itself (e.g. "per the user, this module retries failed charges — unconfirmed against the code, which shows only a single retry attempt") rather than silently dropping the caveat.
+- **`verification_depth: strict` is this guidance's concrete implementation, not a separate idea (E40_S06_T02).** When a candidate's Familiarity Check answer is `No` (Convergence Loop Step 1), Step 4's risk-weighted gating never lets an escalating finding round up to a false confirmation by asking the user to bless it — it auto-flags the node with exactly the hedged-`description` convention this bullet describes and converges it without a prompt. This bullet states the principle; Step 4's `strict` branch is what enforces it mechanically, so the two sections should be read as one mechanism, not two independently-arrived-at claims.
 - **A confidently wrong answer is not detectable by this flow.** Corroboration against a second signal (commit history, existing docs, a second person) is the only mitigation, and it is not built here — this is the accepted residual risk, not a gap to engineer around mid-conversation.
 
 ### Directory Triage
@@ -213,10 +214,56 @@ Silence, a counter-question, or an ambiguous reply is not consent — re-ask, th
 
 Runs once per surviving candidate (a subsystem, a named flow, a directory) after Directory Triage. This is the "propose understanding, ask the user to confirm or correct" cycle at the center of the redesign — and the one the scrutiny flagged as having no termination bound and no defense against confirmation fatigue. Both gaps are closed mechanically, not by agent discipline alone:
 
-1. **Dispatch Investigative Mode.** Per `agents/developer.md`'s and `agents/tester.md`'s Investigative Mode sections (E20_S08_T02), dispatch the developer to trace what the code actually does for the candidate, and the tester to trace what the test suite actually exercises and verifies for the same candidate — two distinct vantage points, not two names for the same read. Both are read-only, worktree-sandboxed, no commits, no board writes.
-2. **Propose understanding.** From both traces, draft the candidate's coarse graph node(s)/edge(s) (per the stub schema) and a plain-language summary of what they represent.
-3. **Risk-weighted gating — not every finding gets a prompt.** This is the fix for confirmation fatigue (solution assessment, Problem 6, Solution B — RECOMMENDED): force an explicit confirmation only for **high-uncertainty or high-impact** findings — a node whose description depends on an inference the traces don't fully support, a node with many outgoing edges (structurally central), or one the Human-Oracle-Availability Limitation above already flagged as uncertain. **Auto-accept** low-risk, high-confidence findings — the traces agree, the finding is narrow in scope, nothing about it is surprising — without a prompt, but **log every auto-accepted node** in the elicitation state's checkpoint data (see below) so the decision is auditable later, per that solution's own mitigation for "the scoring mechanism itself misjudges impact."
-4. **Confirm/correct, one round per call to `elicitation-state.sh turn`.** For a node requiring confirmation, present the draft and ask the user to confirm or correct it (per the Interaction Pattern in `CLAUDE.md` — confirm / correct-with-detail / defer as "unconfirmed" / other). Each round, call:
+1. **Familiarity Check — once per candidate, before Investigative Mode dispatch.** Ask (per the Interaction Pattern in `CLAUDE.md` — numbered list, free-text last):
+
+   ```
+   Are you familiar with this service/segment?
+   1. Yes
+   2. A little
+   3. No
+   4. Other (describe below)
+   ```
+
+   Silence, a counter-question, or an ambiguous reply is not consent — re-ask, the same convention used at every other confirmation gate in this skill. Map the answer to a `verification_depth` scoped to this candidate only — `Yes` → `shallow`, `A little` → `moderate`, `No` → `strict` — and persist it immediately, keyed by this candidate's node id, via `elicitation-state.sh`'s checkpoint mechanism (see Multi-Session Persistence below for the exact call and merge semantics):
+
+   ```bash
+   printf '{"verification_depth": {"%s": "%s"}}' "<candidate-id>" "<shallow|moderate|strict>" \
+     | bash skills/j-uncharted/scripts/elicitation-state.sh checkpoint --id <elicitation-id> --json -
+   ```
+
+   **Check before asking.** A candidate whose `verification_depth` is already present in the state file's `checkpoint.verification_depth` (per Multi-Session Persistence below) has already answered this — do not re-ask it, on a fresh session or otherwise.
+
+   This question operationalizes the Human-Oracle-Availability Limitation above — it is the mechanism for finding out, per candidate, how much weight the user's own confirmations should carry, rather than assuming a uniform level of trust for every candidate in one run. **`verification_depth` is read back and consumed by Step 4's risk-weighted gating below (`E40_S06_T02`)**, which branches its auto-accept/confirm/auto-flag behavior per depth. The fixed internal/external question template used whenever shallow/moderate gating does decide to prompt (Step 5) is `skills/j-uncharted/assets/NODE_QUESTION_TEMPLATE.md` (`E40_S06_T03`) — this step's job remains asking the question and making the answer durable for those steps to read.
+2. **Dispatch Investigative Mode.** Per `agents/developer.md`'s and `agents/tester.md`'s Investigative Mode sections (E20_S08_T02), dispatch the developer to trace what the code actually does for the candidate, and the tester to trace what the test suite actually exercises and verifies for the same candidate — two distinct vantage points, not two names for the same read. Both are read-only, worktree-sandboxed, no commits, no board writes.
+3. **Propose understanding.** From both traces, draft the candidate's coarse graph node(s)/edge(s) (per the stub schema) and a plain-language summary of what they represent.
+4. **Risk-weighted gating — not every finding gets a prompt, and `verification_depth` (Step 1) decides how gating itself behaves, not just what counts as risky.** This is the fix for confirmation fatigue (solution assessment, Problem 6, Solution B — RECOMMENDED). The baseline escalation criteria — the three triggers that force an explicit confirmation — are unchanged from before `E40_S06`:
+
+   - **T1 — inference-dependent:** the node's description depends on an inference the traces don't fully support.
+   - **T2 — structurally central:** the node has many outgoing edges.
+   - **T3 — already-flagged uncertain:** the Human-Oracle-Availability Limitation above already flagged this finding as uncertain.
+
+   A finding tripping none of T1-T3 is **low-risk** and auto-accepts regardless of depth. A finding tripping any of T1-T3 is **escalating**, and what happens to it now branches on the current candidate's `verification_depth` (read from `checkpoint.verification_depth.<candidate-id>`, per Step 1):
+
+   - **`moderate` (the default, unchanged calibration)** — exactly today's behavior: every escalating finding (any of T1-T3) forces a confirm prompt (Step 5); every low-risk finding auto-accepts without a prompt. **Log every auto-accepted node** in the elicitation state's checkpoint data (see Multi-Session Persistence below) so the decision is auditable later, per that solution's own mitigation for "the scoring mechanism itself misjudges impact."
+   - **`shallow` (widened auto-accept)** — the concrete widening rule: **drop T2 (structurally central) as an escalation trigger.** A finding tripping T2 alone — structurally central, but not inference-dependent and not already flagged uncertain — is reclassified low-risk and auto-accepted (still logged, same as above) instead of escalating. T1 and T3 still force a confirm prompt exactly as under `moderate`; only the T2-alone case widens. This is the literal reading of "findings that would sit just below today's high-impact bar" from the task's own framing — a purely structural signal with no corroborating uncertainty is no longer, by itself, enough to interrupt the user.
+   - **`strict` (no confirm prompt for escalating findings, ever)** — a finding tripping any of T1-T3 is **never presented to the user**. Instead:
+     1. Write the node directly with a hedged, low-confidence `description`, reusing the exact hedging convention the Human-Oracle-Availability Limitation section already specifies (e.g. "unconfirmed — traces did not fully corroborate this," adapted to name the specific gap).
+     2. Call `elicitation-state.sh converge` directly — **do not call `elicitation-state.sh turn` for this node.** No confirmation round is spent; the node goes straight from "proposed" to "converged," never "pending":
+
+        ```bash
+        bash skills/j-uncharted/scripts/elicitation-state.sh converge --id <elicitation-id> --node <node-id> --note "auto-flagged under strict depth: <one-line reason, e.g. 'structurally central, traces disagree on scope'>"
+        ```
+     3. **Log the auto-flag** in the elicitation state's checkpoint data, the same way `moderate`/`shallow` auto-accepts are logged — this is an automatic decision, not a silent one, and stays auditable exactly like every other gating outcome.
+
+     Low-risk findings under `strict` are unaffected — they auto-accept exactly as under `moderate`/`shallow`. `strict` only changes what happens to the escalating case.
+
+   The fixed internal/external question template used whenever `shallow`/`moderate` gating does decide to prompt is `skills/j-uncharted/assets/NODE_QUESTION_TEMPLATE.md` (Step 5, `E40_S06_T03`) — dormant under `strict`, since no prompt ever fires there.
+5. **Confirm/correct, one round per call to `elicitation-state.sh turn`.** Never reached for a `strict`-depth candidate's escalating findings — those converge directly per Step 4 above. For a node requiring confirmation under `shallow`/`moderate`, do **not** present the draft with a fully open-ended "propose understanding, ask to confirm or correct" prompt. Instead use the fixed question set in `skills/j-uncharted/assets/NODE_QUESTION_TEMPLATE.md` (`E40_S06_T03`), selecting the variant by node kind:
+
+   - **Internal variant** — the node represents the candidate/service itself (the thing this investigation is about).
+   - **External variant** — the node represents a dependency or consumer the traces surfaced outside the candidate (something it calls, or something that calls it).
+
+   Present the drafted node/edge summary from Step 3 first, then ask the selected variant's fixed questions, then offer the same confirm / correct-with-detail / defer-as-unconfirmed / other choice as before (per the Interaction Pattern in `CLAUDE.md`) — the template file spells out both the questions and this response block verbatim, so read it rather than reconstructing either from memory. Each round, call:
 
    ```bash
    bash skills/j-uncharted/scripts/elicitation-state.sh turn --id <elicitation-id> --node <node-id>
@@ -233,7 +280,7 @@ Runs once per surviving candidate (a subsystem, a named flow, a directory) after
    ```
 
    Option 3 is the only way past the cap, and it is a per-node, explicit, one-time override — it does not raise the cap for the rest of the run.
-5. **On convergence** (confirmed, corrected-and-accepted, or resolved via the cap choice above), call:
+6. **On convergence** (confirmed, corrected-and-accepted, or resolved via the cap choice above), call:
 
    ```bash
    bash skills/j-uncharted/scripts/elicitation-state.sh converge --id <elicitation-id> --node <node-id> --note "<one-line summary of what was confirmed>"
@@ -252,9 +299,9 @@ A whole-codebase `onboard` conversation, or an investigation of a large director
   ```
 
   Idempotent — safe to call again on a resumed `<elicitation-id>` without resetting progress. Choose `<elicitation-id>` so it is stable and re-derivable across sessions (e.g. `onboard-<root-slug>-<date>`, or `segment-investigate-<target-slug>`), since a resuming session must be able to reconstruct it to call `init` again.
-- **`checkpoint` after every converged node and after the Directory Triage confirmation gate** — never only at the end. This is what makes a mid-run pause lossless: `checkpoint --id <id> --json <file>` merges arbitrary progress data (triage results, draft nodes not yet converged, anything else worth surviving a pause) into the state file.
+- **`checkpoint` after every converged node, after the Directory Triage confirmation gate, and after every Familiarity Check answer** — never only at the end. This is what makes a mid-run pause lossless: `checkpoint --id <id> --json <file>` merges arbitrary progress data (triage results, draft nodes not yet converged, per-candidate `verification_depth`, anything else worth surviving a pause) into the state file. `verification_depth` is stored as one object keyed by candidate id — `checkpoint.verification_depth.<candidate-id>` — and, per the script's own merge semantics (see its header), checking one candidate in never clobbers another candidate already recorded there.
 - **`pause` when a session must end before the elicitation has converged.** Immediately after calling `elicitation-state.sh pause --id <elicitation-id>`, write the scrum-master's own `SessionEnd` handoff (per `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s `handoffs/` convention) with `status: "elicitation_paused"` and both `elicitation_id` and `state_file` set — `hooks/on_session_end.sh` routes that into an `elicitation_resume` trigger on `scrum_triggers.jsonl`, which the next scrum-master session's Drain Scrum Triggers Queue procedure picks up (`agents/scrum-master.md`).
-- **On resume**, read `state_file` directly — every converged node, every flagged node, and the checkpoint data (including the confirmed directory-triage lists) are already there. Do not re-run Directory Triage or re-ask about an already-converged node; resume the Convergence Loop only for nodes still `pending` or explicitly deferred.
+- **On resume**, read `state_file` directly — every converged node, every flagged node, and the checkpoint data (including the confirmed directory-triage lists and any per-candidate `verification_depth` already recorded) are already there. Do not re-run Directory Triage, re-ask the Familiarity Check for a candidate already present under `checkpoint.verification_depth`, or re-ask about an already-converged node; resume the Convergence Loop only for nodes still `pending` or explicitly deferred, and only ask the Familiarity Check for a candidate that has neither.
 - **`complete` when every candidate has converged, been deferred, or been explicitly accepted past the cap.** The state file is left on disk afterward as an audit trail — nothing currently prunes a completed elicitation's state file.
 
 ---

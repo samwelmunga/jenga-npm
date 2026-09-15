@@ -53,7 +53,23 @@
 #     "nodes": {
 #       "<node-id>": { "turns": <int>, "status": "pending"|"converged"|"flagged", "note": "<text>" }
 #     },
-#     "checkpoint": { ...arbitrary, agent-defined fields, e.g. directory-triage results... }
+#     "checkpoint": {
+#       ...arbitrary, agent-defined fields, e.g. directory-triage results...
+#       "verification_depth": {
+#         // Recognized field (E40_S06_T01). Per-candidate Familiarity Check
+#         // answer from skills/j-uncharted/SKILL.md's Convergence Loop Step 1,
+#         // keyed by candidate/node id so a resumed elicitation can tell which
+#         // candidates already answered. Values are "shallow" | "moderate" |
+#         // "strict". Written and read by the agent driving /uncharted, same
+#         // as every other checkpoint field — this script assigns it no
+#         // special handling beyond the dict-merge behavior documented under
+#         // `checkpoint` below (which exists so that checking in one
+#         // candidate's depth never clobbers another's already recorded
+#         // here). Consumed by E40_S06_T02's risk-weighted gating; unread by
+#         // anything in this script or E40_S06_T01's own scope.
+#         "<candidate-id>": "shallow" | "moderate" | "strict"
+#       }
+#     }
 #   }
 #
 # ---------------------------------------------------------------------------
@@ -79,11 +95,22 @@
 #       the node's note (e.g. a one-line summary of what was confirmed).
 #
 #   checkpoint --id ID --json FILE
-#       Shallow-merge the JSON object in FILE (or stdin when FILE is "-")
-#       into the state's top-level "checkpoint" field. New keys are added;
-#       existing keys are overwritten by the new value. This is the generic
-#       "save progress" primitive — directory-triage results, draft node
-#       content, anything else the flow wants durable before it might pause.
+#       Merge the JSON object in FILE (or stdin when FILE is "-") into the
+#       state's top-level "checkpoint" field. New keys are added; existing
+#       keys are overwritten by the new value — EXCEPT when both the existing
+#       value and the new value for a given key are themselves JSON objects,
+#       in which case they are merged one level deep instead of one replacing
+#       the other (existing sub-keys are kept, new sub-keys are added,
+#       conflicting sub-keys take the new value). This one-level dict merge
+#       is what lets a map-shaped field addressed by its own sub-keys — e.g.
+#       "verification_depth", keyed per candidate id (E40_S06_T01) — accumulate
+#       entries across separate checkpoint calls instead of each call
+#       clobbering every entry a previous call wrote. Plain (non-dict)
+#       values — strings, numbers, lists, directory-triage's own arrays —
+#       still simply overwrite, exactly as before this addition. This is the
+#       generic "save progress" primitive — directory-triage results, draft
+#       node content, anything else the flow wants durable before it might
+#       pause.
 #
 #   pause --id ID
 #       Set status "paused" and update "updated_at". The caller (the agent
@@ -422,7 +449,18 @@ elif subcommand == "checkpoint":
     state = load()
     payload = json.loads(checkpoint_json)
     cp = state.setdefault("checkpoint", {})
-    cp.update(payload)
+    # One-level-deep merge when both sides are dicts (E40_S06_T01) — lets a
+    # map-shaped field keyed by its own sub-keys (e.g. verification_depth,
+    # keyed per candidate id) accumulate entries across separate checkpoint
+    # calls instead of each call replacing the whole field. Anything else
+    # (strings, numbers, lists, or a dict landing on a non-dict/absent key)
+    # keeps the prior plain overwrite behavior.
+    for key, value in payload.items():
+        existing = cp.get(key)
+        if isinstance(existing, dict) and isinstance(value, dict):
+            existing.update(value)
+        else:
+            cp[key] = value
     state["updated_at"] = now
     atomic_write(state)
     result = {"checkpoint_keys": list(payload.keys())}
