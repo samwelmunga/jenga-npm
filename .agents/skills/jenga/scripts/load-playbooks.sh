@@ -461,18 +461,30 @@ if [ -n "${JENGA_PLAYBOOKS_TEST_ROOT:-}" ]; then
   # E53_S05_T01 to also cover playbook-config.json resolution). Never set in a real invocation.
   PKG_ROOT="$JENGA_PLAYBOOKS_TEST_ROOT"
   PROJECT_DIR="$JENGA_PLAYBOOKS_TEST_ROOT"
-# Resolve the jenga-agent PACKAGE root (where the canonical skills/ tree actually lives) — same
-# monorepo-checkout vs. installed-npm-package detection used by
-# skills/jenga/scripts/load-nl-catalog.sh's PKG_ROOT resolution and skills/init/scripts/init.sh.
-elif [ -d "$SCRIPT_DIR/../../../templates" ]; then
-  PKG_ROOT="$SCRIPT_DIR/../../.."
-  PROJECT_DIR="${JENGA_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || pwd)}}"
-elif [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -d "${CLAUDE_PROJECT_DIR}/node_modules/@jenga-ai/agent/templates" ]; then
-  PKG_ROOT="${CLAUDE_PROJECT_DIR}/node_modules/@jenga-ai/agent"
-  PROJECT_DIR="${JENGA_PROJECT_DIR:-$CLAUDE_PROJECT_DIR}"
 else
-  echo "Error: could not locate the jenga-agent package root (templates/ not found via monorepo checkout or node_modules/@jenga-ai/agent)." >&2
-  exit 2
+  # Resolve JENGA_PROJECT_DIR the same way every other script in skills/jenga/scripts/ does.
+  if [ -f "$SCRIPT_DIR/../../../lib/resolve-project-dir.sh" ]; then
+    # shellcheck source=/dev/null
+    source "$SCRIPT_DIR/../../../lib/resolve-project-dir.sh"
+  elif [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
+    JENGA_PROJECT_DIR="$CLAUDE_PROJECT_DIR"
+  else
+    JENGA_PROJECT_DIR="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || pwd)"
+  fi
+
+  # Resolve the jenga-agent PACKAGE root (where the canonical skills/ tree actually lives) — same
+  # monorepo-checkout vs. installed-npm-package detection used by
+  # skills/jenga/scripts/load-nl-catalog.sh's PKG_ROOT resolution and skills/init/scripts/init.sh.
+  if [ -d "$SCRIPT_DIR/../../../templates" ]; then
+    PKG_ROOT="$SCRIPT_DIR/../../.."
+    PROJECT_DIR="$JENGA_PROJECT_DIR"
+  elif [ -d "$JENGA_PROJECT_DIR/node_modules/@jenga-ai/agent/templates" ]; then
+    PKG_ROOT="$JENGA_PROJECT_DIR/node_modules/@jenga-ai/agent"
+    PROJECT_DIR="$JENGA_PROJECT_DIR"
+  else
+    echo "Error: could not locate the jenga-agent package root (templates/ not found via monorepo checkout or node_modules/@jenga-ai/agent)." >&2
+    exit 2
+  fi
 fi
 
 PLAYBOOKS_DIR="$PKG_ROOT/skills/jenga/playbooks"
