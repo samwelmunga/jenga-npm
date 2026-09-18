@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-16T15:30:19.120Z",
+  "generated_at": "2026-09-18T00:09:12.152Z",
   "skill_count": 41,
   "skills": [
     "brainstorm",
@@ -12,7 +12,6 @@
     "dashboard",
     "dashboard-share",
     "deep-dive",
-    "dev-done",
     "distribute",
     "do",
     "doc",
@@ -21,6 +20,7 @@
     "error",
     "evaluate",
     "examplify",
+    "gitignore",
     "help",
     "idea",
     "improve",

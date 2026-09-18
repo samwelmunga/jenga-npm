@@ -32,6 +32,76 @@ use more than one.
 The consumer's own `project/` directory (board, queue, logs, rapports) is never touched by
 install.
 
+### Prerequisite — lifecycle scripts must be allowed to run (`E26_S09`)
+
+Everything in §2 below — the mirror, the Copilot bootstrap, the version marker — happens
+inside `scripts/postinstall.js`, which npm invokes automatically as the package's
+`postinstall` lifecycle script. **If lifecycle scripts don't run, none of it happens.** A
+package manager configured to block install scripts skips `postinstall` entirely, and does so
+silently: `npm install @jenga-ai/agent` (or the pnpm/yarn equivalent) exits 0, the dependency
+lands in `node_modules`, and the consumer sees no error — but no `.claude/`, no `.agents/`, no
+`.github/copilot-instructions.md`, and none of the `j.<name>` skills exist. There is nothing to
+`grep` for in the install log because nothing failed; `postinstall` simply never ran.
+
+> **If your install "succeeded" but no framework files appeared** — no `.claude/skills/`, no
+> `.agents/skills/`, no `j.<name>` commands available — the most likely cause is a
+> script-blocking package manager configuration. This is the symptom to search for.
+
+**npm consumers.** npm runs lifecycle scripts by default; most consumers need to do nothing.
+Scripts are skipped only if you (or your CI config) explicitly opt out, via either:
+- The `--ignore-scripts` flag on the install command itself, or
+- `ignore-scripts=true` in an `.npmrc` that's in scope (project, user, or global).
+
+**Fix:** remove `--ignore-scripts` from the install command, or remove/override
+`ignore-scripts=true` for this install, then re-run `npm install @jenga-ai/agent`.
+
+**pnpm consumers.** Since pnpm v8's default-deny change, pnpm blocks dependency lifecycle
+scripts (`preinstall`/`install`/`postinstall`) unless the dependency is explicitly approved.
+Opt in via either:
+- **Interactive:** run `pnpm approve-builds` and select `@jenga-ai/agent` from the prompted
+  list. pnpm persists the approval for you, into `pnpm-workspace.yaml`'s
+  `onlyBuiltDependencies` array (in a workspace) or the project's own `package.json` under
+  `pnpm.onlyBuiltDependencies` (in a single-package project).
+- **Manual:** add the entry yourself —
+  ```json
+  {
+    "pnpm": {
+      "onlyBuiltDependencies": ["@jenga-ai/agent"]
+    }
+  }
+  ```
+  to your `package.json` (or the equivalent `onlyBuiltDependencies` entry under
+  `pnpm-workspace.yaml` for a workspace), then re-run `pnpm install`.
+
+**Already installed with scripts blocked?** Apply the opt-in step above and re-run
+`npm install` / `pnpm install` — the version gate in `postinstall.js` (see §2, step 3) still
+treats this as eligible to run, since no `.jenga-version` file was ever written. Alternatively,
+trigger the mirror manually without reinstalling:
+
+```bash
+node node_modules/@jenga-ai/agent/scripts/postinstall.js
+```
+
+**Verified (`E26_S09_T03`, 2026-09-17, pnpm 12.4.2 / npm 11.16.0 / node v24.18.0):** a real
+`npm pack` tarball of this package was installed into a scratch pnpm project with pnpm's
+default script-blocking in effect. Result: `pnpm add`/`pnpm install` **failed outright**
+(`ERR_PNPM_IGNORED_BUILDS`, non-zero exit) rather than the "silent success, no signal" case
+above — pnpm's own error already names the blocked package and points at `pnpm approve-builds`,
+so a pnpm consumer is never left without a signal. `pnpm approve-builds --all -y` then ran
+`postinstall` correctly end-to-end (`.claude/`, `.agents/`, `.github/` all mirrored,
+`.jenga-version` written) in a single step, confirming the Interactive path above works exactly
+as documented. The **Manual** `pnpm.onlyBuiltDependencies` package.json entry documented above
+did **not** take effect on pnpm 12.4.2 — pnpm now ignores that `package.json` field entirely
+(warns "no longer read by pnpm... see https://pnpm.io/settings") and moved the equivalent
+setting to `pnpm-workspace.yaml`'s `allowBuilds` map, keyed by the full resolved dependency
+specifier rather than the bare package name, which pnpm only auto-generates a stub for after a
+first failed install attempt; even once set, a first `pnpm install` reported "Already up to
+date" without running the build, requiring a follow-up `pnpm rebuild <pkg>` to actually execute
+it. This is a pnpm-version-specific drift in the documented Manual path, not a defect in this
+package — filed as a non-blocking follow-up in
+`project/rapports/problems/E26_S09_T03-pnpm-manual-optin-doc-drift.md`. The Interactive path
+(`pnpm approve-builds`) remains the reliable, version-tolerant recommendation.
+
 ### Dashboard packaging decision (`project/app`) — E47_S01
 
 The local project dashboard (`j.dashboard`, API server + React UI) lives at `project/app/` —
@@ -515,5 +585,6 @@ survived. See `project/documentation/summaries/E26_S08_T03-summary.md` for the t
 Board provenance: `E26` (NPM-Compatible Distribution) owns the consumer install path;
 `E26_S08` / `E26_S08_T01` added the manifest mechanism, `E26_S08_T02` added `jenga doctor` as the
 manual stopgap for pre-manifest and other drift, `E26_S08_T03` added legacy-path seeding as the
-permanent automatic fix for the same pre-manifest gap. `E27` owns `j.self-sync` and explicitly
-scopes out consumer install behaviour.
+permanent automatic fix for the same pre-manifest gap, `E26_S09` documents the lifecycle-script
+(`allowScripts`) requirement that all of the above depends on. `E27` owns `j.self-sync` and
+explicitly scopes out consumer install behaviour.

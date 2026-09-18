@@ -1,0 +1,13 @@
+{
+  "developer": {
+    "cap": 2,
+    "holders": {
+      "holder-4": "2026-09-17T16:43:06Z",
+      "holder-1": "2026-09-17T16:43:06Z"
+    }
+  },
+  "tester": {
+    "cap": 2,
+    "holders": {}
+  }
+}

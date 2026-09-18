@@ -228,6 +228,39 @@ After this phase completes (bare and scoped branches via confirmation, wildcard 
 
 ---
 
+### Phase 0.9 — Generate the Run's Shared `orchestrator_session_id`
+
+This phase runs for every entry mode that reaches Phase 1 at all — bare, scoped, and wildcard (`*`) —
+immediately after Phase 0.75 completes and before Phase 1 begins. It does not run for the
+natural-language branch's playbook/single-skill-match outcomes (E53_S01/E53_S02), since those hand off
+entirely to another skill or playbook and never reach Phase 1-4 of this document.
+
+Generate exactly **one** `orchestrator_session_id` for this entire `/jenga` run, here and only here.
+Both Phase 3.5's bundle dispatch and Phase 4's first (and every later) wave dispatch need this same
+value, which is why it is generated once, early, before either call site runs.
+
+**Format.** Generate it as `jenga-<UTC ISO 8601 basic-format timestamp>` (e.g.
+`jenga-20260917T162349Z`) — a short prefix naming the orchestrating skill, plus a UTC timestamp, with no
+`/` or `..` characters. This follows the same session-id string convention this repo already uses for
+other orchestrator-minted session ids (e.g. `/do`'s own dispatch sessions), and stays compatible with
+`scripts/acquire-concurrency-slot.sh`'s own validation, which refuses a `<session_id>` argument
+containing a path separator or traversal sequence, because the value is used verbatim in filenames such
+as `project/queue/concurrency-slots-<session_id>.json`.
+
+**Generate once, reuse everywhere in this run — never regenerate.** This value MUST be reused,
+byte-for-byte unchanged, across:
+- Phase 3.5 step 7b's bundle `/do <E##_S##>` call.
+- Every wave dispatched by Phase 4 step 3, across every loop-back at Phase 4 step 5b. The loop-back
+  never mints a new value — it only ever references the one value generated here.
+
+This is what allows `E32_S15`'s per-session `max_concurrent_developers`/`max_concurrent_testers` cap
+(`skills/do/SKILL.md`'s `### 4.4`) to actually contend across an entire `/jenga` run's dispatches,
+instead of every spawned `/do` sub-agent minting its own private `orchestrator_session_id` and getting
+its own private, uncontended `project/queue/concurrency-slots-<id>.json` counter file — the root-cause
+defect this story (`E32_S16`) fixes.
+
+---
+
 ### Phase 1 — Decompose Epics into Stories
 
 If Phase 0.75 produced a scoped set, restrict this phase to epics that are members of that set (directly selected, or flagged in its `undecomposed` list). Under `/jenga *`, this phase is unrestricted, exactly as before.
@@ -272,7 +305,7 @@ For each in-scope story that has one or more tasks listed in `todo.md`:
       BUNDLE DETECTED: story <E##_S##> — <N> story-scoped tasks will execute as a bundle.
       ```
       where `<E##_S##>` is the story ID and `<N>` is the count of tasks in the list.
-   b. Call `/do <E##_S##>` once (with the story ID, not individual task IDs). This invokes the bundle execution path in `/do` (implemented in E32_S05_T02), which runs all tasks sequentially in one shared worktree.
+   b. Call `/do <E##_S##>` once (with the story ID, not individual task IDs), passing this run's shared `orchestrator_session_id` (generated once in Phase 0.9) into the bundle's sender object as its `session_id` field — a caller-supplied session id per `skills/do/SKILL.md`'s standalone-vs-caller-supplied contract (`### 4.4`/`### 5`, `E32_S16_T02`), so the bundle path's own `### 4.4` slot acquire shares this run's one counter file too, rather than minting a private one. This invokes the bundle execution path in `/do` (implemented in E32_S05_T02), which runs all tasks sequentially in one shared worktree.
    c. **Mark these tasks as bundled** — record their task IDs so Phase 4 skips individual dispatch for them.
 8. **Non-bundle stories** — stories with a mixed scope, a zero-length task list, any task missing `execution_scope: story`, or any task with `crucial_level: locked` (step 5) use the normal per-task dispatch in Phase 4 without any change.
 
@@ -282,11 +315,11 @@ Loop through `todo.md` and execute all eligible items, running independent ones 
 
 1. **Collect eligible items** — from `todo.md`, find all items whose board file has `status: Pending` and no unresolved dependencies, **excluding tasks already dispatched as part of a story bundle in Phase 3.5**. If Phase 0.75 produced a scoped set, also exclude any item not a member of that set — execution never runs outside the confirmed/resolved scope. Under `/jenga *`, no such exclusion applies. A dependency is resolved if the blocking item's status is at least `In Progress` or `Passed`.
 2. **Group by parallelism** — items with no shared dependencies and no overlapping output files can run concurrently. Items that depend on each other must be sequenced.
-3. **Invoke `/do` in parallel** — launch each independent item as a **background sub-agent** simultaneously. Do not wait for one to finish before starting another if they are independent.
+3. **Invoke `/do` in parallel** — launch each independent item as a **background sub-agent** simultaneously. Do not wait for one to finish before starting another if they are independent. Pass this run's shared `orchestrator_session_id` (generated once in Phase 0.9, unchanged across every wave) into each sub-agent's sender object as its `session_id` field, per `assets/sender_template.json`'s existing shape and `skills/do/SKILL.md`'s caller-supplied-session-id case (`### 4.4`/`### 5`, `E32_S16_T02`) — this is what lets `E32_S15`'s per-session developer/tester concurrency cap actually contend across every sub-agent dispatched within (and across) this run's waves, instead of each one minting its own private session id and its own private, uncontended counter file.
 4. **Mark In Progress** — update `status: In Progress` in each launched item's board file (YAML front-matter) immediately after launch.
 5. **Wait, drain, and loop** — once all active background agents in the wave have completed:
    a. **Drain the scrum triggers queue** — invoke the `## Drain Scrum Triggers Queue` procedure from `agents/scrum-master.md` against `project/queue/scrum_triggers.jsonl`. `/jenga`'s orchestrating agent is the scrum-master, and this is the same session-start procedure applied mid-run: process any `rapport_review`, `status_review`, and `story_rollup` triggers written by the tester sub-sessions that just completed, then clear the file. This ensures rollups become visible on the board (story/epic status updates) before the next wave is collected, instead of sitting unprocessed until some future scrum-master session start.
-   b. **Return to step 1** of this phase to pick up any newly unblocked items — including items unblocked by the rollups just processed in (a).
+   b. **Return to step 1** of this phase to pick up any newly unblocked items — including items unblocked by the rollups just processed in (a). This loop-back reuses the SAME `orchestrator_session_id` generated once in Phase 0.9 for every subsequent wave's `/do` dispatches — it is never regenerated here or anywhere else in this phase.
 
 ### Exit condition
 
@@ -329,3 +362,4 @@ When no eligible candidates remain in Phase 4, exit and output:
 - **A playbook step carries composition origin metadata (depth > 1), shown at confirmation (`E53_S05_T03`)** — the Natural-language branch's step 5b relays `render-playbook-confirmation.sh`'s rendered chain, which now visibly indents and labels that step's line with "(from playbook: <id>, depth N)" — composing another playbook's steps into a chain never hides where one playbook ends and another begins from the user, even though the whole chain is still ONE numbered, editable, confirmable list (never a separate confirmation per nested playbook) and checking/unchecking a composed step still works exactly like any other step.
 - **`/jenga *` (wildcard branch)** — never produces a scoped set; Phases 1-4 run fully unrestricted over the entire board, identical to `/jenga`'s behavior before Phase 0.75 existed.
 - **Stale out-of-scope story queued in `todo.md` from an earlier run (scoped run only)** — Phase 3.5's scoped-set guard skips it entirely (not considered for bundling), so it cannot be dispatched via a bundle `/do <E##_S##>` call that would otherwise bypass Phase 4's own scoped-set exclusion; it remains untouched in `todo.md` until a future run's scope includes it.
+- **`orchestrator_session_id` reuse across waves and phases (`E32_S16_T01`)** — the value generated once in Phase 0.9 is the exact same value threaded into Phase 3.5's bundle `/do` call and into every wave's `/do` sub-agent sender objects dispatched by Phase 4, for the entire duration of a single `/jenga` run; Phase 4 step 5b's loop-back never mints a new one. A run that halts before Phase 0.9 completes (e.g. cancelled at Phase 0.75's picker/confirmation) never reaches Phase 3.5 or Phase 4, so the value it would have generated is simply never used.

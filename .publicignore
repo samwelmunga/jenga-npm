@@ -99,11 +99,17 @@ skills/route/
 skills/j-route/
 .claude/skills/j-route/
 .agents/skills/j-route/
+skills/dev-done/
+.claude/skills/dev-done/
+.agents/skills/dev-done/
+skills/j-dev-done/
+.claude/skills/j-dev-done/
+.agents/skills/j-dev-done/
 
 # --- Canonical duplicates of j-<name>-twinned skills (E28_S09) ---
 # Every skill below has a functional `skills/j-<name>/` twin (E50_S05). Only the
 # canonical (non-`j-`) directory is blocklisted here so the public mirror ships
-# each skill's content exactly once, under its `j-<name>` twin. The six skills
+# each skill's content exactly once, under its `j-<name>` twin. The seven skills
 # above are already fully private and are not duplicated here. `jenga` and
 # `jenga-permission-level` are deliberately NOT blocklisted — they stay public
 # under their bare name per explicit user direction.
@@ -128,9 +134,6 @@ skills/continue/
 skills/deep-dive/
 .claude/skills/deep-dive/
 .agents/skills/deep-dive/
-skills/dev-done/
-.claude/skills/dev-done/
-.agents/skills/dev-done/
 skills/distribute/
 .claude/skills/distribute/
 .agents/skills/distribute/

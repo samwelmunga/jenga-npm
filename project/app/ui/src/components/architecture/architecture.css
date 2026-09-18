@@ -113,10 +113,59 @@
 }
 
 /* SAD Map */
+.sad-map-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.sad-type-chip {
+  --chip-color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #374151;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.sad-type-chip.is-collapsed {
+  background: #f3f4f6;
+  border-color: var(--chip-color);
+}
+
+.sad-type-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--chip-color);
+  flex-shrink: 0;
+}
+
+.sad-reset-view-btn {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #374151;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 0.25rem 0.65rem;
+  cursor: pointer;
+  margin-left: auto;
+}
+
 .sad-map-scroll {
   width: 100%;
   min-height: 320px;
-  overflow: auto;
+  overflow: hidden;
   -webkit-overflow-scrolling: touch;
   border: 1px solid var(--border, #e2e8f0);
   border-radius: 8px;
@@ -125,10 +174,14 @@
 
 .sad-map-svg {
   display: block;
-  min-width: 800px;
-  min-height: 500px;
-  padding: 8px;
+  width: 100%;
+  cursor: grab;
 }
+
+.sad-map-svg:active {
+  cursor: grabbing;
+}
+
 .sad-empty {
   color: var(--text-muted, #94a3b8);
   font-style: italic;

@@ -1,0 +1,31 @@
+# E32_S16_T04 evidence: N > max_concurrent_developers concurrent /do-style
+# dispatches sharing one orchestrator_session_id still cap developer slot
+# holders at the configured value. Captured from a real run of
+# tests/wave-dispatch-cap-contention.bats's scenario 2 on 2026-09-17, against
+# a fixture with max_concurrent_developers=2 (deliberately different from
+# this repo's real configured value of 3, read live from
+# project/configs/scope-thresholds.json rather than assumed). N=cap+3=5.
+# See tests/wave-dispatch-cap-contention.bats and its accompanying counter
+# file snapshot, E32_S16_T04-cap-holds-counter-snapshot.json, for the
+# corresponding assertions and the exact counter-file shape.
+=== E32_S16_T04 evidence run: N=5 concurrent /do-style acquires sharing one orchestrator_session_id, cap=2 ===
+holder-1 exit=0
+holder-2 exit=3
+holder-3 exit=3
+holder-4 exit=0
+holder-5 exit=3
+--- final shared counter file ---
+{
+  "developer": {
+    "cap": 2,
+    "holders": {
+      "holder-4": "2026-09-17T16:43:06Z",
+      "holder-1": "2026-09-17T16:43:06Z"
+    }
+  },
+  "tester": {
+    "cap": 2,
+    "holders": {}
+  }
+}
+successes=2 blocked=3 (expect successes=2, blocked=3)

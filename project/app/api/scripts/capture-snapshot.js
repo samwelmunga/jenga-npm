@@ -4,10 +4,11 @@
  *
  * E47_S04_T02 — capture step for `j.dashboard --snapshot`.
  *
- * Calls the dashboard API's `/v1/board`, `/v1/history`, and `/v1/architecture` routes exactly once
- * each and writes their combined JSON to a single artifact, consumable by the bundling/inlining
- * step in `E47_S04_T03` (not yet implemented — this script's job ends at "artifact written to
- * disk").
+ * Calls the dashboard API's `/v1/board`, `/v1/history`, `/v1/architecture`, and `/v1/health` routes
+ * exactly once each and writes their combined JSON to a single artifact, consumable by the
+ * bundling/inlining step in `E47_S04_T03` (implemented) and, for `/v1/health` specifically, by
+ * `E47_S06_T02`'s snapshot `<title>` rewrite in `../../ui/scripts/build-snapshot-html.cjs`, which
+ * needs the captured project name to bake into the exported HTML's title at build time.
  *
  * ── Why an ad-hoc, in-process server instead of hitting an already-running one ──────────────────
  * This script always spins up its own short-lived, ephemeral (`--port 0` by default) server
@@ -45,7 +46,8 @@
  *   "routes": {
  *     "board":        <full API envelope from GET /v1/board,        i.e. { data, meta, error }>,
  *     "history":       <full API envelope from GET /v1/history,      i.e. { data, meta, error }>,
- *     "architecture":  <full API envelope from GET /v1/architecture, i.e. { data, meta, error }>
+ *     "architecture":  <full API envelope from GET /v1/architecture, i.e. { data, meta, error }>,
+ *     "health":        <full API envelope from GET /v1/health,       i.e. { data, meta, error }>
  *   }
  * }
  * Each `routes.<name>` value is the *full* envelope exactly as the route returned it (see
@@ -90,11 +92,12 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 
-const ROUTES = ['/v1/board', '/v1/history', '/v1/architecture'];
+const ROUTES = ['/v1/board', '/v1/history', '/v1/architecture', '/v1/health'];
 const ROUTE_KEYS = {
   '/v1/board': 'board',
   '/v1/history': 'history',
   '/v1/architecture': 'architecture',
+  '/v1/health': 'health',
 };
 
 function printUsage() {

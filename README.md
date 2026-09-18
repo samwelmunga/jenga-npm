@@ -31,6 +31,34 @@ Jenga AI solves each of these with structure: persistent engineering context mai
 
 ---
 
+## How Jenga AI's Agentic Workflow Works
+
+```
+j.init → j.pi-plan → j.todo → j.do
+                              │
+                     Developer agent
+                     (isolated worktree, commits)
+                           │
+                     Tester agent
+                     (validates, updates board status)
+                           │
+                     SessionEnd hook
+                     (writes triggers to queue)
+                           │
+                     Scrum Master (next session)
+                     (processes queue, rollups, unblocks)
+```
+
+| Mechanism | Location | Purpose |
+|---|---|---|
+| Scrum board | `project/board/` | Epics, stories, tasks with structured frontmatter |
+| Trigger queue | `project/queue/scrum_triggers.jsonl` | Async handoff to Scrum Master |
+| Event log | `project/logs/events.json` | Append-only audit trail |
+| Rapport system | `project/rapports/` | Problem/analysis reports by Developer and Tester |
+| File locking | `<file>.lock` adjacent to board files | Concurrency control for parallel agents |
+
+---
+
 ## What You Get
 
 - **Three specialised agents** — Scrum Master, Developer, Tester — each with a distinct role and no self-graded work
@@ -60,83 +88,6 @@ The Tester doesn't read your code and form an opinion about it. It executes the 
 
 ---
 
-## Examples
-
-### A Real Session, On This Repo
-
-Not a demo — this is what actually produced the section you're reading.
-
-The conversation starts with a request to align this README's language and content with a positioning plan drafted for this epic (E41):
-
-```
-j.improve E41: I want to make some adjustments to the README in both
-language as well as content to better match [the E41 positioning plan]
-[...]
-```
-
-That plan already existed, so the copy gets edited directly — no need to re-run a fresh analysis pass just to re-derive it. A few edits later, ten more issues surface, one with an `j.brainstorm` request attached:
-
-```
-Then do a j.todo on this, as there are more places that should be
-edited based on that scrutiny rapport:
-* Remove warning banner about Copilot conflict
-[...]
-* Fewer, better and more relatable examples, we should
-  j.brainstorm this so I can send examples from real world usecases
-[...]
-* Should we really display the entire Skill list here?
-[...]
-```
-
-`j.todo` classifies the ten items into two stories: nine mechanical README fixes (`E41_S10`), and the Examples section you're reading right now (`E41_S11`) — carved out and held back specifically because of that `j.brainstorm` request, since a real example had to come from the user, not be invented.
-
-Once `E41_S10` is on the board, it's picked to run first. The Scrum Master reads the story and decomposes it into seven tasks, executed through `j.do`. Five are small, single-file text fixes deemed `--trivial` — they run inline, smoke-tested and committed directly, no worktree needed. Two need an editorial call — one of them being which skills are "foundational" enough to stay inline — those escalate to a real git worktree with a Developer and a Tester. The Tester independently re-verifies the diff, catches one file the Developer missed, fixes it, and queues the story for rollup. The Scrum Master processes that queue next: `E41_S10` → `Passed`. Epic `E41` stays `In Progress` — three other stories are still open.
-
-Then, circling back to the deferred request:
-
-```
-Jenga AI: [...] Remaining open thread from this session: E41_S11
-(Examples rework) is on the board but not started — it's gated on
-a j.brainstorm session where you supply real-world use cases. Want
-to do that now, or leave it queued?
-
-You: do it now
-```
-
-`j.brainstorm` opens for the gated story — the session you're reading right now, working out what this example should even say.
-
-Nobody hand-wrote this task breakdown. The board did it, the routing rules decided what needed a real worktree versus what could run inline, and the Tester — not the agent that made the edits — decided when each piece was actually done. The board entries are real: `E41_S10` and `E41_S11`.
-
----
-
-## How Jenga AI's Agentic Workflow Works
-
-```
-j.init → j.pi-plan → j.todo → j.do
-                              │
-                     Developer agent
-                     (isolated worktree, commits)
-                           │
-                     Tester agent
-                     (validates, updates board status)
-                           │
-                     SessionEnd hook
-                     (writes triggers to queue)
-                           │
-                     Scrum Master (next session)
-                     (processes queue, rollups, unblocks)
-```
-
-| Mechanism | Location | Purpose |
-|---|---|---|
-| Scrum board | `project/board/` | Epics, stories, tasks with structured frontmatter |
-| Trigger queue | `project/queue/scrum_triggers.jsonl` | Async handoff to Scrum Master |
-| Event log | `project/logs/events.json` | Append-only audit trail |
-| Rapport system | `project/rapports/` | Problem/analysis reports by Developer and Tester |
-| File locking | `<file>.lock` adjacent to board files | Concurrency control for parallel agents |
-
----
-
 ## Agents
 
 | Agent | Role | Owns |
@@ -160,6 +111,13 @@ Each agent is defined in `.agents/agents/`. They communicate exclusively through
 ```sh
 npm install -g @jenga-ai/agent
 ```
+
+> **pnpm or `--ignore-scripts`?** Jenga's install relies on a `postinstall` lifecycle script to
+> mirror `skills/`/`agents/` into your project — if your package manager blocks lifecycle
+> scripts by default (pnpm v8+) or you install with `--ignore-scripts`/`ignore-scripts=true`,
+> the install will silently produce none of the framework files with no error shown. See
+> [`docs/distribution.md`](docs/distribution.md#prerequisite--lifecycle-scripts-must-be-allowed-to-run-e26_s09)
+> for the exact npm/pnpm opt-in step.
 
 Or clone directly:
 
@@ -256,6 +214,55 @@ Nothing executes until you confirm the chain, and any step can be unchecked firs
 When a step forwards its result into the next one, that value has a declared **output type** (a plain string, a list of board IDs, a list of files) so the chain can be validated before it runs. See [Getting Started](https://samwelmunga.github.io/jenga-npm/getting-started.html#how-playbooks-know-what-a-skill-produces) for how that works.
 
 Want your own recurring chain? `j.playbook-new` walks you through authoring one — id, name, description, keywords, examples, and an ordered list of skills — writes it to `project/.playbooks/<id>.json` alongside the built-in ones, and self-validates the result before reporting success.
+
+---
+
+## Example
+
+### A Real Session, On This Repo
+
+Not a demo — this is what actually produced the section you're reading.
+
+The conversation starts with a request to align this README's language and content with a positioning plan drafted for this epic (E41):
+
+```
+j.improve E41: I want to make some adjustments to the README in both
+language as well as content to better match [the E41 positioning plan]
+[...]
+```
+
+That plan already existed, so the copy gets edited directly — no need to re-run a fresh analysis pass just to re-derive it. A few edits later, ten more issues surface, one with an `j.brainstorm` request attached:
+
+```
+Then do a j.todo on this, as there are more places that should be
+edited based on that scrutiny rapport:
+* Remove warning banner about Copilot conflict
+[...]
+* Fewer, better and more relatable examples, we should
+  j.brainstorm this so I can send examples from real world usecases
+[...]
+* Should we really display the entire Skill list here?
+[...]
+```
+
+`j.todo` classifies the ten items into two stories: nine mechanical README fixes (`E41_S10`), and the Examples section you're reading right now (`E41_S11`) — carved out and held back specifically because of that `j.brainstorm` request, since a real example had to come from the user, not be invented.
+
+Once `E41_S10` is on the board, it's picked to run first. The Scrum Master reads the story and decomposes it into seven tasks, executed through `j.do`. Five are small, single-file text fixes deemed `--trivial` — they run inline, smoke-tested and committed directly, no worktree needed. Two need an editorial call — one of them being which skills are "foundational" enough to stay inline — those escalate to a real git worktree with a Developer and a Tester. The Tester independently re-verifies the diff, catches one file the Developer missed, fixes it, and queues the story for rollup. The Scrum Master processes that queue next: `E41_S10` → `Passed`. Epic `E41` stays `In Progress` — three other stories are still open.
+
+Then, circling back to the deferred request:
+
+```
+Jenga AI: [...] Remaining open thread from this session: E41_S11
+(Examples rework) is on the board but not started — it's gated on
+a j.brainstorm session where you supply real-world use cases. Want
+to do that now, or leave it queued?
+
+You: do it now
+```
+
+`j.brainstorm` opens for the gated story — the session you're reading right now, working out what this example should even say.
+
+Nobody hand-wrote this task breakdown. The board did it, the routing rules decided what needed a real worktree versus what could run inline, and the Tester — not the agent that made the edits — decided when each piece was actually done. The board entries are real: `E41_S10` and `E41_S11`.
 
 ---
 

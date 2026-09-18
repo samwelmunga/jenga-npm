@@ -29,7 +29,13 @@
  *      which src/api/client.js's get() already reads instead of calling fetch()
  *      whenever it is present. That runtime branch is NOT build-mode-gated, so
  *      the ordinary `vite build` output is already snapshot-capable.
- *   5. Fails loudly if any local asset reference survives, so a future UI change
+ *   5. Rewrites the static <title> to "<ProjectName>'s Dashboard" using the
+ *      project name captured from the /v1/health route (E47_S06_T02) — the
+ *      exported file has zero network dependency once opened via file://, so the
+ *      client-side document.title fix (E47_S06_T01) never runs against it; this
+ *      has to happen here, at export time, instead. Leaves the static title
+ *      untouched when no name is resolvable (see resolveProjectName() below).
+ *   6. Fails loudly if any local asset reference survives, so a future UI change
  *      that adds an image/font/chunk can never silently ship a broken snapshot.
  *
  * Usage:
@@ -125,6 +131,42 @@ function attr(tag, name) {
   return match ? match[1] : null;
 }
 
+// Minimal HTML-escaping for text placed inside a <title> element — a project
+// name is untrusted input (it comes from a consumer's own package.json), so it
+// must not be able to break out of the element or inject markup.
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// Candidate keys checked, in order, on the captured /v1/health route's `data`
+// object. E47_S06_T01 (sibling task, dispatched concurrently in a separate
+// worktree/branch, not yet visible when this was written) owns the exact field
+// name /v1/health returns the project name under — the story only commits to
+// "returns the consuming project's name", not a specific key. Checking an
+// ordered list instead of a single guessed key avoids a silent no-op title
+// fallback if the merged field name differs from the first guess.
+const PROJECT_NAME_KEYS = ['projectName', 'project_name', 'name'];
+
+/**
+ * Pull a non-empty project name string out of the captured snapshot data's
+ * /v1/health route, or return null if none is resolvable (route missing from
+ * the capture, envelope has no usable data, or none of the candidate keys hold
+ * a non-empty string). Never throws — a resolution failure here must fall back
+ * to the static default title, not abort the whole snapshot build.
+ */
+function resolveProjectName(data) {
+  const healthData = data && data.routes && data.routes.health && data.routes.health.data;
+  if (!healthData || typeof healthData !== 'object') return null;
+  for (const key of PROJECT_NAME_KEYS) {
+    const value = healthData[key];
+    if (typeof value === 'string' && value.trim().length > 0) return value.trim();
+  }
+  return null;
+}
+
 // ── 0. Reserve the real </head> injection point ──────────────────────────────
 // This MUST run before step 1. Step 4 injects the payload before `</head>` with
 // a first-match regex, and step 1 inlines the ESM bundle INTO the head. The
@@ -182,7 +224,26 @@ const dataTag = `<script id="jenga-dashboard-data" type="application/json">${ser
 // competing '</head>'; see there for why the anchor cannot be taken here.
 html = html.replace(DATA_PLACEHOLDER, () => `  ${dataTag}`);
 
-// ── 5. Refuse to emit a snapshot that still points at files it does not carry ─
+// ── 5. Rewrite <title> using the resolved project name, when available ──────
+// Only replaces the exact static default — if some earlier step already
+// changed it, there's nothing to do here. No project name resolvable means the
+// static title is left exactly as-is (no "undefined's Dashboard").
+const projectName = resolveProjectName(snapshotData);
+if (projectName) {
+  const titleReplaced = html.replace(
+    /<title>Jenga AI Dashboard<\/title>/,
+    () => `<title>${escapeHtml(projectName)}'s Dashboard</title>`
+  );
+  if (titleReplaced === html) {
+    console.warn(
+      'Warning: could not find the static "<title>Jenga AI Dashboard</title>" to replace — ' +
+        'leaving the title untouched.'
+    );
+  }
+  html = titleReplaced;
+}
+
+// ── 6. Refuse to emit a snapshot that still points at files it does not carry ─
 // Without this, adding (say) a background image to the UI would produce a
 // snapshot that looks fine here and renders broken on the recipient's machine.
 const leftovers = [...html.matchAll(/\b(?:src|href)=["'](?!data:|https?:|#|\/\/)([^"']+)["']/gi)]

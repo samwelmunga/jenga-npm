@@ -297,7 +297,7 @@ currently gates on its presence.
 
 ### `[SPIKE]` — Bounded Research
 
-**Scope:** story and task level only.
+**Scope:** story and task level, **and rapports** (extended by `E35_S03_T01`, see below).
 
 **Meaning:** a time-boxed research or exploration effort whose output is a decision, a design note,
 or an answered question — **not** shippable implementation code. Existing usage (`E06_S03_spike-editable-board.md`,
@@ -311,6 +311,19 @@ or an answered question — **not** shippable implementation code. Existing usag
 
 `[SPIKE]` predates this document; this section formalizes an existing informal convention rather
 than introducing new behavior.
+
+**Rapport scope extension (`E35_S03_T01`):** `[SPIKE]` also applies to a problem rapport (see
+`project/rapports/problems/`) via the same title-text convention — a `[SPIKE] <Topic>` prefix on
+the rapport's own title/header field, not a frontmatter key (rapports don't carry board
+frontmatter at all). This marks a rapport as itself surfacing a bounded research question or a
+distinct idea worth tracking, independent of whatever problem the rapport was originally filed
+to report. In practice this happens as part of the idea-lifecycle outcome-record mechanism
+(`E35_S03`): when a `project/ideas.md` entry that originated from a rapport (see
+`skills/idea/SKILL.md`'s "Source-Rapport Link Convention") is later promoted or rejected, the
+outcome-record step updates that rapport with the decision and prefixes its title `[SPIKE]` if
+it isn't already tagged. As with the story/task usage above, this is advisory only — nothing
+validates or enforces the prefix's presence, and a rapport's normal `Type:`/`Related
+Epic/Story/Task` fields (per `templates/PROBLEM_RAPPORT_TEMPLATE.md`) are unaffected by it.
 
 ### `[ARCH]` — Durable Architectural Inventory
 

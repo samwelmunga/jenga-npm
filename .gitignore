@@ -23,6 +23,9 @@ jobs/
 *.pid
 node_modules/
 
+# npm pack artifacts (e.g. from manual verification runs like E26_S09_T03)
+*.tgz
+
 # Jenga runtime files (machine-local, auto-generated)
 mcp/router/.pid
 mcp/router/.session.json

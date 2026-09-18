@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import BoardTab from './tabs/BoardTab'
 import ActiveSprintTab from './tabs/ActiveSprintTab'
 import HistoryTab from './tabs/HistoryTab'
 import ArchitectureTab from './tabs/ArchitectureTab'
 import RapportsTab from './tabs/RapportsTab'
 import DocumentationTab from './tabs/DocumentationTab'
+import { get } from './api/client'
 import './App.css'
 
 const TABS = [
@@ -18,6 +19,25 @@ const TABS = [
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('board')
+
+  // E47_S06_T01 — set the browser tab title to the serving project's name once `/v1/health`
+  // resolves, so multiple dashboards (or multiple tabs of the same one) are distinguishable.
+  // `index.html`'s static "Jenga AI Dashboard" title stays as the pre-JS/no-name-available
+  // fallback: if the request fails, or `projectName` is missing/null (e.g. the consuming
+  // project's package.json is missing, unreadable, or has no `name` field — see
+  // `project/app/api/routes/health.js`'s `resolveProjectName()`), the title is left untouched
+  // rather than rendering something like "undefined's Dashboard".
+  useEffect(() => {
+    get('/v1/health')
+      .then(data => {
+        if (data && typeof data.projectName === 'string' && data.projectName.trim().length > 0) {
+          document.title = `${data.projectName}'s Dashboard`
+        }
+      })
+      .catch(() => {
+        // Network/parse failure — keep index.html's static fallback title.
+      })
+  }, [])
 
   return (
     <div className="app">

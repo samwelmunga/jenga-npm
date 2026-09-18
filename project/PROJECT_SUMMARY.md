@@ -43,7 +43,7 @@ Jenga AI supports two distribution paths:
 - **E17** — Workflow Quality Enforcement *(Reopened 2026-09-09, fourth time — In Progress. E17_S08 added: `agents/tester.md` step 6d — authored by this epic's own `E17_S01` — forces `status: Failed` on any story with an unverifiable DoD item, but the tester runs **per task**, so mid-story the DoD items gated on later tasks are necessarily unverifiable. The rule is unsatisfiable for every multi-task story. Two tester runs in the 2026-09-09 `E50_S10` session hit it and both declined to follow their own contract, leaving the story `Pending` instead — correct judgment, but it means 6d is enforced by agent discretion rather than by its text. S08 must narrow *when* 6d applies without weakening *what* it does, or the fix re-opens this epic's own `S03`/`S04` false-completion failure mode)*
 - **E18** — README & Documentation Overhaul
 - **E19** — Train Skill Enhancement *(Rejected 2026-09-10 — superseded by E57; never started, premise reversed)*
-- **E20** — Knowledge Graph *(S09 — Mechanical Board-to-Graph Populator — rolled up to `Passed` 2026-09-12: T01 defined the `board` source-provenance value in `STUB_SCHEMA.md`, T02 built `scripts/populate-knowledge-graph.js` (a rapport-flagged node-pruning gap was addressed in the same task and re-verified, upgrading it from `Passed with remarks` to `Passed`), T03 added test coverage (16 tests, full suite 195/195). This is the populator side that E08_S05 consumes. Epic remains `Pending` overall — S01–S08 are still `Pending`/undecomposed)*
+- **E20** — Knowledge Graph *(S09 — Mechanical Board-to-Graph Populator — rolled up to `Passed` 2026-09-12: T01 defined the `board` source-provenance value in `STUB_SCHEMA.md`, T02 built `scripts/populate-knowledge-graph.js` (a rapport-flagged node-pruning gap was addressed in the same task and re-verified, upgrading it from `Passed with remarks` to `Passed`), T03 added test coverage (16 tests, full suite 195/195). This is the populator side that E08_S05 consumes. 2026-09-18: a `/j-deep-dive` on E08_S05's graph-sourcing approach added `E20_S10` (active scope — architecture-map provenance gating, interim UX, mixed-provenance edges, entity resolution, staleness revalidation) plus `E20_S11`-`E20_S13` as gated/provisional backlog, see below. Epic remains `Pending` overall — S01–S08 are still `Pending`/undecomposed)*
 - **E21** — Clarify Skill *(Passed with remarks)*
 - **E22** — Publish Skill *(Passed)*
 - **E23** — Human–Agent Handoff Protocol
@@ -263,6 +263,72 @@ script) before re-passing `T03`. Since the defect was caught and fully resolved 
 surviving caveat, the story rolled up to a clean `Passed` rather than `Passed with remarks`. Parent
 epic `E06` does not roll up yet — `E06_S04` (Collapsible Epic → Story → Task Tree) is still
 `Pending`.
+
+## Knowledge Graph Provenance Gating (E20_S10) and Gated Backlog (E20_S11–E20_S13)
+Filed via a `/j-deep-dive` (challenge mode) session on 2026-09-18, triggered by a user critique of
+`E08_S05`'s graph-sourcing approach. The diagnosis: `scripts/populate-knowledge-graph.js` hard-codes
+`source: 'board'` on every node derived from epics/stories/tasks/dependencies, and nothing downstream
+(`parseArchitecture()`, `SADMap.jsx`) filters on that field before rendering — so the dashboard's
+Architecture tab actually renders project-management structure (epics → stories → tasks), not a map
+of real services, components, and their connections. `project/knowledge-graph/STUB_SCHEMA.md` already
+anticipates this: its `source: human | ast | board` provenance field and Evidence-Wins Conflict Rule
+were defined for exactly this purpose, just never activated by a consumer-side filter.
+
+The deep-dive's original proposal bundled four stories under a reopened E20. Scrutiny scored it
+CAUTIOUS (5/10): Story 1 (provenance gating) was sound and reused an already-anticipated schema
+field, but Stories 2-4 were under-specified, and shipping Story 1's filter alone — with nothing else
+changed — would regress the Architecture tab to a near-empty, unexplained state (no interim UX was
+defined). The solution assessment (verdict CHALLENGING) recommended de-scoping to Story 1 plus two
+cheap companion fixes now, holding Stories 2-4 as gated/provisional backlog behind individual
+scoping spikes rather than committing all four as one bundle. The user explicitly approved this
+narrower option. Full reasoning: `project/documentation/plans/e20-arch-graph-provenance-and-dynamic-tracing.md`,
+`scrutiny-e20-arch-graph-provenance-and-dynamic-tracing.md`,
+`solution-assessment-e20-arch-graph-provenance-and-dynamic-tracing.md`.
+
+**`E20_S10` (new story, `Pending`, active scope) — Architecture-Map Provenance Gating, Interim UX &
+Data-Quality Companions.** Five tasks, all `execution_scope: task` (branching logic disqualifies each
+from `inline`): `T01` filters `parseArchitecture()`/`SADMap.jsx` to render only `human`/`ast`-provenance
+nodes (`board` nodes stay in `graph.json`, just excluded from architecture rendering); `T02` ships, in
+the same change as `T01`, a provenance-coverage indicator and an honest "no verified architecture data
+yet" empty state — closing the scrutiny's top-flagged risk of an unexplained near-empty tab; `T03`
+handles mixed-provenance edges (a `board` epic node linked to a `human`/`ast` service node) via
+node-level filtering with dimmed "ghost" endpoint stubs, preserving board↔architecture traceability
+without a schema change; `T04` and `T05` fold in two more solution-assessment-recommended fixes as
+their own tasks, since they're small and structurally coupled to the filter rather than independent
+scope — a deterministic key-based entity-resolution/merge-on-write policy in
+`populate-knowledge-graph.js` (so duplicate nodes across sources merge instead of accumulating), and a
+timestamp + content-hash staleness/revalidation badge for non-`board` provenance tiers (closing the
+scrutiny's critique that gating on `source` alone relocates, rather than solves, the original
+"board data goes stale" defect). No heuristic in the Crucial Level Heuristic Proposal list matched
+any of these five tasks (the schema/frontmatter-contract heuristic's examples and rationale are
+scoped to the *board* schema/`validate-board.sh`, not `STUB_SCHEMA.md`), so no `crucial_level` was
+proposed.
+
+**`E20_S11`/`E20_S12`/`E20_S13` (new stories, `Pending`, gated/provisional backlog — not queued via
+`/do`)** capture the deep-dive's original Stories 2-4 without committing to their full scope: static
+schema extraction (`E20_S11`, depends on nothing), synthetic fixture generation (`E20_S12`,
+`depends_on: E20_S11`), and dynamic tracing (`E20_S13`, `depends_on: E20_S08, E20_S11, E20_S12`).
+Each opens with exactly one `[SPIKE]`-tagged, `execution_scope: inline` scoping-spike task (a
+findings/design-note doc only, no implementation code) per the solution assessment's own recommended
+next steps, rather than being decomposed into full implementation task lists — each story's own
+Acceptance Criteria/DoD explicitly state that further tasks wait on the spike's outcome and a human
+go/no-go decision. `E20_S11`'s spike targets the scrutiny's flagged gap that Story 2 has no defined
+fallback for codebases lacking OpenAPI/DB-migration/schema artifacts. `E20_S13` carries the deep-dive's
+single highest-severity open item, called out explicitly in its own Related Work section and DoD as a
+hard human gate rather than a note in passing: network-egress sandboxing alone does not cover
+DB/disk/local-queue side effects from running real test code against `E20_S12`'s synthetic payloads —
+this is **UNRESOLVED** per the solution assessment §5 (not merely a documented risk), and no
+instrumentation or trace-execution code may be written until a human explicitly picks between a full
+ephemeral sandbox (2-3 weeks, closes the gap) or a cheaper snapshot/restore approach (~1 week, leaves
+the local-queue/external-process side-effect class explicitly uncovered).
+
+E20 was never previously completed (`status: Pending` throughout), so this reopening simply appends
+`E20_S10`-`E20_S13` to the epic's existing `stories:` list — no `reopened_on`/`dates_previously_completed`
+frontmatter was needed (contrast `E08`'s reopening pattern for the consumer-side half of this same
+underlying critique). One new epic DoD line was added: architecture-map consumers must render only
+provenance-verified nodes, with the interim-UX/edge/entity-resolution/staleness companions `E20_S10`
+ships. No implementation was started and no developer handoff was written — this session is board-item
+creation only, per explicit instruction.
 
 ## Launch & Discoverability (E41)
 E26 built the npm distribution pipeline and is marked `Passed`, but `jenga-agent` was never actually published — `npm view jenga-agent` returns 404, so there is no registry page and no download history. Every discovery-driving field is simultaneously empty or wrong: `package.json` carries `keywords: []`, `author: ""`, and no `repository`, `homepage`, `bugs`, or `engines`; the description contains none of the terms the target audience searches for; and the public-facing `samwelmunga/jenga-npm` repo has an empty description, zero topics, and no homepage, while the richer `samwelmunga/Jenga AI` repo is private. E41 fixes the whole in-our-control discovery surface and ships the first public release at **v1.1.0**. Keywords are deliberately broad rather than brand-led — `npm search jenga` is already contested by an unrelated z-index library and Equity Bank's payments API, and nobody searches the brand yet — spanning generic agentic terms, multi-vendor ecosystem terms (`claude-code`, `copilot`, `codex`, `agents-md`), and category terms (`scrum`, `project-management`). The multi-vendor claim is grounded in real architecture: `postinstall.js` mirrors `skills/` and `agents/` into both `.claude/` and `.agents/`, and `lib/commands/init.js` already generates `.github/copilot-instructions.md`. One gap is closed first, and it turned out to be a `/init` setup miss rather than a Codex-only one: `/init` scaffolds no root-level agent context file at all — Copilot alone gets a pointer via `.github/copilot-instructions.md`, while Claude Code and Codex receive a fully populated framework their agents cannot see. S04 makes `/init` generate `CLAUDE.md` and `AGENTS.md` from a single source template (this repo's own `CLAUDE.md` and `AGENT.md` have already drifted by one skills-table row, so two hand-maintained copies is a proven failure mode), writes the Jenga copy as `J-<NAME>.md` with a reference inserted into the user's existing file when one is already present, and adds `codex` to the `agentTarget` enum — so no shipped keyword outruns the implementation. S05 gates on S01–S04 and publishes; S06 tracks off-npm channels while stating plainly that npm ranking is driven by download volume that only off-registry attention produces. Separately flagged for `/reconcile`: E16 is marked `Done` with every DoD checkbox unticked despite the work appearing implemented — since resolved by the 2026-09-07 reopening below, which also added a new DoD line rather than only reticking the old ones, so the checkbox/implementation gap this flag pointed at is now folded into E16's own tracked scope instead of living only in this paragraph.

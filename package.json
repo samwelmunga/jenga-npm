@@ -12,6 +12,10 @@
   "engines": {
     "node": ">=14.13.1"
   },
+  "jenga": {
+    "requiresLifecycleScripts": true,
+    "note": "postinstall (scripts/postinstall.js) mirrors skills/agents/hooks into the consumer project and is load-bearing for the whole framework install. On package managers that block lifecycle scripts by default (pnpm v10+, npm 11.16+ via allowScripts), an explicit consumer-side opt-in is required — see docs/distribution.md."
+  },
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
     "prepack": "npm run ui:build --prefix project/app --",

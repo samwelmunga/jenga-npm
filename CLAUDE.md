@@ -139,6 +139,7 @@ Invocation Convention note under Workflow Lifecycle above).
 | `j.continue` | Pick up the next incomplete item across `PROJECT_SUMMARY.md`, epics, and stories. |
 | `j.proceed` | Resume execution from where it left off. |
 | `j.error` | Guided troubleshooting — gathers context about an error and investigates a fix. |
+| `j.gitignore` | Retroactively repair an already-scaffolded project's Jenga gitignore state — strips the stray heredoc `EOF` line left by pre-fix `/init` scaffolds, adds (or removes) the Jenga-owned path entries via a managed block, and untracks those paths from git and from `origin` while leaving every file on disk. `/init` cannot do this: it hard-stops on `already-scaffolded`, and its template fix is forward-only. |
 | `j.help` | List all available skills with descriptions. |
 
 ---
