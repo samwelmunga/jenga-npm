@@ -40,7 +40,11 @@ export default function ArchitectureTab() {
           </section>
           <section className="arch-section">
             <h3>Architecture Map</h3>
-            <SADMap nodes={data.sad_map?.nodes} edges={data.sad_map?.edges} />
+            <SADMap
+              nodes={data.sad_map?.nodes}
+              edges={data.sad_map?.edges}
+              coverage={data.sad_map?.coverage}
+            />
           </section>
         </>
       )}

@@ -176,7 +176,44 @@ function layoutWithDagre(nodes, edges) {
   }
 }
 
-export default function SADMap({ nodes, edges }) {
+// E20_S10_T02: renders the provenance-coverage indicator (verified/shown vs. hidden/unverified
+// node counts) that must ship alongside E20_S10_T01's provenance filter, per the story's explicit
+// sequencing requirement — a near-empty tab with no explanation was the deep-dive scrutiny's top
+// risk of shipping the filter alone. `coverage` is sourced verbatim from readSADMap()'s own
+// filtering pass (knowledge-graph.js) — never recomputed here — so it can't drift from what's
+// actually rendered below.
+function CoverageIndicator({ coverage }) {
+  if (!coverage || coverage.total === 0) return null
+  const { shown, hidden, needsRevalidation } = coverage
+  return (
+    <p className="sad-coverage-indicator">
+      <span className="sad-coverage-shown">{shown} verified</span>
+      {hidden > 0 && (
+        <span className="sad-coverage-hidden"> · {hidden} hidden (unverified)</span>
+      )}
+      {/* E20_S10_T05: surfaced through this same indicator so it never becomes invisible
+          background noise — a separate, easy-to-miss element was deliberately avoided. */}
+      {needsRevalidation > 0 && (
+        <span className="sad-coverage-stale"> · {needsRevalidation} need{needsRevalidation === 1 ? 's' : ''} re-verification</span>
+      )}
+    </p>
+  )
+}
+
+// E20_S10_T03: a short legend/caption explaining what a dimmed/ghost node means, shown only when
+// at least one is actually on screen (never as permanent clutter for a fully-verified graph).
+function GhostLegend({ hasGhosts }) {
+  if (!hasGhosts) return null
+  return (
+    <p className="sad-ghost-legend">
+      <span className="sad-ghost-legend-swatch" aria-hidden="true" /> Dimmed, dashed nodes are
+      unverified (board-sourced) — shown only because a verified node links to them. Click for a
+      label only; no full detail is available until they are confirmed as architecture.
+    </p>
+  )
+}
+
+export default function SADMap({ nodes, edges, coverage }) {
   const [selectedId, setSelectedId] = useState(null)
   const [collapsedTypes, setCollapsedTypes] = useState(() => new Set())
 
@@ -192,6 +229,13 @@ export default function SADMap({ nodes, edges }) {
     for (const n of nodes || []) types.add(n.type)
     return [...types].sort()
   }, [nodes])
+
+  // E20_S10_T03: whether any ghost (verified: false) stub is present in the unfiltered node set,
+  // so the legend only ever appears when it's actually relevant.
+  const hasGhosts = useMemo(
+    () => (nodes || []).some(n => n.verified === false),
+    [nodes]
+  )
 
   const { nodes: collapsedNodes, edges: collapsedEdges, clusterMembers } = useMemo(
     () => collapseByType(nodes || [], allEdges, collapsedTypes),
@@ -251,6 +295,24 @@ export default function SADMap({ nodes, edges }) {
   }, [layout.svgH, selectedId, collapsedTypes])
 
   if (!nodes || nodes.length === 0) {
+    // E20_S10_T02: an honest, two-branch empty state instead of one generic message, so "hidden
+    // because unverified" never reads as "broken/empty."
+    const hiddenCount = coverage && coverage.hidden > 0 ? coverage.hidden : 0
+    if (hiddenCount > 0) {
+      return (
+        <div className="sad-empty-state">
+          <p className="sad-empty">
+            No verified architecture data yet for this area.
+          </p>
+          <p className="sad-empty-detail">
+            {hiddenCount} project-management node{hiddenCount === 1 ? '' : 's'} exist
+            {hiddenCount === 1 ? 's' : ''} for this project but {hiddenCount === 1 ? 'has' : 'have'}{' '}
+            not yet been confirmed as architecture (human-elicited or AST-derived) — this is an
+            interim state, not a bug.
+          </p>
+        </div>
+      )
+    }
     return <p className="sad-empty">No architecture map data available.</p>
   }
 
@@ -277,6 +339,8 @@ export default function SADMap({ nodes, edges }) {
 
   return (
     <div>
+      <CoverageIndicator coverage={coverage} />
+      <GhostLegend hasGhosts={hasGhosts} />
       <div className="sad-map-toolbar" role="toolbar" aria-label="Architecture map controls">
         {allTypes.map(type => {
           const isCollapsed = collapsedTypes.has(type)
@@ -340,33 +404,49 @@ export default function SADMap({ nodes, edges }) {
               if (!pos) return null
               const fill = TYPE_COLORS[n.type] || DEFAULT_TYPE_COLOR
               const label = n.label.length > 18 ? n.label.slice(0, 17) + '…' : n.label
-              const opacity = selectedId === null ? 0.85 : 1.0
               const isCluster = Boolean(n.isCluster)
+              // E20_S10_T03: a ghost stub (verified: false, only ever present because it's an edge
+              // endpoint of a verified node — see readSADMap()) renders dimmed/dashed, label +
+              // provenance badge only. It is never given the same visual treatment as a fully
+              // verified node, and clicking it never opens click-to-isolate (no "full detail").
+              const isGhost = n.verified === false
+              // E20_S10_T05: a "needs re-verification" badge — a stale-content signal, distinct
+              // from (and orthogonal to) ghost dimming. Only ever applies to a fully verified
+              // node; a ghost stub's provenance was never confirmed in the first place, so
+              // staleness doesn't apply to it.
+              const needsRevalidation = !isGhost && n.needsRevalidation === true
+              const opacity = isGhost ? 0.4 : selectedId === null ? 0.85 : 1.0
+              const titleSuffix = needsRevalidation ? ' — needs re-verification (source changed since extraction)' : ''
               return (
                 <g
                   key={n.id}
                   transform={`translate(${pos.x},${pos.y})`}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() =>
-                    isCluster
-                      ? toggleTypeCollapse(n.type)
-                      : setSelectedId(selectedId === n.id ? null : n.id)
+                  style={{ cursor: isGhost ? 'default' : 'pointer' }}
+                  onClick={
+                    isGhost
+                      ? undefined
+                      : () =>
+                          isCluster
+                            ? toggleTypeCollapse(n.type)
+                            : setSelectedId(selectedId === n.id ? null : n.id)
                   }
                 >
                   <title>
                     {isCluster
                       ? `${n.label} — click to expand (${(clusterMembers[n.id] || []).length} nodes)`
-                      : n.label}
+                      : isGhost
+                        ? `${n.label} — unverified (${n.source}-sourced); label only, no detail available`
+                        : `${n.label}${titleSuffix}`}
                   </title>
                   <rect
                     width={NODE_W}
                     height={NODE_H}
                     rx={6}
-                    fill={fill}
+                    fill={isGhost ? DEFAULT_TYPE_COLOR : fill}
                     opacity={opacity}
-                    stroke={isCluster ? '#1f2937' : 'none'}
-                    strokeWidth={isCluster ? 1.5 : 0}
-                    strokeDasharray={isCluster ? '4 2' : undefined}
+                    stroke={isCluster || isGhost ? '#1f2937' : 'none'}
+                    strokeWidth={isCluster || isGhost ? 1.5 : 0}
+                    strokeDasharray={isCluster || isGhost ? '4 2' : undefined}
                   />
                   <text
                     x={NODE_W / 2}
@@ -377,8 +457,19 @@ export default function SADMap({ nodes, edges }) {
                     fontSize={11}
                     fontFamily="inherit"
                   >
-                    {label}
+                    {isGhost ? `${label} (${n.source})` : label}
                   </text>
+                  {needsRevalidation && (
+                    <circle
+                      className="sad-node-stale-badge"
+                      cx={NODE_W - 8}
+                      cy={8}
+                      r={5}
+                      fill="#f59e0b"
+                      stroke="#fff"
+                      strokeWidth={1.5}
+                    />
+                  )}
                 </g>
               )
             })}

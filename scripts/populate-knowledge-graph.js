@@ -42,6 +42,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, '..');
@@ -49,7 +50,21 @@ const REPO_ROOT = path.join(__dirname, '..');
 const EPIC_ID_RE = /^E\d+$/;
 const STORY_ID_RE = /^E\d+_S\d+$/;
 
-const NODE_KEY_ORDER = ['id', 'type', 'label', 'description', 'source', 'status', 'superseded_by'];
+// E20_S10_T05: extracted_at/content_hash/needs_revalidation are appended after the pre-existing
+// fields — never inserted in the middle — so a graph.json written before E20_S10_T05 diffs
+// cleanly against one written after it for every node that doesn't carry the new fields.
+const NODE_KEY_ORDER = [
+  'id',
+  'type',
+  'label',
+  'description',
+  'source',
+  'status',
+  'superseded_by',
+  'extracted_at',
+  'content_hash',
+  'needs_revalidation',
+];
 const EDGE_KEY_ORDER = ['id', 'from', 'to', 'type', 'description'];
 
 // ── CLI args ────────────────────────────────────────────────────────────────
@@ -326,6 +341,168 @@ function isBoardOwnedEdgeId(id) {
   return BOARD_EDGE_ID_PREFIXES.some((prefix) => id.startsWith(prefix));
 }
 
+// ── Entity resolution (E20_S10_T04) ────────────────────────────────────────
+//
+// This governs *whether two nodes are the same node at all* — distinct from, and does not
+// replace, STUB_SCHEMA.md's Evidence-Wins Conflict Rule (which governs *which description wins*
+// once two nodes are already known to be the same entity). A node's literal `id` is already this
+// populator's own stable identity for its own `board`-sourced writes (an Epic/Story's own board
+// id never changes shape between runs), so key-based merging is infrastructure ahead of its real
+// caller: a future `human`/`ast` writer describing the same real-world entity under a different
+// literal `id` than an existing node. Deliberately conservative (under-merging on purpose, per the
+// task's own instruction to start narrow and expand only on observed false negatives) — a node
+// with no usable key returns `null` and is matched by `id` only, never over-merged.
+
+const SOURCE_PRECEDENCE = { human: 2, ast: 2, board: 1 };
+
+function sourcePrecedence(source) {
+  return SOURCE_PRECEDENCE[source] ?? 0;
+}
+
+function normalizeKeyPart(value) {
+  return String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/**
+ * Compute a node's canonical identity key, or `null` if this node type has no reliable key yet.
+ * `epic`/`story` key on their own (already-stable) board id, matching this populator's existing
+ * identity scheme. Any other type (e.g. a future `service`/`module`/`function` from an `ast`/
+ * `human` writer) keys on its normalized `label` — exact-normalized, not fuzzy, per the
+ * conservative-by-design instruction above.
+ * @param {{id: string, type: string, label?: string}} node
+ * @returns {string|null}
+ */
+function canonicalKey(node) {
+  if (!node || !node.type) return null;
+  if (node.type === 'epic' || node.type === 'story') {
+    return node.id ? `${node.type}:${normalizeKeyPart(node.id)}` : null;
+  }
+  return node.label ? `${node.type}:${normalizeKeyPart(node.label)}` : null;
+}
+
+/**
+ * Resolve a computed node against an existing node map using canonical-key identity resolution,
+ * merging in place (and logging the merge) when a genuine match is found under a *different*
+ * literal id. Falls back to plain `id`-keyed merge/create — completely unchanged from the
+ * pre-E20_S10_T04 behavior — whenever no key-based match applies.
+ * @param {Map<string, object>} nodeMap mutated in place
+ * @param {string} computedId
+ * @param {object} computedNode
+ * @param {Map<string, string>} keyIndex canonical key -> existing node id, built before this run's
+ *   computed nodes are applied (so a computed node is only ever matched against pre-existing data,
+ *   never against another computed node from the same run)
+ * @param {Array<object>} mergeLog appended to in place with a record of every key-based merge
+ */
+function resolveNodeIdentity(nodeMap, computedId, computedNode, keyIndex, mergeLog) {
+  const key = canonicalKey(computedNode);
+  const matchedExistingId = key ? keyIndex.get(key) : undefined;
+
+  if (matchedExistingId && matchedExistingId !== computedId) {
+    // Genuine key-based merge: same canonical identity, different literal id. Merge into the
+    // EXISTING node's id (stable target) rather than creating a second node for the same entity.
+    const existingNode = nodeMap.get(matchedExistingId) ?? {};
+    const resolvedSource =
+      sourcePrecedence(computedNode.source) >= sourcePrecedence(existingNode.source)
+        ? computedNode.source
+        : existingNode.source; // never downgrade an existing node's provenance via a lower-precedence write
+
+    const changedFields = [];
+    for (const field of ['label', 'description', 'type']) {
+      if (computedNode[field] !== undefined && computedNode[field] !== existingNode[field]) {
+        changedFields.push(field);
+      }
+    }
+    if (existingNode.source !== resolvedSource) changedFields.push('source');
+
+    const merged = {
+      ...existingNode,
+      ...computedNode,
+      id: existingNode.id, // keep the existing (target) id stable — never renamed by a merge
+      source: resolvedSource,
+    };
+    nodeMap.set(matchedExistingId, canonicalizeKeys(ensureProvenanceMetadata(merged), NODE_KEY_ORDER));
+
+    mergeLog.push({
+      key,
+      targetId: matchedExistingId,
+      mergedFromId: computedId,
+      changedFields,
+      existingSource: existingNode.source,
+      incomingSource: computedNode.source,
+    });
+    return;
+  }
+
+  // No key-based match (or the match IS this same id, i.e. the pre-existing idempotent-on-id
+  // case) — fall back to plain id-keyed merge/create, unchanged from pre-E20_S10_T04 behavior.
+  const merged = { ...(nodeMap.get(computedId) ?? {}), ...computedNode };
+  nodeMap.set(computedId, canonicalizeKeys(ensureProvenanceMetadata(merged), NODE_KEY_ORDER));
+}
+
+// ── Staleness / revalidation (E20_S10_T05) ─────────────────────────────────
+//
+// Gating on `source` alone (E20_S10_T01) relocates, rather than solves, the original "board goes
+// stale" defect: a non-`board` node can itself drift from the source it was extracted from with no
+// signal to the user. `hashSource`/`checkStaleness` are the general-purpose, directly-testable
+// utilities this closes with — deliberately NOT new scheduling infrastructure, per the task's own
+// instruction to hook into an existing lifecycle trigger point instead. This populator has no live
+// `ast`/`human` writer yet (same caveat as E20_S10_T04's entity resolution), so it applies these
+// utilities to its own passthrough of any non-`board` node it merges, using that node's own
+// descriptive text as a content proxy — a future dedicated writer with real source-file text
+// should call `hashSource()` directly with its own normalized content instead of relying on this
+// proxy.
+
+/**
+ * Hash arbitrary content (already normalized by the caller, if normalization is available) into a
+ * short, stable fingerprint. Prefer passing normalized/parsed structure rather than raw bytes when
+ * the caller has one available — e.g. a future AST writer hashing a normalized AST dump rather than
+ * raw file text — so purely cosmetic/formatting-only source changes don't flip staleness.
+ * @param {string} content
+ * @returns {string} hex-encoded sha256 digest
+ */
+function hashSource(content) {
+  return createHash('sha256').update(String(content ?? '')).digest('hex');
+}
+
+/**
+ * Best-effort "source content" proxy for a node with no separately-tracked raw source file: its
+ * own label + description. Used only by this populator's own write path below, which has nothing
+ * else to hash against; a dedicated ast/human writer with real source-file text should hash that
+ * directly via hashSource() instead of going through this proxy.
+ */
+function contentFingerprint(node) {
+  return `${node.label ?? ''} ${node.description ?? ''}`;
+}
+
+/**
+ * Compare a node's stored `content_hash` against a freshly computed hash of its current source
+ * content. A node with no stored `content_hash` yet has nothing to compare against — reported as
+ * not stale (never a false "needs re-verification" for a node that was never hash-stamped at all).
+ * @param {{content_hash?: string}} node
+ * @param {string} currentContent
+ * @returns {{stale: boolean}}
+ */
+function checkStaleness(node, currentContent) {
+  if (!node || !node.content_hash) return { stale: false };
+  return { stale: hashSource(currentContent) !== node.content_hash };
+}
+
+/**
+ * Stamp `extracted_at`/`content_hash` on any non-`board` node being written, refreshing
+ * `extracted_at` only when the computed content hash actually changes (so re-running against
+ * unchanged content never bumps the timestamp). `board` nodes are left untouched — this metadata
+ * is scoped to non-`board` provenance per the task's own Acceptance Criteria.
+ * @param {object} node
+ * @param {string} [now] ISO 8601 UTC timestamp; overridable for tests
+ * @returns {object} a new node object (or the same reference, if source is 'board')
+ */
+function ensureProvenanceMetadata(node, now = new Date().toISOString()) {
+  if (!node || node.source === 'board') return node;
+  const hash = hashSource(contentFingerprint(node));
+  if (node.content_hash === hash) return node; // unchanged — keep the existing extracted_at as-is
+  return { ...node, content_hash: hash, extracted_at: now };
+}
+
 function mergeGraph(existing, computed) {
   const nodeMap = new Map(existing.nodes.map((node) => [node.id, node]));
   // Prune stale populator-owned nodes no longer produced this run (e.g. an Epic or Story board
@@ -339,9 +516,18 @@ function mergeGraph(existing, computed) {
       nodeMap.delete(id);
     }
   }
+
+  // Built BEFORE this run's computed nodes are applied, so key-based resolution only ever matches
+  // against pre-existing graph state — never against a sibling computed node from the same pass.
+  const keyIndex = new Map();
+  for (const node of nodeMap.values()) {
+    const key = canonicalKey(node);
+    if (key && !keyIndex.has(key)) keyIndex.set(key, node.id);
+  }
+
+  const mergeLog = [];
   for (const [id, computedNode] of computed.nodes) {
-    const merged = { ...(nodeMap.get(id) ?? {}), ...computedNode };
-    nodeMap.set(id, canonicalizeKeys(merged, NODE_KEY_ORDER));
+    resolveNodeIdentity(nodeMap, id, computedNode, keyIndex, mergeLog);
   }
 
   const edgeMap = new Map(existing.edges.map((edge) => [edge.id, edge]));
@@ -360,7 +546,7 @@ function mergeGraph(existing, computed) {
 
   const nodes = [...nodeMap.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const edges = [...edgeMap.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  return { nodes, edges };
+  return { nodes, edges, mergeLog };
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────
@@ -375,8 +561,25 @@ function run(argv) {
   const computed = deriveNodesAndEdges(epics, stories);
 
   const existing = loadExistingGraph(graphPath);
-  const merged = mergeGraph(existing, computed);
+  const { nodes, edges, mergeLog } = mergeGraph(existing, computed);
+  // graph.json's on-disk shape is strictly {nodes, edges} per STUB_SCHEMA.md — mergeLog is
+  // reporting-only and must never be serialized into it.
+  const merged = { nodes, edges };
   const nextContent = `${JSON.stringify(merged, null, 2)}\n`;
+
+  // E20_S10_T04: every key-based merge is logged (what changed, which sources were involved) so a
+  // silent merge never hides a legitimate content difference between sources — printed regardless
+  // of --dry-run, since a merge decision is worth surfacing even on a preview run.
+  for (const entry of mergeLog) {
+    process.stdout.write(
+      `[merge] ${entry.mergedFromId} -> ${entry.targetId} (key: ${entry.key}) — ` +
+        `source ${entry.existingSource ?? 'none'} + ${entry.incomingSource ?? 'none'} -> ${
+          entry.changedFields.includes('source')
+            ? 'upgraded'
+            : entry.existingSource ?? entry.incomingSource
+        }; changed fields: ${entry.changedFields.length ? entry.changedFields.join(', ') : 'none'}\n`,
+    );
+  }
 
   let currentContent = null;
   try {
@@ -425,5 +628,10 @@ export {
   deriveNodesAndEdges,
   loadExistingGraph,
   mergeGraph,
+  canonicalKey,
+  resolveNodeIdentity,
+  hashSource,
+  checkStaleness,
+  ensureProvenanceMetadata,
   run,
 };

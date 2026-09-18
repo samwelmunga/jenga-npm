@@ -187,6 +187,61 @@
   font-style: italic;
 }
 
+/* E20_S10_T02: coverage indicator + honest empty state */
+.sad-coverage-indicator {
+  font-size: 0.78rem;
+  color: #6b7280;
+  margin: 0 0 0.5rem;
+}
+
+.sad-coverage-shown {
+  font-weight: 600;
+  color: #374151;
+}
+
+.sad-coverage-hidden {
+  color: #9ca3af;
+}
+
+/* E20_S10_T05: staleness/revalidation badge, surfaced through the same coverage indicator */
+.sad-coverage-stale {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.sad-empty-state {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.sad-empty-detail {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  margin: 0;
+}
+
+/* E20_S10_T03: ghost/dimmed mixed-provenance endpoint legend */
+.sad-ghost-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin: 0 0 0.6rem;
+}
+
+.sad-ghost-legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 3px;
+  background: #94a3b8;
+  opacity: 0.4;
+  border: 1.5px dashed #1f2937;
+}
+
 /* ── Mobile (<= 480px, matches tokens.css --breakpoint-mobile) ───────────────── */
 @media (max-width: 480px) {
   .architecture-tab {

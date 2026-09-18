@@ -414,3 +414,26 @@ print(sum(1 for e in g['edges'] if e['type'] == 'depends-on'))
   after_list="$(find "$FIXTURE_ROOT/board" -type f | sort)"
   [ "$before_list" = "$after_list" ]
 }
+
+# -----------------------------------------------------------------------------
+# 7. Entity resolution (E20_S10_T04): no spurious merge log line on idempotent rerun
+#
+# This populator's own board-sourced nodes always key on their own stable board `id` (see
+# canonicalKey() in populate-knowledge-graph.js), so a re-run against unchanged board input is
+# expected to be the plain id-keyed "already exists" case, never a key-based merge — a genuine
+# key-based merge (different id, same canonical key) has no live producer through this CLI yet and
+# is covered directly at the unit level in
+# scripts/populate-knowledge-graph.entity-resolution.test.js instead.
+# -----------------------------------------------------------------------------
+
+@test "re-running the populator against unchanged board input never logs a spurious [merge] line" {
+  write_epic "E90" "Test Epic Alpha" "Alpha purpose."
+  write_story "E90_S01" "E90" "Story One" "Story body."
+
+  run_populator
+  [ "$status" -eq 0 ]
+
+  run_populator
+  [ "$status" -eq 0 ]
+  ! echo "$output" | grep -q '\[merge\]'
+}
