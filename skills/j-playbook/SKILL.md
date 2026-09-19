@@ -8,7 +8,7 @@ keywords:
   - execute playbook
 examples:
   - "j.playbook brainstorm-to-mirror"
-  - "run the understand-then-ship playbook"
+  - "run the understand-then-commit playbook"
   - "invoke playbook by id"
 ---
 

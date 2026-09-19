@@ -86,6 +86,8 @@ fi
 source "${SCRIPT_DIR}/publish_common.sh"
 
 WRITE_LEDGER_SCRIPT="${SCRIPT_DIR}/write_ledger_entry.sh"
+GENERATE_RELEASE_NOTES_SCRIPT="${SCRIPT_DIR}/generate_release_notes.sh"
+FINALIZE_CHANGELOG_SCRIPT="${SCRIPT_DIR}/finalize_changelog.sh"
 
 # ---------------------------------------------------------------------------
 # OTP tracing guard — MUST run at the top level, before `main "$@"` is ever
@@ -395,6 +397,53 @@ _write_stage_tested_ledger() {
   [[ -n "${config_path}" ]] && cmd+=(--config "${config_path}")
   [[ -n "${version}" ]] && cmd+=(--version "${version}")
   "${cmd[@]}" || log_warn "failed to write 'stage_tested' ledger entry for stage ${stage_id} (result: ${result})"
+}
+
+# _finalize_stage_changelog <target_name> <config_path> <package_version>
+#
+# `approve`'s equivalent of publish_deploy.sh's generate_release_notes() +
+# finalize_changelog() pair (E22_S09_T08) — reused verbatim, not
+# reimplemented. Only ever called AFTER a real `npm stage approve` call has
+# already succeeded, so a failure here never masks (nor is masked by) the
+# approve result itself; the caller decides how to report it.
+#
+# Mirrors publish_deploy.sh's resolve_last_tag(): resolves the last publish
+# tag from the ledger via publish_resolve_last_publish_tag, never a
+# hardcoded/guessed tag. Passes --from-tag only when a tag was actually
+# resolved, and passes the config path positional only when one is
+# resolved -- generate_release_notes.sh treats an omitted config the same
+# way it treats an unresolved one internally (falls back to its own
+# defaults via publish_resolve_history_file "").
+#
+# Uses the already-resolved package_version (from the stage's own `npm
+# stage view` output) for finalize_changelog.sh, per the task's acceptance
+# criteria -- never a re-derived version.
+_finalize_stage_changelog() {
+  local target_name="$1" config_path="$2" package_version="$3"
+  local history_file last_tag
+  local -a notes_cmd=(bash "${GENERATE_RELEASE_NOTES_SCRIPT}" --target "${target_name}")
+
+  history_file="$(publish_resolve_history_file "${config_path}")"
+  last_tag="$(publish_resolve_last_publish_tag "${history_file}" HEAD 2>/dev/null || true)"
+  [[ -n "${last_tag}" ]] && notes_cmd+=(--from-tag "${last_tag}")
+  [[ -n "${config_path}" ]] && notes_cmd+=("${config_path}")
+
+  if ! "${notes_cmd[@]}"; then
+    log_warn "failed to generate release notes for stage approve (target: ${target_name})"
+    return 1
+  fi
+
+  if [[ -z "${package_version}" ]]; then
+    log_warn "no package version resolved from stage view — skipping CHANGELOG.md finalization"
+    return 1
+  fi
+
+  if ! bash "${FINALIZE_CHANGELOG_SCRIPT}" "${package_version}" "${REPO_ROOT}/CHANGELOG.md"; then
+    log_warn "failed to finalize CHANGELOG.md for stage approve (version: ${package_version})"
+    return 1
+  fi
+
+  return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -771,6 +820,18 @@ cmd_approve() {
     printf 'npm stage inspect: npm stage approve failed (exit %s).\n' "${status}" >&2
     exit "${EXIT_OP_FAILED}"
   fi
+
+  # Generate release notes into CHANGELOG.md's [Unreleased] section and
+  # stamp it with the approved version — mirroring publish_deploy.sh's own
+  # generate_release_notes() + finalize_changelog() pair (E22_S09_T08).
+  # Only reached after a confirmed successful `npm stage approve` above, so
+  # a failed approve never gets a changelog write, and --force only ever
+  # affects the test-interlock check earlier in this function — this step
+  # runs identically on both the normal and --force paths, no divergent
+  # logic. Never reached at all under --dry-run, which already exited
+  # earlier, before the real approve call.
+  _finalize_stage_changelog "${target_name}" "${config_path}" "${package_version}" \
+    || log_warn "stage ${stage_id} was approved, but CHANGELOG.md was not updated — see warnings above"
 
   local -a ledger_cmd=(bash "${WRITE_LEDGER_SCRIPT}" "${target_name}" "${target_type}" approved "" --stage-id "${stage_id}")
   [[ -n "${config_path}" ]] && ledger_cmd+=(--config "${config_path}")

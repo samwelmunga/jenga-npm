@@ -20,18 +20,42 @@
 #
 # Fixture strategy
 # ----------------
-# The "expected twin" fixtures are produced by running the REAL
-# scripts/generate-j-alias.sh in a sandbox, rather than by hand-writing what its
-# output is believed to be. That is deliberate: the audit is specified as a port of
-# that generator, so agreement with the generator's actual output IS the contract, and
-# a hand-written fixture would only ever pin one author's reading of it. To stop that
-# becoming circular, the expected-difference tests additionally assert the concrete
-# property that makes the fixture non-trivial — that the generated twin really does
-# differ from its source, on the path rewrite specifically — so a generator that
-# emitted a byte-identical copy could not make these tests pass vacuously.
+# UPDATED by E50_S14_T01 (2026-09-19): the "expected twin" fixtures used to be produced
+# by running the REAL scripts/generate-j-alias.sh in a sandbox, rather than by
+# hand-writing what its output is believed to be — deliberately, because the audit was
+# specified as a port of that generator, so agreement with the generator's actual output
+# WAS the contract, and a hand-written fixture would only ever have pinned one author's
+# reading of it.
+#
+# That generator no longer exists. E50_S14's retire-or-invert decision (recorded in
+# docs/skill-authoring.md's "The Canonical Naming Contract" > "Generation" subsection)
+# deleted scripts/generate-j-alias.sh outright: under the settled contract there is no
+# bare-name source left for it to copy from, and its `j.j-<name>` output is no longer
+# canonical. This suite cannot invoke a deleted script from its own setup(), so the
+# "expected twin" fixture below (make_demo_twin()) is now hand-written instead —
+# encoding, by hand, the exact same divergence shape the generator used to produce: the
+# skills/<name>/ -> skills/j-<name>/ self-referential path rewrite, the frontmatter
+# name:/description: rewrite, the appended keywords/examples, and the injected alias
+# note. Because scripts/audit-twin-divergence.sh's own classification logic
+# (build_expected_skill_md() etc.) is itself a byte-for-byte port of that generator's
+# transforms — unaffected by E50_S14, which did not touch this script — the hand-written
+# fixture must still match audit-twin-divergence.sh's independent reconstruction exactly
+# for these tests to mean anything; it is not merely "a plausible-looking twin".
+#
+# To keep that from becoming circular, the expected-difference tests additionally assert
+# the concrete property that makes the fixture non-trivial — that the hand-written twin
+# really does differ from its source, on the path rewrite specifically — so a fixture
+# that was accidentally a byte-identical copy could not make these tests pass vacuously.
 #
 # Every test runs against a throwaway sandbox under $BATS_TEST_TMPDIR, never against
 # this repository's own skills/ contents.
+#
+# ADDED by E50_S19_T04: gitignored-artifact exclusion (Defect 1) coverage. The real
+# instance that motivated this fix (skills/train/__pycache__/*.pyc) cannot be
+# reproduced inside a bats sandbox without a real .gitignore backing it -- the fix is
+# driven entirely by `git check-ignore`, so a sandbox that is never `git init`'d would
+# leave the exclusion path completely untested. Tests in the new "Gitignored build
+# artifacts" section below run `git init` inside $PROJECT_DIR specifically for this.
 
 # Shared assertion helpers. A bare `[[ ... ]]` does NOT fail a bats test unless it is
 # the body's final statement -- `[[` is a shell keyword and never fires bats' ERR trap
@@ -48,7 +72,6 @@ setup() {
 
   mkdir -p "$PROJECT_DIR/scripts" "$PROJECT_DIR/lib" "$PROJECT_DIR/skills"
   cp "$REPO_ROOT/scripts/audit-twin-divergence.sh" "$PROJECT_DIR/scripts/"
-  cp "$REPO_ROOT/scripts/generate-j-alias.sh" "$PROJECT_DIR/scripts/"
   cp "$REPO_ROOT/lib/resolve-project-dir.sh" "$PROJECT_DIR/lib/"
 
   write_demo_source
@@ -96,8 +119,60 @@ parse_stage_id_from_text "$@"
 RUN_EOF
 }
 
-run_generator() {
-  JENGA_PROJECT_DIR="$PROJECT_DIR" bash "$PROJECT_DIR/scripts/generate-j-alias.sh" "$1"
+# Hand-written replacement for the deleted scripts/generate-j-alias.sh (E50_S14_T01 —
+# see the "Fixture strategy" note at the top of this file). Builds skills/j-demo/ as a
+# byte-exact twin of skills/demo/ (written by write_demo_source above), applying by hand
+# the same four transforms the generator used to apply: the skills/demo/ ->
+# skills/j-demo/ self-referential path rewrite (transform 2), the frontmatter
+# name:/description: rewrite (transforms 3-4), the appended keywords/examples
+# (transform 4), and the injected alias note just below the body's first H1
+# (transform 4). Every test below calls this once, then mutates the result to inject
+# the specific divergence it is checking for.
+make_demo_twin() {
+  mkdir -p "$PROJECT_DIR/skills/j-demo/scripts"
+
+  cat > "$PROJECT_DIR/skills/j-demo/SKILL.md" <<'TWIN_EOF'
+---
+name: j.j-demo
+description: Polyfill alias of the demo skill under a collision-safe directory name. Identical behavior to /demo — Fixture skill for audit-twin-divergence.sh coverage. Use when the bare /demo form is shadowed by another tool's own built-in command of the same name.
+output_types: text
+keywords:
+  - demo
+  - j-demo
+  - polyfill
+examples:
+  - "run the demo"
+  - "j-demo"
+---
+
+# Demo
+
+This skill is a literal-directory-name duplicate of `skills/demo/`. It exists so that `/j-demo` (and `j.j-demo`) give a guaranteed-unshadowed way to reach the same flow as `/demo`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/demo` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+
+This file is generated/synced by `scripts/generate-j-alias.sh demo` from `skills/demo/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
+
+## Usage
+
+Run the helper:
+
+```bash
+skills/j-demo/scripts/run.sh
+```
+
+Falls back to `.claude/skills/j-demo/scripts/run.sh` on a mirrored install.
+TWIN_EOF
+
+  cat > "$PROJECT_DIR/skills/j-demo/scripts/run.sh" <<'RUN_EOF'
+#!/usr/bin/env bash
+# skills/j-demo/scripts/run.sh — fixture helper.
+set -euo pipefail
+
+parse_stage_id_from_text() {
+  printf 'stage-id: %s\n' "$1"
+}
+
+parse_stage_id_from_text "$@"
+RUN_EOF
 }
 
 run_audit() {
@@ -173,7 +248,7 @@ SRC_SH_EOF
 # -----------------------------------------------------------------------------
 
 @test "a difference that is only the skills/<name>/ -> skills/j-<name>/ path rewrite is classified as EXPECTED" {
-  run_generator demo
+  make_demo_twin
 
   # Guard against a vacuous pass: the twin must genuinely differ from its source on
   # the path rewrite, otherwise "the audit reported nothing" would prove nothing.
@@ -195,7 +270,7 @@ SRC_SH_EOF
 }
 
 @test "the transform-3 name: tolerance accepts both j.j-<name> and the canonical j.<name>" {
-  run_generator demo
+  make_demo_twin
 
   # The generator emits j.j-demo (L262); E50_S10's settled contract keeps the
   # canonical twin at j.demo and E50_S15 lands that rewrite. The audit must not force
@@ -213,7 +288,7 @@ SRC_SH_EOF
 }
 
 @test "a name: value that is NEITHER accepted form is still reported (the tolerance is narrow)" {
-  run_generator demo
+  make_demo_twin
   sed -i.bak 's/^name: j\.j-demo$/name: j.something-else/' "$PROJECT_DIR/skills/j-demo/SKILL.md"
   rm -f "$PROJECT_DIR/skills/j-demo/SKILL.md.bak"
 
@@ -228,7 +303,7 @@ SRC_SH_EOF
 # -----------------------------------------------------------------------------
 
 @test "a genuine content gap in a twin script is classified as UNEXPECTED" {
-  run_generator demo
+  make_demo_twin
 
   # Reproduces the E22_S09_T07 shape: a helper present in the source that never
   # reached the twin. Everything else about the twin stays correct, so the audit
@@ -245,7 +320,7 @@ SRC_SH_EOF
 }
 
 @test "a frontmatter field present in the source and absent from the twin is reported" {
-  run_generator demo
+  make_demo_twin
 
   # This is the real j-reconcile / j-status / j-uncharted shape: `output_types: text`
   # was added to the bare source long after the twin was last generated.
@@ -259,7 +334,7 @@ SRC_SH_EOF
 }
 
 @test "a file present in the source but missing from the twin is reported as MISSING_FILE" {
-  run_generator demo
+  make_demo_twin
   rm "$PROJECT_DIR/skills/j-demo/scripts/run.sh"
 
   run_audit
@@ -269,7 +344,7 @@ SRC_SH_EOF
 }
 
 @test "a twin that still carries a bare skills/<name>/ self-reference is reported" {
-  run_generator demo
+  make_demo_twin
 
   # The inverse of the path-rewrite test: reverting transform 2 reintroduces exactly
   # the bare-name path reference E50_S11 exists to remove, and must not be silently
@@ -289,7 +364,7 @@ SRC_SH_EOF
 # -----------------------------------------------------------------------------
 
 @test "exit-code contract: 0 when clean, 1 when a divergence remains, 2 on a bad root" {
-  run_generator demo
+  make_demo_twin
 
   run_audit
   [ "$status" -eq 0 ]
@@ -312,7 +387,7 @@ SRC_SH_EOF
 }
 
 @test "--min-pairs turns a vacuous clean run into a failure (the fail-open E50_S19_T03 found)" {
-  run_generator demo
+  make_demo_twin
 
   # A tree with pairs in it satisfies the floor and still exits 0.
   run bash "$PROJECT_DIR/scripts/audit-twin-divergence.sh" "$PROJECT_DIR" --min-pairs 1
@@ -337,7 +412,7 @@ SRC_SH_EOF
 }
 
 @test "--min-pairs rejects a non-numeric or missing argument" {
-  run_generator demo
+  make_demo_twin
 
   run bash "$PROJECT_DIR/scripts/audit-twin-divergence.sh" "$PROJECT_DIR" --min-pairs abc
   [ "$status" -eq 2 ]
@@ -349,7 +424,7 @@ SRC_SH_EOF
 }
 
 @test "the repo root is taken from the argument, not hardcoded (E50_S19_T03 depends on this)" {
-  run_generator demo
+  make_demo_twin
 
   # Run from an unrelated cwd against an explicitly-passed root. If the root were
   # hardcoded or derived from cwd, this would audit the wrong tree.
@@ -361,11 +436,84 @@ SRC_SH_EOF
 }
 
 # -----------------------------------------------------------------------------
+# Gitignored build artifacts (E50_S19_T04, Defect 1).
+#
+# Reproduces, in miniature, the skills/train/__pycache__/*.pyc false positive: a file
+# present only in the bare source, absent from the twin, purely because it is a
+# gitignored build artifact that was never meant to be compared at all. Neither the
+# developer nor the tester saw the real instance because a freshly-created git
+# worktree has no untracked files -- these tests build the ignored file directly, so
+# they do not depend on any tool having actually been run.
+# -----------------------------------------------------------------------------
+
+@test "a gitignored build artifact present only in the source is not reported (the __pycache__/*.pyc false positive)" {
+  make_demo_twin
+  ( cd "$PROJECT_DIR" && git init -q && printf '**/__pycache__\n' > .gitignore )
+
+  mkdir -p "$PROJECT_DIR/skills/demo/__pycache__"
+  echo "compiled bytecode, never tracked" > "$PROJECT_DIR/skills/demo/__pycache__/demo.cpython-312.pyc"
+
+  run_audit
+  [ "$status" -eq 0 ]
+  assert_output_contains "no unexpected divergence"
+  assert_output_not_contains "MISSING_FILE"
+  assert_output_not_contains "__pycache__"
+}
+
+@test "a non-ignored file is still reported even when it sits beside a gitignored one (the exclusion is not a blanket skip)" {
+  make_demo_twin
+  ( cd "$PROJECT_DIR" && git init -q && printf '**/__pycache__\n' > .gitignore )
+
+  mkdir -p "$PROJECT_DIR/skills/demo/__pycache__"
+  echo "compiled bytecode, never tracked" > "$PROJECT_DIR/skills/demo/__pycache__/demo.cpython-312.pyc"
+  # A real, non-ignored file dropped in the very same source tree must still be
+  # caught -- proves the exclusion consults git's actual ignore rules per-path
+  # rather than skipping every "unmatched" file once a tree contains an ignore hit.
+  echo "genuinely missing from the twin" > "$PROJECT_DIR/skills/demo/new-helper.sh"
+
+  run_audit
+  [ "$status" -eq 1 ]
+  assert_output_contains "MISSING_FILE"
+  assert_output_contains "skills/j-demo/new-helper.sh"
+  assert_output_not_contains "__pycache__"
+}
+
+@test "a file with a build-artifact-sounding name that git does NOT ignore is still reported (the exclusion is ignore-rule-driven, not a name/extension match)" {
+  make_demo_twin
+  ( cd "$PROJECT_DIR" && git init -q && printf '**/__pycache__\n' > .gitignore )
+
+  # Not under a __pycache__/ directory and not otherwise gitignored -- a hardcoded
+  # "*.pyc" or "__pycache__" literal would wrongly exclude this; git check-ignore
+  # correctly does not.
+  echo "not actually a build artifact" > "$PROJECT_DIR/skills/demo/notes.pyc"
+
+  run_audit
+  [ "$status" -eq 1 ]
+  assert_output_contains "MISSING_FILE"
+  assert_output_contains "skills/j-demo/notes.pyc"
+}
+
+@test "a non-git repo root is not treated as an error, and gitignore filtering is skipped rather than guessed at" {
+  make_demo_twin
+  # $PROJECT_DIR is deliberately never git-init'd here -- reproduces the
+  # public-mirror-shaped-tree case (T01's AC3), which may not be a git repository at
+  # all. There is no ignore-rule authority to consult, so the file is NOT excluded;
+  # this is documented, accepted degradation (see the script's header), not a bug.
+  mkdir -p "$PROJECT_DIR/skills/demo/__pycache__"
+  echo "orphaned, non-git tree" > "$PROJECT_DIR/skills/demo/__pycache__/demo.cpython-312.pyc"
+
+  run_audit
+  [ "$status" -eq 1 ]
+  assert_output_contains "MISSING_FILE"
+  assert_output_contains "__pycache__/demo.cpython-312.pyc"
+}
+
+# -----------------------------------------------------------------------------
 # Scope: the directories that have no twin, and the hand-maintained init pair.
 # -----------------------------------------------------------------------------
 
 @test "the three no-twin directories and an orphan j- directory are skipped without erroring" {
-  run_generator demo
+  make_demo_twin
 
   # jenga / jenga-permission-level are hard-excluded from twin generation (E50_S06_T01);
   # index is not a skill at all (no SKILL.md); j-orphan stands in for skills/j-playbook/,

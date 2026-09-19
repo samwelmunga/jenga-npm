@@ -128,8 +128,8 @@ if [ -d "$RAPPORT_DIR" ]; then
   # Uses a portable `while read` loop rather than mapfile/readarray: macOS
   # ships bash 3.2 (no mapfile support), and this hook must run there —
   # matches the convention already established in scripts/smoke-harness.sh,
-  # skills/publish/scripts/generate_release_notes.sh, and
-  # skills/publish/scripts/finalize_changelog.sh. Fixed incidentally here
+  # skills/j-publish/scripts/generate_release_notes.sh, and
+  # skills/j-publish/scripts/finalize_changelog.sh. Fixed incidentally here
   # because this task's acceptance criteria require the hook to actually
   # execute end-to-end (mapfile silently failed on stock macOS bash,
   # leaving CURRENT_FILES empty and masking real detection results).
@@ -312,9 +312,9 @@ for HANDOFF_FILE in "$HANDOFF_DIR"/*.json; do
       # A conversational architecture elicitation session (/uncharted
       # onboard's default flow, or segment --mode investigate — E20_S08_T03)
       # ended mid-run without converging. The session driving it is
-      # responsible for calling skills/uncharted/scripts/elicitation-state.sh
+      # responsible for calling skills/j-uncharted/scripts/elicitation-state.sh
       # pause and then writing this handoff with status "elicitation_paused"
-      # as its last action (see skills/uncharted/SKILL.md's Multi-Session
+      # as its last action (see skills/j-uncharted/SKILL.md's Multi-Session
       # Persistence subsection). This routes that pause into a resume
       # signal for the next scrum-master session, per the existing
       # SessionEnd/queue pattern rather than a new persistence mechanism

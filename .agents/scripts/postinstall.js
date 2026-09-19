@@ -49,7 +49,7 @@
  *                "package_version":  "3.0.1",
  *                "generated_at":     "<ISO 8601>",
  *                "dest_root":        ".agents",
- *                "paths":            ["agents/developer.md", "skills/do/SKILL.md"]
+ *                "paths":            ["agents/developer.md", "skills/j-do/SKILL.md"]
  *              }
  *              `paths` are relative to the destination root, POSIX-separated,
  *              deduped and sorted, and record REGULAR FILES ONLY — never

@@ -1,0 +1,32 @@
+{
+  "id": "board-hygiene",
+  "name": "Board Hygiene",
+  "description": "Reconciles the scrum board against what is actually implemented, captures whatever drift that turns up as follow-up todos, and reports the resulting board state -- a read-only triage chain that writes no code and produces no commit of its own.",
+  "keywords": [
+    "board hygiene",
+    "board triage",
+    "board health",
+    "tidy the board",
+    "board audit"
+  ],
+  "examples": [
+    "reconcile the board, capture whatever drift you find as todos, then show me the status",
+    "do a full board hygiene pass -- sync it with what's really implemented, queue follow-ups for anything off, and report where we stand",
+    "check the board against reality, turn any discrepancies into todo items, and give me an overview at the end",
+    "the board feels out of sync -- triage it, capture the fixes, and summarise the state afterwards",
+    "audit the board end to end and only queue follow-up work if something is actually wrong"
+  ],
+  "steps": [
+    "j-reconcile",
+    {
+      "skill": "j-todo",
+      "forward_from": "j-reconcile",
+      "conditional": {
+        "depends_on": "j-reconcile",
+        "predicate": "non_empty"
+      },
+      "instruction": "capture each reconciliation finding as a follow-up todo"
+    },
+    "j-status"
+  ]
+}

@@ -50,7 +50,7 @@ Assess whether you have enough context to evaluate current behavior against the 
 Invoke the `/examplify` skill. Specify clearly what you want it to find out — e.g. which code paths are exercised, what inputs/outputs look like, or what edge cases exist.
 
 ### 5. Run `/evaluate`
-Copy `.agents/skills/evaluate/assets/evaluation_invokation_template.yml` and fill in:
+Copy `.agents/skills/j-evaluate/assets/evaluation_invokation_template.yml` and fill in:
 - `paths`: path(s) to the relevant example files
 - `goal`: the confirmed target goal
 

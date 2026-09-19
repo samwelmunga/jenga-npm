@@ -54,6 +54,20 @@ $ echo $?
 
 `--min-pairs 40` is not decoration. See run C.
 
+**Wired, 2026-09-19 (`E50_S19_T04`):** `npm run gate:twin-parity` runs exactly the command above.
+It is deliberately **not** folded into `npm test` — see "The gate is wired, but not into `npm test`"
+below for why.
+
+> **Known caveat as of `E50_S19_T04`.** A real run of run A above currently exits 1, not 0. This is
+> **not** a content-parity defect: `E50_S11`/`E50_S12`/`E50_S14` (merged the same day, concurrently
+> with this fix) settled the naming contract in the opposite direction this audit still assumes —
+> `skills/j-<name>/` is now the canonically hand-edited source, `skills/<name>/` is a frozen,
+> soon-to-be-deleted (`E50_S15`) stub — and this script's classification engine has not yet been
+> updated to match. The 5 `__pycache__`/`*.pyc` false positives this task fixes are gone; ~61
+> `SKILL_DRIFT`/`CONTENT_DRIFT` findings remain, all attributable to the same stale-model cause, not
+> to any actual content at risk of being lost. Full account, evidence, and recommended next step in
+> `project/rapports/problems/E50_S19_T04-audit-classification-stale-post-contract-flip.md`.
+
 ### B. Mirror-shaped tree — reproduce the condition the defect appears under
 
 Build a tree with the blocklist applied, using the same rsync semantics as
@@ -105,7 +119,8 @@ $ echo $?
 2
 ```
 
-**Always pass `--min-pairs` when using this script as a gate.**
+**Always pass `--min-pairs` when using this script as a gate.** As of `E50_S19_T04`, that means
+`npm run gate:twin-parity` — see "The gate is wired, but not into `npm test`" below.
 
 ### D. The real question — do the twins that *ship* carry the sources' content?
 
@@ -173,6 +188,125 @@ referencing *those* by twin name is fine.
 never-public subjects above. As of 2026-09-10 this reports no violations. This check is **manual and
 unwired** — the same weakness recorded in `E50_S19`'s rapport about `--min-pairs`, and a natural
 candidate to wire into the same gate.
+
+## Permanently private *by policy*: `brainstorm-to-mirror`
+
+Every other exclusion recorded in this document is **mechanical**: a thing is out of the mirror
+because shipping it would break something — a test whose subject is private (above), a twin whose
+source never ships, a skill that depends on private tooling. Fix the dependency and the exclusion
+could in principle go away.
+
+`skills/jenga/playbooks/brainstorm-to-mirror.json` is **not** in that category, and should not be
+read alongside the lists above as though it were. It is excluded by a standing product decision
+(user, 2026-09-17, `E53_S10`):
+
+> **No public playbook may contain a publishing or mirroring step; public build chains terminate at
+> `j-commit`.**
+
+The rationale is in `docs/skill-authoring.md`'s "Public Playbooks Terminate at `j-commit`" section:
+most users would not want a playbook that publishes or pushes to a public destination on their
+behalf, so publishing stays an explicit, separately invoked act. Consequences for this document:
+
+- **Its three `.publicignore` entries are permanent.** Do not "fix" them. No step-name cutover,
+  skill rename, or parity-audit improvement is meant to make this playbook public, and a future
+  audit finding it absent from the mirror has found the intended state, not a defect.
+- **It is out of the parity population by construction**, for the same reason the six
+  never-public skills are out of run D's 34 pairs — no downstream consumer exists for it.
+- **`understand-then-ship` was never in this category and is no longer here at all.** It was
+  blocklisted only as collateral of composing `brainstorm-to-mirror`; it had no private step of its
+  own. `E53_S10_T01` repointed it at `idea-to-committed`, renamed it `understand-then-commit`, and
+  removed all three of its entries — it now ships.
+- **Blocklist membership is not what enforces the policy.** `j-publish` ships publicly, so a
+  playbook chaining it would pass `scripts/check-public-playbook-steps.sh` clean while violating the
+  policy. The enforcing deny-list landed in `E28_S14_T02` — see the section below.
+
+## Project-local playbooks are private: `project/.playbooks/` (`E28_S14`)
+
+`skills/jenga/scripts/load-playbooks.sh` scans two playbook sources (`E53_S09_T01`): the
+framework-owned BUILTIN source `skills/jenga/playbooks/`, and the project-owned PROJECT source
+`project/.playbooks/`. Only the first is framework content. As of `E28_S14_T01`
+(user decision 2026-09-17) the second is blocklisted in full:
+
+```
+project/.playbooks/
+```
+
+**Why.** Project-local playbooks are per-project by definition. Ours are not framework content, and
+a consumer's are not ours to overwrite. Shipping our own would push private workflow tooling
+downstream as though it were part of the framework, and would land in the same directory a consumer
+uses for their own playbooks.
+
+**The asymmetry this closes.** `project/.playbooks/improve-to-commit.json` was tracked in the public
+mirror while being **absent from `package.json`'s `files` array**. The two delivery channels
+therefore disagreed: someone cloning the public GitHub repo received the file, and npm consumers
+never did. That split was unintentional — the file was neither a deliberate worked example nor
+properly private. `E28_S14_T01` closes it in the private direction, so both channels now agree that
+project-local playbooks do not ship. The already-present mirror copy is purged by rsync `--delete`
+on the next `/j-mirror-public` run (`E28_S04`).
+
+**This is an exclusion, not a deletion.** `improve-to-commit` is untouched on disk and still loads
+in the private repo — `load-playbooks.sh` continues to list it with `source: "project"`. It simply
+stops shipping.
+
+**No test is stranded by it** (per the "a test may never outlive its subject" rule above; re-verified
+at implementation time, 2026-09-19):
+
+- `tests/load-playbooks-project-source.bats` and `tests/load-playbooks-resolve-lookup.bats` build
+  every fixture under `$BATS_TEST_TMPDIR` and point the loader at it via `JENGA_PLAYBOOKS_TEST_ROOT`.
+  Neither reads the real `project/.playbooks/`.
+- No file under `tests/`, `scripts/` or `skills/` references `improve-to-commit` by name. Outside
+  the private `project/` tree, the only mentions anywhere are the explanatory prose in this section
+  and the matching comment block in `.publicignore` — inert text that records *why* the file is
+  absent, depends on nothing, and strands no test. Deliberately worded this way: the original
+  phrasing included `docs/`, which the very commit recording it falsified (`E28_S14_T01` rapport,
+  `project/rapports/problems/E28_S14_T01-self-falsifying-no-reference-claim.md`).
+- `load-playbooks.sh` treats a missing `project/.playbooks/` as a **silent no-op** — no warning, no
+  error — asserted by `tests/load-playbooks-project-source.bats` Case 3. The mirror simply has no
+  PROJECT playbook source.
+
+So this exclusion needed neither of the rule's two sanctioned mitigations: there was no test to
+blocklist alongside its subject and none to condition on the subject's absence.
+
+**The guard covers the directory mechanically, not by policy.**
+`scripts/check-public-playbook-steps.sh` scans `project/.playbooks/*.json` as a second source
+(`E28_S14_T02`), classifying each entry through `scripts/check-publicignore-match.sh` exactly as it
+classifies builtin playbooks. With this blocklist entry in place every project-local playbook
+classifies BLOCKED and is counted as private/skipped — the expected steady state. The point is that
+if anyone unblocks the directory later, the guard covers it automatically rather than the invariant
+resting on the blocklist staying as it is. A missing `project/.playbooks/` is a no-op there too,
+matching the loader.
+
+## The gate is wired, but not into `npm test`
+
+`E50_S19_T04` (2026-09-19) closed the gap the original rapport
+(`project/rapports/problems/E50_S19-parity-gate-is-manual-only.md`, Finding 1) flagged: `--min-pairs`
+was documented as "the thing to always pass when using this as a gate" but nothing actually invoked
+it. `npm run gate:twin-parity` (`package.json`) now does — it is exactly
+`bash scripts/audit-twin-divergence.sh . --min-pairs 40`, the run A command above, reachable from the
+project's normal `npm run` surface.
+
+**Deliberately not folded into `npm test` (`bats tests/*.bats`).** Two reasons, one permanent and one
+transitional:
+
+- **Permanent.** Coupling the bats suite's pass/fail to real-tree state was a design question the
+  original rapport raised and explicitly declined to resolve in place — "wiring this into `npm test`
+  or CI... would make the suite depend on real-tree state, which the suite currently avoids by
+  design." `gate:twin-parity` is intentionally a separate, explicitly-invoked surface rather than an
+  implicit addition to every contributor's `npm test` run.
+- **Transitional, and the sharper reason right now.** Per the "Known caveat" note under run A above,
+  a real invocation of this gate currently fails for a cause unrelated to content parity (the
+  audit's classification engine predates the `E50_S10`/`E50_S11`/`E50_S12`/`E50_S14` contract
+  reversal). Folding a known-red check into `npm test` today would make the whole suite fail for
+  everyone, for a reason no ordinary contributor caused or can fix locally — precisely the "a gate
+  that cries wolf gets disabled" failure mode `E50_S19_T04`'s own task file warns against, just
+  arriving from an unanticipated direction. `gate:twin-parity` stays runnable and honest
+  (`npm run gate:twin-parity`) without holding the rest of the suite hostage to a fix that is out of
+  this task's scope; see the rapport referenced above for the recommended next step.
+
+`tests/gate-twin-parity.bats` covers the wiring itself and proves the gate's fault-injection
+correctness — that a genuine divergence trips it and clearing it clears the gate, and that a
+gitignored build artifact does neither — against synthetic sandboxes, not the live repo, for the same
+reason.
 
 ## Known limitation
 

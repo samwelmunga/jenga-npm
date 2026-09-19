@@ -30,7 +30,7 @@
  * is no legitimate reason for a consumer to hand-edit it, so a full deterministic overwrite on
  * every run is safe and simpler than a marker-merge.
  *
- * No `skills/self-sync/scripts/run.js` wiring is needed either: self-sync mirrors root-level
+ * No `skills/j-self-sync/scripts/run.js` wiring is needed either: self-sync mirrors root-level
  * source directories, and this file has none to mirror — it is generated directly, exactly like
  * `.github/copilot-instructions.md` is (also outside self-sync's `COPY_SET`/`GITHUB_COPY_SET`).
  *

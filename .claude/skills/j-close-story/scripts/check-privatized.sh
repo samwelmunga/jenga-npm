@@ -5,8 +5,8 @@
 # Static (run-independent) `.publicignore` membership check for a single
 # board ticket, invoked by /close-story at both task granularity (Step 2's
 # per-task loop) and story granularity (Step 4's finalization), per
-# E51_S03_T03. Unlike `Merged` (skills/self-sync/scripts/mark-merged.sh) and
-# `Publicized` (skills/mirror-public/scripts/mark-publicized.sh, E51_S03_T02),
+# E51_S03_T03. Unlike `Merged` (skills/j-self-sync/scripts/mark-merged.sh) and
+# `Publicized` (skills/j-mirror-public/scripts/mark-publicized.sh, E51_S03_T02),
 # which both react to a specific run's file diff, `Privatized` has NO
 # dependency on any run ever having occurred -- it is a pure blocklist
 # membership test against the ticket's own derived touched-file list, per
@@ -25,7 +25,7 @@
 #                       write target.
 #
 # Touched-file derivation -- IDENTICAL technique to
-# skills/self-sync/scripts/mark-merged.sh (reused, not reinvented, per this
+# skills/j-self-sync/scripts/mark-merged.sh (reused, not reinvented, per this
 # task's own description):
 #   1. git log --all --no-merges --extended-regexp \
 #        --grep="<id>([^0-9_]|$)" --pretty=format:'%H'
@@ -41,7 +41,7 @@
 #   4. Zero matched commits -> nothing to check -> UNCHANGED (not an error).
 #
 # .publicignore matching -- ported (not sourced) from
-# skills/mirror-public/scripts/mirror.sh's `_publicignore_rule_for` helper:
+# skills/j-mirror-public/scripts/mirror.sh's `_publicignore_rule_for` helper:
 # directory-prefix match for trailing-"/" lines, glob match against the full
 # relative path and the basename for everything else, skipping comments,
 # blank lines, and "+"-prefixed include lines (which never block anything).

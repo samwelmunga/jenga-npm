@@ -3,7 +3,7 @@ name: j.reconcile
 description: Polyfill alias of the reconcile skill under a collision-safe directory name. Identical behavior to /reconcile — Reconcile the scrum board with actual implementation state. Cross-checks every task's board status against git history and worktrees, merges orphaned worktree branches, demotes unimplemented "Done" items, promotes secretly-implemented items, flags code with no board provenance and offers /uncharted segment for it, and cleans stale entries from todo.md. Use when the board feels out of sync, after a big merge session, when tasks were completed outside the normal workflow, or when todo.md has grown stale. Trigger on phrases like "sync the board", "clean up the board", "reconcile", "board is out of date", "todo is stale", or "check what's really done". Use when the bare /reconcile form is shadowed by another tool's own built-in command of the same name.
 metadata:
   prefered_agent: scrum-master
-output_types: text
+output_types: id_list
 keywords:
   - j-reconcile
   - polyfill
@@ -200,7 +200,7 @@ older conventions still present in this repo's history (`E04_S01: ...` and
 `feat(train): implement E01_S05 - ...`).
 
 The script reuses the board-linkage check from
-`skills/uncharted/scripts/resolve-segment-target.sh` through its batch interface. Do not
+`skills/j-uncharted/scripts/resolve-segment-target.sh` through its batch interface. Do not
 re-derive linkage yourself, and do not substitute a `grep` over `project/board/` if the script
 fails — a second answer to "is this path on the board" is what that reuse exists to prevent.
 If the script exits non-zero, report the failure in the reconcile report and continue to phase 6.

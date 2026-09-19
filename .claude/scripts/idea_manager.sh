@@ -3,7 +3,7 @@
 # Run from the repository root.
 
 IDEA_FILE="project/ideas.md"
-TEMPLATE="skills/idea/assets/idea_template.md"
+TEMPLATE="skills/j-idea/assets/idea_template.md"
 PLANS_DIR="project/documentation/plans"
 
 usage() {

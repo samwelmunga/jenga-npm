@@ -42,7 +42,7 @@
  *     "package_version":  "3.0.1",
  *     "generated_at":     "2026-09-07T00:00:00.000Z",
  *     "dest_root":        ".agents",
- *     "paths":            ["agents/developer.md", "skills/do/SKILL.md"]
+ *     "paths":            ["agents/developer.md", "skills/j-do/SKILL.md"]
  *   }
  *
  *   - `paths` are relative to the destination root, POSIX-separated, deduped and

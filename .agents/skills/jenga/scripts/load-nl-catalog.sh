@@ -46,7 +46,7 @@ fi
 
 # Resolve the jenga-agent PACKAGE root (where lib/generate-skill-allow-list.js and the canonical
 # skills/ tree actually live) — same monorepo-checkout vs. installed-npm-package detection used
-# by skills/init/scripts/init.sh's PKG_ROOT resolution.
+# by skills/j-init/scripts/init.sh's PKG_ROOT resolution.
 if [ -d "$SCRIPT_DIR/../../../templates" ]; then
   PKG_ROOT="$SCRIPT_DIR/../../.."
 elif [ -d "$JENGA_PROJECT_DIR/node_modules/@jenga-ai/agent/templates" ]; then

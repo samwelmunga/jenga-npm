@@ -278,7 +278,7 @@ resolves to:
 /brainstorm → /todo → /do → /commit
 ```
 
-— planning, board capture, implementation, and a commit, run as one confirmed sequence. Two related playbooks build on the same idea: `brainstorm-to-mirror` extends it through `/dev-done` and `/mirror-public` for a full public release, and `understand-then-ship` prepends `/uncharted` investigation before running the same pipeline — useful when the feature touches code you don't fully understand yet.
+— planning, board capture, implementation, and a commit, run as one confirmed sequence. A related playbook builds on the same idea: `understand-then-commit` prepends `j.uncharted` investigation before running the same pipeline — useful when the feature touches code you don't fully understand yet. Note where both chains stop: no built-in playbook publishes or mirrors on your behalf, so a build chain terminates at the commit and publishing stays something you invoke explicitly, when you mean it.
 
 ---
 

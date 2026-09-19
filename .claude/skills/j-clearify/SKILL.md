@@ -26,7 +26,7 @@ This skill is a literal-directory-name duplicate of `skills/clearify/`. It exist
 
 This file is generated/synced by `scripts/generate-j-alias.sh clearify` from `skills/clearify/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
 
-> **Note on the `alias: wtf` frontmatter field:** this repo has no runtime mechanism that reads an `alias` key to route slash commands — no existing `SKILL.md` implements one, and `project/configs/workflow.json` has no alias registry. The field here documents the intended relationship only. `/wtf` is made invocable as a working alias by the companion skill folder at `skills/wtf/SKILL.md`, which delegates to these same instructions.
+> **Note on the `alias: wtf` frontmatter field:** this repo has no runtime mechanism that reads an `alias` key to route slash commands — no existing `SKILL.md` implements one, and `project/configs/workflow.json` has no alias registry. The field here documents the intended relationship only. `/wtf` is made invocable as a working alias by the companion skill folder at `skills/j-wtf/SKILL.md`, which delegates to these same instructions.
 
 ## Instructions
 
@@ -56,4 +56,4 @@ This file is generated/synced by `scripts/generate-j-alias.sh clearify` from `sk
 ## Examples
 - `/clearify` — Clarify the most recent user message / relevant conversation context
 - `/clearify <pasted text>` — Clarify the attached text directly
-- `/wtf` — Alias for `/clearify`, invoked via the companion skill in `skills/wtf/`
+- `/wtf` — Alias for `/clearify`, invoked via the companion skill in `skills/j-wtf/`

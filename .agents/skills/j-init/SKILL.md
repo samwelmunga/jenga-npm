@@ -101,7 +101,7 @@ run can never silently relocate directories or edit `.gitignore`.
 > `.agents/`/`.claude/` convention), was built and then withdrawn before release —
 > testing found it left board resolution and session-end hooks writing to two
 > different trees. It is not offered here. See
-> `skills/distribute/CONFIG_SCHEMA.md` for the root-cause note and the tracked
+> `skills/j-distribute/CONFIG_SCHEMA.md` for the root-cause note and the tracked
 > follow-up to reintroduce it once fixed.
 
 Carry the chosen value into step 4. Do not apply it yourself — the script owns all
@@ -116,7 +116,7 @@ framework scaffold (skill and agent definitions), which is a separate tree with 
 separate lifecycle — it gets overwritten wholesale by every `/distribute` run or npm
 upgrade, unlike `project/`. Kept as its own flag (`scaffold_visibility`) rather than
 folded into `project_files_visibility`'s enum; see
-`skills/distribute/CONFIG_SCHEMA.md`'s "Scaffold visibility" section for the full
+`skills/j-distribute/CONFIG_SCHEMA.md`'s "Scaffold visibility" section for the full
 rationale.
 
 Ask the user this question, verbatim, before running any script:
@@ -195,7 +195,7 @@ run) by the time `/init` runs `git add -A`.
 If the script fails, check that you are in the project root and that git and `jq`
 are available.
 
-See `skills/distribute/CONFIG_SCHEMA.md` for the full `project_files_visibility` and
+See `skills/j-distribute/CONFIG_SCHEMA.md` for the full `project_files_visibility` and
 `scaffold_visibility` field reference.
 
 ### 5. Prompt next step

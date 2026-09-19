@@ -86,16 +86,17 @@ Skills are stored in `skills/j-<name>/SKILL.md`. Invoke them with `j.<name>` in 
 or as the directory-resolved slash form `/j-<name>`. The bare `/<name>` form does not resolve (see the
 Invocation Convention note under Workflow Lifecycle above).
 
-> ⚠️ **Target state, not yet on disk.** The bare-name directories are **still present** in this repo
-> and are deleted by `E50_S15`, which lands that deletion in the same change as the
-> `j.j-<name>` → `j.<name>` frontmatter rewrite. Until it does, both forms exist side by side. This
-> block and the Invocation Convention note above describe the ratified end state that `E50_S11`–`E50_S18`
-> implement — do not read either as a description of the current directory listing.
+> ✅ **Cutover landed.** The bare-name directories have been deleted and the `j.j-<name>` →
+> `j.<name>` frontmatter rewrite has landed, both in the single `E50_S15_T04` commit. This block and
+> the Invocation Convention note above now describe the actual current directory listing — only
+> `skills/j-<name>/` directories (plus the three permanent exceptions) remain under `skills/`.
+> Provenance: `E50_S15_T04` (deletion + rewrite), verified end-to-end by `E50_S15_T05` (full test
+> suite, allow-list/mirror resync, doc cleanup).
 
 > **`skills/j-<name>/` is the canonical skill directory (`E50_S05`, promoted from twin to sole
 > canonical form by the `E50` reopening of 2026-09-09):** it is the hand-edited source of truth — the
-> directory you create, edit, and commit — not a generated duplicate of a bare-name directory. Once
-> `E50_S15` lands, no bare-name directory will remain to generate it from or keep it in lockstep
+> directory you create, edit, and commit — not a generated duplicate of a bare-name directory. Now that
+> `E50_S15` has landed, no bare-name directory remains to generate it from or keep it in lockstep
 > with. Its `j-` prefix
 > exists for collision safety: a real directory under a distinct name, rather than a
 > routing/frontmatter alias, for cases where a host tool ships its own same-named built-in command
@@ -108,11 +109,11 @@ Invocation Convention note under Workflow Lifecycle above).
 > `skills/init/` is **not** an exception — `skills/j-init/` is simply already at its canonical name.
 >
 > `scripts/generate-j-alias.sh`'s bare-name-source → `j-<name>`-twin generation relationship no longer
-> applies as written, since both ends of it are invalidated by this contract. Retiring or inverting
-> that generator is `E50_S14`'s scope; until it lands, do not run it against a canonical
-> `skills/j-<name>/` directory — it would reintroduce the doubled `j.j-<name>` frontmatter value this
-> contract removes. Full contract in `docs/skill-authoring.md`'s "The Canonical Naming Contract"
-> section.
+> applied once this contract landed, since both ends of it were invalidated by it — `E50_S14` retired
+> the script outright (deleted, not hardened) rather than inverting it. `scripts/apply-j-prefix.sh` was
+> kept, fixed to accept the settled `j-<name>` directory / `j.<name>` frontmatter pairing instead of
+> requiring exact string equality. Full contract, including both decisions and their reasoning, in
+> `docs/skill-authoring.md`'s "The Canonical Naming Contract" section (see its "Generation" subsection).
 
 | Command | Description |
 |---|---|

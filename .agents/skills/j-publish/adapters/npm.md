@@ -119,7 +119,7 @@ becomes visible on the registry. See `skills/j-publish/SKILL.md`'s
 
 - `bash skills/j-publish/scripts/npm_stage_pipeline.sh <target> <path-to-publish.json> [--dry-run] [--non-interactive] [--otp <otp>]` runs validate → gates → pack → stage → capture → ledger and writes a `staged` ledger entry.
 - `bash skills/j-publish/scripts/npm_stage_inspect.sh test <stage-id>` installs the staged tarball into an isolated scratch directory and smoke-tests it, writing a `stage_tested` ledger entry.
-- `bash skills/j-publish/scripts/npm_stage_inspect.sh approve <stage-id>` requires an npm 2FA one-time password and refuses without a passing `test` on record unless `--force <reason>` is given.
+- `bash skills/j-publish/scripts/npm_stage_inspect.sh approve <stage-id>` requires an npm 2FA one-time password and refuses without a passing `test` on record unless `--force <reason>` is given. On a successful `npm stage approve`, it also generates release notes into `CHANGELOG.md`'s `[Unreleased]` section and finalizes that section with the approved version — the same `generate_release_notes.sh` + `finalize_changelog.sh` pair `/publish deploy` runs, reused rather than duplicated (E22_S09_T08). `--dry-run` skips this (it exits before the real approve call runs at all); a failed `npm stage approve` skips it too (no changelog write on a failed approve); `--force` still runs it — `--force` only bypasses the passing-test requirement, not the changelog step.
 - `bash skills/j-publish/scripts/npm_stage_inspect.sh reject <stage-id>` discards the staged version.
 
 Same registry-existence precondition as a normal `npm` publish: staged

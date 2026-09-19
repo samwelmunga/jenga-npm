@@ -13,8 +13,8 @@
 # twins. A gap in a twin is a gap for every consumer.
 #
 # Confirmed instance, and this script's primary fixture: E22_S09_T07 (commit f3daaa8)
-# added parse_stage_id_from_text() to skills/publish/scripts/npm_stage_pipeline.sh and
-# a CI-log capture block to skills/publish/adapters/npm-ci.md. Neither reached
+# added parse_stage_id_from_text() to skills/j-publish/scripts/npm_stage_pipeline.sh and
+# a CI-log capture block to skills/j-publish/adapters/npm-ci.md. Neither reached
 # skills/j-publish/. A public-mirror consumer reported it as "E22_S09_T07 has not been
 # addressed" while the board read Merged. Both were right.
 #
@@ -202,12 +202,73 @@ python3 - <<'PY'
 import difflib
 import os
 import re
+import subprocess
 import sys
 
 repo_root = os.environ["REPO_ROOT"]
 want_diff = os.environ.get("OPT_DIFF") == "1"
 min_pairs = int(os.environ.get("OPT_MIN_PAIRS") or "0")
 skills_dir = os.path.join(repo_root, "skills")
+
+# Gitignored-artifact exclusion (E50_S19_T04, Defect 1)
+# --------------------------------------------------------------------------
+# A build artifact that is gitignored (e.g. skills/train/__pycache__/*.pyc,
+# .gitignore:11's `**/__pycache__`) exists only because someone ran the tooling
+# on a real working checkout, not because a fix landed in the source and never
+# reached the twin. Comparing it at all is the bug: it is present in the bare
+# source and absent from the twin purely as a byproduct of git never tracking
+# it in either place, and gets reported as a false-positive MISSING_FILE.
+#
+# This is driven from the repo's OWN ignore rules (`git check-ignore`) rather
+# than a hardcoded `__pycache__`/`*.pyc` literal. A bespoke list was rejected
+# deliberately: the next generated-artifact class (a new lint cache, a new
+# compiled-language build dir, anything else `.gitignore` or `.publicignore`
+# already knows about) would silently reintroduce this exact false positive,
+# and a literal list is something every contributor has to remember to update
+# by hand. Reusing `git check-ignore` means this script's exclusion rule stays
+# correct automatically as `.gitignore` evolves.
+#
+# Degrades sensibly on a non-git repo root: this script's own AC (T01) requires
+# it to work against an arbitrary repo root, including a public-mirror-shaped
+# tree assembled by rsync that may not be a git repository at all. When that is
+# the case there is no ignore-rule authority to consult, so the exclusion is
+# skipped entirely rather than erroring -- acceptable because a mirror-shaped
+# tree is built from an explicit --exclude-from list (.publicignore) that does
+# not carry gitignored build artifacts across in the first place.
+IS_GIT_REPO = False
+try:
+    _git_check = subprocess.run(
+        ["git", "-C", repo_root, "rev-parse", "--is-inside-work-tree"],
+        capture_output=True, text=True, timeout=10,
+    )
+    IS_GIT_REPO = _git_check.returncode == 0 and _git_check.stdout.strip() == "true"
+except (OSError, subprocess.SubprocessError):
+    IS_GIT_REPO = False
+
+
+def git_ignored_paths(paths):
+    """Returns the subset of the given absolute paths that git considers ignored.
+
+    Batches every path into a single `git check-ignore --stdin` call rather than
+    one subprocess per file. Exit code 1 (nothing matched) and 0 (something
+    matched) are both legitimate outcomes; anything else (128, a missing git
+    binary, a timeout) is treated as "cannot determine ignore status" and
+    degrades to reporting nothing ignored, matching the non-git-repo behavior
+    above rather than crashing the whole audit over an environment quirk.
+    """
+    if not IS_GIT_REPO or not paths:
+        return set()
+    try:
+        proc = subprocess.run(
+            ["git", "-C", repo_root, "check-ignore", "--stdin"],
+            input="\n".join(paths) + "\n",
+            capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    if proc.returncode not in (0, 1):
+        return set()
+    return {line for line in proc.stdout.splitlines() if line}
 
 # Pairs the generator refuses outright. See generate-j-alias.sh L110-113 (hard error,
 # E50_S06_T01) and L118-121 (no SKILL.md).
@@ -242,11 +303,18 @@ def read_bytes(path):
 
 
 def walk_files(root):
-    out = set()
+    rel_by_abs = {}
     for dirpath, _dirnames, filenames in os.walk(root):
         for fn in filenames:
-            out.add(os.path.relpath(os.path.join(dirpath, fn), root))
-    return out
+            abs_path = os.path.join(dirpath, fn)
+            rel_by_abs[abs_path] = os.path.relpath(abs_path, root)
+    ignored = git_ignored_paths(list(rel_by_abs.keys()))
+    if not ignored:
+        return set(rel_by_abs.values())
+    return {
+        rel for abs_path, rel in rel_by_abs.items()
+        if abs_path not in ignored
+    }
 
 
 def split_frontmatter(text, label):

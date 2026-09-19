@@ -36,6 +36,21 @@ This file is generated/synced by `scripts/generate-j-alias.sh status` from `skil
 
 6. **Check the queue** — If `project/queue/scrum_triggers.jsonl` is non-empty, note the number of pending triggers awaiting the scrum master.
 
+6.5. **Run the deploy-reconcile pass** (`E51_S05`) before printing the summary — `/status` has no
+`scripts/` directory of its own comparable to `/self-sync`'s, so invoke the shared pipeline
+directly rather than adding a third skill-local wrapper script:
+   ```
+   bash scripts/mark-deployed.sh
+   ```
+   This defaults to invoking its own sibling `scripts/compute-deploy-reconcile.sh`, which
+   discovers any not-yet-reconciled `vX.Y.Z-stage`/`vX.Y.Z` tags on the public `jenga-npm` repo
+   (unauthenticated read — no credential required) and promotes matching `Publicized`/
+   `Deployed to Stage` tickets to `Deployed to Stage`/`Deployed to Prod` (writing
+   `date_deployed_prod` on a Prod promotion) by commit ancestry, before this skill re-scans the
+   board in steps 2-4 above. This step is **non-fatal**: a failure anywhere in the pipeline
+   (including an unreachable public repo) is logged as a warning only and never prevents `/status`
+   from printing whatever board state it already has, and never causes a non-zero exit.
+
 7. **Print the summary** following the layout and icon conventions in `assets/output_format.md`.
 
 8. If no epics exist, print: `No board items found. Run /pi-plan to define epics or /todo to add items.`

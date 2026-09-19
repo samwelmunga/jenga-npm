@@ -3,7 +3,7 @@
 # skills/jenga/scripts/match-playbook.sh
 #
 # Deterministic PLAYBOOK matcher for `/jenga`'s natural-language branch (E53_S02_T02). Runs the
-# same three-pass matching *philosophy* as `skills/route/SKILL.md`'s Step 2 (keyword ->
+# same three-pass matching *philosophy* as `skills/j-route/SKILL.md`'s Step 2 (keyword ->
 # example similarity -> description), but scoped to the playbook catalog produced by
 # `load-playbooks.sh` (E53_S02_T01) instead of the single-skill catalog `load-nl-catalog.sh`
 # produces for `/route`/`/jenga`'s existing single-skill matching.

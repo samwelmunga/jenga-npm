@@ -45,6 +45,33 @@ project/documentation/plans/
 project/documentation/summaries/
 project/instructions/
 
+# --- Project-local playbooks (E28_S14_T01, user decision 2026-09-17) ---
+# `project/.playbooks/` is per-project by definition — `load-playbooks.sh` scans it as the PROJECT
+# source alongside the framework-owned `skills/jenga/playbooks/` BUILTIN source (E53_S09_T01).
+# Ours are not framework content, and a consumer's are not ours to overwrite. Shipping our own
+# project-local playbooks would push private workflow tooling downstream as if it were part of the
+# framework, and would collide with a consumer's own `project/.playbooks/` on their side.
+#
+# This closes an unintentional npm/GitHub asymmetry: `project/.playbooks/improve-to-commit.json` is
+# tracked in the public mirror today but is absent from `package.json`'s `files` array, so people
+# cloning the public GitHub repo received it while npm consumers never did. It was neither a
+# deliberate worked example nor properly private. Closed in the private direction.
+#
+# Safety per the "a test may never outlive its subject" rule above — re-verified 2026-09-19:
+# tests/load-playbooks-project-source.bats and tests/load-playbooks-resolve-lookup.bats build their
+# fixtures under $BATS_TEST_TMPDIR and never read the real directory; no file under tests/, scripts/
+# or skills/ references `improve-to-commit` by name, and the only mentions anywhere outside the
+# private project/ tree are the explanatory prose in this block and in
+# docs/public-mirror-content-parity.md, which depend on nothing and strand no test; and
+# load-playbooks.sh treats a missing
+# `project/.playbooks/` as a SILENT no-op (no warning, no error). So no test is stranded and the
+# mirror simply has no PROJECT playbook source.
+#
+# This does NOT delete or relocate improve-to-commit — it keeps working normally in the private
+# repo, it simply stops shipping. rsync --delete purges the already-present mirror copy on the next
+# /j-mirror-public run (E28_S04).
+project/.playbooks/
+
 # --- Secrets / environment files ---
 .env
 .env.*
@@ -242,20 +269,20 @@ tests/helpers/router-route.mjs
 skills/jenga/playbooks/brainstorm-to-mirror.json
 .claude/skills/jenga/playbooks/brainstorm-to-mirror.json
 .agents/skills/jenga/playbooks/brainstorm-to-mirror.json
-# understand-then-ship composes brainstorm-to-mirror via {"playbook": "brainstorm-to-mirror"}.
-# Once the parent stops shipping, that reference resolves to a nonexistent playbook id and the
-# child is dropped anyway — the behaviour tests/load-playbooks-composition.bats already asserts.
-# Blocklisting the parent alone would leave this one broken rather than absent.
-skills/jenga/playbooks/understand-then-ship.json
-.claude/skills/jenga/playbooks/understand-then-ship.json
-.agents/skills/jenga/playbooks/understand-then-ship.json
+# understand-then-ship was blocklisted here only because it composed brainstorm-to-mirror — it had
+# no private step of its own. E53_S10_T01 repointed it at the public idea-to-committed playbook and
+# renamed it understand-then-commit, so it now ships publicly and is deliberately NOT listed here.
 # The two real-catalog tests assert those now-private playbooks load against the real skills tree,
 # so they follow their subjects out of the mirror per the E50_S07_T11 rule directly above. This is
 # what turns the public suite's two failures green — because their subjects are private, NOT by
 # weakening either assertion; both still run in full in the private repo.
 # tests/load-playbooks-stepobject.bats: asserts the real brainstorm-to-mirror.json loads
 tests/load-playbooks-stepobject.bats
-# tests/load-playbooks-composition.bats: asserts the real understand-then-ship.json composes it
+# tests/load-playbooks-composition.bats: its real-catalog check used to assert the (then-private)
+# understand-then-ship composition. Since E53_S10_T01 that check targets two PUBLIC playbooks
+# (understand-then-commit -> idea-to-committed), so the private-subject rationale above no longer
+# applies to this entry. It is left in place only because E50_S20_T02 owns both of these test
+# entries and their visible-skip conversion; unblocking it is that task's call, not this one's.
 tests/load-playbooks-composition.bats
 
 # --- Scratch worktree used by /mirror-public itself ---

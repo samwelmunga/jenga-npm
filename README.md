@@ -209,7 +209,7 @@ j.brainstorm → j.todo → j.do → j.commit
 
 Calling `j.playbook` with no id prints a table of every available playbook (id, name, and steps) instead of resolving one.
 
-Nothing executes until you confirm the chain, and any step can be unchecked first. `brainstorm-to-mirror` extends the same chain through `j.dev-done` and `j.mirror-public` for a full public release; `understand-then-ship` prepends `j.uncharted` investigation for unfamiliar code before running the same pipeline.
+Nothing executes until you confirm the chain, and any step can be unchecked first. `understand-then-commit` prepends `j.uncharted` investigation for unfamiliar code before running that same pipeline — useful when the change touches code you don't fully understand yet. No built-in playbook publishes or mirrors on your behalf: build chains terminate at `j.commit`, and publishing stays an explicit, separately invoked act.
 
 When a step forwards its result into the next one, that value has a declared **output type** (a plain string, a list of board IDs, a list of files) so the chain can be validated before it runs. See [Getting Started](https://samwelmunga.github.io/jenga-npm/getting-started.html#how-playbooks-know-what-a-skill-produces) for how that works.
 

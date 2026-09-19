@@ -32,7 +32,7 @@
 #   <producer> | write-context-digest.sh --agent <agent> --session-id <id> --task-id <id>
 #
 # If neither --content nor --content-file is given, digest content is read
-# from stdin (mirrors skills/uncharted/scripts/import-source.sh's snippet
+# from stdin (mirrors skills/j-uncharted/scripts/import-source.sh's snippet
 # convention).
 #
 # Options:

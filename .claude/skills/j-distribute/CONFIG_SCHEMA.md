@@ -1,6 +1,6 @@
 # jenga.config.json — Schema Reference
 
-This document is the canonical reference for the `jenga.config.json` file written into **consuming projects** during framework distribution. The file is created and maintained by `distribute-changes.sh`, with the `project_files_visibility` field written by `skills/init/scripts/apply-project-visibility.sh` during `/init`; it should not be edited by hand.
+This document is the canonical reference for the `jenga.config.json` file written into **consuming projects** during framework distribution. The file is created and maintained by `distribute-changes.sh`, with the `project_files_visibility` field written by `skills/j-init/scripts/apply-project-visibility.sh` during `/init` and the `scaffold_visibility` field written by `skills/j-init/scripts/apply-scaffold-visibility.sh`, also during `/init`; it should not be edited by hand.
 
 ---
 
@@ -28,7 +28,8 @@ This document is the canonical reference for the `jenga.config.json` file writte
   "updated_at": "2026-08-11",
   "last_distributed": "2026-08-11T10:00:00Z",
   "source": "private",
-  "project_files_visibility": "visible"
+  "project_files_visibility": "visible",
+  "scaffold_visibility": "visible"
 }
 ```
 
@@ -44,7 +45,8 @@ This document is the canonical reference for the `jenga.config.json` file writte
 | `updated_at` | string (ISO 8601 date) | yes | — | Date of the last successful distribution, in `YYYY-MM-DD` format. Does **not** include a time component. |
 | `last_distributed` | string (ISO 8601 datetime) | yes | — | Full UTC timestamp of the last successful distribution, in `YYYY-MM-DDTHH:MM:SSZ` format. Provides more precision than `updated_at` and is useful for audit and ordering purposes. |
 | `source` | string | yes | `"private"` | Distribution channel. Always `"private"` for projects that receive updates via the filesystem distribution mechanism. Distinguishes these projects from any future npm-installed consumers. Do not change this value manually. |
-| `project_files_visibility` | string (enum) | no | `"visible"` | How Jenga AI's own working files appear in the consuming project. Exactly one of `visible` or `ignored` — no other value is accepted. Written by `/init`, not by distribution. See [Project files visibility](#project-files-visibility) below. |
+| `project_files_visibility` | string (enum) | no | `"visible"` | How Jenga AI's own working files (`project/`) appear in the consuming project. Exactly one of `visible` or `ignored` — no other value is accepted. Written by `/init`, not by distribution. See [Project files visibility](#project-files-visibility) below. |
+| `scaffold_visibility` | string (enum) | no | `"visible"` | How the distributed `.claude`/`.agents` framework scaffold appears in the consuming project. Exactly one of `visible` or `ignored` — no other value is accepted. A **distinct** flag from `project_files_visibility`, written by `/init`, not by distribution. See [Scaffold visibility](#scaffold-visibility) below. |
 
 ---
 
@@ -96,9 +98,84 @@ The default is **`visible`**, used whenever `/init` runs non-interactively or th
 
 ### Who writes it
 
-The field is written during `/init` by `skills/init/scripts/apply-project-visibility.sh`, which also performs the corresponding on-disk change. The script merges the field into any existing `jenga.config.json` rather than overwriting the file, since `/init` normally runs before the first `/distribute` has created it.
+The field is written during `/init` by `skills/j-init/scripts/apply-project-visibility.sh`, which also performs the corresponding on-disk change. The script merges the field into any existing `jenga.config.json` rather than overwriting the file, since `/init` normally runs before the first `/distribute` has created it.
 
 Changing the value after the initial `/init` is not currently supported — there is no toggle or migration path. Re-running the applier with a different mode is not a supported upgrade route.
+
+---
+
+## Scaffold visibility
+
+`scaffold_visibility` controls how the **distributed framework scaffold** — `.claude/` and
+`.agents/`, the mirrored skill and agent definitions that make Jenga AI's own commands
+(`/init`, `/do`, `/commit`, etc.) available inside a consuming project — appears in that
+project's git history.
+
+### Why this is a separate flag from `project_files_visibility`
+
+This field was filed as new, adjacent scope under `E31_S07`, from a problem rapport
+(`project/rapports/problems/E31_S05-consumer-scaffold-committed-despite-ignored-visibility.md`)
+reporting that a consumer who selected `project_files_visibility: ignored` still had 342
+files under `.claude/`/`.agents/` swept into their `/init` commit — `project_files_visibility`
+never covered that tree in the first place.
+
+`E31_S05`'s own Background section explicitly scoped `project_files_visibility` to the
+`project/` working tree — the scrum board, `todo.md`, `queue/`, `rapports/`, and `logs/` —
+and explicitly said this was **not** about "the distributed skill/agent definitions
+themselves." Two ways to close the resulting gap were considered when `E31_S07_T01` made
+this decision:
+
+- **(a) Extend** `project_files_visibility`'s `ignored` mode to also gitignore `.claude/`
+  and `.agents/`. Rejected: this erases the documented boundary from `E31_S05` — a single
+  flag would then silently govern two trees with different lifecycles (`project/`
+  accumulates as the user works; `.claude/`/`.agents/` are overwritten wholesale by every
+  `/distribute` run or npm upgrade), and a consumer reading `ignored` for one tree would
+  have no way to tell it also silently applies to the other.
+- **(b) Introduce a distinct, separately-named flag** (`scaffold_visibility`), chosen. Costs
+  one extra config field and one extra `/init` prompt, but keeps each flag's semantics
+  unambiguous and independently selectable — a consumer can, for example, keep `project/`
+  visible (to track their own board in git) while still excluding the vendored
+  `.claude/`/`.agents/` scaffold, or vice versa.
+
+`scaffold_visibility` reuses `project_files_visibility`'s exact two-value enum and
+semantics (same mental model, different target directories) rather than inventing new
+vocabulary.
+
+### Allowed values
+
+Exactly two values are accepted. Any other value is rejected with a non-zero exit code.
+
+| Value | On-disk effect |
+|---|---|
+| `visible` | `.claude/`/`.agents/` are tracked and committed normally — unchanged from `/init`'s behavior before this field existed. |
+| `ignored` | `.claude/` and `.agents/` are appended to the project's `.gitignore` (whichever of the two exist, or will later be created by `/distribute` or an npm install), so they exist on disk but are never committed. |
+
+### Default
+
+The default is **`visible`**, used whenever `/init` runs non-interactively or the user is
+not prompted — this is an additive capability, not a change to the previously-unconditional
+commit behavior. `visible` reproduces exactly what every `/init` run did before this field
+existed: the scaffold is committed regardless of `project_files_visibility`'s value. An
+absent field (a `jenga.config.json` written before this field existed) is also read as
+`visible`.
+
+### Who writes it
+
+The field is written during `/init` by `skills/j-init/scripts/apply-scaffold-visibility.sh`,
+which also performs the corresponding `.gitignore` change. Like
+`apply-project-visibility.sh`, it merges the field into any existing `jenga.config.json`
+rather than overwriting the file, and gitignores `.claude/`/`.agents/` unconditionally
+(not only when they already exist on disk), so a scaffold created by a later
+`/distribute` run or npm install is covered too — not only one already present at `/init`
+time.
+
+`init.sh` applies both `project_files_visibility` and `scaffold_visibility` before its
+final `git add -A && git commit` step, so any `.gitignore` entries from either flag are
+already in place — and therefore respected by `git add -A` — before the first commit is
+made.
+
+Changing the value after the initial `/init` is not currently supported, matching
+`project_files_visibility`'s own limitation above.
 
 ---
 
@@ -115,7 +192,7 @@ When `distribute-changes.sh` runs against a project for the first time and no `j
 
 The directory referenced by `target_dir` is created if it does not already exist.
 
-> **Known gap:** `distribute-changes.sh` rebuilds `jenga.config.json` from scratch on every run and emits only the six fields above, so a `project_files_visibility` value written by `/init` is dropped by the next `/distribute`. Making the rebuild preserve fields it does not own is tracked as follow-up work; until then, treat the on-disk layout (not the config field) as the source of truth for which mode a project is in.
+> **Known gap:** `distribute-changes.sh` rebuilds `jenga.config.json` from scratch on every run and emits only the six fields above, so a `project_files_visibility` or `scaffold_visibility` value written by `/init` is dropped by the next `/distribute`. Making the rebuild preserve fields it does not own is tracked as follow-up work; until then, treat the on-disk layout (not the config field) as the source of truth for which mode a project is in.
 
 ---
 

@@ -5,7 +5,7 @@
  * Single source of truth for scaffolding the two root-level agent-context
  * files from templates/agent-context.md.tpl (E41_S04_T02). Used by:
  *   - lib/commands/init.js         (published `jenga init` CLI)
- *   - skills/init/scripts/init.sh  (this repo's own board-scaffolding flow,
+ *   - skills/j-init/scripts/init.sh  (this repo's own board-scaffolding flow,
  *                                   invoked via `node` — see the CLI guard
  *                                   at the bottom of this file)
  *
@@ -234,7 +234,7 @@ export function generateAgentContext(projectRoot = process.cwd(), packageRoot = 
 }
 
 // CLI guard — allows `node lib/generate-agent-context.js [projectRoot]`,
-// used by skills/init/scripts/init.sh (this repo's own board-scaffolding
+// used by skills/j-init/scripts/init.sh (this repo's own board-scaffolding
 // flow, where node is guaranteed available). The published npm CLI path
 // (lib/commands/init.js) imports generateAgentContext() directly instead.
 //

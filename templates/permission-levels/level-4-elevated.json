@@ -6,7 +6,7 @@
   "autoMode": {
     "allow": [
       "$defaults",
-      "Bash(bash skills/mirror-public/scripts/mirror.sh*)"
+      "Bash(bash skills/j-mirror-public/scripts/mirror.sh*)"
     ]
   },
   "permissions": {

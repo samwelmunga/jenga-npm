@@ -104,7 +104,7 @@ Options:
   -h, --help      Show this help and exit.
 
 Examples:
-  $(basename "$0") skills/reconcile/
+  $(basename "$0") skills/j-reconcile/
   $(basename "$0") scripts/board_resolver.sh
 EOF
 }

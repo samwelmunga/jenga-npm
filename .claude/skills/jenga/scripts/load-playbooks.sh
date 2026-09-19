@@ -474,7 +474,7 @@ else
 
   # Resolve the jenga-agent PACKAGE root (where the canonical skills/ tree actually lives) — same
   # monorepo-checkout vs. installed-npm-package detection used by
-  # skills/jenga/scripts/load-nl-catalog.sh's PKG_ROOT resolution and skills/init/scripts/init.sh.
+  # skills/jenga/scripts/load-nl-catalog.sh's PKG_ROOT resolution and skills/j-init/scripts/init.sh.
   if [ -d "$SCRIPT_DIR/../../../templates" ]; then
     PKG_ROOT="$SCRIPT_DIR/../../.."
     PROJECT_DIR="$JENGA_PROJECT_DIR"

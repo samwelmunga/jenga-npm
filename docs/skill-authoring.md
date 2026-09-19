@@ -117,7 +117,33 @@ so a future name change that a host tool would reject fails the suite instead of
   forward — not the low-level mechanics of how each individual surface's resolver gets there.
 - `scripts/postinstall.js` and `lib/mirror.js` (the install/dev mirror pipeline) copy `skills/` and
   `agents/` by directory name and are entirely content-agnostic about `SKILL.md` — a frontmatter-only
-  change requires no changes to either and cannot break the mirror/install path.
+  change requires no changes to either and cannot break the mirror/install path. **That claim holds
+  only for a frontmatter-only change. Checked determination for the directory-rename axis of this
+  cutover (`E50_S11_T04`, closing the deferred Finding 3 of
+  `project/rapports/problems/E50_S10_T01-residual-decision1-contradictions.md`):** `lib/mirror.js`'s
+  `mirror()` takes an explicit `copySet` of top-level relative paths — `scripts/postinstall.js` always
+  calls it with `copySet = ['skills', 'agents']`, never a specific skill name — and then walks
+  whatever is actually on disk under those two directories via a recursive `fs.readdirSync`.
+  `lib/postinstall-manifest.js`'s delete-reconciliation likewise records/diffs whatever paths a run
+  actually wrote, again with no skill name ever hardcoded. **None of the three files reference a
+  bare or `j-`-prefixed skill directory name in their own logic** — the few bare-name mentions that
+  existed were illustrative examples inside comments/JSDoc (`scripts/postinstall.js` L52,
+  `lib/postinstall-manifest.js` L45, `lib/mirror.js` L8), now repointed to their twin form by
+  `E50_S11_T04` like any other prose reference, with no logic change alongside them. Concretely: (1)
+  **today, mid-sequence, with both bare and twin directories present** — the rename is a no-op for
+  this pipeline, since it copies whatever directory names exist, bare and twin alike; (2) **after
+  `E50_S15` deleted the bare directories (landed by `E50_S15_T04`, verified by `E50_S15_T05`)** — the
+  pipeline needed no code change, because it simply copies whichever directory names remain (now only
+  the `j-` twins) into the consumer's mirror, exactly as it does for any other directory rename or
+  removal. The one thing this pipeline's
+  *existing* manifest-diff mechanism (`E26_S08_T01`) is designed to handle — a path present in a
+  prior manifest but absent from the current run gets cleaned up — is exactly the shape of a shipped
+  skill's bare form disappearing on a future release; it requires no new code here either. **Explicit
+  `E50_S16` boundary:** what that existing mechanism does *not* cover on its own is a consumer who
+  installed *before* any manifest existed at all (pre-manifest orphans) — closing that gap for
+  already-installed consumers (orphaned bare directories at existing sites, `lib/commands/doctor.js`
+  delete-candidate flagging, `lib/legacy-shipped-paths.json` union mode) is `E50_S16`'s scope under
+  "3. Consumer reconciliation", not this task's or this story's.
 - `mcp/router/skill-index.js` already indexes skills by their frontmatter `fm.name` (not directory
   name), and `mcp/router/index.js`'s `route_prompt` already emits whatever string is in
   `match.skill.name` (`transformed: "/${match.skill.name} ${text}"`). A frontmatter-only rename is
@@ -315,16 +341,46 @@ pair was hand-built before `scripts/generate-j-alias.sh` existed. Under this con
 exception at all: `skills/j-init/` is simply already at its canonical name, and `skills/init/` is
 deleted like every other bare-name directory.
 
-#### Generation: the source → twin relationship no longer applies as written
+#### Generation: `E50_S14`'s retire-or-fix decisions (2026-09-19)
 
-`scripts/generate-j-alias.sh <skill-name>` was built to copy a bare-name source tree into a
+`scripts/generate-j-alias.sh <skill-name>` **was** built to copy a bare-name source tree into a
 `skills/j-<name>/` duplicate, rewriting self-referential paths and frontmatter
-(`name: j.<skill-name>` → `name: j.j-<skill-name>`). Both ends of that relationship are invalidated
-here: there is no bare-name source directory left to copy *from*, and the `j.j-<name>` frontmatter
-value it produces is no longer canonical. Retiring or inverting that generator is **`E50_S14`'s
-scope** — until it lands, do not run it against the canonical `skills/j-<name>/` directories, as it
-would reintroduce the doubled frontmatter name this contract removes. The `j-<name>` directory is now
-the canonical source that is edited directly, not a generated artifact kept in lockstep with another.
+(`name: j.<skill-name>` → `name: j.j-<skill-name>`). Both ends of that relationship were invalidated by
+this contract: there was no bare-name source directory left to copy *from* once the cutover landed, and
+the `j.j-<name>` frontmatter value it produced was never canonical here. Worse, its
+`rmtree`-then-`copytree` step (former L176-182) would have deleted the only remaining copy of a skill
+before failing to recreate it, had it ever been invoked by mistake against a `j-<name>` directory with
+no bare sibling left to copy from — the sharpest edge this story existed to close.
+
+**Decision (`E50_S14_T01`, retire): `scripts/generate-j-alias.sh` is deleted, not hardened.** There is
+no source left to sync a twin from, so retirement eliminates the destructive-failure path outright
+rather than merely guarding it. Its two hardcoded special cases (former L97-100's `init`/`j-init`
+no-op, and former L110-113's `jenga`/`jenga-permission-level` hard error) are **moot** now that the
+whole script is gone — there is no longer a second hand-maintained exception list to reconcile with
+this document's "Permanent exceptions" table above; that table is the sole remaining source of truth
+for the three exceptions. `tests/generate-j-alias.bats` was deleted alongside it — there is no
+surviving script for the file to test — and `tests/audit-twin-divergence.bats`'s generator-invoking
+fixture setup (its `setup()` used to `run_generator()` against a sandboxed copy of the real script) was
+replaced with a hand-written fixture encoding the same divergence shape the generator used to produce,
+since that suite can no longer invoke a deleted script to build its own test fixtures.
+
+**Decision (`E50_S14_T02`, fix/retain): `scripts/apply-j-prefix.sh` is kept**, with two fixes. Its
+directory-name↔frontmatter-name check (former L144-148) now accepts the settled `j-<name>` directory /
+`j.<name>` frontmatter pairing instead of requiring exact string equality (stripping a `j-` prefix from
+the directory name before comparing, and emitting `j.<base-name>` rather than `j.<directory-name>` on
+repair). Its `agents/*.md` prose rewrite (former L169-212) strips a discovered `j-<name>` directory's
+`j-` prefix before emitting the replacement, so a literal `/j-<name>` mention is rewritten to
+`j.<name>`, never the doubled `j.j-<name>`. Unlike the generator, this script's job was not fully
+done at the time of this decision: `--dry-run` still found live, legitimate bare-`/<name>` prose
+mentions to convert (`/idea`, `/brainstorm` in `agents/scrum-master.md`, `/jenga` in `agents/tester.md`),
+so retiring it would have left that cleanup with no tool to do it. The directory-check bug was latent
+rather than currently manifesting — every skill in this repo is already `j.`-prefixed, and the
+exact-match branch only ever runs for a frontmatter value that is *not yet* `j.`-prefixed — but it is a
+real correctness gap for the next skill added directly under a `j-<name>` directory with an unmigrated
+bare `name:` value, so it is fixed here rather than left as a trap for that case.
+
+The `j-<name>` directory is the canonical source that is edited directly, not a generated artifact kept
+in lockstep with another — this was true before this decision and remains true after it.
 
 #### Why this reversed (one paragraph of history)
 
@@ -466,15 +522,50 @@ shapes:
   never runs it to determine which branch would actually fire. See "Playbooks — StepObject Schema
   and `output_types`" below for exactly what claim this load-time check does and does not make.
 
+#### What `output_types` actually declares (`E53_S11`, user decision 2026-09-17)
+
+**`output_types` declares what downstream steps can consume — not everything the skill prints.**
+
+This is a deliberate **narrowing** of the field's meaning, ratified on 2026-09-17, and it applies
+repo-wide. Two consequences follow directly:
+
+- **`text` means "prose only, nothing structured to forward".** It is not a catch-all or a default.
+  A skill declaring `text` is asserting that a downstream step gets prose and nothing else —
+  which is exactly what `j.status` and `j.error` are.
+- **A skill that both prints prose and emits structure declares only the structured half.**
+  `j.reconcile` declares `id_list` even though it also prints a human-readable drift report. That
+  is the narrowed reading working as intended, not an omission.
+
+**Why blanket adoption was rejected.** The obvious "consistency" move — have every skill declare
+`output_types`, most of them as `text` — was considered and **rejected**. The load-time gate's only
+real value today is that it *rejects a `forward_from` whose source declares nothing*. Declaring
+`text` across every skill would buy uniformity by disarming that check: every skill would become a
+legal forward source, including the many that have nothing forwardable to give. **Honesty over
+breadth.** Partial adoption is the intended steady state, not a backlog of missing declarations.
+
+**The constraint that forces the narrowing.** `output_types` is either a single static type string
+**or** a list of `{when, type}` entries. There is deliberately **no unconditional multi-type form**,
+and a `when` must be either a built-in predicate (`argument_empty` / `argument_nonempty`) or a
+classifier script that exists on disk (structurally checked by `load-playbooks.sh`). So "this skill
+emits both prose and ids" is simply **inexpressible** without writing a classifier script whose only
+job would be to say "both" — far more machinery than the honesty gain justifies. `j.reconcile`
+declaring `id_list` while still printing a prose report is therefore a **deliberate, documented
+narrowing, not an oversight**, and the same reasoning applies to any future skill in the same
+position.
+
 **Guidelines:**
 - The declared type value(s) should be one of the entries in the canonical type vocabulary,
   `templates/playbook-types.json` (`text`, `id_list`, `file_list` as of this writing) — see
   "Playbook Type Registry Governance" below before adding a new type.
 - Only declare `output_types` if this skill genuinely produces output another playbook step could
-  meaningfully consume. Partial adoption is intentional and expected: as of `E53_S03`, only
-  `j.status`, `j.uncharted`, `j.jenga`, and `j.reconcile` declare it. A skill with no declared
-  `output_types` simply cannot be a playbook `forward_from` source — this is not a defect to fix
-  proactively for every skill.
+  meaningfully consume. A skill with no declared `output_types` simply cannot be a playbook
+  `forward_from` source — this is not a defect to fix proactively for every skill.
+- When a skill produces both prose and structure, declare the **structured** type. The forwardable
+  half is what the field is for.
+- Current adopters, as of `E53_S11`: `j.status` (`text`), `j.uncharted` (`text`), `j.jenga`
+  (`id_list`, conditionally via `when: detect-nl-intent`), `j.reconcile` (`id_list`), `j.todo`
+  (`id_list`), and `j.doc-sync` (`file_list`). `j.doc-sync` is the first producer of `file_list`,
+  which until `E53_S11` was a type in the vocabulary that nothing emitted.
 
 ---
 
@@ -770,6 +861,52 @@ section) is the authoritative, most detailed reference; this is the skill-author
   a step purely by its resolved skill name; a flattened composition containing two or more steps
   that resolve to the same skill name is dropped with a stderr warning rather than silently
   corrupting that addressing.
+
+### Public Playbooks Terminate at `j-commit` (`E53_S10`, user decision 2026-09-17)
+
+**No public playbook may contain a publishing or mirroring step; public build chains terminate at
+`j-commit`.**
+
+**Why.** Most users would not want a playbook that publishes or pushes to a public destination on
+their behalf. A chain the user confirmed as "plan it and build it" should not, several unattended
+steps later, put their work somewhere public. Publishing stays an explicit, separately invoked act —
+run `j.publish` or `j.mirror-public` yourself, deliberately, when you mean it. That is a deliberate
+ceiling on what a confirmed chain is allowed to do, not a gap in the catalog.
+
+Three consequences follow, and all three are load-bearing:
+
+1. **`brainstorm-to-mirror` is permanently private — by policy, not by accident.** It is not a
+   temporary exclusion awaiting a fix, and no future step-name cutover, skill rename, or mirror
+   change will make it public. Independently of the policy, both of its last two steps are private
+   as of 2026-09-17: `j-mirror-public` (never shipped) and `j-dev-done` (blocklisted the same day
+   under `E28_S13`). Treat its three `.publicignore` entries as permanent.
+
+   By contrast, `understand-then-ship` was only ever blocked as *collateral* — it had no private
+   step of its own and was private purely because of what it composed. `E53_S10_T01` repointed it at
+   `idea-to-committed`, renamed it `understand-then-commit`, and made it public.
+
+2. **The policy is not self-enforcing through blocklist membership.**
+   `scripts/check-public-playbook-steps.sh` asks exactly one question per step — *is this step
+   blocklisted?* — and `j-publish` ships publicly. A public playbook chaining `j-publish` therefore
+   passes that BLOCKLIST check completely clean while violating this policy outright. That check is
+   a loadability check, not a policy check, and reading a green blocklist run as policy compliance
+   is the specific mistake to avoid. The enforcing mechanism is the **terminal-step deny-list**
+   `E28_S14_T02` added to the same script, which is what makes this rule mechanical rather than
+   review-enforced. It is declared as data — a `DENYLISTED_STEPS` array in a marked DATA block at
+   the top of `scripts/check-public-playbook-steps.sh`, seeded with `j-publish`, `j-mirror-public`
+   and their bare forms — so adding a skill to it is a one-line array edit that touches no checking
+   logic. A public playbook containing a deny-listed step is reported as a `VIOLATION` naming the
+   playbook, the step, and this policy sentence verbatim, and the guard exits non-zero.
+
+3. **The rule forbids publish/mirror *steps* — not non-commit terminal steps.** It is not a
+   requirement that every playbook end at `j-commit`. A read-only or triage chain that legitimately
+   ends somewhere else — e.g. `board-hygiene` ending at `j-status` (`E53_S11`) — is fully compliant,
+   because it publishes nothing. "Terminates at `j-commit`" is the ceiling on a **build** chain, not
+   a mandatory terminal step for every chain.
+
+This applies to built-in playbooks (`skills/jenga/playbooks/`) that ship to the public mirror. A
+project-local playbook (`project/.playbooks/`, below) never ships and is the user's own call — but
+the same reasoning applies to anyone you share that project with.
 
 ### Project-Local Playbooks (`E53_S09_T01`)
 

@@ -35,7 +35,7 @@
  *                 and unions it with the paths CURRENTLY on disk under this repo's own `skills/`
  *                 and `agents/` directories — i.e. "what this release is about to ship" folds into
  *                 the running cumulative record. This is the mode wired into the publish pipeline
- *                 (`skills/publish/scripts/npm_pipeline.sh` / `npm_ci_pipeline.sh`, via the
+ *                 (`skills/j-publish/scripts/npm_pipeline.sh` / `npm_ci_pipeline.sh`, via the
  *                 `generate:legacy-paths` npm script) so every future publish keeps the list
  *                 current with zero network dependency and zero publish-time registry flakiness.
  *
@@ -57,7 +57,7 @@
  *     "generated_at": "<ISO 8601>",
  *     "package": "@jenga-ai/agent",
  *     "source": "bootstrap-from-registry+incremental" | "incremental",
- *     "paths": ["agents/developer.md", "skills/do/SKILL.md", ...]
+ *     "paths": ["agents/developer.md", "skills/j-do/SKILL.md", ...]
  *   }
  *
  * `paths` are relative to a mirror root, POSIX-separated, deduped and sorted — matching the same

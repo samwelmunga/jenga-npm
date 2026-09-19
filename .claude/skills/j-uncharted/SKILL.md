@@ -860,7 +860,7 @@ sections of `project/PROJECT_SUMMARY.md`:
 
 **Step B — Check both sections for existing content before proposing anything.** A section counts
 as a **stub** only if its body is empty, whitespace-only, or is (or is limited to) the literal
-placeholder text from `skills/init/assets/PROJECT_SUMMARY_template.md` — `_To be completed._`.
+placeholder text from `skills/j-init/assets/PROJECT_SUMMARY_template.md` — `_To be completed._`.
 Anything else — a sentence, a partial list, a paragraph someone already wrote by hand — is real,
 non-stub content, however short, and is never silently overwritten. Check the Overview and
 Architecture & Structure sections independently; one can be a stub while the other is not.

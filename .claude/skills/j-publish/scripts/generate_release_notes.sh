@@ -76,7 +76,7 @@ git rev-parse --verify "$TO_REF" >/dev/null 2>&1 || {
 # Absence of .publicignore is a strict no-op — PI_ACTIVE stays 0 and every
 # _pi_* helper below fails open immediately.
 #
-# Matching semantics are borrowed from skills/mirror-public/scripts/mirror.sh
+# Matching semantics are borrowed from skills/j-mirror-public/scripts/mirror.sh
 # rather than reimplemented: that script's compute_ship_list asks rsync
 # itself "what would transfer past --exclude-from=.publicignore?" and that
 # is the single source of truth /mirror-public --dry-run reports as

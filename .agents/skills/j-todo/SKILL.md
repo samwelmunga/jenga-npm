@@ -1,6 +1,7 @@
 ---
 name: j.todo
 description: Polyfill alias of the todo skill under a collision-safe directory name. Identical behavior to /todo — Add missions to the project todo list (project/todo.md), optionally linking them to epics and stories. Loops until the user is done, then optionally executes the list. Use when the bare /todo form is shadowed by another tool's own built-in command of the same name.
+output_types: id_list
 keywords:
   - todo
   - add task
@@ -29,7 +30,7 @@ This file is generated/synced by `scripts/generate-j-alias.sh todo` from `skills
 
 When `--trivial` is present, the mission is written as a **fully-formed task board file immediately** (not just a raw `todo.md` line deferred to `/do`'s own breakdown pass) with `execution_scope: inline` forced unconditionally — no threshold computation is consulted for the scope value itself. See step 4.5 below for the mechanics.
 
-**Human-only override.** `--trivial` is invoked by a human typing `/todo --trivial ...` — it is never applied by the scrum-master to itself during autonomous story/epic breakdown elsewhere (e.g. `/jenga`'s Phase 0.5, or `/do`'s own scrum-master decomposition step in `skills/do/SKILL.md` step 3). Those paths keep using the normal heuristic-only `execution_scope` assignment documented in `agents/scrum-master.md`'s Execution Scope Assignment section, unmodified by this flag.
+**Human-only override.** `--trivial` is invoked by a human typing `/todo --trivial ...` — it is never applied by the scrum-master to itself during autonomous story/epic breakdown elsewhere (e.g. `/jenga`'s Phase 0.5, or `/do`'s own scrum-master decomposition step in `skills/j-do/SKILL.md` step 3). Those paths keep using the normal heuristic-only `execution_scope` assignment documented in `agents/scrum-master.md`'s Execution Scope Assignment section, unmodified by this flag.
 
 **Fallback on failure is out of scope here.** If a `--trivial`-forced inline run fails the smoke-harness or shows scope creep at dispatch time, `/do`'s own `--trivial` handling (a separate task, E32_S14_T02) is responsible for falling back to the full `task` pipeline — this skill only ever writes the initial forced-inline task.
 

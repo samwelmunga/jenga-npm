@@ -13,7 +13,7 @@
 # project/.wiki/documentation.md, project/.wiki/intro-guide.md, or
 # project/.wiki/concepts/*.md, re-run this script to refresh the Pages site
 # so it doesn't silently drift from the wiki the way README.md and the wiki
-# itself have drifted from each other before (see skills/doc-sync/SKILL.md
+# itself have drifted from each other before (see skills/j-doc-sync/SKILL.md
 # for the doc-sync side of this convention).
 #
 # WHAT THIS SCRIPT DOES NOT TOUCH:

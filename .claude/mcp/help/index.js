@@ -2,8 +2,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { existsSync, readdirSync, statSync } from "fs";
-import { join, resolve } from "path";
+import { resolve } from "path";
+import { resolveSkillsDir, candidateSkillsDirs, listSkillFolders } from "./scan.js";
 
 const server = new McpServer({
   name: "help",
@@ -23,15 +23,13 @@ server.tool(
   },
   async ({ path: inputPath }) => {
     const root = inputPath ? resolve(inputPath) : process.cwd();
-    // The jenga-agent postinstall mirrors skills/ into both .claude/ (Claude Code)
-    // and .agents/ (Copilot / custom agents). Prefer .claude/; fall back to .agents/.
-    const candidates = [
-      join(root, ".claude", "skills"),
-      join(root, ".agents", "skills"),
-    ];
-    const skillsDir = candidates.find(existsSync);
+    // E50_S12_T06: the actual scan logic lives in ./scan.js (resolveSkillsDir /
+    // listSkillFolders) so it is importable and unit-testable without starting this
+    // MCP server. See that module's header for why. No behavior change here.
+    const skillsDir = resolveSkillsDir(root);
 
     if (!skillsDir) {
+      const candidates = candidateSkillsDirs(root);
       return {
         content: [
           {
@@ -42,14 +40,7 @@ server.tool(
       };
     }
 
-    const entries = readdirSync(skillsDir);
-    const folders = entries.filter((entry) => {
-      try {
-        return statSync(join(skillsDir, entry)).isDirectory();
-      } catch {
-        return false;
-      }
-    });
+    const folders = listSkillFolders(skillsDir);
 
     if (folders.length === 0) {
       return {

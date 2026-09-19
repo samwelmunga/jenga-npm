@@ -53,7 +53,7 @@ REPO_ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)
 # and .agents/ — scripts/ (which owns both validators) is never copied there,
 # so this script — itself shipped under skills/j-uncharted/scripts/ and mirrored
 # alongside it — cannot assume "$REPO_ROOT/scripts/..." exists. Mirrors
-# skills/init/scripts/init.sh's PKG_ROOT fallback (same pattern already
+# skills/j-init/scripts/init.sh's PKG_ROOT fallback (same pattern already
 # applied to this skill's elicitation-state.sh WITH_LOCK resolution): prefer
 # a monorepo checkout's sibling scripts/ dir, else fall back to the installed
 # npm package under node_modules/@jenga-ai/agent.

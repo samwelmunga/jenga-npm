@@ -183,7 +183,7 @@ fi
 # and .agents/ — scripts/ (which owns with-lock.sh) is never copied there, so
 # this script — itself shipped under skills/j-uncharted/scripts/ and mirrored
 # alongside it — cannot assume "$REPO_ROOT/scripts/with-lock.sh" exists.
-# Mirrors skills/init/scripts/init.sh's PKG_ROOT fallback: prefer a monorepo
+# Mirrors skills/j-init/scripts/init.sh's PKG_ROOT fallback: prefer a monorepo
 # checkout's sibling scripts/ dir, else fall back to the installed npm
 # package under node_modules/@jenga-ai/agent.
 if [ -f "$SCRIPT_DIR/../../../scripts/with-lock.sh" ]; then

@@ -37,7 +37,7 @@
 # SIGNAL A IS BORROWED, NOT REBUILT
 # ---------------------------------------------------------------------------
 # The board-linkage question is answered by
-# `skills/uncharted/scripts/resolve-segment-target.sh` (E40_S02_T01) through its
+# `skills/j-uncharted/scripts/resolve-segment-target.sh` (E40_S02_T01) through its
 # documented batch interface:
 #
 #     git ls-files | resolve-segment-target.sh --paths-from -
@@ -70,7 +70,7 @@
 #
 # This is deliberate. `run-engine.sh` currently renders the out-of-repo
 # `not_checked` case as `unlinked` in its understanding document, which asserts
-# a verified absence that was never verified. `skills/uncharted/SKILL.md` names
+# a verified absence that was never verified. `skills/j-uncharted/SKILL.md` names
 # Step 1 (`resolve-segment-target.sh`) authoritative on linkage where the two
 # disagree, so this script passes the resolver's status through unchanged and
 # does not repeat that conflation.
@@ -104,8 +104,8 @@
 # Classifying files and then reporting directories would assert about a
 # directory something that was only ever verified about its contents. Because
 # the resolver's match is a path-boundary test, a board item naming
-# `skills/convert/` links THAT DIRECTORY without linking
-# `skills/convert/convert_cli.py`. Both facts are true, and the directory-level
+# `skills/j-convert/` links THAT DIRECTORY without linking
+# `skills/j-convert/convert_cli.py`. Both facts are true, and the directory-level
 # one is what decides whether a segment is worth investigating -- offering
 # `/uncharted segment` there would duplicate a board item that already exists.
 #
@@ -125,7 +125,7 @@
 # MIRROR SPELLINGS. Per CLAUDE.md the canonical file lives in the root tree and
 # `.agents/`, `.claude/` are generated build outputs -- but older board items
 # were often written against the mirror path. E17_S05 owns `/reconcile-origin`
-# and names it `.agents/skills/reconcile-origin/SKILL.md`, so a match on the
+# and names it `.agents/skills/j-reconcile-origin/SKILL.md`, so a match on the
 # root path alone misses a board item that plainly owns the directory. Each
 # group directory is therefore asked about under its own name and under both
 # mirror prefixes, and `directory_linkage.matched_as` records which spelling
@@ -187,14 +187,14 @@
 #                  "not_checked_paths": N,
 #                  "groups": N, "covered_groups": N },
 #     "groups": [
-#       { "directory": "skills/skillify",
+#       { "directory": "skills/j-skillify",
 #         "unlinked_count": N,        // files keyed to THIS group
 #         "subtree_candidates": N,    // all candidates under the directory
 #         "subtree_unlinked": N,      // all unlinked under the directory
 #         "fully_unlinked": true,
 #         "directory_linkage": { "status": "unlinked", "reason": "...",
 #                                "items": [], "match_count": 0,
-#                                "matched_as": "skills/skillify" },
+#                                "matched_as": "skills/j-skillify" },
 #         "files": ["..."],           // capped by --limit
 #         "files_truncated": N }
 #     ],
@@ -295,7 +295,7 @@ REPO_ROOT=$(cd -- "$REPO_ROOT" && pwd -P)
 [ -n "$RESOLVER" ] || RESOLVER="$SCRIPT_DIR/../../uncharted/scripts/resolve-segment-target.sh"
 [ -f "$RESOLVER" ] || die 4 "board-linkage checker not found: $RESOLVER
   This script deliberately has no fallback implementation -- see the header. Restore
-  skills/uncharted/scripts/resolve-segment-target.sh or pass --resolver <path>."
+  skills/j-uncharted/scripts/resolve-segment-target.sh or pass --resolver <path>."
 [ -x "$RESOLVER" ] || die 4 "board-linkage checker is not executable: $RESOLVER"
 RESOLVER=$(cd -- "$(dirname -- "$RESOLVER")" && pwd -P)/$(basename -- "$RESOLVER")
 
@@ -572,8 +572,8 @@ for path, status in sorted(status_of.items()):
 # --- second pass: is the GROUP DIRECTORY itself on the board? ---------------------------------
 # Reporting a directory while only ever having checked the files inside it asserts an absence
 # that was never verified -- the same error this script is careful to avoid for `not_checked`.
-# The resolver's match is a path-boundary test, so a board item naming `skills/convert/` links
-# that directory without linking `skills/convert/convert_cli.py`. Both facts are true and the
+# The resolver's match is a path-boundary test, so a board item naming `skills/j-convert/` links
+# that directory without linking `skills/j-convert/convert_cli.py`. Both facts are true and the
 # directory-level one is the one that decides whether a segment is worth investigating.
 #
 # Same borrowed checker, same batch interface, one extra call. No new linkage logic -- the only
@@ -582,7 +582,7 @@ for path, status in sorted(status_of.items()):
 # MIRROR SPELLINGS. Per CLAUDE.md the canonical file lives in the root tree and `.agents/` and
 # `.claude/` are generated build outputs, but plenty of older board items were written against
 # the mirror path -- E17_S05 owns `/reconcile-origin` and names it as
-# `.agents/skills/reconcile-origin/SKILL.md`. A boundary match on the root path alone therefore
+# `.agents/skills/j-reconcile-origin/SKILL.md`. A boundary match on the root path alone therefore
 # misses a board item that plainly owns the directory. So each directory is asked about under its
 # own name and under both mirror prefixes, and a hit on any spelling is board provenance. This
 # adds path spellings to the QUESTION; it does not add a second answer to it.

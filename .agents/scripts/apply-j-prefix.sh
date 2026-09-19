@@ -44,11 +44,25 @@
 # silently skipped, not re-applied or reported as an error. Skills still carrying
 # the legacy "j:<name>" form are REPAIRED to "j.<name>" rather than skipped —
 # skipping them would silently leave a Copilot-breaking name in place.
+#
+# Retire-or-fix decision (E50_S14_T02, 2026-09-19): kept, not retired — see
+# docs/skill-authoring.md's "The Canonical Naming Contract" > "Generation" subsection
+# for the full reasoning. Fixed in place for E50_S10's settled contract (canonical
+# directory skills/j-<name>/, frontmatter name: j.<name> — NOT j.j-<name>):
+#   - Step 1's directory-name<->frontmatter-name check no longer requires exact
+#     string equality; it strips a "j-" directory prefix before comparing, so the
+#     settled j-<name>/j.<name> pairing is accepted rather than always rejected.
+#   - Step 2's prose rewrite strips a discovered "j-<name>" directory's "j-" prefix
+#     before emitting "j.<name>", so it never emits the doubled "j.j-<name>" form.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=lib/resolve-project-dir.sh
+# E50_S14_T02: disabled rather than left as an accepted info-level finding — this
+# script's AC requires a clean default-level shellcheck run, and the sourced file does
+# exist; shellcheck simply will not follow it without -x (same fix already applied to
+# scripts/audit-twin-divergence.sh and scripts/build-pages-site.sh).
+# shellcheck source=lib/resolve-project-dir.sh disable=SC1091
 source "$SCRIPT_DIR/../lib/resolve-project-dir.sh"
 
 PROJECT_DIR="$JENGA_PROJECT_DIR"
@@ -141,17 +155,29 @@ if os.path.isdir(skills_dir):
         # this is repaired to "j.<name>" rather than skipped as "already migrated".
         base_name = current_name[2:] if current_name.startswith("j:") else current_name
 
-        if base_name != entry:
+        # E50_S14_T02: under E50_S10's settled contract the canonical skill directory
+        # carries a "j-" prefix (skills/j-<name>/) while its frontmatter name is the
+        # UNPREFIXED "j.<name>" — deliberately not "j.j-<name>" (see
+        # docs/skill-authoring.md's "The Canonical Naming Contract"). A plain
+        # base_name != entry equality would reject every "j-<name>" directory by
+        # construction (e.g. directory "j-commit", frontmatter "commit", stripped
+        # "commit" != "j-commit"). expected_base strips that one directory-name prefix
+        # before comparing, so the check still catches a genuine mismatch (a
+        # frontmatter name that matches neither the bare nor the "j-"-stripped
+        # directory name) without hard-failing on the settled pairing itself.
+        expected_base = entry[2:] if entry.startswith("j-") else entry
+
+        if base_name != expected_base:
             errors.append(
                 f"{skill_path}: frontmatter name '{current_name}' does not match "
-                f"directory name '{entry}' — skipped for safety"
+                f"directory name '{entry}' (expected base '{expected_base}') — skipped for safety"
             )
             continue
 
         if not do_skills:
             continue
 
-        new_line = f"name: j.{entry}\n"
+        new_line = f"name: j.{expected_base}\n"
         changes.append({
             "type": "frontmatter",
             "file": skill_path,
@@ -174,6 +200,21 @@ if do_agents and os.path.isdir(agents_dir):
     boundary_chars = set(
         "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:"
     )
+
+    def canonical_prose_name(discovered_name):
+        """E50_S14_T02: skill_names includes every directory under skills/ that has a
+        SKILL.md, which — under E50_S10's settled contract — includes "j-<name>"
+        canonical directories alongside the three bare-name exceptions (jenga,
+        jenga-permission-level; index has no SKILL.md and never reaches this list).
+        A literal prose mention of "/j-<name>" is matched on the RAW discovered name
+        (so the pattern still finds it), but the emitted replacement must strip the
+        "j-" directory prefix before prepending "j." — otherwise this would emit the
+        doubled "j.j-<name>" form the settled contract rejects (see
+        docs/skill-authoring.md's "The Canonical Naming Contract"). Bare names
+        without a "j-" prefix (including the jenga/jenga-permission-level
+        exceptions, which never carry one) are returned unchanged.
+        """
+        return discovered_name[2:] if discovered_name.startswith("j-") else discovered_name
 
     for entry in sorted(os.listdir(agents_dir)):
         if not entry.endswith(".md"):
@@ -198,7 +239,7 @@ if do_agents and os.path.isdir(agents_dir):
                     continue  # e.g. "/doc" inside "/doc-sync"
                 matches.append((start, end))
             for start, end in reversed(matches):
-                text = text[:start] + f"j.{name}" + text[end:]
+                text = text[:start] + f"j.{canonical_prose_name(name)}" + text[end:]
                 file_changes += 1
 
         if file_changes:

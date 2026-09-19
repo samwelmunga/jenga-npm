@@ -13,7 +13,7 @@
 #   2. Derives each eligible ticket's matched EST-tagged commit SHAs (and,
 #      for parity/logging, their unioned touched-file list) using the
 #      identical anchored-grep + union technique
-#      skills/self-sync/scripts/mark-merged.sh already implements.
+#      skills/j-self-sync/scripts/mark-merged.sh already implements.
 #   3. Checks ANCESTRY, not diff-membership: a ticket is "covered" by a tag
 #      only when EVERY one of its matched commits is an ancestor of that
 #      tag's resolved_private_sha (git merge-base --is-ancestor). A tag
@@ -183,7 +183,7 @@ REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)
 
 COMPUTE_SCRIPT="$SCRIPT_DIR/compute-deploy-reconcile.sh"
 WITH_LOCK_SCRIPT="$REPO_ROOT/scripts/with-lock.sh"
-UPDATE_FRONTMATTER_SCRIPT="$REPO_ROOT/skills/close-story/scripts/update-task-frontmatter.sh"
+UPDATE_FRONTMATTER_SCRIPT="$REPO_ROOT/skills/j-close-story/scripts/update-task-frontmatter.sh"
 MARKER_FILE="$REPO_ROOT/project/data/deploy-reconcile-marker.json"
 
 [ -f "$WITH_LOCK_SCRIPT" ] || die "expected script not found: $WITH_LOCK_SCRIPT"

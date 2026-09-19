@@ -44,7 +44,7 @@ This file is generated/synced by `scripts/generate-j-alias.sh spinoff` from `ski
 
 4. **Run /brainstorm (if chosen)** — Invoke the `/brainstorm` skill, passing the diverging topic and collected context as the opening prompt. After `/brainstorm` completes, use the refined output as the idea description.
 
-5. **Save via `/idea`** — Populate `skills/idea/assets/idea_handoff_template.md` with the context collected so far:
+5. **Save via `/idea`** — Populate `skills/j-idea/assets/idea_handoff_template.md` with the context collected so far:
    - **Mission title**: the diverging topic name (as confirmed in step 1)
    - **Goal / objective**: what the diverging topic aims to achieve
    - **Affected files or scope**: any files or modules identified during the conversation

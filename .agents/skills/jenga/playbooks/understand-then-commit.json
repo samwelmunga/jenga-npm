@@ -1,0 +1,19 @@
+{
+  "id": "understand-then-commit",
+  "name": "Understand Then Build",
+  "description": "Investigates existing or unfamiliar code first, then runs the full idea-to-commit pipeline on top of what was learned -- a composed chain built from the canonical idea-to-committed playbook, terminating at the commit.",
+  "keywords": [
+    "understand then build",
+    "investigate then build",
+    "explore then implement",
+    "onboard and build",
+    "learn the codebase first"
+  ],
+  "examples": [
+    "help me understand this codebase first, then plan a change here, build it, and commit it",
+    "investigate this existing code, then take an idea through planning, implementation, and a commit",
+    "look into what's already here, then brainstorm a fix, build it, and commit the work",
+    "onboard me to this project and then walk a new idea from planning through to a committed change"
+  ],
+  "steps": ["j-uncharted", {"playbook": "idea-to-committed"}]
+}

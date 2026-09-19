@@ -60,7 +60,7 @@ Compare the user's redo description against the original implementation to deter
 Summarise scope findings to the user in a brief list before continuing.
 
 ### 3. Plan the redo
-Populate `skills/todo/assets/todo_handoff_template.md` with the following pre-collected context:
+Populate `skills/j-todo/assets/todo_handoff_template.md` with the following pre-collected context:
 - **Mission title**: a short name for the redo work
 - **Goal / objective**: the redo objective — what is changing and the desired outcome
 - **Affected files or scope**: code, tests, and documentation files identified in step 2

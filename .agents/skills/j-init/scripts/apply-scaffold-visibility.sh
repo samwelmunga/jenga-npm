@@ -11,7 +11,7 @@
 # overwritten wholesale by every `/distribute` run or npm upgrade; project/
 # is not). Filed as new, adjacent scope under E31_S07 rather than folded
 # silently into project_files_visibility's existing enum. See
-# skills/distribute/CONFIG_SCHEMA.md's "Scaffold visibility" section for the
+# skills/j-distribute/CONFIG_SCHEMA.md's "Scaffold visibility" section for the
 # full rationale.
 #
 # This is skills/j-init/'s own copy of skills/init/scripts/apply-scaffold-visibility.sh

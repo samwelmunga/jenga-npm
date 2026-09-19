@@ -239,7 +239,12 @@ automated and human halves of the flow:
   relies on the automated CI-staged test result) and then
   `bash skills/j-publish/scripts/npm_stage_inspect.sh approve <stage-id> --otp <otp>`
   from their own machine. `reject` (same script) is available to either
-  side to discard a staged candidate.
+  side to discard a staged candidate. On success, `approve` also generates
+  release notes into `CHANGELOG.md`'s `[Unreleased]` section and finalizes
+  it with the approved version — the same behavior described in
+  `adapters/npm.md`'s Staged Publishing section, shared by both target
+  types since it lives in `npm_stage_inspect.sh` itself, not in either
+  target-type-specific pipeline (E22_S09_T08).
 - **Stage-id capture reads the CI run's own log, not a local `npm stage
   list` call.** Because the actual `npm stage publish --provenance` call
   runs inside the dispatched Actions run, the local `npm_stage_pipeline.sh`

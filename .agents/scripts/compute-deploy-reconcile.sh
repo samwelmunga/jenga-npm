@@ -15,7 +15,7 @@
 # scripts/ rather than duplicated into one skill's scripts/ folder.
 #
 # Reads:
-#   skills/mirror-public/assets/config.json
+#   skills/j-mirror-public/assets/config.json
 #     - publicRepoUrl  : URL of the public downstream repo (unauthenticated,
 #                        public repo — no credential required)
 #     - worktreePath   : scratch worktree path (relative to repo root) that
@@ -50,7 +50,7 @@
 # tag, `git log -1 --format=%B <tag>` is run against whichever clone/fetch
 # supplied that tag's commit, and the `Source-Commit: <full-sha>` trailer
 # line is extracted — the exact trailer key/format
-# skills/mirror-public/scripts/mirror.sh already writes
+# skills/j-mirror-public/scripts/mirror.sh already writes
 # (`COMMIT_TRAILER="Source-Commit: $PRIVATE_FULL_SHA"`, a 40-char lowercase
 # hex SHA). A tag whose commit has no such trailer is skipped with a stderr
 # warning, not a script error (defensive — should not happen given
@@ -126,8 +126,8 @@ fi
 
 # -----------------------------------------------------------------------------
 # Locate script + repo root (same symlink-resolution + repo-root derivation
-# pattern as skills/mirror-public/scripts/mirror.sh and
-# skills/self-sync/scripts/compute-sync-diff.sh).
+# pattern as skills/j-mirror-public/scripts/mirror.sh and
+# skills/j-self-sync/scripts/compute-sync-diff.sh).
 # -----------------------------------------------------------------------------
 
 SCRIPT_PATH="${BASH_SOURCE[0]}"
@@ -143,7 +143,7 @@ SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)"
 [ -n "$REPO_ROOT" ] || die "could not locate repo root (git rev-parse failed from $SCRIPT_DIR)"
 
-CONFIG_FILE="$REPO_ROOT/skills/mirror-public/assets/config.json"
+CONFIG_FILE="$REPO_ROOT/skills/j-mirror-public/assets/config.json"
 [ -f "$CONFIG_FILE" ] || die "config not found: $CONFIG_FILE"
 
 WITH_LOCK_SCRIPT="$REPO_ROOT/scripts/with-lock.sh"

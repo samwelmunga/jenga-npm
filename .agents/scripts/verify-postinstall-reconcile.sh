@@ -90,7 +90,7 @@ echo "  fixture: $FIXTURE"
 # ── package v1.0.0 ───────────────────────────────────────────────────────────
 PKG1="$FIXTURE/pkg-v1"
 make_pkg "$PKG1" "1.0.0"
-add_skill "$PKG1" "do"           "# do — stable across both versions"
+add_skill "$PKG1" "j-do"         "# j-do — stable across both versions"
 add_skill "$PKG1" "renamed-old"  "# renamed-old — becomes renamed-new in v2"
 add_skill "$PKG1" "j-legacy-twin" "# j-legacy-twin — excluded in v2 (E50_S06 style)"
 printf '# developer agent v1\n' > "$PKG1/agents/developer.md"
@@ -98,7 +98,7 @@ printf '# developer agent v1\n' > "$PKG1/agents/developer.md"
 # ── package v2.0.0 ───────────────────────────────────────────────────────────
 PKG2="$FIXTURE/pkg-v2"
 make_pkg "$PKG2" "2.0.0"
-add_skill "$PKG2" "do"           "# do — stable across both versions"   # byte-identical
+add_skill "$PKG2" "j-do"         "# j-do — stable across both versions"   # byte-identical
 add_skill "$PKG2" "renamed-new"  "# renamed-new — replaces renamed-old"
 # j-legacy-twin intentionally absent (excluded), renamed-old intentionally absent
 printf '# developer agent v2 (changed)\n' > "$PKG2/agents/developer.md"
@@ -136,7 +136,7 @@ assert_file "$CONSUMER/.claude/.jenga-postinstall-manifest.json" \
   "manifest written to .claude on first install"
 assert_nogrep "preexisting/JUNK.md" "$CONSUMER/.agents/.jenga-postinstall-manifest.json" \
   "consumer file is NOT recorded in the manifest"
-assert_grep "skills/do/SKILL.md" "$CONSUMER/.agents/.jenga-postinstall-manifest.json" \
+assert_grep "skills/j-do/SKILL.md" "$CONSUMER/.agents/.jenga-postinstall-manifest.json" \
   "manifest records mirrored package paths"
 
 # ═══ Scenario B — upgrade with renames / removals / exclusions ════════════════
@@ -153,7 +153,7 @@ done
 
 # Record identity of a file common to both versions, to prove it is not needlessly
 # deleted and recopied (mirror() should classify it as `skipped`).
-DO_BEFORE="$(ls -li "$CONSUMER/.agents/skills/do/SKILL.md" | awk '{print $1, $6, $7, $8}')"
+DO_BEFORE="$(ls -li "$CONSUMER/.agents/skills/j-do/SKILL.md" | awk '{print $1, $6, $7, $8}')"
 
 run_install "$PKG2" "$CONSUMER" "$FIXTURE/install-v2.log"
 
@@ -196,7 +196,7 @@ assert_file "$CONSUMER/.claude/skills/renamed-new/SKILL.md" \
   "renamed-to skill installed (.claude)"
 
 # 5. Unchanged common file was neither deleted nor recopied.
-DO_AFTER="$(ls -li "$CONSUMER/.agents/skills/do/SKILL.md" | awk '{print $1, $6, $7, $8}')"
+DO_AFTER="$(ls -li "$CONSUMER/.agents/skills/j-do/SKILL.md" | awk '{print $1, $6, $7, $8}')"
 if [ "$DO_BEFORE" = "$DO_AFTER" ]; then
   pass "file common to both versions untouched (same inode+mtime)"
 else
@@ -375,9 +375,9 @@ mkdir -p "$CONSUMER_M"
 run_install "$PKG1" "$CONSUMER_M" "$FIXTURE/missing-v1.log"
 run_install "$PKG2M" "$CONSUMER_M" "$FIXTURE/missing-v2.log"
 
-assert_file "$CONSUMER_M/.agents/skills/do/SKILL.md" \
+assert_file "$CONSUMER_M/.agents/skills/j-do/SKILL.md" \
   "missing copySet entry does not wipe the mirrored subtree (.agents)"
-assert_file "$CONSUMER_M/.claude/skills/do/SKILL.md" \
+assert_file "$CONSUMER_M/.claude/skills/j-do/SKILL.md" \
   "missing copySet entry does not wipe the mirrored subtree (.claude)"
 assert_grep "Upgrade cleanup skipped" "$FIXTURE/missing-v2.log" \
   "packaging regression reported, cleanup skipped"

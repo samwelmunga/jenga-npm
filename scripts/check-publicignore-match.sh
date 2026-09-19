@@ -5,13 +5,13 @@
 # Classify one or more repo-relative paths as PUBLIC (would ship to the
 # public mirror repo) or BLOCKED (excluded by .publicignore), using the
 # exact same rsync --exclude-from=.publicignore matching semantics as
-# skills/mirror-public/scripts/mirror.sh's --dry-run "ship list" computation
+# skills/j-mirror-public/scripts/mirror.sh's --dry-run "ship list" computation
 # (see the SHIP_LIST_FILE block in that script). A file classified as
 # "would be blocked" by `/mirror-public --dry-run` is guaranteed to be
 # classified as BLOCKED here too, and vice versa for PUBLIC.
 #
 # This does NOT touch the network, clone the public repo, or require
-# /mirror-public to be configured (skills/mirror-public/assets/config.json
+# /mirror-public to be configured (skills/j-mirror-public/assets/config.json
 # is never read) — it only needs a .publicignore file at the repo root.
 # Rsync's include/exclude filter evaluation does not depend on destination
 # state (destination state only affects delete/itemize-flag details for

@@ -30,7 +30,7 @@ fi
 # queue/, rapports/, logs/). scaffold_visibility is a distinct, independent
 # flag (E31_S07_T01, ported here in E31_S07_T03) covering the distributed
 # .claude/.agents framework scaffold — kept separate per
-# skills/distribute/CONFIG_SCHEMA.md's "Scaffold visibility" section, rather
+# skills/j-distribute/CONFIG_SCHEMA.md's "Scaffold visibility" section, rather
 # than folded into project_files_visibility's existing enum.
 VISIBILITY="${JENGA_PROJECT_FILES_VISIBILITY:-visible}"
 SCAFFOLD_VISIBILITY="${JENGA_SCAFFOLD_VISIBILITY:-visible}"
@@ -79,7 +79,7 @@ echo "→ Copying test-config.json from template..."
 cp "$ASSETS_DIR/test-config_template.json" project/configs/test-config.json
 
 # ─── 6.5. Create project/configs/scope-thresholds.json ───────────────────────
-# Consumed by skills/jenga (Phase 0) and skills/do (Step 0); both halt if it's
+# Consumed by skills/jenga (Phase 0) and skills/j-do (Step 0); both halt if it's
 # missing, so it must exist immediately after scaffold.
 echo "→ Copying scope-thresholds.json from template..."
 cp "$ASSETS_DIR/scope-thresholds_template.json" project/configs/scope-thresholds.json
@@ -93,7 +93,7 @@ echo "→ Creating events.json..."
 echo '[]' > project/logs/events.json
 
 # ─── 8.5. Create project/knowledge-graph/{STUB_SCHEMA.md,graph.json} ─────────
-# Consumed by skills/uncharted's conversational elicitation flow (`onboard`,
+# Consumed by skills/j-uncharted's conversational elicitation flow (`onboard`,
 # `segment --mode investigate`), which writes coarse graph nodes/edges to
 # graph.json per the stub schema — both must exist before that flow's first
 # write, per templates/KNOWLEDGE_GRAPH_STUB_SCHEMA_TEMPLATE.md's own header

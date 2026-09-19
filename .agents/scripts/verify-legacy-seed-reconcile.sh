@@ -83,8 +83,8 @@ make_pkg() {
   cat > "$dir/package.json" <<'JSON'
 { "name": "@jenga-ai/agent", "version": "3.0.0", "type": "module" }
 JSON
-  mkdir -p "$dir/skills/do" "$dir/agents"
-  printf '# do skill (still shipped)\n' > "$dir/skills/do/SKILL.md"
+  mkdir -p "$dir/skills/j-do" "$dir/agents"
+  printf '# do skill (still shipped)\n' > "$dir/skills/j-do/SKILL.md"
   printf '# developer agent (still shipped)\n' > "$dir/agents/developer.md"
 }
 
@@ -116,7 +116,7 @@ PKG="$FIXTURE/pkg"
 make_pkg "$PKG"
 write_legacy_paths "$PKG" \
   "agents/developer.md" \
-  "skills/do/SKILL.md" \
+  "skills/j-do/SKILL.md" \
   "skills/j-legacy-twin/SKILL.md" \
   "../OUTSIDE-THE-FIXTURE.txt" \
   "skills/trap/LINK.md"
@@ -146,7 +146,7 @@ assert_dir "$CONSUMER_A/.agents/skills/j-legacy-twin" \
   "directory survives because it still holds a consumer file (.agents)"
 assert_grep "seeded from known-shipped legacy paths" "$FIXTURE/a-install.log" \
   "install log attributes the cleanup to legacy-path seeding"
-assert_file "$CONSUMER_A/.agents/skills/do/SKILL.md" \
+assert_file "$CONSUMER_A/.agents/skills/j-do/SKILL.md" \
   "currently-shipped skill untouched"
 assert_file "$CONSUMER_A/.agents/agents/developer.md" \
   "currently-shipped agent file untouched"
@@ -158,7 +158,7 @@ import json, sys
 paths = json.load(open(sys.argv[1]))["paths"]
 assert "skills/j-legacy-twin/SKILL.md" not in paths, "deleted orphan must not be in the fresh manifest"
 assert "skills/j-legacy-twin/my-notes.md" not in paths, "consumer file must never be in the manifest"
-assert "skills/do/SKILL.md" in paths and "agents/developer.md" in paths, "current package paths must be present"
+assert "skills/j-do/SKILL.md" in paths and "agents/developer.md" in paths, "current package paths must be present"
 PYEOF
 if [ $? -eq 0 ]; then pass "fresh manifest describes only what is actually on disk post-cleanup"; else fail "fresh manifest is inaccurate"; fi
 
@@ -174,13 +174,13 @@ assert_nogrep_re "[1-9][0-9]* stale file" "$FIXTURE/b-install.log" \
   "first-ever install deletes nothing despite a non-empty legacy path list"
 assert_grep "no previous install manifest" "$FIXTURE/b-install.log" \
   "first-ever install reports plain additive-only, not a seeded outcome"
-assert_file "$CONSUMER_B/.agents/skills/do/SKILL.md" \
+assert_file "$CONSUMER_B/.agents/skills/j-do/SKILL.md" \
   "first-ever install still copies current package files"
 
 # ═══ Scenario C — a legacy path still currently shipped is never touched ═════
-# (Implicitly exercised by Scenario A's "do"/"developer.md" already surviving, but
+# (Implicitly exercised by Scenario A's "j-do"/"developer.md" already surviving, but
 # asserted here as its own named check for clarity.)
-assert_file "$CONSUMER_A/.claude/skills/do/SKILL.md" \
+assert_file "$CONSUMER_A/.claude/skills/j-do/SKILL.md" \
   "a legacy-listed path that is STILL shipped survives untouched (not stale)"
 
 # ═══ Scenario D — a legacy path absent from disk is never phantom-seeded ═════
@@ -219,7 +219,7 @@ PKG_F1="$FIXTURE/pkg-f1"
 make_pkg "$PKG_F1"
 mkdir -p "$PKG_F1/skills/renamed-old"
 printf '# renamed-old — removed in the next version\n' > "$PKG_F1/skills/renamed-old/SKILL.md"
-write_legacy_paths "$PKG_F1" "agents/developer.md" "skills/do/SKILL.md"
+write_legacy_paths "$PKG_F1" "agents/developer.md" "skills/j-do/SKILL.md"
 
 PKG_F2="$FIXTURE/pkg-f2"
 make_pkg "$PKG_F2"
@@ -228,7 +228,7 @@ import json
 p = '$PKG_F2/package.json'
 d = json.load(open(p)); d['version'] = '3.0.1'; json.dump(d, open(p, 'w'))
 "
-write_legacy_paths "$PKG_F2" "agents/developer.md" "skills/do/SKILL.md" "skills/renamed-old/SKILL.md"
+write_legacy_paths "$PKG_F2" "agents/developer.md" "skills/j-do/SKILL.md" "skills/renamed-old/SKILL.md"
 
 CONSUMER_F="$FIXTURE/consumer-f"
 mkdir -p "$CONSUMER_F"

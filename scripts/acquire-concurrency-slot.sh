@@ -5,7 +5,7 @@
 # Acquire a role-scoped concurrency slot against a single orchestrating
 # session's counter file, for E32_S15 (Per-Session Concurrency Cap for
 # Developer/Tester Dispatch). Generalizes the existing per-epic boolean
-# bundle lock ("Epic-Level Bundle Lock" in skills/do/SKILL.md) into a
+# bundle lock ("Epic-Level Bundle Lock" in skills/j-do/SKILL.md) into a
 # per-role bounded counter with multiple named holders.
 #
 # The counter file lives at:

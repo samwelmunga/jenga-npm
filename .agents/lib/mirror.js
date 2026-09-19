@@ -5,7 +5,7 @@
  * (files or directories) from a source root into a destination root. Used
  * by:
  *   - scripts/postinstall.js  (consumer install; reconcileDeletes = false)
- *   - skills/self-sync/...    (in-repo dev mirror; reconcileDeletes = true)   [wired in T02]
+ *   - skills/j-self-sync/...    (in-repo dev mirror; reconcileDeletes = true)   [wired in T02]
  *
  * Design constraints:
  *   - ESM, Node built-ins only (node:fs / node:fs/promises / node:path).

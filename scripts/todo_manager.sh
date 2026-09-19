@@ -3,7 +3,7 @@
 # Run from the repository root.
 
 TODO_FILE="project/todo.md"
-TEMPLATE="skills/todo/assets/todo_template.md"
+TEMPLATE="skills/j-todo/assets/todo_template.md"
 
 usage() {
   cat >&2 <<EOF

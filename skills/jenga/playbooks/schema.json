@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://jenga.local/schemas/jenga-playbook.schema.json",
   "title": "Jenga Multi-Skill Playbook",
-  "description": "Schema for a single multi-skill playbook definition consumed by skills/jenga/scripts/load-playbooks.sh (E53_S02_T01). A playbook is a dedicated, versionable data file describing an ORDERED chain of skills that /jenga's natural-language branch may propose (as an editable, confirmable numbered list -- see skills/jenga/scripts/render-playbook-confirmation.sh, E53_S02_T03) when free-text intent spans more than one skill and does not cleanly resolve to a single one via skills/route/SKILL.md's Step 2 matching. This file itself (schema.json) is never treated as a playbook -- load-playbooks.sh explicitly excludes it by filename when scanning skills/jenga/playbooks/*.json.",
+  "description": "Schema for a single multi-skill playbook definition consumed by skills/jenga/scripts/load-playbooks.sh (E53_S02_T01). A playbook is a dedicated, versionable data file describing an ORDERED chain of skills that /jenga's natural-language branch may propose (as an editable, confirmable numbered list -- see skills/jenga/scripts/render-playbook-confirmation.sh, E53_S02_T03) when free-text intent spans more than one skill and does not cleanly resolve to a single one via skills/j-route/SKILL.md's Step 2 matching. This file itself (schema.json) is never treated as a playbook -- load-playbooks.sh explicitly excludes it by filename when scanning skills/jenga/playbooks/*.json.",
   "type": "object",
   "required": ["id", "name", "description", "keywords", "examples", "steps"],
   "additionalProperties": false,
@@ -18,25 +18,92 @@
     },
     "description": {
       "type": "string",
-      "description": "One-sentence explanation of what this playbook accomplishes end-to-end, used as the lowest-priority match signal (description match, same as skills/route/SKILL.md's Step 2 Pass 3) when keywords/examples don't produce a confident match."
+      "description": "One-sentence explanation of what this playbook accomplishes end-to-end, used as the lowest-priority match signal (description match, same as skills/j-route/SKILL.md's Step 2 Pass 3) when keywords/examples don't produce a confident match."
     },
     "keywords": {
       "type": "array",
-      "description": "Short phrases (1-3 words) for verbatim, case-insensitive keyword matching against the raw natural-language prompt -- the highest-priority match signal (Pass 1), mirroring skills/route/SKILL.md's Step 2 Pass 1 semantics exactly, but scoped to this playbook's catalog rather than the single-skill catalog.",
+      "description": "Short phrases (1-3 words) for verbatim, case-insensitive keyword matching against the raw natural-language prompt -- the highest-priority match signal (Pass 1), mirroring skills/j-route/SKILL.md's Step 2 Pass 1 semantics exactly, but scoped to this playbook's catalog rather than the single-skill catalog.",
       "items": { "type": "string" },
       "minItems": 1
     },
     "examples": {
       "type": "array",
-      "description": "Natural-language example prompts a user might type that should resolve to this playbook. Used for the semantic similarity match (Pass 2), mirroring skills/route/SKILL.md's Step 2 Pass 2 semantics. At least one example must plausibly span the full breadth of this playbook's steps (not just its first step) so it is distinguishable from a plain single-skill match.",
+      "description": "Natural-language example prompts a user might type that should resolve to this playbook. Used for the semantic similarity match (Pass 2), mirroring skills/j-route/SKILL.md's Step 2 Pass 2 semantics. At least one example must plausibly span the full breadth of this playbook's steps (not just its first step) so it is distinguishable from a plain single-skill match.",
       "items": { "type": "string" },
       "minItems": 1
     },
     "steps": {
       "type": "array",
-      "description": "Ordered list of canonical skill DIRECTORY names (the directory under skills/<dir>/SKILL.md, e.g. \"j-brainstorm\", not the \"j.brainstorm\" frontmatter/invocation form and not the retired bare \"brainstorm\") that make up this playbook's chain, in the exact execution order. Per E50_S10's canonical naming contract the canonical directory is skills/j-<name>/, so a step value carries the j- prefix; the three permanent exceptions (jenga, jenga-permission-level, index) keep their bare directory names and are written bare. Each entry MUST resolve to an existing skills/<dir>/SKILL.md at load time -- load-playbooks.sh skips (with a stderr warning) any playbook referencing a nonexistent skill rather than silently including a broken chain in the catalog.",
-      "items": { "type": "string" },
+      "description": "Ordered list of steps making up this playbook's chain, in the exact execution order. A step is either a BARE STRING or a STEPOBJECT (E53_S03; composition added by E53_S05). A bare string is shorthand for {\"skill\": \"<name>\"} -- \"bare\" describes the JSON shape, never a bare skill NAME. A skill name is always a canonical skill DIRECTORY name (the directory under skills/<dir>/SKILL.md, e.g. \"j-brainstorm\", not the \"j.brainstorm\" frontmatter/invocation form and not the retired bare \"brainstorm\"); per E50_S10's canonical naming contract the canonical directory is skills/j-<name>/, so a step value carries the j- prefix, while the three permanent exceptions (jenga, jenga-permission-level, index) keep their bare directory names and are written bare. Each skill name MUST resolve to an existing skills/<dir>/SKILL.md at load time -- load-playbooks.sh skips (with a stderr warning) any playbook referencing a nonexistent skill rather than silently including a broken chain in the catalog. NOTE: this schema documents SHAPE only. The cross-step rules -- forward_from naming an EARLIER step whose skill declares a non-empty output_types, conditional.depends_on naming an EARLIER step, composition cycle/depth limits -- are not expressible here and are enforced by load-playbooks.sh, which remains the single source of truth for validation.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "Bare-string step: shorthand for {\"skill\": \"<name>\"}, unchanged original behavior. An all-bare-string playbook loads byte-for-byte the same as it did before E53_S03, and a bare-string step is never rewritten into object form in the loader's output."
+          },
+          { "$ref": "#/definitions/stepObject" }
+        ]
+      },
       "minItems": 2
+    }
+  },
+  "definitions": {
+    "stepObject": {
+      "type": "object",
+      "description": "A StepObject step (E53_S03_T01). Carries EXACTLY ONE of the mutually exclusive target fields `skill` or `playbook` -- a step naming both, or naming neither, is rejected by load-playbooks.sh.",
+      "additionalProperties": false,
+      "oneOf": [
+        { "required": ["skill"], "not": { "required": ["playbook"] } },
+        { "required": ["playbook"], "not": { "required": ["skill"] } }
+      ],
+      "properties": {
+        "skill": {
+          "type": "string",
+          "description": "Invokes a single skill, same as a bare string. Value is a canonical skill directory name (see the `steps` description above)."
+        },
+        "playbook": {
+          "type": "string",
+          "description": "Composes another playbook by ID (E53_S05). Resolved and flattened in place at load time, so the emitted catalog's `steps` array never contains a raw playbook-type entry. Existence validation, cycle detection, and a configurable nesting-depth limit (project/configs/playbook-config.json's max_composition_depth, default 3) all apply."
+        },
+        "instruction": {
+          "type": "string",
+          "description": "Static natural-language text appended to this step's own invocation message."
+        },
+        "forward_from": {
+          "type": "string",
+          "description": "Names an EARLIER step in the same playbook (by that step's skill name) whose typed output becomes this step's actual invocation input. The named source's SKILL.md must declare a non-empty output_types -- a skill declaring nothing can never be a forward source. Transparent across composition boundaries, since composition resolution runs before this validation."
+        },
+        "resolve": {
+          "type": "string",
+          "description": "Natural-language instructions for reshaping/filtering/type-bridging the value forwarded into this step (e.g. \"pick the first three items\"). A step carrying both `resolve` and `playbook` is rejected at load time: resolve may never pre-authorize a downstream confirmation gate (E53_S07's safety review, permanently rejected)."
+        },
+        "conditional": {
+          "type": "object",
+          "description": "Runs this step only when the predicate holds against a named earlier step's captured output; otherwise the step is marked `skipped` and the chain continues without halting (E53_S04_T02). Unlike forward_from, this does NOT require the depended-on step to declare output_types.",
+          "additionalProperties": false,
+          "required": ["depends_on", "predicate"],
+          "properties": {
+            "depends_on": {
+              "type": "string",
+              "description": "Names an EARLIER skill step in this playbook whose captured output the predicate is evaluated against.",
+              "minLength": 1
+            },
+            "predicate": {
+              "type": "string",
+              "description": "The recognized predicate grammar, whose single source of truth is skills/jenga/scripts/run-playbook-step.sh: non_empty | empty | equals:<value> | not_equals:<value>.",
+              "pattern": "^(non_empty|empty|equals:.+|not_equals:.+)$"
+            }
+          }
+        },
+        "version": {
+          "type": "string",
+          "description": "RESERVED, currently a no-op. Accepted and passed through unchanged; not acted upon by anything yet. Exists so a future schema revision has a place to declare itself without a retroactive migration of every existing playbook."
+        },
+        "schema_version": {
+          "type": "string",
+          "description": "Alternate key name for `version`. Same reserved no-op semantics."
+        }
+      }
     }
   }
 }
