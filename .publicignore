@@ -258,6 +258,12 @@ tests/mirror-orphaned-twin-rewrite.bats
 tests/helpers/mirror-orphaned-twin-rewrite.sh
 # tests/helpers/router-route.mjs: drives the router that router-prefix-guard.bats imports
 tests/helpers/router-route.mjs
+# tests/dev-done-post-sync-commit.bats: runs skills/j-dev-done/scripts/commit-post-sync.sh,
+# which lives under the fully-private skills/j-dev-done/ blocklisted above. Synced to the
+# public mirror without its subject by the 2026-09-18 run (81b7f8b6), where all 14 of its
+# cases exit 127 (command not found) and break `npm test` — the exact failure mode the
+# "a test may never outlive its subject" rule at the top of this file exists to prevent.
+tests/dev-done-post-sync-commit.bats
 
 # --- Private-tooling playbooks and their tests (E50_S13, user decision 2026-09-10) ---
 # brainstorm-to-mirror terminates in `mirror-public`, a deliberately private skill blocklisted

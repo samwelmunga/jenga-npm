@@ -559,6 +559,54 @@ change needed, since `GET /v1/board` already returns full `_content` per item. `
 acceptance criteria (collapse/expand is "the only interactive affordance added") was amended in the
 same session to explicitly permit this overlay as a second, compatible affordance.
 
+## Playbook Type Descriptors & Runtime Verification (E62)
+Filed via `/j-deep-dive` then `/j-brainstorm` (2026-09-19); design documents co-located at
+`project/documentation/plans/systemwide-type-declaration-system.md` (plus its scrutiny and
+solution-assessment companions). The originating request was a *systemwide* object type declaration
+policy generalized from playbook `output_types`. Scrutiny rated the full three-layer proposal
+CRITICAL (3/10 feasibility) and the scope was deliberately cut to what is verifiable and
+deterministic.
+
+**What the investigation established.** Three defects, each verified against code rather than
+assumed: (1) `grep -rn "input_types"` returns **0 hits** repo-wide — no skill declares what it
+*accepts*, so `load-playbooks.sh` can only check that a `forward_from` source declares *something*
+(`:1054`), never that the two ends are compatible; (2) `run-playbook-step.sh` stores a step's typed
+output verbatim (`:723-726`) and contains **zero** references to `output_types` or any classifier
+resolution, so nothing verifies a declared type against the real value; (3)
+`templates/playbook-types.json` — the "canonical type vocabulary" — is **parsed by nothing**,
+appearing in a single comment line, so `output_types: banana` loads cleanly today.
+
+**The shape that survived.** Each registry type gains a **descriptor** (optional `verify` rule,
+optional `normalize` list of named transforms), making the registry load-bearing for the first time
+while keeping type addition a **data-only** edit. `E62_S01` builds the descriptors, a deterministic
+validator, the `input_types` field, and the load-time compatibility check; `E62_S02` wires
+verification into the runner at the `advance … passed` chokepoint. Both land as **one scope** — the
+split is decomposition, not phasing.
+
+**Key design decision — conditional types need no new plumbing.** The runner never needs to know
+which `{when, type}` branch fired, only whether the value satisfies **at least one** declared branch.
+This designs out the confirmed-missing classifier-resolution work that was the largest cost driver in
+the original proposal.
+
+**What was rejected, and why it matters.** The user's original "type skill as formatter/converter/
+verifier" was cut to *verifier* only. LLM-driven **auto-convert was rejected**: repairing
+`text` → `id_list` is semantic extraction, which would put non-determinism exactly where correctness
+matters most and would make a declared type an aspiration enforced by a corrector rather than an
+honest producer claim — reversing `E53_S11`. **Warn-and-continue was rejected** (normalization of
+deviance), which in turn removed the need for a **dev/prod primitive** that does not exist anywhere in
+`project/configs/` and is ambiguous for an npm-distributed framework. `E53_S11`'s honesty-over-breadth
+policy is **kept**, scoped to `output_types`; `input_types` may be broadly declared because an input
+declaration cannot disarm the forward-source check. `text` is a verification **no-op** but explicitly
+**not** an `any` in the compatibility lattice.
+
+**Deliberately deferred**, each requiring its own ratification: sender objects, queue trigger records,
+`events.json` entries, rapports, and board frontmatter — the other boundary objects with hand-rolled,
+unshared validation. `templates/` beyond the registry itself is out of scope, its population being
+largely unreachable by a frontmatter-first approach. The epic is committed to with its near-term blast
+radius understood: the entire `forward_from` surface in the repo today is **one edge**
+(`j-reconcile` → `j-todo` in `board-hygiene.json`).
+
+
 ## Conventions
 - Board items use `E##_S##_T##` naming convention
 - Story format requires `## Acceptance Criteria` and `## Definition of Done` with `- [ ]` checkboxes

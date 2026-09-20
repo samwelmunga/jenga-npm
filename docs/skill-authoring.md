@@ -417,6 +417,7 @@ examples:                            # optional — natural-language prompts for
   - "<example prompt 2>"
 minimum_permission_level: <1-5>       # optional — minimum session permission level required to run this skill
 output_types: <type> | [{when, type}] # optional — declares this skill's forwardable output type(s) for playbooks (E53_S03_T02)
+input_types: <type> | [{when, type}]  # optional — declares the type(s) this skill accepts as forwarded input (E62_S01_T03)
 ---
 ```
 
@@ -431,6 +432,7 @@ output_types: <type> | [{when, type}] # optional — declares this skill's forwa
 | `examples` | string[] | ❌ | Natural-language prompt strings that should trigger this skill. Used by the Jenga Router for semantic matching. |
 | `minimum_permission_level` | integer | ❌ | Minimum session permission level (`1`-`5`) required to run this skill. Skills that set this field must gate execution via `scripts/check-permission-level.sh`. |
 | `output_types` | string \| `{when, type}`[] | ❌ | Declares what type(s) of forwardable output this skill produces, for `/jenga` playbook `forward_from` steps to reference. See "Playbooks — StepObject Schema and `output_types`" below. |
+| `input_types` | string \| `{when, type}`[] | ❌ | Declares what type(s) of forwarded input this skill accepts, for a `/jenga` playbook step that names this skill as a `forward_from` **consumer**. Same two shapes as `output_types`. See "`input_types`" below. |
 
 ---
 
@@ -566,6 +568,133 @@ position.
   (`id_list`, conditionally via `when: detect-nl-intent`), `j.reconcile` (`id_list`), `j.todo`
   (`id_list`), and `j.doc-sync` (`file_list`). `j.doc-sync` is the first producer of `file_list`,
   which until `E53_S11` was a type in the vocabulary that nothing emitted.
+
+---
+
+### `input_types`
+
+An optional field (`E62_S01_T03`) declaring what type(s) of **forwarded input** this skill accepts.
+Where `output_types` describes what a skill can hand to a later step, `input_types` describes what a
+skill is willing to be handed. It exists so a `/jenga` playbook's `forward_from` wiring can be
+checked for **compatibility** between the two ends, rather than only for the producer having
+declared *something*.
+
+It takes the **same two shapes** as `output_types`:
+
+- a **single static type string** — this skill accepts the same input type however it is invoked:
+  ```yaml
+  input_types: id_list
+  ```
+- a **list of `{when, type}` objects** — what this skill accepts depends on how it was invoked. Each
+  `when` is either one of the two built-in predicates (`argument_empty` / `argument_nonempty`) or a
+  named reference to this skill's own classifier script under its `scripts/` directory, exactly as
+  for `output_types`:
+  ```yaml
+  input_types:
+    - when: argument_nonempty
+      type: id_list
+  ```
+
+**Status: declared, not yet enforced.** As of `E62_S01_T03` this field is documented and declarable
+only. Load-time compatibility checking — validating declared values against the registry vocabulary
+and rejecting a `forward_from` whose source output type the consumer does not accept — is
+`E62_S01_T04`'s scope, in `skills/jenga/scripts/load-playbooks.sh`. Runtime verification of an actual
+value against its declared type is `E62_S02`'s scope, in `skills/jenga/scripts/run-playbook-step.sh`.
+Adding `input_types` to a skill today changes no behavior; do not read a declaration as a guarantee
+that anything currently checks it.
+
+**Declaring nothing stays valid.** A consumer with no `input_types` retains today's behavior: the
+forward is allowed on the existing declaredness check of the *source* alone. Adoption is additive
+and never retroactively breaks an existing playbook.
+
+#### How honesty-over-breadth applies — scoped to `output_types` only (`E62`, ratified 2026-09-19)
+
+`E53_S11`'s **honesty over breadth** policy is **kept**, unchanged, and it is scoped to
+`output_types`. It does **not** extend to `input_types`.
+
+`input_types` **may be broadly declared.** The reason is structural, not a matter of taste: an input
+declaration **cannot disarm the forward-source check.** That check asks whether a *source* declares
+an `output_types` — and no amount of input declaration, on any skill, affects the answer. The harm
+`E53_S11` guarded against was blanket `output_types: text` turning every skill into a legal forward
+source; a blanket `input_types` declaration creates no equivalent opening, because it makes nothing a
+legal *source*. At worst an over-broad `input_types` makes a consumer accept a forward it cannot
+really use, which is a narrower and more visible failure than silently legalising every producer.
+
+**Record this scoping explicitly whenever either field is discussed.** The two fields have
+*different* adoption policies — partial-by-policy for `output_types`, broad-is-fine for
+`input_types` — and the single most likely way this contract degrades is someone conflating them and
+either (a) suppressing legitimate `input_types` declarations in the name of honesty-over-breadth, or
+(b) citing `input_types`' breadth as precedent for blanket `output_types` adoption. Neither follows.
+
+#### The `text` rule — both halves, and they must stay together
+
+`text` has two properties that are easy to state separately and wrong to separate. **Write them
+down together; separating them in the prose is exactly how this rule gets misread later.**
+
+1. **`text` is a verification no-op.** In the type registry its descriptor carries
+   `"verify": null`, because prose has no checkable shape. A runtime validator asked to verify a
+   `text` value always reports conforming and never fails. There is nothing to check, so nothing is
+   checked.
+
+2. **`text` is explicitly *not* an `any` in the compatibility lattice.** Being unverifiable at
+   runtime says nothing about what it is compatible with at load time. `text` is a specific type
+   that matches `text`; it is not a wildcard that satisfies every `input_types`, and it is not a
+   wildcard `input_types` that accepts every `output_types`.
+
+**Why half 2 does not follow from half 1.** A universal acceptor would make every `text`-declaring
+skill compatible with everything — precisely the disarming that `E53_S11` rejected blanket adoption
+to prevent. If `text` were an `any`, declaring `input_types: text` on a skill would be a way to
+switch off compatibility checking for every forward into it, and declaring `output_types: text`
+would make any source legal into any consumer. The load-time check would then be decorative. So:
+**unverifiable at runtime, yes; universal acceptor at load time, no.**
+
+#### The normalize-versus-convert boundary
+
+The type registry's descriptors carry an optional `normalize` list (see "Playbook Type Registry
+Governance" below). `normalize` covers exactly one thing, and the boundary is deliberate:
+
+- **Normalization — in scope.** `"E12_S03, E12_S04"` → two ids. This is **mechanical and lossless**:
+  the ids are already present in the value, and getting to them is a fixed sequence of named
+  transforms (`split_on_comma`, `trim`, `drop_empty`) drawn from a **closed vocabulary**. Nothing is
+  invented and nothing is discarded.
+
+- **Semantic extraction — deliberately unrepresentable.** `"I added three tasks"` → ids is not a
+  reshaping of the value; the ids are simply not in it. Recovering them means inferring what the
+  producer *meant*. The descriptor format is built so this **cannot be written down**: `normalize`
+  accepts only named transforms from the closed vocabulary, so there is no slot in which to put a
+  free-text instruction like "extract the ids the skill meant to return".
+
+**LLM-driven auto-convert was considered and rejected** (`E62`, ratified 2026-09-19 — the epic's
+Decisions table records the ruling; the analysis is in
+`project/documentation/plans/systemwide-type-declaration-system.md`, tension **T4**). It was not
+deferred or left as a gap to close later — it was rejected on principle.
+
+The reason: auto-convert-and-warn **would make a declared type an aspiration enforced by a corrector
+rather than an honest producer claim**, reversing `E53_S11`. If a skill declaring `id_list` can emit
+prose and have a repair step quietly turn it into ids, then `output_types: id_list` no longer states
+what the skill produces — it states what something downstream will make the output look like. That is
+the opposite of the honesty principle, and it would put non-deterministic LLM judgment at exactly the
+point where determinism matters most. A value that does not conform after normalization is therefore
+**non-conforming, by design** — not a case awaiting a smarter corrector.
+
+**Boundary against `resolve`.** A playbook step's `resolve` field (`E53_S06`) does natural-language
+reshaping of a forwarded value and remains the place where author-directed, per-step judgment lives.
+`normalize` is its deterministic opposite: type-level, registry-declared, closed-vocabulary, and
+identical on every run. Neither is a substitute for the other, and `normalize` must never grow
+`resolve`'s expressiveness.
+
+**Guidelines:**
+- Declare the type value(s) from the canonical vocabulary in `templates/playbook-types.json` — see
+  "Playbook Type Registry Governance" below before reaching for a type that is not there.
+- Declare `input_types` on any skill that can meaningfully be the **consumer** end of a
+  `forward_from`. Unlike `output_types`, there is no reason to hold back (see the scoping subsection
+  above).
+- Declare what the skill genuinely accepts, not the broadest type that would make a wiring pass. The
+  field is only useful to the author of the *next* playbook if it is true.
+- Current adopters, as of `E62_S01_T03`: `j.todo` (`id_list`). That is the whole list, and
+  deliberately so — the only `forward_from` in the repo today is `j-reconcile` (`id_list`) →
+  `j-todo`, in `skills/jenga/playbooks/board-hygiene.json`, so `j.todo` is the single consumer whose
+  declaration gives the future load-time check a live edge to guard.
 
 ---
 
@@ -951,6 +1080,46 @@ already established for `PROJECT_SUMMARY.md`. Registry additions or changes rout
 normal board-item (task) process — never an ungoverned direct edit to that file. If a skill you're
 authoring needs a type the registry doesn't yet have, raise it as a task rather than adding the
 entry yourself.
+
+#### The type descriptor format (`verify` / `normalize`)
+
+A registry entry is not just a name. Each type carries a **descriptor** — an optional `verify` rule
+and an optional `normalize` list — which is what lets a deterministic validator answer "does this
+value conform to this type?" without any agent judgment. Illustrative shape:
+
+```json
+{
+  "types": {
+    "text":      { "verify": null },
+    "id_list":   { "verify": { "per_line": "^E\\d+(_S\\d+(_T\\d+)?)?$" },
+                   "normalize": ["split_on_comma", "trim", "drop_empty"] },
+    "file_list": { "verify": { "per_line": "^\\S" },
+                   "normalize": ["trim", "drop_empty"] }
+  }
+}
+```
+
+**`templates/playbook-types.json` is the authoritative source for the exact key names and rules** —
+the block above is illustrative and this document is not a second copy of the registry. The
+descriptor conversion is `E62_S01_T01`'s deliverable; the deterministic validator that consumes it is
+`scripts/validate-typed-object.sh` (`E62_S01_T02`).
+
+- **`verify`** — the rule a value must satisfy to conform. `null` means "no checkable shape", which
+  is a real, deliberate value and not a missing rule: `text` carries `"verify": null`. See "The
+  `text` rule — both halves, and they must stay together" above for why that does **not** make `text`
+  a universal acceptor.
+- **`normalize`** — an ordered list of **named transforms from a closed vocabulary**, applied when a
+  value fails `verify`, to see whether a conforming value falls out. The format is deliberately
+  incapable of expressing free-text or semantic-extraction instructions. See "The
+  normalize-versus-convert boundary" above for where that line sits and why auto-convert was
+  rejected rather than deferred.
+
+**Governance is unchanged, and extension stays data-only.** Adding a type — or adding a `verify` rule
+or a `normalize` transform to an existing one — is an edit to `templates/playbook-types.json` and
+**requires no code change**, which is the property the file's own header has always asserted. It
+routes through the Scrum Master via the normal board-item process, exactly as described above for the
+vocabulary itself. The descriptor format changes what a registry entry *contains*; it does not change
+who owns it or how a change gets made.
 
 ---
 
