@@ -359,10 +359,15 @@ no-op, and former L110-113's `jenga`/`jenga-permission-level` hard error) are **
 whole script is gone — there is no longer a second hand-maintained exception list to reconcile with
 this document's "Permanent exceptions" table above; that table is the sole remaining source of truth
 for the three exceptions. `tests/generate-j-alias.bats` was deleted alongside it — there is no
-surviving script for the file to test — and `tests/audit-twin-divergence.bats`'s generator-invoking
-fixture setup (its `setup()` used to `run_generator()` against a sandboxed copy of the real script) was
-replaced with a hand-written fixture encoding the same divergence shape the generator used to produce,
-since that suite can no longer invoke a deleted script to build its own test fixtures.
+surviving script for the file to test — and the twin-divergence audit's own bats suite had its
+generator-invoking fixture setup (its `setup()` used to `run_generator()` against a sandboxed copy of
+the real script) replaced with a hand-written fixture encoding the same divergence shape the generator
+used to produce, since that suite could no longer invoke a deleted script to build its own test
+fixtures. That audit suite has itself since been retired, along with the twin-parity gate it covered
+and the audit script beneath it — see `E42_S07` and the "Retired" section of
+`docs/public-mirror-content-parity.md`. The reason is the same one that retired the generator, one
+step further along: with no bare-name directory left anywhere, there is no source to reconstruct a
+twin from and no pair to audit.
 
 **Decision (`E50_S14_T02`, fix/retain): `scripts/apply-j-prefix.sh` is kept**, with two fixes. Its
 directory-name↔frontmatter-name check (former L144-148) now accepts the settled `j-<name>` directory /
@@ -557,8 +562,8 @@ position.
 
 **Guidelines:**
 - The declared type value(s) should be one of the entries in the canonical type vocabulary,
-  `templates/playbook-types.json` (`text`, `id_list`, `file_list` as of this writing) — see
-  "Playbook Type Registry Governance" below before adding a new type.
+  `templates/playbook-types.json` (`text`, `id_list`, `file_list`, `ranked_list` as of this writing) —
+  see "Playbook Type Registry Governance" below before adding a new type.
 - Only declare `output_types` if this skill genuinely produces output another playbook step could
   meaningfully consume. A skill with no declared `output_types` simply cannot be a playbook
   `forward_from` source — this is not a defect to fix proactively for every skill.
@@ -595,17 +600,87 @@ It takes the **same two shapes** as `output_types`:
       type: id_list
   ```
 
-**Status: declared, not yet enforced.** As of `E62_S01_T03` this field is documented and declarable
-only. Load-time compatibility checking — validating declared values against the registry vocabulary
-and rejecting a `forward_from` whose source output type the consumer does not accept — is
-`E62_S01_T04`'s scope, in `skills/jenga/scripts/load-playbooks.sh`. Runtime verification of an actual
-value against its declared type is `E62_S02`'s scope, in `skills/jenga/scripts/run-playbook-step.sh`.
-Adding `input_types` to a skill today changes no behavior; do not read a declaration as a guarantee
-that anything currently checks it.
+**Status: enforced at load time (`E62_S01_T04`).** `skills/jenga/scripts/load-playbooks.sh` runs two
+checks driven by this field, so a declaration is live the moment you write it. Both are about
+**declarations only** — what a `SKILL.md` claims — never about an actual runtime value:
 
-**Declaring nothing stays valid.** A consumer with no `input_types` retains today's behavior: the
-forward is allowed on the existing declaredness check of the *source* alone. Adoption is additive
-and never retroactively breaks an existing playbook.
+- **Registry vocabulary.** Every type value a skill declares, in `input_types` or `output_types`,
+  must be a key in `templates/playbook-types.json`. This covers every skill named by a step in the
+  playbook's flattened step list — bare-string steps included, not only `forward_from` sources — so
+  `input_types: banana` is caught even on a playbook with no forward edges at all. The vocabulary is
+  always read from that file; the loader hardcodes no type name, so adding a type there is a
+  data-only edit.
+- **Output/input compatibility.** Where a step declares `forward_from`, the source's declared
+  `output_types` must be accepted by the consumer's `input_types` — the consumer being this step's
+  own skill. How that acceptance is evaluated is the all-branches rule, below.
+
+Either check failing **skips that one playbook**, with a `Warning:` on stderr naming the offending
+value, the field it came from, and — for the `{when, type}` form — the branch. It does not abort the
+loader or affect any other playbook.
+
+Runtime verification of an actual *value* against its declared type is a separate concern and is not
+built yet: that is `E62_S02`'s scope, in `skills/jenga/scripts/run-playbook-step.sh`, via
+`scripts/validate-typed-object.sh`. The loader never calls it and never sees a value — so a
+declaration is a checked claim about wiring, not yet a checked claim about output.
+
+**Declaring nothing stays valid — binding.** A consumer with no `input_types` at all retains exactly
+the behavior it had before enforcement: the forward is allowed on the declaredness check of the
+*source* alone, and the compatibility check short-circuits before any comparison is made. The
+**absence** of a declaration is never a violation. This is a distinction the loader draws in code
+rather than only in prose — "declares nothing" and "declares branches that agree on nothing" (see
+below) are different states with different outcomes. Adoption is additive and never retroactively
+breaks an existing playbook.
+
+#### The all-branches rule — how a conditional consumer is evaluated (`E62_S01_T04`, ratified 2026-09-19)
+
+Either side of a forward may be a single static type string or a `{when, type}` list. The load-time
+check never needs to know which branch will actually fire on either side, and never executes a
+classifier script to find out:
+
+> **Compatible iff every type the source could produce is accepted under *every* consumer branch** —
+> the source's type set must be a subset of the **intersection** of the consumer's accepted types.
+
+The source half of that — every source branch must produce a type the consumer accepts, and a branch
+that does not rejects the playbook, naming that branch — is the rule as `E53` originally specified
+it. The **consumer** half, what a conditional `input_types` means for compatibility, was left open
+by `E62_S01_T03` and ratified on 2026-09-19 as the conservative dual above.
+
+**Mechanically, each consumer branch accepts exactly one type.** So the intersection is `{t}` when
+every branch declares the same `t`, and **empty when the branches disagree**. An empty intersection
+accepts nothing at all — every forward into that consumer is rejected.
+
+**A disagreeing two-branch consumer therefore accepts nothing.** The declaration below is
+syntactically valid and passes the registry-vocabulary check, and is still useless as a consumer:
+
+```yaml
+# skills/j-example/SKILL.md — accepts NOTHING.
+# Each branch is individually fine; their intersection is empty.
+input_types:
+  - when: argument_empty
+    type: id_list
+  - when: argument_nonempty
+    type: file_list
+```
+
+`{id_list} ∩ {file_list} = {}`, so a `forward_from` naming `j.example` as its consumer is rejected
+whatever the source declares — including a source declaring `id_list`, which one of the two branches
+plainly accepts on its own.
+
+**That is the intended conservative outcome, not a bug — do not "fix" it.** If you find a consumer
+that accepts nothing, the declaration is what is wrong, not the loader.
+
+**And if you wanted a union, the shape cannot express one.** There is deliberately no unconditional
+multi-type form for either field (see "The constraint that forces the narrowing" under
+`output_types` above), and a `{when, type}` list is not a union — it is a per-invocation branch, read
+here under a universal quantifier. A conditional `input_types` is therefore only ever useful when
+every branch declares the *same* type, which is to say it is rarely what you want: declare the
+single type the skill really consumes, or split the two behaviours into separate skills.
+
+**Why the rule is this strict.** Which consumer branch applies at runtime is no more knowable at
+load time than which source branch applies, so the only answer that is safe regardless of both is
+the one that holds under both universally — and it stays fully deterministic, executing no
+classifier script to find out. No skill in this repository declares a conditional `input_types`
+today, so the ruling costs nothing now; it exists to close the ambiguity before it can bite.
 
 #### How honesty-over-breadth applies — scoped to `output_types` only (`E62`, ratified 2026-09-19)
 
@@ -694,7 +769,7 @@ identical on every run. Neither is a substitute for the other, and `normalize` m
 - Current adopters, as of `E62_S01_T03`: `j.todo` (`id_list`). That is the whole list, and
   deliberately so — the only `forward_from` in the repo today is `j-reconcile` (`id_list`) →
   `j-todo`, in `skills/jenga/playbooks/board-hygiene.json`, so `j.todo` is the single consumer whose
-  declaration gives the future load-time check a live edge to guard.
+  declaration gives the load-time compatibility check a live edge to guard.
 
 ---
 
@@ -751,8 +826,8 @@ bash "$([ -f scripts/<name>.sh ] && echo scripts/<name>.sh || echo node_modules/
 ```
 
 This is the same monorepo-checkout-vs-installed-package fallback already used programmatically
-inside scripts themselves (`skills/init/scripts/init.sh`'s `PKG_ROOT` resolution,
-`skills/uncharted/scripts/elicitation-state.sh`'s `WITH_LOCK` resolution) — just expressed as a
+inside scripts themselves (`skills/j-init/scripts/init.sh`'s `PKG_ROOT` resolution,
+`skills/j-uncharted/scripts/elicitation-state.sh`'s `WITH_LOCK` resolution) — just expressed as a
 self-contained prose idiom since a `SKILL.md` instruction has no `$SCRIPT_DIR` of its own to climb
 from.
 
@@ -876,7 +951,16 @@ on disk:
    example this check was built against — see `skills/jenga/scripts/load-playbooks.sh`'s header for
    the full end-to-end trace this claim is based on.
 
-A `forward_from` failing any of these three checks causes the **whole playbook** to be
+4. **Type compatibility** (`E62_S01_T04`) — when the consuming step's own skill declares
+   `input_types`, every type the source could produce must be accepted by it. The source's declared
+   type set must be a subset of the **intersection** of the consumer's accepted types; see
+   "The all-branches rule — how a conditional consumer is evaluated" under `input_types` above for
+   how that intersection is computed and why a consumer whose branches disagree accepts nothing.
+   Like check 3, this is decided entirely from declarations on disk — no classifier script is ever
+   run. A consumer that declares **no** `input_types` skips this check entirely and behaves exactly
+   as it did before this check existed; absence of a declaration is not a violation.
+
+A `forward_from` failing any of these four checks causes the **whole playbook** to be
 rejected (stderr warning, skipped) — never just the offending step, consistent with this loader's
 existing "a chain with a broken link is not a usable chain" granularity.
 
@@ -1075,7 +1159,7 @@ authored by the wizard; hand-edit the written file directly for those. A project
 ### Playbook Type Registry Governance
 
 The canonical playbook type vocabulary lives in `templates/playbook-types.json` (currently `text`,
-`id_list`, `file_list`). It is **owned by the Scrum Master**, mirroring the same ownership pattern
+`id_list`, `file_list`, `ranked_list`). It is **owned by the Scrum Master**, mirroring the same ownership pattern
 already established for `PROJECT_SUMMARY.md`. Registry additions or changes route through the
 normal board-item (task) process — never an ungoverned direct edit to that file. If a skill you're
 authoring needs a type the registry doesn't yet have, raise it as a task rather than adding the
@@ -1120,6 +1204,37 @@ or a `normalize` transform to an existing one — is an edit to `templates/playb
 routes through the Scrum Master via the normal board-item process, exactly as described above for the
 vocabulary itself. The descriptor format changes what a registry entry *contains*; it does not change
 who owns it or how a change gets made.
+
+#### The `ranked_list` type (`E63_S01_T02`)
+
+`ranked_list` represents a 1-indexed, numbered list of `<id> — <title>` lines — the shape a shared
+eligibility-rendering script (`E63_S01_T01`) produces for `/dooo`'s own step 3 and for `/todo
+--ranked-list`'s non-interactive one-shot output. For example:
+
+```
+1. E15_S04 — Fix jenga attach and permission-level templates clobbering the WorktreeCreate commit-guard hook
+2. E20_S01 — Schema, Templates & Coarse Graph Foundation
+```
+
+Each line is a leading integer index, a literal `. ` separator, an id-like token, a literal ` — `
+(em dash, U+2014, padded by single spaces) separator, and a non-empty title. No trailing
+menu/terminator line (e.g. `/dooo`'s interactive "Done" option) is part of the type's shape — that is
+UI framing a consumer adds on top, never something the type itself describes.
+
+- **`verify`** — `{"per_line": "^[0-9]+\\. [^[:space:]]+ — .+$"}`. This genuinely checks the shape
+  (index, separator, id-like token, em-dash separator, title) rather than accepting arbitrary text;
+  a line missing the leading index, using the wrong separator, or missing a title all fail. The
+  id-like token is matched generically (`[^[:space:]]+`), not against the stricter board-ID grammar
+  `id_list` uses (`^E[0-9]+(_S[0-9]+(_T[0-9]+)?)?$`) — `ranked_list` describes a rendering *shape*,
+  not a board-ID list, so it deliberately does not assume every ranked entry names a Jenga board ID.
+- **`normalize`** — `[]`. The shape has a strict, fixed per-line structure with nothing mechanical to
+  do before verification (no comma-splitting, no case-folding); a value either already has this shape
+  or it doesn't. This mirrors `text`'s precedent of pairing a real `verify` rule (or none, in `text`'s
+  case) with empty `normalize` rather than manufacturing a transform step just to have one.
+- **Naming** — `ranked_list` (snake_case, matching `text`/`id_list`/`file_list`). The user-suggested
+  alternatives were considered and rejected: `RankedList` breaks the registry's snake_case
+  convention, and `SimpleRanking` reads more like a scoring-algorithm name and obscures that the
+  value is a *list* of ranked entries.
 
 ---
 

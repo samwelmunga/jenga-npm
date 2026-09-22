@@ -68,8 +68,11 @@ import { join } from "path";
 import { pathToFileURL } from "url";
 
 // The three permanent exceptions to the `j-<name>` canonical directory convention — see
-// docs/skill-authoring.md's Canonical Naming Contract and scripts/audit-twin-divergence.sh's
-// NEVER_TWINNED list, which this mirrors.
+// docs/skill-authoring.md's Canonical Naming Contract, and scripts/repoint-skill-refs.sh's
+// REPOINT_SKILL_REFS_EXCEPTIONS list, which this mirrors. (It previously mirrored the
+// twin-divergence audit script's NEVER_TWINNED tuple; that script was deleted when
+// E42_S07 retired the twin-parity gate, so both this comment and the cross-check in
+// tests/load-nl-catalog-twin-resolution.bats were repointed at the surviving list.)
 const NEVER_TWINNED = new Set(["jenga", "jenga-permission-level", "index"]);
 
 function canonicalSkillDir(name) {

@@ -145,22 +145,40 @@ run_loader() {
 }
 
 # --------------------------------------------------------------
-# NEVER_TWINNED cross-check against scripts/audit-twin-divergence.sh's own exception
-# list, per this task's second acceptance criterion. Extracted textually from both
-# source files rather than hand-copied, so a future edit to either list makes this test
-# fail instead of silently drifting.
+# NEVER_TWINNED cross-check against the repo's surviving permanent-exception list, per
+# this task's second acceptance criterion. Extracted textually from both source files
+# rather than hand-copied, so a future edit to either list makes this test fail instead
+# of silently drifting.
+#
+# Cross-check partner, and why it changed (E42_S07_T01, 2026-09-20)
+# -----------------------------------------------------------------
+# This test originally compared the loader's set against the twin-divergence audit
+# script's own NEVER_TWINNED tuple. That script was deleted when E42_S07 retired the
+# twin-parity gate -- its entire bare/twin-pair input population went to zero
+# permanently when E50_S15_T04 deleted the bare-name skill directories. The cross-check
+# itself is still worth having (the loader's exception set must never drift unnoticed),
+# so it is repointed rather than deleted, at scripts/repoint-skill-refs.sh's
+# REPOINT_SKILL_REFS_EXCEPTIONS -- a surviving list that file labels its "Single named
+# source", and that scripts/delete-bare-skill-dirs.sh already documents itself as
+# mirroring. Same three names, same textual-extraction discipline, one fewer deleted
+# dependency.
 # --------------------------------------------------------------
 
-@test "NEVER_TWINNED in load-nl-catalog.js matches audit-twin-divergence.sh's exception list" {
-  local loader_set audit_set
+@test "NEVER_TWINNED in load-nl-catalog.js matches repoint-skill-refs.sh's exception list" {
+  local loader_set exceptions_set
   loader_set=$(grep -o 'NEVER_TWINNED = new Set(\[[^]]*\])' "$LOADER" \
     | node -e 'const m=require("fs").readFileSync(0,"utf8").match(/\[(.*)\]/)[1]; console.log(eval("["+m+"]").sort().join(","))')
-  audit_set=$(grep -A2 '^NEVER_TWINNED = (' "$REPO_ROOT/scripts/audit-twin-divergence.sh" \
+  exceptions_set=$(grep -o 'REPOINT_SKILL_REFS_EXCEPTIONS=([^)]*)' "$REPO_ROOT/scripts/repoint-skill-refs.sh" \
     | node -e '
       const text = require("fs").readFileSync(0,"utf8");
       const m = text.match(/\(([^)]*)\)/s);
-      const items = [...m[1].matchAll(/"([^"]+)"/g)].map(x => x[1]);
+      const items = m[1].trim().split(/\s+/).filter(Boolean);
       console.log(items.sort().join(","));
     ')
-  [ "$loader_set" = "$audit_set" ]
+  # Both extractions must actually find something. Without this, a rename on either
+  # side would empty both captures and the equality below would pass vacuously --
+  # exactly the silent drift this test exists to prevent.
+  [ -n "$loader_set" ]
+  [ -n "$exceptions_set" ]
+  [ "$loader_set" = "$exceptions_set" ]
 }

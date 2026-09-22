@@ -40,7 +40,7 @@ This file is generated/synced by `scripts/generate-j-alias.sh status` from `skil
 `scripts/` directory of its own comparable to `/self-sync`'s, so invoke the shared pipeline
 directly rather than adding a third skill-local wrapper script:
    ```
-   bash scripts/mark-deployed.sh
+   bash "$([ -f scripts/mark-deployed.sh ] && echo scripts/mark-deployed.sh || echo node_modules/@jenga-ai/agent/scripts/mark-deployed.sh)"
    ```
    This defaults to invoking its own sibling `scripts/compute-deploy-reconcile.sh`, which
    discovers any not-yet-reconciled `vX.Y.Z-stage`/`vX.Y.Z` tags on the public `jenga-npm` repo

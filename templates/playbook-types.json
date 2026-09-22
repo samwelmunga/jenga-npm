@@ -31,6 +31,12 @@
         "trim",
         "drop_empty"
       ]
+    },
+    "ranked_list": {
+      "verify": {
+        "per_line": "^[0-9]+\\. [^[:space:]]+ — .+$"
+      },
+      "normalize": []
     }
   }
 }

@@ -219,10 +219,17 @@ PY
 
   # This is the value the forward_from step is invoked WITH -- the conditional deciding to run
   # and the forwarded value actually being retrievable are two separate claims.
+  #
+  # E62_S02_T01: j-reconcile declares `output_types: id_list`, and this raw comma-joined value is
+  # ONE line, so id_list's `per_line` rule does not match it as given -- it only conforms after
+  # the type's own `normalize` ([split_on_comma, trim, drop_empty]) splits it into two lines.
+  # get-output therefore now (correctly) returns the NORMALIZED value that was actually stored,
+  # not the raw pre-normalization string -- this is runtime type verification doing exactly what
+  # it is for, not a regression in what forward_from resolves.
   run bash "$RPS" get-output "$STATE_FILE" "j-reconcile"
   [ "$status" -eq 0 ]
   assert_output_contains '"status": "found"'
-  assert_output_contains 'E53_S11_T01,E53_S11_T02'
+  assert_output_contains "$(printf 'E53_S11_T01\\nE53_S11_T02')"
 }
 
 # -----------------------------------------------------------------------------

@@ -4,7 +4,7 @@
  * Resolves the invoking (consumer) project's root directory for the dashboard API, so that
  * `project/app/api/parsers/*.js` never has to compute its data root via a fixed
  * `path.resolve(__dirname, '../../../...')` climb — the same defect pattern `E46_S01` already fixed
- * for `/init` (see `skills/init/scripts/init.sh`'s `PKG_ROOT` idiom and
+ * for `/init` (see `skills/j-init/scripts/init.sh`'s `PKG_ROOT` idiom and
  * `lib/generate-agent-context.js`'s `realpathSync` symlink-safe comparison). A `__dirname` climb only
  * ever resolves correctly when this module runs from this monorepo's own checkout; once mirrored into
  * a real consumer's `node_modules/@jenga-ai/agent/`, climbing a fixed number of levels lands inside or

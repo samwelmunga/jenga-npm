@@ -164,6 +164,38 @@
   cursor: pointer;
 }
 
+/* E06_S08_T01 — from/to epic range filter, styled to sit above .status-filter
+   as a matching control strip. */
+.epic-range-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.epic-range-option {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: #374151;
+  cursor: pointer;
+}
+
+.epic-range-option select {
+  font-size: 0.85rem;
+  color: #374151;
+  padding: 0.15rem 0.35rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
 /* ── Mobile (<= 480px, matches tokens.css --breakpoint-mobile) ───────────────── */
 @media (max-width: 480px) {
   .epic-header,
@@ -189,5 +221,14 @@
   .stories-list,
   .tasks-list {
     padding-left: var(--space-sm);
+  }
+
+  .epic-range-filter {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .epic-range-option {
+    justify-content: space-between;
   }
 }

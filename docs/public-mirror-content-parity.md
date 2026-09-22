@@ -7,6 +7,15 @@ repo alone cannot tell you that.
 Established by `E50_S19` (2026-09-10). Companion to `docs/skill-authoring.md`'s
 "The Canonical Naming Contract".
 
+> **Status: the gate this document was built around is retired (2026-09-20, `E42_S07_T01`).** The
+> twin-parity gate — its `npm run` entry point, the twin-divergence audit script beneath it, and both
+> of their bats suites — has been deleted, because `E50_S15` removed every bare-name skill directory
+> and with it every pair the audit existed to compare. The verification procedure below is kept as a
+> record of what was checked and what each check proved; runs A, C, and D are no longer runnable as
+> written. Full account in "Retired: the twin-parity gate" below. Everything else in this document —
+> the failure mode, the "a test may never outlive its subject" rule, and the `.publicignore` policy
+> sections — is unaffected and still current.
+
 ---
 
 ## The failure this exists to catch
@@ -39,33 +48,36 @@ correct. Back-filled by `E50_S19_T02`.
 
 ## The verification procedure
 
-Four runs. Each answers a different question, and the ordering matters — run A alone
+**Historical, as of 2026-09-20.** Runs A, C, and D invoked the twin-divergence audit script, which
+was deleted when the gate was retired — so they cannot be run as written. They are kept because the
+*questions* they asked, and the trap run C exposes, are the substance of this document and outlive
+the tool that answered them. The exact commands, flags, and real output are in git history
+(`E50_S19` built them; `E42_S07_T01`'s parent commit is the last state in which they ran). Run B
+depends on no deleted tooling and still works today.
+
+Four runs. Each answered a different question, and the ordering mattered — run A alone
 is what previously looked sufficient and was not.
 
 ### A. Private repo — is every twin in sync with its source?
 
-```console
-$ bash scripts/audit-twin-divergence.sh . --min-pairs 40
-audit-twin-divergence.sh: audited 40 twinned pair(s) under ./skills
-audit-twin-divergence.sh: no unexpected divergence — every difference between each source and its twin is explained by the generator's transforms.
-$ echo $?
-0
-```
+The audit walked `./skills`, paired each `skills/j-<name>/` twin with its `skills/<name>/` bare
+source, and reported every difference between the two that the generator's own transforms did not
+explain. It was always invoked with a `--min-pairs 40` floor, asserting it had actually found all 40
+pairs rather than quietly finding none. That floor was not decoration — see run C.
 
-`--min-pairs 40` is not decoration. See run C.
+**Wired 2026-09-19 (`E50_S19_T04`), retired 2026-09-20 (`E42_S07_T01`).** It ran as an `npm run`
+entry point and was deliberately never folded into `npm test`. Both decisions, and the retirement,
+are recorded in "Retired: the twin-parity gate" below.
 
-**Wired, 2026-09-19 (`E50_S19_T04`):** `npm run gate:twin-parity` runs exactly the command above.
-It is deliberately **not** folded into `npm test` — see "The gate is wired, but not into `npm test`"
-below for why.
-
-> **Known caveat as of `E50_S19_T04`.** A real run of run A above currently exits 1, not 0. This is
-> **not** a content-parity defect: `E50_S11`/`E50_S12`/`E50_S14` (merged the same day, concurrently
-> with this fix) settled the naming contract in the opposite direction this audit still assumes —
-> `skills/j-<name>/` is now the canonically hand-edited source, `skills/<name>/` is a frozen,
-> soon-to-be-deleted (`E50_S15`) stub — and this script's classification engine has not yet been
-> updated to match. The 5 `__pycache__`/`*.pyc` false positives this task fixes are gone; ~61
-> `SKILL_DRIFT`/`CONTENT_DRIFT` findings remain, all attributable to the same stale-model cause, not
-> to any actual content at risk of being lost. Full account, evidence, and recommended next step in
+> **Known caveat as it stood at `E50_S19_T04` — retained for the record, and part of why retirement
+> beat repair.** A real run of run A exited 1, not 0. That was **not** a content-parity defect:
+> `E50_S11`/`E50_S12`/`E50_S14` (merged the same day, concurrently with that fix) settled the naming
+> contract in the opposite direction the audit still assumed — `skills/j-<name>/` became the
+> canonically hand-edited source and `skills/<name>/` a frozen, soon-to-be-deleted (`E50_S15`) stub —
+> and the script's classification engine was never updated to match. The 5 `__pycache__`/`*.pyc`
+> false positives `E50_S19_T04` fixed were gone; ~61 `SKILL_DRIFT`/`CONTENT_DRIFT` findings remained,
+> all attributable to the same stale-model cause, not to any actual content at risk of being lost.
+> Full account and evidence in
 > `project/rapports/problems/E50_S19_T04-audit-classification-stale-post-contract-flip.md`.
 
 ### B. Mirror-shaped tree — reproduce the condition the defect appears under
@@ -97,50 +109,34 @@ $ grep -c "Stage-id capture reads the CI run's own log" "$MIRROR/skills/j-publis
 
 ### C. The trap — why a clean audit of the mirror tree means nothing
 
-```console
-$ bash scripts/audit-twin-divergence.sh "$MIRROR"
-audit-twin-divergence.sh: audited 0 twinned pair(s) under /tmp/…/skills
-audit-twin-divergence.sh: no unexpected divergence — …
-$ echo $?
-0
-```
+Pointed at `$MIRROR`, the audit reported **exit 0 over zero pairs**: `audited 0 twinned pair(s)`,
+followed by `no unexpected divergence`.
 
-**Exit 0, and worthless.** The audit compares each twin against its bare source; in a
-mirror-shaped tree the sources have been stripped, so there are no pairs, nothing is
-compared, and success is reported. Anyone reading only the exit code would take this as
+**Exit 0, and worthless.** The audit compared each twin against its bare source; in a
+mirror-shaped tree the sources have been stripped, so there were no pairs, nothing was
+compared, and success was reported. Anyone reading only the exit code would take this as
 proof of parity.
 
-`--min-pairs` exists to make that failure loud:
+The `--min-pairs` floor existed to make that failure loud. The same run with `--min-pairs 1` exited
+2 instead: `only 0 twinned pair(s) were audited, but --min-pairs 1 was required. A clean result over
+too small a population is not a pass — check the tree actually contains the pairs you expected.`
 
-```console
-$ bash scripts/audit-twin-divergence.sh "$MIRROR" --min-pairs 1
-audit-twin-divergence.sh: error: only 0 twinned pair(s) were audited, but --min-pairs 1 was required. A clean result over too small a population is not a pass — check the tree actually contains the pairs you expected.
-$ echo $?
-2
-```
-
-**Always pass `--min-pairs` when using this script as a gate.** As of `E50_S19_T04`, that means
-`npm run gate:twin-parity` — see "The gate is wired, but not into `npm test`" below.
+**This is the lesson that outlives the tool.** A parity check whose population can silently fall to
+zero reports success most confidently exactly when it is measuring nothing, so any such check needs a
+floor asserting the population it expected. It is also, read forward, precisely how this gate ended:
+`E50_S15` took the real population to zero permanently, the floor did its job and refused to pass,
+and there was nothing left for a passing run to mean. Any future audit of this shape — `E61_S04`'s
+master-vs-mirror drift audit is the live candidate — should carry the same floor, and should be
+retired the same way if its population ever goes to zero for good.
 
 ### D. The real question — do the twins that *ship* carry the sources' content?
 
 Overlay the private repo's bare sources onto the twins that survived the blocklist, and
-audit that. This is the only one of the four runs that is both non-vacuous and scoped
-to what consumers actually receive:
-
-```console
-$ HYBRID=$(mktemp -d); mkdir -p "$HYBRID/skills"
-$ cp -R "$MIRROR/skills/." "$HYBRID/skills/"
-$ for d in "$HYBRID"/skills/j-*/; do
-    bare="$(basename "$d")"; bare="${bare#j-}"
-    [ -d "skills/$bare" ] && cp -R "skills/$bare" "$HYBRID/skills/$bare"
-  done
-$ bash scripts/audit-twin-divergence.sh "$HYBRID" --min-pairs 34
-audit-twin-divergence.sh: audited 34 twinned pair(s) under /tmp/…/skills
-audit-twin-divergence.sh: no unexpected divergence — …
-$ echo $?
-0
-```
+audit that. This was the only one of the four runs that was both non-vacuous and scoped
+to what consumers actually receive: copy `$MIRROR/skills/` into a fresh `$HYBRID`, then for each
+`j-<name>` twin there, copy the private `skills/<name>/` source back in beside it, and run the audit
+over `$HYBRID` with a `--min-pairs 34` floor. It reported `audited 34 twinned pair(s)` and
+`no unexpected divergence`, exit 0.
 
 34, not 40: six skills are blocklisted in **both** forms and ship in neither
 (`mirror-public`, `self-sync`, `train`, `strategy`, `convert`, `route`). A drift in
@@ -186,8 +182,9 @@ referencing *those* by twin name is fine.
 **Audit command.** For each `tests/*.bats` and `tests/helpers/*` that
 `scripts/check-publicignore-match.sh` classifies `PUBLIC`, grep for references to the seven
 never-public subjects above. As of 2026-09-10 this reports no violations. This check is **manual and
-unwired** — the same weakness recorded in `E50_S19`'s rapport about `--min-pairs`, and a natural
-candidate to wire into the same gate.
+unwired** — the same weakness `E50_S19`'s rapport recorded about the `--min-pairs` floor. It was once
+the natural candidate to fold into the twin-parity gate; with that gate retired (see below) it has no
+host, and wiring it is still open.
 
 ## Permanently private *by policy*: `brainstorm-to-mirror`
 
@@ -276,37 +273,80 @@ if anyone unblocks the directory later, the guard covers it automatically rather
 resting on the blocklist staying as it is. A missing `project/.playbooks/` is a no-op there too,
 matching the loader.
 
-## The gate is wired, but not into `npm test`
+## Retired: the twin-parity gate
 
-`E50_S19_T04` (2026-09-19) closed the gap the original rapport
+**Wired 2026-09-19 (`E50_S19_T04`). Retired 2026-09-20 (`E42_S07_T01`).** Recorded here rather than
+deleted silently, so the lifecycle end is as traceable as the build-out was.
+
+### What it was, and why it existed
+
+`E50_S19_T04` closed the gap the original rapport
 (`project/rapports/problems/E50_S19-parity-gate-is-manual-only.md`, Finding 1) flagged: `--min-pairs`
 was documented as "the thing to always pass when using this as a gate" but nothing actually invoked
-it. `npm run gate:twin-parity` (`package.json`) now does — it is exactly
-`bash scripts/audit-twin-divergence.sh . --min-pairs 40`, the run A command above, reachable from the
-project's normal `npm run` surface.
+it. An `npm run` entry point was added that ran exactly run A's command — the audit over `./skills`
+with a floor of 40 pairs — making it reachable from the project's normal `npm run` surface. A
+dedicated bats file covered the wiring itself and proved the gate's fault-injection correctness
+against synthetic sandboxes rather than the live repo: a genuine divergence tripped it, clearing that
+divergence cleared it, and a gitignored build artifact did neither.
 
-**Deliberately not folded into `npm test` (`bats tests/*.bats`).** Two reasons, one permanent and one
-transitional:
+It was deliberately **not** folded into `npm test` (`bats tests/*.bats`). Coupling the bats suite's
+pass/fail to real-tree state was a design question the original rapport raised and explicitly
+declined to resolve in place — "wiring this into `npm test` or CI... would make the suite depend on
+real-tree state, which the suite currently avoids by design." The gate was therefore a separate,
+explicitly-invoked surface rather than an implicit addition to every contributor's `npm test` run.
 
-- **Permanent.** Coupling the bats suite's pass/fail to real-tree state was a design question the
-  original rapport raised and explicitly declined to resolve in place — "wiring this into `npm test`
-  or CI... would make the suite depend on real-tree state, which the suite currently avoids by
-  design." `gate:twin-parity` is intentionally a separate, explicitly-invoked surface rather than an
-  implicit addition to every contributor's `npm test` run.
-- **Transitional, and the sharper reason right now.** Per the "Known caveat" note under run A above,
-  a real invocation of this gate currently fails for a cause unrelated to content parity (the
-  audit's classification engine predates the `E50_S10`/`E50_S11`/`E50_S12`/`E50_S14` contract
-  reversal). Folding a known-red check into `npm test` today would make the whole suite fail for
-  everyone, for a reason no ordinary contributor caused or can fix locally — precisely the "a gate
-  that cries wolf gets disabled" failure mode `E50_S19_T04`'s own task file warns against, just
-  arriving from an unanticipated direction. `gate:twin-parity` stays runnable and honest
-  (`npm run gate:twin-parity`) without holding the rest of the suite hostage to a fix that is out of
-  this task's scope; see the rapport referenced above for the recommended next step.
+### Why it was retired
 
-`tests/gate-twin-parity.bats` covers the wiring itself and proves the gate's fault-injection
-correctness — that a genuine divergence trips it and clearing it clears the gate, and that a
-gitignored build artifact does neither — against synthetic sandboxes, not the live repo, for the same
-reason.
+**Its entire input population went permanently to zero.** `E50_S15_T04` deleted every bare-name
+`skills/<name>/` directory on 2026-09-19, the final step of the sole-canonical-form cutover
+(`E50_S10`–`E50_S15`). The gate audited drift between a bare source and its `j-` twin; with no bare
+source left anywhere in `skills/`, there is not now and never will be a pair to compare. It could
+only ever report zero pairs audited and hard-fail its own 40-pair floor.
+
+That was not a theoretical cost. It surfaced twice:
+
+- `project/rapports/problems/E50_S15_T05-crucial-escalation-twin-parity-gate-obsoleted.md` — the
+  originating `crucial_escalation`, raised the moment the cutover landed.
+- `project/rapports/problems/E62_S01_T06-twin-parity-gate-min-pairs-unsatisfiable.md` — the gate
+  reappearing a day later as the sole red test on `main`, hit by an unrelated task's smoke gate.
+  That is the concrete price of leaving an unsatisfiable check standing: it bills its failure to
+  whoever runs the suite next, who did not cause it and cannot locally fix it.
+
+**Two alternatives were considered and rejected** (scrum-master, 2026-09-19; full reasoning in
+`project/board/stories/E42_S07_retire-gate-twin-parity-mechanism.md`):
+
+- **Repurpose the script.** Its classification engine was a byte-for-byte port of the also-deleted
+  `scripts/generate-j-alias.sh`'s bare→twin transforms (`E50_S14_T01`). With no bare source left to
+  reconstruct a twin from, it has no meaningful function; aiming it at an unrelated invariant would
+  mean rewriting it from scratch — out of proportion to any currently identified need.
+- **Leave the floor standing as a deliberate always-fails trip-wire.** Rejected as needless noise for
+  anyone invoking the gate directly, with no corresponding benefit, and — per the `E62_S01_T06`
+  rapport above — noise that lands on unrelated work.
+
+The redesign the classification engine needed (it could detect whole-file absence but not reliably
+detect same-file content drift — see
+`project/rapports/problems/E50_S19_T04-audit-classification-stale-post-contract-flip.md`) existed
+only to protect the `E50_S15` cutover from silent content loss. That cutover is complete, and the one
+concrete drift instance those rapports found — `skills/status/SKILL.md`'s `E51_S05` deploy-reconcile
+step — was independently confirmed backfilled into `skills/j-status/SKILL.md` by `E50_S19_T07`
+(commit `6f353ec5`) and re-verified before `E50_S15_T04` ran. No content was lost, and there is no
+future pair for a redesigned engine to compare.
+
+### What was removed, and what did not change
+
+Removed: the `npm run` entry (one line out of `package.json`'s `scripts` block), the audit shell
+script under `scripts/`, and both bats files — the script's own classification-logic suite and the
+gate's wiring suite. Exact paths and the full diff are in `E42_S07_T01`'s commits, and the board
+files (`project/board/stories/E42_S07_*`, `project/board/tasks/E42_S07_T01_*`) name them explicitly.
+
+Unchanged: `npm test` (`bats tests/*.bats`). The gate was never part of the default run, so its
+removal changes no default-run behavior — verified green before and after.
+
+One cross-reference worth keeping in view: `tests/load-nl-catalog-twin-resolution.bats` used to
+cross-check `load-nl-catalog.js`'s permanent-exception set against the audit script's own copy of
+that list. Rather than lose the drift guard with the gate, `E42_S07_T01` repointed it at
+`scripts/repoint-skill-refs.sh`'s `REPOINT_SKILL_REFS_EXCEPTIONS` — a surviving list that file labels
+its "Single named source".
 
 ## Known limitation
 

@@ -1,8 +1,36 @@
 {
-  "_comment": "Canonical playbook output-type vocabulary for Epic E53's Playbooks v2 StepObject/output_types contract (E53_S03_T02). Extend this vocabulary by adding entries to the 'types' array below -- NEVER by code changes; skills/jenga/scripts/load-playbooks.sh references this file by name in its own header contract (see that script's 'TYPE REGISTRY' section). Governed by the Scrum Master: registry additions/changes route through the normal board-item process rather than an ungoverned edit to this file -- see docs/skill-authoring.md's 'Playbook Type Registry Governance' section for the full policy.",
-  "types": [
-    "text",
-    "id_list",
-    "file_list"
-  ]
+  "_comment": "Canonical playbook type registry for Epic E53's Playbooks v2 StepObject/output_types contract (E53_S03_T02), converted from a bare list of type names into a map of type descriptors by E62_S01_T01. -- FORMAT: 'types' maps each type name to a descriptor object {\"verify\": <rule-object|null>, \"normalize\": [<transform-name>, ...]}. Both members are optional in the sense that 'verify' may be null and 'normalize' may be empty; a descriptor never carries any other key. -- VERIFY: null means the type has no checkable shape and runtime verification is a deliberate no-op. Otherwise it is an object whose keys are drawn ONLY from the enumerated 'verify_rules' below. The single rule kind defined today is 'per_line': a regex that every element of the normalized value must match. Regexes here are POSIX ERE, not PCRE -- write [0-9] and [^[:space:]], never \\d or \\S -- because the consuming validator is a shell script (E62_S01_T02). -- NORMALIZE: an ordered list of named transforms applied left to right BEFORE verification. The value is treated as a list of lines; 'split_on_comma' further splits each element on commas, 'trim' strips leading and trailing whitespace from each element, 'drop_empty' removes elements that are empty after trimming. Every entry MUST be a bare identifier matching ^[a-z][a-z0-9_]*$ AND a member of 'normalize_vocabulary' below. That closure is the single most important property of this format: because an entry cannot contain whitespace, a free-text or semantic-extraction instruction (e.g. 'extract the ids the skill meant to return') is STRUCTURALLY UNREPRESENTABLE here, not merely discouraged. LLM-driven auto-conversion and a type-repair skill were both rejected at epic level (E62); a transform name the validator does not implement is a hard error, never a string for anything to interpret. -- THE 'text' RULE: 'text' carries \"verify\": null because prose has no checkable shape. This is NOT a licence to treat 'text' as an 'any' in the load-time compatibility lattice. Unverifiable at runtime: yes. Universal acceptor at load time: no -- a universal acceptor would make every text-declaring skill compatible with everything, disarming exactly what E53_S11's honesty-over-breadth policy protects. -- EXTENDING: adding a TYPE is a DATA-ONLY edit and NEVER a code change -- add a key to 'types' whose verify/normalize are composed from the already-enumerated 'verify_rules' and 'normalize_vocabulary'. Adding a new TRANSFORM or a new RULE KIND is the one thing that does require code, since the validator has to implement it; extend the corresponding enumeration here in that same change. Removing or renaming an existing type is a breaking change: it invalidates every SKILL.md declaring it. skills/jenga/scripts/load-playbooks.sh references this file by name in its own header contract (see that script's 'TYPE REGISTRY' section). -- GOVERNANCE: owned by the Scrum Master. Registry additions or changes route through the normal board-item process rather than an ungoverned edit to this file -- see docs/skill-authoring.md's 'Playbook Type Registry Governance' section for the full policy.",
+  "verify_rules": [
+    "per_line"
+  ],
+  "normalize_vocabulary": [
+    "split_on_comma",
+    "trim",
+    "drop_empty"
+  ],
+  "types": {
+    "text": {
+      "verify": null,
+      "normalize": []
+    },
+    "id_list": {
+      "verify": {
+        "per_line": "^E[0-9]+(_S[0-9]+(_T[0-9]+)?)?$"
+      },
+      "normalize": [
+        "split_on_comma",
+        "trim",
+        "drop_empty"
+      ]
+    },
+    "file_list": {
+      "verify": {
+        "per_line": "^[^[:space:]]"
+      },
+      "normalize": [
+        "trim",
+        "drop_empty"
+      ]
+    }
+  }
 }

@@ -17,15 +17,25 @@ examples:
 
 # J-Init — Project Setup (polyfill alias of Init)
 
-This skill is a literal-directory-name duplicate of `skills/init/`. It exists because
-some host tools/harnesses (e.g. GH Copilot) ship their own built-in command literally
-named `/init`, which can shadow or override Jenga AI's own `/init` alias (Claude Code's
-native skill resolution is a literal-string, directory-name-based match — see
-`docs/skill-authoring.md`'s "Invocation Convention"). `/j-init` (and `j.j-init`) give
-users a guaranteed-unshadowed way to reach the exact same setup flow.
+`skills/j-init/` is the **sole canonical directory** for this skill. The `j-` prefix is
+there for collision safety: some host tools/harnesses (e.g. GH Copilot) ship their own
+built-in command literally named `/init`, which would shadow a bare `/init` alias, since
+Claude Code's native skill resolution is a literal-string, directory-name-based match —
+see `docs/skill-authoring.md`'s "Invocation Convention". Invoke it as `j.init` or
+`/j-init`.
 
-Keep this file's instructions in lockstep with `skills/init/SKILL.md` — any change made
-there should be mirrored here.
+> **This file was previously described as a duplicate of `skills/init/`, with an
+> instruction to keep the two in lockstep. That instruction is void.** `E50_S15_T04`
+> deleted every bare-name `skills/<name>/` directory on 2026-09-19, making
+> `skills/j-<name>/` the sole canonical form (see `docs/skill-authoring.md`'s "The
+> Canonical Naming Contract"), and `scripts/generate-j-alias.sh` — which had excluded this
+> hand-maintained pair from generation anyway — was retired by `E50_S14_T01`. There is no
+> second copy to mirror a change into, and none should be created. Edit this file directly.
+>
+> Corrected by `E42_S07_T01`'s follow-up, per
+> `project/rapports/problems/E42_S07_T01-j-init-skill-md-lockstep-instruction-still-stale.md`.
+> The same correction already landed one level down, in
+> `skills/j-init/scripts/apply-scaffold-visibility.sh`.
 
 ## Instructions
 

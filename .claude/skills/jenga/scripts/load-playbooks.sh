@@ -130,6 +130,84 @@
 #   anywhere in this loop. `conditional.depends_on` works identically, by the same mechanism.
 #
 # ---------------------------------------------------------------------------
+# TYPE REGISTRY (E62_S01_T04)
+# ---------------------------------------------------------------------------
+# The canonical type vocabulary this script validates against is `templates/playbook-types.json`
+# (E53_S03_T02, converted into a map of type descriptors by E62_S01_T01), resolved as
+# `<PKG_ROOT>/templates/playbook-types.json` — the SAME `PKG_ROOT` that already resolves
+# `PLAYBOOKS_DIR`/`SKILLS_DIR` above, so the `JENGA_PLAYBOOKS_TEST_ROOT` override (see "TESTING
+# OVERRIDE") redirects it too, and a fixture tree may supply its own vocabulary. The vocabulary is
+# ALWAYS read from that file's `types` map — this script never hardcodes a type name, and adding a
+# type to the registry is a data-only edit that requires no change here (see that file's own
+# `_comment`, "EXTENDING").
+#
+# Two load-time checks are driven from it. Both are about DECLARATIONS ONLY — what a SKILL.md
+# claims — never about an actual runtime VALUE. Verifying a value against its declared type is a
+# separate concern owned by `scripts/validate-typed-object.sh` (E62_S01_T02) and consumed at
+# runtime by `run-playbook-step.sh` (E62_S02); this script never calls it and never sees a value.
+#
+#   CHECK 1 — REGISTRY VOCABULARY. For EVERY skill named by a step in the final flattened step
+#   list (bare-string steps included, not only StepObjects, and not only `forward_from` sources),
+#   every type value the skill declares in its `output_types` or `input_types` frontmatter must be
+#   a key in the registry's `types` map. An unrecognized value (e.g. `output_types: banana`) skips
+#   the whole playbook with a stderr warning naming the offending value, the field it came from,
+#   and — for the `{when, type}` list form — the branch it came from. This check is INDEPENDENT of
+#   `forward_from`: it has repo-wide value on a playbook with no forward edges at all.
+#
+#   CHECK 2 — OUTPUT/INPUT COMPATIBILITY. Where a step declares `forward_from`, the SOURCE's
+#   declared `output_types` must be accepted by the CONSUMER's (i.e. this step's own skill's)
+#   declared `input_types`. This runs AFTER the existing declaredness and Blocker-1 structural
+#   checks above, so a source that declares nothing, or declares a malformed `{when, type}` entry,
+#   is still rejected by its own pre-existing message rather than by this one.
+#
+# THE ALL-BRANCHES RULE — both sides. Either side's declaration may be a single static type string
+# or a list of `{when, type}` branches. This check never needs to know which branch will actually
+# fire on either side, and never executes a classifier script to find out:
+#
+#   Compatible IFF every type the SOURCE could produce is accepted under EVERY CONSUMER branch.
+#   Equivalently: the set of source types must be a subset of the INTERSECTION of the consumer's
+#   accepted types.
+#
+# The source half of that rule (every source branch must produce a type the consumer accepts; any
+# branch that does not rejects the playbook, naming the offending branch) is the rule as originally
+# specified in E53. The CONSUMER half — what a conditional consumer, one whose own `input_types` is
+# a `{when, type}` list, means for compatibility — was left open by E62_S01_T03 and is RATIFIED
+# HERE (2026-09-19, E62_S01_T04) as the conservative dual stated above.
+#
+#   Rationale: which consumer branch applies at runtime is no more knowable at load time than which
+#   source branch applies. The only answer that is safe regardless of BOTH is the one that holds
+#   under both universally. It stays fully deterministic and executes no classifier script. No
+#   skill in this repository declares a conditional `input_types` today, so the ruling costs
+#   nothing now — it exists to close the ambiguity before it can bite.
+#
+#   Mechanically, each consumer branch accepts exactly one type, so the intersection is `{t}` when
+#   every branch declares the same `t`, and EMPTY when the branches disagree. An empty intersection
+#   rejects every forward into that consumer. That is the intended conservative outcome of the
+#   ruling, not an accident of the implementation.
+#
+# BACKWARD COMPATIBILITY — BINDING. A consumer that declares NO `input_types` at all retains
+# today's behavior EXACTLY: the forward is allowed on the existing source-declaredness check alone,
+# and Check 2 short-circuits before any comparison is made. The ABSENCE of a declaration is never a
+# violation. Adding the input side must not, and does not, retroactively break a single existing
+# playbook. (`docs/skill-authoring.md`'s `input_types` section states the same guarantee from the
+# skill author's side.)
+#
+# `text` IS NOT A WILDCARD. `text` carries `"verify": null` in the registry because prose has no
+# checkable shape, but it is a specific type in this compatibility lattice — never an `any`. It is
+# neither an `output_types` that satisfies every `input_types` nor an `input_types` that accepts
+# every `output_types`. Treating it as a universal acceptor would make every text-declaring skill
+# compatible with everything and render this check decorative, which is precisely what E53_S11's
+# honesty-over-breadth policy exists to prevent. Nothing in this script special-cases it.
+#
+# MISSING REGISTRY — DELIBERATE FAIL-OPEN. If the registry file is absent or unparseable, CHECK 1
+# is a silent no-op (no warning, no rejection); Check 2 is unaffected, since comparing declared
+# type NAMES needs no vocabulary. This matches this script's existing convention for an absent
+# optional input (a missing `project/.playbooks/` directory, a missing `playbook-config.json`), and
+# it is unreachable in a real invocation: PKG_ROOT detection is itself keyed on `templates/`
+# existing. It exists so a fixture tree under `JENGA_PLAYBOOKS_TEST_ROOT` may supply its own
+# registry, or deliberately supply none.
+#
+# ---------------------------------------------------------------------------
 # CONDITIONAL RESOLUTION (E53_S04_T02)
 # ---------------------------------------------------------------------------
 # A step's `conditional: {"depends_on": "<name>", "predicate": "<predicate>"}` is validated at load
@@ -418,6 +496,20 @@
 #   - A `conditional`'s `predicate` does not match the recognized grammar
 #     (`non_empty`/`empty`/`equals:<value>`/`not_equals:<value>`, defined
 #     in `run-playbook-step.sh`'s own header)                (E53_S04_T02) -> skipped
+#   - ANY step's skill declares an `output_types`/`input_types` value
+#     that is not a key in `templates/playbook-types.json`'s `types`
+#     map (Check 1)                                          (E62_S01_T04) -> skipped
+#     (applies to every skill-type step, bare string included -- not only
+#     `forward_from` sources; a silent no-op if the registry file itself is
+#     missing/unparseable, see "TYPE REGISTRY" above)
+#   - A `forward_from` source declares an `output_types` the consumer step's
+#     own `input_types` does not accept under EVERY consumer branch
+#     (Check 2, the all-branches rule)                       (E62_S01_T04) -> skipped
+#     (a consumer declaring NO `input_types` is never a violation -- the
+#     forward is allowed on the source-declaredness check alone, exactly as
+#     before this task)
+#   - A consumer's `input_types` list carries an entry missing `when`/`type`
+#                                                            (E62_S01_T04) -> skipped
 #
 # ---------------------------------------------------------------------------
 # EXIT CODES
@@ -515,6 +607,11 @@ project_dir = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else None
 # --- E53_S06_T02: additive `lookup <id>` CLI mode --------------------------------------------
 mode = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else "catalog"
 lookup_id = sys.argv[5] if len(sys.argv) > 5 else ""
+# --- E62_S01_T04: the jenga-agent PACKAGE root, where `templates/playbook-types.json` lives ---
+# Already resolved by the bash wrapper above (and already honoring JENGA_PLAYBOOKS_TEST_ROOT) --
+# threaded in here rather than re-derived, so there is exactly one PKG_ROOT resolution in this
+# script. See header "TYPE REGISTRY".
+pkg_root = sys.argv[6] if len(sys.argv) > 6 and sys.argv[6] else None
 
 # --- E53_S09_T01: project-local playbook source directory ------------------------------------
 # `project/.playbooks/`, resolved relative to the SAME project_dir already threaded above (which
@@ -567,6 +664,32 @@ def load_max_composition_depth(proj_dir):
 
 
 MAX_COMPOSITION_DEPTH = load_max_composition_depth(project_dir)
+
+
+# --- E62_S01_T04: the canonical type vocabulary -------------------------------------------------
+def load_type_registry(root):
+    """Read the set of known type names from `<root>/templates/playbook-types.json`'s `types` map.
+
+    Returns None when the registry is missing or unparseable, which makes the vocabulary check a
+    deliberate silent no-op -- see header 'TYPE REGISTRY' ("MISSING REGISTRY"). The vocabulary is
+    ALWAYS read from that file; no type name is ever hardcoded here, so adding a type to the
+    registry is a data-only edit requiring no change to this script.
+    """
+    if not root:
+        return None
+    registry_path = os.path.join(root, "templates", "playbook-types.json")
+    try:
+        with open(registry_path, encoding="utf-8") as fh:
+            registry = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    types = registry.get("types") if isinstance(registry, dict) else None
+    if not isinstance(types, dict):
+        return None
+    return set(types.keys())
+
+
+TYPE_REGISTRY = load_type_registry(pkg_root)
 
 catalog = []
 # --- E53_S06_T02: per-basename skip-reason capture -------------------------------------------
@@ -662,8 +785,11 @@ def step_skill_name(step):
 _FRONTMATTER_RE = re.compile(r'^---\r?\n(.*?)\r?\n---', re.DOTALL)
 
 
-def extract_output_types(skill_md_path):
-    """Best-effort extraction of the `output_types` frontmatter field from a SKILL.md.
+def extract_types_field(skill_md_path, field):
+    """Best-effort extraction of a type-declaration frontmatter field from a SKILL.md.
+
+    `field` is `output_types` or `input_types` (E62_S01_T04) -- both take the SAME two shapes (see
+    docs/skill-authoring.md), so they are read by this one parser rather than two copies of it.
 
     Returns None if the file/field is missing or unparseable, a `str` for the single-static-type
     form, or a `list[dict]` for the `{when, type}` list form. This is a small, targeted parser for
@@ -684,7 +810,7 @@ def extract_output_types(skill_md_path):
     fm_lines = fm_match.group(1).splitlines()
 
     for i, line in enumerate(fm_lines):
-        key_match = re.match(r'^output_types:\s*(.*)$', line)
+        key_match = re.match(r'^%s:\s*(.*)$' % re.escape(field), line)
         if not key_match:
             continue
 
@@ -725,6 +851,104 @@ def extract_output_types(skill_md_path):
         return items if items else None
 
     return None
+
+
+def extract_output_types(skill_md_path):
+    """The `output_types` half of extract_types_field -- kept as a named wrapper so every
+    pre-existing call site (E53_S03_T03/T04) reads exactly as it did before E62_S01_T04."""
+    return extract_types_field(skill_md_path, "output_types")
+
+
+def extract_input_types(skill_md_path):
+    """The `input_types` half of extract_types_field (E62_S01_T04)."""
+    return extract_types_field(skill_md_path, "input_types")
+
+
+# --- E62_S01_T04: shared normalization of either declaration shape ------------------------------
+def declared_type_entries(value):
+    """Normalize an `output_types`/`input_types` value into `[(type_or_None, when_or_None), ...]`.
+
+    A single static type string yields ONE entry whose `when` is None; a `{when, type}` list yields
+    one entry per branch. A malformed list entry (not an object, or missing `type`) yields a
+    `(None, when_or_None)` entry rather than being dropped, so a caller can tell "no branches" from
+    "a branch this function could not read". Both checks in header 'TYPE REGISTRY' consume this, so
+    neither re-derives the two shapes.
+    """
+    if not value:
+        return []
+    if isinstance(value, str):
+        return [(value, None)]
+    if isinstance(value, list):
+        entries = []
+        for item in value:
+            if isinstance(item, dict):
+                entries.append((item.get("type") or None, item.get("when") or None))
+            else:
+                entries.append((None, None))
+        return entries
+    return []
+
+
+def validate_declared_vocabulary(idx, skill_name, skill_md_path, registry):
+    """CHECK 1 -- every type value this skill declares must be a key in the registry's `types` map.
+
+    Returns an error string naming the offending value (and its branch, for the list form), or None.
+    A None `registry` never reaches here (the caller skips the check entirely -- see header
+    'TYPE REGISTRY', "MISSING REGISTRY").
+    """
+    known = ", ".join(sorted(registry)) if registry else "<none>"
+    for field in ("output_types", "input_types"):
+        declared = extract_types_field(skill_md_path, field)
+        for type_name, when_val in declared_type_entries(declared):
+            if type_name is None:
+                # A malformed `{when, type}` entry. Deliberately NOT this check's business: the
+                # pre-existing Blocker-1 structural check (E53_S03_T04) already owns that rejection
+                # for a forward source, with its own message.
+                continue
+            if type_name not in registry:
+                branch = " (branch when='%s')" % when_val if when_val else ""
+                return (
+                    f"step {idx} skill '{skill_name}' declares {field} '{type_name}'{branch}, "
+                    f"which is not a type in templates/playbook-types.json "
+                    f"(known types: {known})"
+                )
+    return None
+
+
+def accepted_input_types(value):
+    """The CONSUMER side of the all-branches rule (E62_S01_T04, ratified 2026-09-19).
+
+    Returns `(accepted_set_or_None, error_or_None)`:
+
+      - `(None, None)`  -- the consumer declares NO `input_types`. This is the BINDING backward-
+                           compatible case: the caller must allow the forward on the source-
+                           declaredness check alone, exactly as before this task. It is distinct
+                           from `(set(), None)` ("declares branches that agree on nothing"), and
+                           conflating the two would be precisely the retroactive break the task
+                           forbids.
+      - `(set, None)`   -- the set of types accepted under EVERY declared branch, i.e. the
+                           INTERSECTION. A single static type yields `{t}`. A `{when, type}` list
+                           yields `{t}` when every branch declares the same `t`, and an EMPTY set
+                           when they disagree -- an empty set rejects every forward, which is the
+                           intended conservative outcome of the ruling (see header 'TYPE REGISTRY').
+      - `(None, str)`   -- a malformed declaration; the string is the reason.
+    """
+    if not value:
+        return None, None
+    if isinstance(value, str):
+        return {value}, None
+    if not isinstance(value, list):
+        return None, "declares a malformed input_types (neither a type string nor a list)"
+
+    accepted = None
+    for item in value:
+        if not isinstance(item, dict) or not item.get("when") or not item.get("type"):
+            return None, "declares a malformed input_types entry (missing 'when' or 'type')"
+        branch_set = {item["type"]}
+        accepted = branch_set if accepted is None else (accepted & branch_set)
+    if accepted is None:
+        return None, "declares an empty input_types list"
+    return accepted, None
 
 
 try:
@@ -1014,7 +1238,26 @@ for pid in order:
         continue
 
     validation_error = None
+
+    # --- E62_S01_T04 CHECK 1: registry vocabulary validation (see header 'TYPE REGISTRY') -------
+    # Its own loop, deliberately separate from the forward_from/conditional loop below: that loop
+    # skips every non-dict step, and this check must cover BARE-STRING steps too -- it is keyed on
+    # the step's resolved skill name, not on the step carrying any particular field. A None
+    # registry (missing/unparseable file) makes the whole check a silent no-op.
+    if TYPE_REGISTRY is not None:
+        for idx, step in enumerate(flattened_steps):
+            step_name = step_skill_name(step)
+            if not step_name:
+                continue
+            validation_error = validate_declared_vocabulary(
+                idx, step_name, os.path.join(skills_dir, step_name, "SKILL.md"), TYPE_REGISTRY
+            )
+            if validation_error:
+                break
+
     for idx, step in enumerate(flattened_steps):
+        if validation_error:
+            break
         if not isinstance(step, dict):
             continue
 
@@ -1085,6 +1328,48 @@ for pid in order:
             if validation_error:
                 break
 
+        # --- E62_S01_T04 CHECK 2: output/input compatibility under the all-branches rule -------
+        # Runs AFTER the two checks above on purpose: a source that declares nothing, or declares
+        # a malformed {when, type} entry, is still rejected by its own pre-existing message, never
+        # by this one. See header 'TYPE REGISTRY'.
+        consumer_name = step_skill_name(step)
+        consumer_input_val = (
+            extract_input_types(os.path.join(skills_dir, consumer_name, "SKILL.md"))
+            if consumer_name
+            else None
+        )
+        accepted, accepted_error = accepted_input_types(consumer_input_val)
+        if accepted_error:
+            validation_error = f"step {idx} forward_from consumer '{consumer_name}' {accepted_error}"
+            break
+        if accepted is not None:
+            # `accepted is None` is the BINDING backward-compatible path: a consumer declaring no
+            # `input_types` is allowed on the source-declaredness check alone, exactly as before
+            # this task. Nothing below runs for it.
+            offending = next(
+                (
+                    (type_val, when_val)
+                    for type_val, when_val in declared_type_entries(output_types_val)
+                    if type_val is not None and type_val not in accepted
+                ),
+                None,
+            )
+            if offending:
+                offending_type, offending_when = offending
+                branch_desc = (
+                    f"output_types branch when='{offending_when}'"
+                    if offending_when
+                    else "static output_types"
+                )
+                accepted_desc = ", ".join(sorted(accepted)) if accepted else "<none>"
+                validation_error = (
+                    f"step {idx} 'forward_from' source '{source_name}' {branch_desc} produces "
+                    f"type '{offending_type}', which consumer '{consumer_name}' does not accept "
+                    f"under every input_types branch (accepted under all branches: "
+                    f"{accepted_desc})"
+                )
+                break
+
     if validation_error:
         print(f"Warning: {path} {validation_error} — skipped", file=sys.stderr)
         skip_reasons[pid] = validation_error
@@ -1129,5 +1414,5 @@ if mode == "lookup":
 print(json.dumps(catalog, indent=2))
 PY
 
-python3 "$PY_SCRIPT" "$PLAYBOOKS_DIR" "$SKILLS_DIR" "$PROJECT_DIR" "$MODE" "$LOOKUP_ID"
+python3 "$PY_SCRIPT" "$PLAYBOOKS_DIR" "$SKILLS_DIR" "$PROJECT_DIR" "$MODE" "$LOOKUP_ID" "$PKG_ROOT"
 exit $?

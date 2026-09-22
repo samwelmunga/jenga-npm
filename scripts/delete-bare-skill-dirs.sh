@@ -92,8 +92,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # This task's AC requires a clean default-level shellcheck run; SC1091 is an
 # info-level "did not follow sourced file" finding that would otherwise fail that
 # bar even though the sourced file does exist (see -x). Same fix already applied to
-# scripts/apply-j-prefix.sh, scripts/audit-twin-divergence.sh, and
-# scripts/build-pages-site.sh.
+# scripts/apply-j-prefix.sh and scripts/build-pages-site.sh.
 # shellcheck source=lib/resolve-project-dir.sh disable=SC1091
 source "$SCRIPT_DIR/../lib/resolve-project-dir.sh"
 

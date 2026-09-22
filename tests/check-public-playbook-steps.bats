@@ -9,8 +9,9 @@
 # interesting cases cannot be expressed against it: to prove the project-local scan is a real
 # scan rather than a vacuous one, a project-local playbook has to be PUBLIC and broken -- and in
 # the real repo E28_S14_T01 blocks that directory in full, permanently. Every behavioural test
-# below therefore builds a throwaway repo under $BATS_TEST_TMPDIR, the same approach
-# tests/gate-twin-parity.bats established. The sandbox is `git init`ed because
+# below therefore builds a throwaway repo under $BATS_TEST_TMPDIR, the same approach the
+# twin-parity gate's own suite established (that suite was deleted when E42_S07 retired
+# the gate; the pattern it established outlives it). The sandbox is `git init`ed because
 # scripts/check-publicignore-match.sh resolves its own repo root via `git rev-parse` from its own
 # location, and it is the single source of blocklist semantics the guard delegates to -- stubbing
 # it out would test a different program than the one that ships.

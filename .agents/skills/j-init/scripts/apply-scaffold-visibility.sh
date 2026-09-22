@@ -14,12 +14,14 @@
 # skills/j-distribute/CONFIG_SCHEMA.md's "Scaffold visibility" section for the
 # full rationale.
 #
-# This is skills/j-init/'s own copy of skills/init/scripts/apply-scaffold-visibility.sh
-# (E31_S07_T03) — skills/j-init/ is a separate, hand-maintained directory, not
-# auto-synced with skills/init/ (scripts/generate-j-alias.sh explicitly excludes
-# this pair), and is the copy that actually ships to public-GitHub-mirror and
-# npm-package consumers. Keep this file's logic in lockstep with skills/init/'s
-# copy — any behavioral change made there should be mirrored here.
+# This file is the sole copy. It was added by E31_S07_T03 as skills/j-init/'s own
+# hand-maintained duplicate of a then-existing skills/init/scripts/ copy, with an
+# instruction to keep the two in lockstep. That instruction is void: E50_S15_T04
+# deleted every bare-name skills/<name>/ directory on 2026-09-19, making
+# skills/j-<name>/ the sole canonical form (see docs/skill-authoring.md's "The
+# Canonical Naming Contract"), and scripts/generate-j-alias.sh — which had excluded
+# this pair from generation as hand-maintained — was itself retired by E50_S14_T01.
+# There is no second copy to mirror a change into, and none should be created.
 #
 # Usage:
 #   apply-scaffold-visibility.sh <mode> [project_root]

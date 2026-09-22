@@ -61,7 +61,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # E50_S14_T02: disabled rather than left as an accepted info-level finding — this
 # script's AC requires a clean default-level shellcheck run, and the sourced file does
 # exist; shellcheck simply will not follow it without -x (same fix already applied to
-# scripts/audit-twin-divergence.sh and scripts/build-pages-site.sh).
+# scripts/build-pages-site.sh).
 # shellcheck source=lib/resolve-project-dir.sh disable=SC1091
 source "$SCRIPT_DIR/../lib/resolve-project-dir.sh"
 

@@ -181,6 +181,18 @@
 #       stdout). If that was the last step, emits a completion report instead (see OUTPUT SCHEMA)
 #       and removes the state file.
 #
+#       RUNTIME TYPE VERIFICATION (E62_S02_T01): when a value IS given, it is checked against the
+#       CURRENT step's declared `output_types` (read off that step's own SKILL.md), via
+#       `scripts/validate-typed-object.sh` -- normalizing first, then re-checking, before any
+#       failure is declared. A `{when, type}` conditional declaration conforms if it satisfies AT
+#       LEAST ONE branch (no classifier is ever run, no branch state is tracked). A value that
+#       still does not conform after normalize is NOT stored -- this call is silently redirected
+#       into the exact same halt behavior as `advance <state_file> failed "<note>"` (see below),
+#       with a note naming the step, the declared type(s) checked, and the raw pre-normalization
+#       value. A step with no declared `output_types` (including one this call cannot resolve a
+#       SKILL.md for) is completely unaffected: no lookup is even attempted beyond determining
+#       there is nothing to check.
+#
 #   run-playbook-step.sh advance <state_file> skipped
 #       Records the CURRENT step as SKIPPED (a new `skipped` list, distinct from `completed`) and
 #       advances the pointer exactly like `passed` -- a skipped step never halts the chain and is
@@ -597,6 +609,30 @@ elif [ "$SUBCOMMAND" = "advance" ]; then
 
   PROJECT_DIR="$(resolve_project_dir)"
 
+  # --- E62_S02_T01: resolve the jenga-agent PACKAGE root, needed ONLY to look up a completing
+  # step's declared `output_types` off its SKILL.md for runtime type verification. Mirrors
+  # load-playbooks.sh's own PKG_ROOT resolution (monorepo checkout vs. installed npm package) --
+  # including reusing JENGA_PLAYBOOKS_TEST_ROOT verbatim as the SAME test-injection override, rather
+  # than inventing a second env var for the same concept. Deliberately gated on
+  # `OUTCOME = passed && EXTRA non-empty`: those are the ONLY two conditions under which
+  # verification does anything at all (see the no-op cases in this task's board item), so a
+  # `skipped`/`failed` call, or a `passed` call with no typed-output value, never pays for this
+  # resolution at all -- "no lookup even attempted beyond determining there is nothing to check."
+  PKG_ROOT=""
+  if [ "$OUTCOME" = "passed" ] && [ -n "$EXTRA" ]; then
+    ADVANCE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [ -n "${JENGA_PLAYBOOKS_TEST_ROOT:-}" ]; then
+      PKG_ROOT="$JENGA_PLAYBOOKS_TEST_ROOT"
+    elif [ -d "$ADVANCE_SCRIPT_DIR/../../../templates" ]; then
+      PKG_ROOT="$(cd "$ADVANCE_SCRIPT_DIR/../../.." && pwd)"
+    elif [ -d "$PROJECT_DIR/node_modules/@jenga-ai/agent/templates" ]; then
+      PKG_ROOT="$PROJECT_DIR/node_modules/@jenga-ai/agent"
+    else
+      echo "Error: could not locate the jenga-agent package root (templates/ not found via monorepo checkout or node_modules/@jenga-ai/agent) -- cannot resolve output_types for step verification." >&2
+      exit 2
+    fi
+  fi
+
   PY_SCRIPT="$(mktemp -t run-playbook-step-advance-XXXXXX.py)"
   trap 'rm -f "$PY_SCRIPT"' EXIT
 
@@ -604,7 +640,9 @@ elif [ "$SUBCOMMAND" = "advance" ]; then
 import json
 import os
 import re
+import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 
 state_file_path = sys.argv[1]
@@ -615,6 +653,221 @@ outcome = sys.argv[2]
 extra = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] != "" else None
 note = extra
 project_dir = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] != "" else None
+# E62_S02_T01: the jenga-agent package root, resolved (or hard-errored) by the bash wrapper above,
+# ONLY when outcome == "passed" and extra is non-empty. Empty string in every other case -- exactly
+# the cases where verification is a documented no-op, so this is never even looked at.
+pkg_root = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5] != "" else None
+
+# ---------------------------------------------------------------------------------------------
+# E62_S02_T01: runtime type verification at the "passed" chokepoint
+# ---------------------------------------------------------------------------------------------
+# `extract_output_types`/`declared_type_entries` below are a DELIBERATE, DOCUMENTED duplication of
+# skills/jenga/scripts/load-playbooks.sh's own `extract_types_field`/`extract_output_types`/
+# `declared_type_entries` (see that script's "TYPE REGISTRY" section, around line 788 as of
+# E62_S01_T04). The task considered factoring this into a shared, importable module, but every
+# python body in both scripts is a throwaway file generated into a fresh `mktemp` path per
+# invocation (see the `cat > "$PY_SCRIPT" <<'PY'` pattern this whole file uses) -- there is no
+# existing precedent in this repo for a shared importable python module fed to that pattern, and
+# building one purely for a ~30-line, rarely-changing frontmatter parser was judged riskier than a
+# small, clearly-labelled duplicate. If this parser ever needs a THIRD copy, that is the signal to
+# extract it for real; until then, a change to one copy's parsing rules should always be checked
+# against the other by anyone touching either.
+_FRONTMATTER_RE = re.compile(r'^---\r?\n(.*?)\r?\n---', re.DOTALL)
+
+
+def extract_output_types(skill_md_path):
+    """Best-effort extraction of the `output_types` frontmatter field from a SKILL.md. Returns
+    None if the file/field is missing or unparseable, a `str` for the single-static-type form, or
+    a `list[dict]` for the `{when, type}` list form. Mirrors load-playbooks.sh's
+    `extract_types_field(path, "output_types")` exactly -- see the module-level note above."""
+    try:
+        with open(skill_md_path, encoding="utf-8") as fh:
+            content = fh.read()
+    except OSError:
+        return None
+
+    fm_match = _FRONTMATTER_RE.match(content)
+    if not fm_match:
+        return None
+
+    fm_lines = fm_match.group(1).splitlines()
+
+    for i, line in enumerate(fm_lines):
+        key_match = re.match(r'^output_types:\s*(.*)$', line)
+        if not key_match:
+            continue
+
+        rest = key_match.group(1).strip()
+        if rest:
+            return rest.strip('"\'')
+
+        # Block/list form: gather subsequent, more-indented lines into a list of dicts.
+        items = []
+        current = {}
+        j = i + 1
+        while j < len(fm_lines):
+            raw_line = fm_lines[j]
+            if not raw_line.strip():
+                j += 1
+                continue
+            if not raw_line[0].isspace():
+                break  # a new top-level frontmatter key ends this block
+
+            stripped = raw_line.strip()
+            item_match = re.match(r'^-\s*(.*)$', stripped)
+            if item_match:
+                if current:
+                    items.append(current)
+                current = {}
+                remainder = item_match.group(1)
+                kv = re.match(r'^([a-zA-Z_]+):\s*(.*)$', remainder) if remainder else None
+                if kv:
+                    current[kv.group(1)] = kv.group(2).strip().strip('"\'')
+            else:
+                kv = re.match(r'^([a-zA-Z_]+):\s*(.*)$', stripped)
+                if kv:
+                    current[kv.group(1)] = kv.group(2).strip().strip('"\'')
+            j += 1
+
+        if current:
+            items.append(current)
+        return items if items else None
+
+    return None
+
+
+def declared_type_entries(value):
+    """Normalize an `output_types` value into `[(type_or_None, when_or_None), ...]`. Mirrors
+    load-playbooks.sh's `declared_type_entries` exactly -- see the module-level note above."""
+    if not value:
+        return []
+    if isinstance(value, str):
+        return [(value, None)]
+    if isinstance(value, list):
+        entries = []
+        for item in value:
+            if isinstance(item, dict):
+                entries.append((item.get("type") or None, item.get("when") or None))
+            else:
+                entries.append((None, None))
+        return entries
+    return []
+
+
+def verify_typed_output(step_name, raw_value, pkg_root_dir):
+    """The E62_S02_T01 chokepoint check itself.
+
+    Returns `(failure_note_or_None, resolved_value)`:
+      - `(None, value)`     -- conforms (or nothing declared/checkable -- a no-op). `value` is the
+                               raw value unless a declared branch needed normalization to conform,
+                               in which case it is that branch's normalized value.
+      - `(note, None)`      -- every declared branch is non-conforming even after normalize. `note`
+                               names the step, the declared type(s) checked, and the raw
+                               pre-normalization value, for the existing `failed` -> `halted` path.
+
+    The conditional `{when, type}` rule (ratified at epic level, not re-derived here): the value
+    conforms if it satisfies AT LEAST ONE declared branch. No classifier script is ever run and no
+    branch state is tracked -- every declared type is checked against the SAME captured value.
+    """
+    skill_md_path = os.path.join(pkg_root_dir, "skills", step_name, "SKILL.md")
+    if not os.path.isfile(skill_md_path):
+        # No resolvable skill dir (e.g. a synthetic/test step name, or a stale board reference) --
+        # nothing to check against. Not this chokepoint's problem to diagnose further.
+        return None, raw_value
+
+    declared = extract_output_types(skill_md_path)
+    entries = [e for e in declared_type_entries(declared) if e[0] is not None]
+    if not entries:
+        # No declared output_types (or only malformed entries, which is a load-time concern this
+        # chokepoint does not re-litigate) -- a documented no-op, exactly as today.
+        return None, raw_value
+
+    validator = os.path.join(pkg_root_dir, "scripts", "validate-typed-object.sh")
+    if not os.path.isfile(validator):
+        print(
+            f"Error: type registry validator not found at {validator} -- cannot verify step "
+            f"'{step_name}'s declared output_types.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    types_checked = []
+    branch_reasons = []
+    normalized_fallback = None  # first branch that conforms only after normalize
+
+    for type_name, when_val in entries:
+        if type_name not in types_checked:
+            types_checked.append(type_name)
+
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", delete=False, prefix="run-playbook-step-verify-"
+            ) as tmp:
+                tmp.write(raw_value)
+                tmp_path = tmp.name
+            proc = subprocess.run(
+                [validator, "--value-file", tmp_path, type_name],
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            if tmp_path is not None:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+
+        if proc.returncode == 0:
+            # Conforms as given, under this branch alone -- the strongest possible verdict.
+            # "At least one branch accepts it" is satisfied immediately; stop checking further
+            # branches and never report this as normalized.
+            return None, raw_value
+        if proc.returncode == 2:
+            if normalized_fallback is None:
+                try:
+                    payload = json.loads(proc.stdout)
+                    normalized_fallback = payload.get("value")
+                except (json.JSONDecodeError, AttributeError):
+                    normalized_fallback = raw_value
+            continue
+        if proc.returncode == 3:
+            reason = None
+            try:
+                payload = json.loads(proc.stdout)
+                reason = payload.get("reason")
+            except (json.JSONDecodeError, AttributeError):
+                reason = None
+            branch = f" (when='{when_val}')" if when_val else ""
+            branch_reasons.append(f"type '{type_name}'{branch}: {reason or 'does not conform'}")
+            continue
+        # Exit 4 (unknown type), 5 (environment), 6 (registry contract violation) are
+        # ENVIRONMENT-level failures, never value judgments -- E62_S01_T02's own validator
+        # contract is explicit that these must not be conflated with non-conforming. A properly
+        # loaded chain should never reach an unknown/malformed type here (load-playbooks.sh's own
+        # load-time check, E62_S01_T04, already rejects that at confirmation time) -- if it
+        # happens anyway, this is a broken environment, not a playbook-author's bad value, so it
+        # is NOT routed through the failed/halted board mechanism.
+        print(
+            f"Error: scripts/validate-typed-object.sh reported an environment-level failure "
+            f"(exit {proc.returncode}) verifying step '{step_name}'s declared type '{type_name}': "
+            f"{proc.stderr.strip() or proc.stdout.strip()}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    if normalized_fallback is not None:
+        # No branch conformed as given, but at least one conforms after its own normalize.
+        return None, normalized_fallback
+
+    # No declared branch accepts the value, as given or normalized.
+    types_list = ", ".join(types_checked)
+    detail = "; ".join(branch_reasons) if branch_reasons else "no declared branch accepts it"
+    failure_note = (
+        f"step '{step_name}' produced a value that does not conform to its declared "
+        f"output_types [{types_list}] (raw value: '{raw_value}'); {detail}"
+    )
+    return failure_note, None
 
 # --- E53_S04_T05: artifact persistence + redaction (persisted copy only -- see header) ---
 _ABS_PATH_RE = re.compile(r'(/[^\s"\']+)')
@@ -693,6 +946,19 @@ if idx >= len(steps):
 current_step = steps[idx]
 state.setdefault("skipped", [])
 
+# E62_S02_T01: verify a "passed" step's typed-output value against its declared output_types
+# BEFORE the outcome dispatch below, so a non-conforming value can redirect into the EXISTING
+# `outcome == "failed"` branch immediately after -- no second failure mechanism is introduced.
+# Both no-op cases (no declared output_types; no typed-output value at all) leave `outcome` and
+# `extra` untouched, so this is byte-for-byte the pre-existing behavior for them.
+if outcome == "passed" and extra is not None:
+    verify_failure_note, resolved_value = verify_typed_output(current_step, extra, pkg_root)
+    if verify_failure_note is not None:
+        outcome = "failed"
+        note = verify_failure_note
+    else:
+        extra = resolved_value
+
 if outcome == "failed":
     state["halted"] = True
     state["failed_step"] = current_step
@@ -757,7 +1023,7 @@ print(json.dumps({
 print(f"STATE_FILE: {state_file_path}", file=sys.stderr)
 PY
 
-  python3 "$PY_SCRIPT" "$STATE_FILE" "$OUTCOME" "$EXTRA" "$PROJECT_DIR"
+  python3 "$PY_SCRIPT" "$STATE_FILE" "$OUTCOME" "$EXTRA" "$PROJECT_DIR" "$PKG_ROOT"
   exit $?
 
 else
