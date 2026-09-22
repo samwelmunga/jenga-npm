@@ -1,7 +1,11 @@
 ---
 name: j.todo
-description: Polyfill alias of the todo skill under a collision-safe directory name. Identical behavior to /todo — Add missions to the project todo list (project/todo.md), optionally linking them to epics and stories. Loops until the user is done, then optionally executes the list. Use when the bare /todo form is shadowed by another tool's own built-in command of the same name.
-output_types: id_list
+description: Add missions to the project todo list (project/todo.md), optionally linking them to epics and stories. Loops until the user is done, then optionally executes the list.
+output_types:
+  - when: argument-is-ranked-list
+    type: ranked_list
+  - when: argument-is-not-ranked-list
+    type: id_list
 input_types: id_list
 keywords:
   - todo
@@ -10,7 +14,6 @@ keywords:
   - backlog
   - add to list
   - j-todo
-  - polyfill
 examples:
   - "add this to the todo list"
   - "queue this as a task"
@@ -21,9 +24,9 @@ metadata:
 
 # Todo — Add Missions to the Todo List
 
-This skill is a literal-directory-name duplicate of `skills/todo/`. It exists so that `/j-todo` (and `j.j-todo`) give a guaranteed-unshadowed way to reach the same flow as `/todo`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/todo` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+`skills/j-todo/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-todo/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `docs/skill-authoring.md`'s "Invocation Convention").
 
-This file is generated/synced by `scripts/generate-j-alias.sh todo` from `skills/todo/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
+> ⚠️ **`scripts/generate-j-alias.sh` was retired by `E50_S14` and no longer exists — there is nothing to run.** This file was previously generated from a bare `skills/todo/SKILL.md` source; `E50_S15` deleted that directory. This file is now the sole canonical, hand-edited source for this skill — edit it directly.
 
 ## `--trivial` Flag
 
@@ -35,7 +38,41 @@ When `--trivial` is present, the mission is written as a **fully-formed task boa
 
 **Fallback on failure is out of scope here.** If a `--trivial`-forced inline run fails the smoke-harness or shows scope creep at dispatch time, `/do`'s own `--trivial` handling (a separate task, E32_S14_T02) is responsible for falling back to the full `task` pipeline — this skill only ever writes the initial forced-inline task.
 
+## `--ranked-list` Flag
+
+**Syntax:** `/todo --ranked-list` — takes no other arguments.
+
+**Non-interactive, one-shot, read-only.** `--ranked-list` is a distinct mode, not a modifier on a
+normal `/todo` mission-add invocation. It calls the shared `scripts/render-ranked-list.sh` (built by
+`E63_S01_T01`; see that script's own header comment for the full eligibility rule and its env-var
+overrides — do not re-derive or restate the scan logic here) and prints its stdout **verbatim**, then
+exits — this is exactly the same script and the same eligibility scan `/dooo`'s own step 2/3 already
+uses (`skills/j-dooo/SKILL.md`), so `--ranked-list`'s output is byte-for-byte identical to `/dooo`'s
+list for the same board/`todo.md` state. Do not append a trailing "Done" option or any interactive
+prompt — that framing belongs to `/dooo`'s own UI layer on top of the script, not to the shared
+script's output, and not to `--ranked-list` either.
+
+**No mutation.** `--ranked-list` never writes `project/todo.md`, never writes a board file, and never
+dispatches a task. It is a pure read/render, matching `scripts/render-ranked-list.sh`'s own
+no-mutation contract.
+
+**Takes precedence over mission text.** If the user somehow passes `--ranked-list` together with
+mission text, treat `--ranked-list` as taking precedence and ignore the mission text — it has no
+mission to attach to, so it cannot combine the way `--trivial` combines with an epic/story reference.
+
+**Short-circuits the whole flow.** See step 0 below — when `--ranked-list` is passed, none of the
+normal `/todo` steps 1-6 (the "where/what/goal" questions, mission classification, board writes, the
+"add another" loop) are ever reached.
+
 ## Instructions
+
+0. **If `--ranked-list` was passed, handle it now and stop — do not proceed to step 1:**
+   ```
+   bash "$([ -f scripts/render-ranked-list.sh ] && echo scripts/render-ranked-list.sh || echo node_modules/@jenga-ai/agent/scripts/render-ranked-list.sh)"
+   ```
+   Print the script's stdout verbatim as the response (no added framing, no "Done" option, no
+   follow-up question) and end the skill invocation here. Steps 1-6 below do not apply to
+   `--ranked-list` at all.
 
 1. **Ensure `project/todo.md` exists** — If it doesn't exist, it will be auto-created by `todo_manager.sh` — no manual action needed.
 

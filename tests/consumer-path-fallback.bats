@@ -72,3 +72,66 @@ mirror_as_npm_consumer() {
   [ "$resolved" = "node_modules/@jenga-ai/agent/templates/EXECUTION_SUMMARY_TEMPLATE.md" ]
   [ -f "$resolved" ]
 }
+
+# ---------------------------------------------------------------------------
+# Intra-script sibling resolution (E32_S15 follow-up).
+#
+# The two tests above pin the *doc-level* idiom -- a SKILL.md or agent .md
+# reaching into scripts/. They never covered a shipped script reaching for a
+# sibling script, which is how acquire/release-concurrency-slot.sh shipped
+# hardcoding "$PROJECT_DIR/scripts/with-lock.sh": the skill layer correctly
+# fell back to node_modules/ to reach the slot script, which then looked for
+# with-lock.sh in a directory postinstall.js never populates, and died 5 on
+# every consumer install.
+# ---------------------------------------------------------------------------
+
+@test "acquire-concurrency-slot.sh resolves with-lock.sh from a consumer install with no project-local scripts/ (E32_S15)" {
+  mirror_as_npm_consumer
+  mkdir -p "$CONSUMER_DIR/project/configs"
+  cp "$REPO_ROOT/project/configs/scope-thresholds.json" "$CONSUMER_DIR/project/configs/"
+
+  # The defining condition of the bug: the consumer has no scripts/ at its root.
+  [ ! -d "$CONSUMER_DIR/scripts" ]
+
+  run env JENGA_PROJECT_DIR="$CONSUMER_DIR" \
+    "$CONSUMER_DIR/node_modules/@jenga-ai/agent/scripts/acquire-concurrency-slot.sh" \
+    developer holderA sessA
+  [ "$status" -eq 0 ]
+  [ -f "$CONSUMER_DIR/project/queue/concurrency-slots-sessA.json" ]
+  run jq -r '.developer.holders.holderA' "$CONSUMER_DIR/project/queue/concurrency-slots-sessA.json"
+  [ "$output" != "null" ]
+}
+
+@test "release-concurrency-slot.sh resolves with-lock.sh from the same consumer install (E32_S15)" {
+  mirror_as_npm_consumer
+  mkdir -p "$CONSUMER_DIR/project/configs"
+  cp "$REPO_ROOT/project/configs/scope-thresholds.json" "$CONSUMER_DIR/project/configs/"
+  PKG="$CONSUMER_DIR/node_modules/@jenga-ai/agent/scripts"
+
+  run env JENGA_PROJECT_DIR="$CONSUMER_DIR" "$PKG/acquire-concurrency-slot.sh" developer holderA sessB
+  [ "$status" -eq 0 ]
+  run env JENGA_PROJECT_DIR="$CONSUMER_DIR" "$PKG/release-concurrency-slot.sh" developer holderA sessB
+  [ "$status" -eq 0 ]
+
+  # Slot actually freed, not just a silent exit 0.
+  run jq -r '.developer.holders | length' "$CONSUMER_DIR/project/queue/concurrency-slots-sessB.json"
+  [ "$output" -eq 0 ]
+}
+
+@test "the cap is still enforced through the node_modules-resolved lock (E32_S15)" {
+  mirror_as_npm_consumer
+  mkdir -p "$CONSUMER_DIR/project/configs"
+  cp "$REPO_ROOT/project/configs/scope-thresholds.json" "$CONSUMER_DIR/project/configs/"
+  PKG="$CONSUMER_DIR/node_modules/@jenga-ai/agent/scripts"
+  cap="$(jq -r '.max_concurrent_developers' "$CONSUMER_DIR/project/configs/scope-thresholds.json")"
+
+  for i in $(seq 1 "$cap"); do
+    run env JENGA_PROJECT_DIR="$CONSUMER_DIR" "$PKG/acquire-concurrency-slot.sh" developer "h$i" sessC
+    [ "$status" -eq 0 ]
+  done
+
+  # One past cap must be denied with exit 3 -- proving the lock/counter path
+  # really ran rather than short-circuiting somewhere benign.
+  run env JENGA_PROJECT_DIR="$CONSUMER_DIR" "$PKG/acquire-concurrency-slot.sh" developer overflow sessC
+  [ "$status" -eq 3 ]
+}

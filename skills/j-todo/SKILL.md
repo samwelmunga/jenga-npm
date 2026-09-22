@@ -1,6 +1,6 @@
 ---
 name: j.todo
-description: Polyfill alias of the todo skill under a collision-safe directory name. Identical behavior to /todo — Add missions to the project todo list (project/todo.md), optionally linking them to epics and stories. Loops until the user is done, then optionally executes the list. Use when the bare /todo form is shadowed by another tool's own built-in command of the same name.
+description: Add missions to the project todo list (project/todo.md), optionally linking them to epics and stories. Loops until the user is done, then optionally executes the list.
 output_types:
   - when: argument-is-ranked-list
     type: ranked_list
@@ -14,7 +14,6 @@ keywords:
   - backlog
   - add to list
   - j-todo
-  - polyfill
 examples:
   - "add this to the todo list"
   - "queue this as a task"
@@ -25,9 +24,9 @@ metadata:
 
 # Todo — Add Missions to the Todo List
 
-This skill is a literal-directory-name duplicate of `skills/todo/`. It exists so that `/j-todo` (and `j.j-todo`) give a guaranteed-unshadowed way to reach the same flow as `/todo`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/todo` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+`skills/j-todo/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-todo/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `docs/skill-authoring.md`'s "Invocation Convention").
 
-This file is generated/synced by `scripts/generate-j-alias.sh todo` from `skills/todo/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
+> ⚠️ **`scripts/generate-j-alias.sh` was retired by `E50_S14` and no longer exists — there is nothing to run.** This file was previously generated from a bare `skills/todo/SKILL.md` source; `E50_S15` deleted that directory. This file is now the sole canonical, hand-edited source for this skill — edit it directly.
 
 ## `--trivial` Flag
 

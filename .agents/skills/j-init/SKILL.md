@@ -1,6 +1,6 @@
 ---
 name: j.init
-description: Polyfill alias of the init skill under a collision-safe directory name. Identical behavior to /init — initializes a new project with the standard directory structure, PROJECT_SUMMARY.md, workflow.json, git repo, and gitignore. Use when the built-in "/init" command (e.g. GH Copilot's own init) shadows Jenga's /init alias.
+description: initializes a new project with the standard directory structure, PROJECT_SUMMARY.md, workflow.json, git repo, and gitignore. Use when the built-in "/init" command (e.g. GH Copilot's own init) shadows Jenga's /init alias.
 keywords:
   - init
   - initialize
@@ -8,7 +8,6 @@ keywords:
   - new project
   - scaffold
   - j-init
-  - polyfill
 examples:
   - "initialize a new project"
   - "set up a new workspace"

@@ -1,6 +1,6 @@
 ---
 name: j.continue
-description: Polyfill alias of the continue skill under a collision-safe directory name. Identical behavior to /continue — Check project status across PROJECT_SUMMARY.md, epics, and stories to determine what should be done next. Reports "All done!" if everything is complete. Use when the bare /continue form is shadowed by another tool's own built-in command of the same name.
+description: Check project status across PROJECT_SUMMARY.md, epics, and stories to determine what should be done next. Reports "All done!" if everything is complete.
 keywords:
   - continue
   - next
@@ -8,7 +8,6 @@ keywords:
   - what's next
   - status
   - j-continue
-  - polyfill
 examples:
   - "what should I do next?"
   - "continue with the project"
@@ -17,9 +16,9 @@ examples:
 
 # Continue — Pick Up the Next Work Item
 
-This skill is a literal-directory-name duplicate of `skills/continue/`. It exists so that `/j-continue` (and `j.j-continue`) give a guaranteed-unshadowed way to reach the same flow as `/continue`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/continue` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+`skills/j-continue/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-continue/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `docs/skill-authoring.md`'s "Invocation Convention").
 
-This file is generated/synced by `scripts/generate-j-alias.sh continue` from `skills/continue/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
+> ⚠️ **`scripts/generate-j-alias.sh` was retired by `E50_S14` and no longer exists — there is nothing to run.** This file was previously generated from a bare `skills/continue/SKILL.md` source; `E50_S15` deleted that directory. This file is now the sole canonical, hand-edited source for this skill — edit it directly.
 
 ## Instructions
 

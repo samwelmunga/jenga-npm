@@ -1,6 +1,6 @@
 ---
 name: j.do
-description: Polyfill alias of the do skill under a collision-safe directory name. Identical behavior to /do — Execute tasks from the scrum board. Reads from project/todo.md, resolves each entry to its full scrum board context, and drives the developer agent through implementation with the correct sender object and communication contract. Loops until all selected tasks are done or the user exits. Use when the bare /do form is shadowed by another tool's own built-in command of the same name.
+description: Execute tasks from the scrum board. Reads from project/todo.md, resolves each entry to its full scrum board context, and drives the developer agent through implementation with the correct sender object and communication contract. Loops until all selected tasks are done or the user exits.
 keywords:
   - do
   - execute
@@ -8,7 +8,6 @@ keywords:
   - work on
   - build
   - j-do
-  - polyfill
 examples:
   - "implement the login feature"
   - "work on the API endpoint"
@@ -26,11 +25,10 @@ directory under a distinct name, so a host tool shipping its own same-named buil
 shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see
 `docs/skill-authoring.md`'s "Invocation Convention").
 
-> ⚠️ **Do not run `scripts/generate-j-alias.sh do` against this directory.** This file was
-> previously generated from `skills/do/SKILL.md`, and carried a banner saying so. That relationship
-> is inverted under the contract above: edits land here first, and `skills/do/` is the copy awaiting
-> deletion by `E50_S15`. Regenerating would overwrite this file from the stale bare directory.
-> CLAUDE.md states the same prohibition in general terms; this is the concrete instance of it.
+> ⚠️ **`scripts/generate-j-alias.sh` was retired by `E50_S14` and no longer exists — there is
+> nothing to run.** This file was previously generated from a bare `skills/do/SKILL.md` source;
+> `E50_S15` deleted that directory. This file is now the sole canonical, hand-edited source for
+> this skill — edit it directly.
 
 ## `--trivial` Flag
 
@@ -194,7 +192,7 @@ After acquiring the epic lock and before writing the bundle manifest, scan all o
 
       1. **Extract expected files** from the task's frontmatter field `scope_rationale` and from the task's `## Description` section. Use a best-effort prose heuristic: split the text on whitespace and punctuation, then retain any token that either (a) contains a `/` character or (b) matches the pattern `*.*` (a dot surrounded by non-dot characters on both sides, e.g. `SKILL.md`, `foo.json`). Collect all retained tokens into a set called `expected_files`. This is intentionally permissive — false positives (expected files that were never actually changed) are acceptable and produce no report.
 
-      2. **Compute unexpected files**: let `actual_files` = the array stored at `task_changed_files[<task_id>]` in the bundle manifest (from step c.1). Compute `unexpected = actual_files − expected_files` (set difference: files in `actual_files` that have no match in `expected_files`). Matching is case-sensitive and exact against the relative path or the basename of the path — a token like `SKILL.md` matches any actual file whose basename is `SKILL.md` (e.g. `skills/do/SKILL.md`).
+      2. **Compute unexpected files**: let `actual_files` = the array stored at `task_changed_files[<task_id>]` in the bundle manifest (from step c.1). Compute `unexpected = actual_files − expected_files` (set difference: files in `actual_files` that have no match in `expected_files`). Matching is case-sensitive and exact against the relative path or the basename of the path — a token like `SKILL.md` matches any actual file whose basename is `SKILL.md` (e.g. `skills/j-do/SKILL.md`).
 
       3. **If `unexpected` is non-empty**:
          a. Write a Markdown conflict report to `project/queue/conflict-<task_id>.md` with the following structure:
@@ -235,14 +233,14 @@ After acquiring the epic lock and before writing the bundle manifest, scan all o
       2. Create the lock file: write the current ISO 8601 timestamp into `project/board/tasks/<task_id>_*.md.lock`.
       3. Update the task frontmatter field `status: Failed`.
       4. Delete the lock file immediately after the write completes.
-      Then invoke the rollback anchor cleanup procedure (see "### Bundle Manifest and Rollback Anchor" — failure path). After the rollback anchor completes, **release the developer concurrency slot** acquired in step 3 above: `scripts/release-concurrency-slot.sh developer <E##_S##> <orchestrator_session_id>` (per `### 4.4` step 2 below). Then **release the epic lock**: run `rm -f project/queue/epic-lock-<E##>.json`. Mark the bundle as failed and **halt** — do not execute any remaining tasks in the sequence.
+      Then invoke the rollback anchor cleanup procedure (see "### Bundle Manifest and Rollback Anchor" — failure path). After the rollback anchor completes, **release the developer concurrency slot** acquired in step 3 above: `"$([ -f scripts/release-concurrency-slot.sh ] && echo scripts/release-concurrency-slot.sh || echo node_modules/@jenga-ai/agent/scripts/release-concurrency-slot.sh)" developer <E##_S##> <orchestrator_session_id>` (per `### 4.4` step 2 below). Then **release the epic lock**: run `rm -f project/queue/epic-lock-<E##>.json`. Mark the bundle as failed and **halt** — do not execute any remaining tasks in the sequence.
 
 5. **Post-bundle verification** (runs only if all tasks completed without failure):
    - Inspect each task in the bundle for `needs_docs: true` in its frontmatter.
    - **If any task has `needs_docs: true`**: invoke the tester agent once for the full story. Pass the story ID, the list of all task IDs in the bundle, and the shared worktree path. The tester is responsible for updating individual task statuses.
    - **If all tasks have `needs_docs: false`**: the developer agent self-verifies — reviews each task's implementation against its acceptance criteria without invoking the tester. After self-verification passes, write `status: Passed` and `date_completed: <YYYY-MM-DD>` (today's date) to each task file using the file-locking protocol (steps c.1–c.4 above). No tester invocation occurs.
 
-6. **Cleanup**: on successful bundle completion, invoke the rollback anchor success path (see "### Bundle Manifest and Rollback Anchor" — success path) to delete the bundle manifest. Then **release the developer concurrency slot** acquired in step 3 above: `scripts/release-concurrency-slot.sh developer <E##_S##> <orchestrator_session_id>` (per `### 4.4` step 2 below). Then **release the epic lock**: run `rm -f project/queue/epic-lock-<E##>.json`.
+6. **Cleanup**: on successful bundle completion, invoke the rollback anchor success path (see "### Bundle Manifest and Rollback Anchor" — success path) to delete the bundle manifest. Then **release the developer concurrency slot** acquired in step 3 above: `"$([ -f scripts/release-concurrency-slot.sh ] && echo scripts/release-concurrency-slot.sh || echo node_modules/@jenga-ai/agent/scripts/release-concurrency-slot.sh)" developer <E##_S##> <orchestrator_session_id>` (per `### 4.4` step 2 below). Then **release the epic lock**: run `rm -f project/queue/epic-lock-<E##>.json`.
 
 ### Bundle Manifest and Rollback Anchor
 
@@ -443,7 +441,7 @@ After resolving the task context (step 4), passing override validation (step 4.1
 
 1. **Acquire a developer concurrency slot, then spawn a developer subagent.** Acquire first, per `### 4.4. Developer Concurrency Slot Enforcement` below (`<id>` = this task's id). On a full cap (`capacity_blocked` outcome), do not spawn anything — `### 4.4` already reverts this task's status to `Pending`, logs the `capacity_blocked` event, and tracks the consecutive-block count; stop here and let `/jenga` Phase 4 retry this task on a later wave once a slot frees up. On a successful acquire, spawn the subagent (Agent tool, `subagent_type: "developer"`) with the same sender object and context payload as step 5 would use, but with an explicit instruction added to the dispatch prompt: **do not create a worktree** — implement directly against the current checkout (the session's existing working tree), not an isolated `.claude/worktrees/<slug>` copy. This is the one concrete difference from the step-5 `task` path: everything else about how the subagent implements the task (reading the task file, following acceptance criteria, following repo conventions) is unchanged.
 
-2. **After the developer subagent reports implementation complete**, first **release the developer concurrency slot** acquired in step 1: `scripts/release-concurrency-slot.sh developer <task_id> <orchestrator_session_id>` (per `### 4.4` step 2) — this subagent's session has ended, so the slot is released now regardless of what it reports, before the smoke test result is even known. Then run the smoke test harness using the same invocation convention as `### 4.2. Inline Execution Path`:
+2. **After the developer subagent reports implementation complete**, first **release the developer concurrency slot** acquired in step 1: `"$([ -f scripts/release-concurrency-slot.sh ] && echo scripts/release-concurrency-slot.sh || echo node_modules/@jenga-ai/agent/scripts/release-concurrency-slot.sh)" developer <task_id> <orchestrator_session_id>` (per `### 4.4` step 2) — this subagent's session has ended, so the slot is released now regardless of what it reports, before the smoke test result is even known. Then run the smoke test harness using the same invocation convention as `### 4.2. Inline Execution Path`:
    - Run `bash "$([ -f scripts/smoke-harness.sh ] && echo scripts/smoke-harness.sh || echo node_modules/@jenga-ai/agent/scripts/smoke-harness.sh)" <changed_file>...`, passing the paths the subagent changed. With no arguments the harness infers them from `git diff --name-only HEAD`. It exits `0` on pass and `1` on failure.
    - If neither `scripts/smoke-harness.sh` nor `node_modules/@jenga-ai/agent/scripts/smoke-harness.sh` exists, log a warning and treat the result as a pass:
      ```
@@ -468,7 +466,7 @@ This is a self-contained, reusable procedure with two current callers — `### 4
 2. **Create a worktree** for the task, named `<E##_S##_T##-short-slug>` per standard Worktree Management conventions, if one does not already exist for this task. (A task dispatched under `light` scope, or forced `inline` via `--trivial`, never had one — both premises skip worktree creation — so this step always creates a fresh worktree in that case.)
 3. **Acquire a developer concurrency slot** (per `### 4.4. Developer Concurrency Slot Enforcement` below, `<id>` = this task's id). This fallback spawn is a distinct developer-subagent lifecycle from whatever `light`/`trivial` attempt preceded it — that attempt's own slot, if any, was already acquired and released around it (`### 4.3` step 1/2, or no slot at all for a `--trivial`-forced inline attempt, which never spawns a subagent) — so this step always acquires its own fresh slot. On a full cap (`capacity_blocked` outcome), do not spawn anything here either: apply `### 4.4`'s Pending-revert/log/consecutive-block handling for this task id and stop the fallback. The task remains exactly as the reduced-overhead attempt left it (any commits already made by that attempt stay in the worktree/branch just created in step 2), and `/jenga` Phase 4 retries it on a later wave once a slot frees up.
 4. **Spawn a developer subagent** in that worktree and have it pick up from the current state of the code (the changes already made by the reduced-overhead attempt are still present in the working tree / already committed, if any commit occurred — the subagent continues from there rather than starting over).
-5. **Invoke the tester agent** per the normal `### 5. Invoke the developer agent` flow's contract — full sender object, commit SHAs, worktree path. The tester is responsible for the terminal status write, exactly as in the standard `task`-scope pipeline. Once this developer subagent's session ends — tester-verified, failed, or errored — **release the slot** acquired in step 3: `scripts/release-concurrency-slot.sh developer <task_id> <orchestrator_session_id>` (per `### 4.4` step 2).
+5. **Invoke the tester agent** per the normal `### 5. Invoke the developer agent` flow's contract — full sender object, commit SHAs, worktree path. The tester is responsible for the terminal status write, exactly as in the standard `task`-scope pipeline. Once this developer subagent's session ends — tester-verified, failed, or errored — **release the slot** acquired in step 3: `"$([ -f scripts/release-concurrency-slot.sh ] && echo scripts/release-concurrency-slot.sh || echo node_modules/@jenga-ai/agent/scripts/release-concurrency-slot.sh)" developer <task_id> <orchestrator_session_id>` (per `### 4.4` step 2).
 6. **Emit a clear, non-fatal fallback notice** to the user/orchestrator, using the message matching the caller's origin:
    - origin `light`:
      ```
@@ -497,7 +495,7 @@ Detecting which case applies is mechanical: if the dispatch context already cont
 
 1. **Acquire.** Before spawning the developer subagent (or the bundle's shared developer subagent), run:
    ```
-   scripts/acquire-concurrency-slot.sh developer <id> <orchestrator_session_id>
+   "$([ -f scripts/acquire-concurrency-slot.sh ] && echo scripts/acquire-concurrency-slot.sh || echo node_modules/@jenga-ai/agent/scripts/acquire-concurrency-slot.sh)" developer <id> <orchestrator_session_id>
    ```
    Per that script's own exit-code contract:
    - **Exit `0`** — slot acquired. Proceed to spawn the subagent exactly as documented at the calling site, and carry out step 2 below (release) once that subagent's session ends.
@@ -523,7 +521,7 @@ Detecting which case applies is mechanical: if the dispatch context already cont
 
 2. **Release — on every subagent exit path.** Once the spawned developer subagent's session ends — whether it reports success, failure, or an error/exception — run:
    ```
-   scripts/release-concurrency-slot.sh developer <id> <orchestrator_session_id>
+   "$([ -f scripts/release-concurrency-slot.sh ] && echo scripts/release-concurrency-slot.sh || echo node_modules/@jenga-ai/agent/scripts/release-concurrency-slot.sh)" developer <id> <orchestrator_session_id>
    ```
    This call is unconditional and must be reached from every branch that follows a successful acquire in step 1: the success path, the ordinary `/do` failure→skip→`Pending` path, and any other error/exception branch that aborts the calling section early. `release-concurrency-slot.sh` is idempotent by its own contract (a no-op success if the holder entry is already absent), so calling it defensively — even in a code path where it is uncertain whether the acquire actually landed — is always safe and never an error.
 
@@ -564,7 +562,7 @@ The developer agent will:
 - Implement, commit at milestones, and invoke the tester agent
 - Return when the tester has verified the work
 
-**Release the slot on every exit path.** Once the developer agent's session ends — whether it returns having implemented and been verified by the tester, fails outright, or errors — release the slot immediately: `scripts/release-concurrency-slot.sh developer <task_id> <orchestrator_session_id>` (per `### 4.4` step 2). This applies uniformly to the success path above, `/jenga`'s existing "`/do` failure (background agent)" skip-to-`Pending` path (`skills/jenga/SKILL.md`'s Edge Cases), and any other error/exception that aborts this section early.
+**Release the slot on every exit path.** Once the developer agent's session ends — whether it returns having implemented and been verified by the tester, fails outright, or errors — release the slot immediately: `"$([ -f scripts/release-concurrency-slot.sh ] && echo scripts/release-concurrency-slot.sh || echo node_modules/@jenga-ai/agent/scripts/release-concurrency-slot.sh)" developer <task_id> <orchestrator_session_id>` (per `### 4.4` step 2). This applies uniformly to the success path above, `/jenga`'s existing "`/do` failure (background agent)" skip-to-`Pending` path (`skills/jenga/SKILL.md`'s Edge Cases), and any other error/exception that aborts this section early.
 
 ### 5.1. Intent-vs-Diff Check (needs_docs: false only)
 

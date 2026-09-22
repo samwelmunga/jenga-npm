@@ -1,6 +1,6 @@
 ---
 name: j.do
-description: Polyfill alias of the do skill under a collision-safe directory name. Identical behavior to /do — Execute tasks from the scrum board. Reads from project/todo.md, resolves each entry to its full scrum board context, and drives the developer agent through implementation with the correct sender object and communication contract. Loops until all selected tasks are done or the user exits. Use when the bare /do form is shadowed by another tool's own built-in command of the same name.
+description: Execute tasks from the scrum board. Reads from project/todo.md, resolves each entry to its full scrum board context, and drives the developer agent through implementation with the correct sender object and communication contract. Loops until all selected tasks are done or the user exits.
 keywords:
   - do
   - execute
@@ -8,7 +8,6 @@ keywords:
   - work on
   - build
   - j-do
-  - polyfill
 examples:
   - "implement the login feature"
   - "work on the API endpoint"
@@ -26,11 +25,10 @@ directory under a distinct name, so a host tool shipping its own same-named buil
 shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see
 `docs/skill-authoring.md`'s "Invocation Convention").
 
-> ⚠️ **Do not run `scripts/generate-j-alias.sh do` against this directory.** This file was
-> previously generated from `skills/do/SKILL.md`, and carried a banner saying so. That relationship
-> is inverted under the contract above: edits land here first, and `skills/do/` is the copy awaiting
-> deletion by `E50_S15`. Regenerating would overwrite this file from the stale bare directory.
-> CLAUDE.md states the same prohibition in general terms; this is the concrete instance of it.
+> ⚠️ **`scripts/generate-j-alias.sh` was retired by `E50_S14` and no longer exists — there is
+> nothing to run.** This file was previously generated from a bare `skills/do/SKILL.md` source;
+> `E50_S15` deleted that directory. This file is now the sole canonical, hand-edited source for
+> this skill — edit it directly.
 
 ## `--trivial` Flag
 
@@ -194,7 +192,7 @@ After acquiring the epic lock and before writing the bundle manifest, scan all o
 
       1. **Extract expected files** from the task's frontmatter field `scope_rationale` and from the task's `## Description` section. Use a best-effort prose heuristic: split the text on whitespace and punctuation, then retain any token that either (a) contains a `/` character or (b) matches the pattern `*.*` (a dot surrounded by non-dot characters on both sides, e.g. `SKILL.md`, `foo.json`). Collect all retained tokens into a set called `expected_files`. This is intentionally permissive — false positives (expected files that were never actually changed) are acceptable and produce no report.
 
-      2. **Compute unexpected files**: let `actual_files` = the array stored at `task_changed_files[<task_id>]` in the bundle manifest (from step c.1). Compute `unexpected = actual_files − expected_files` (set difference: files in `actual_files` that have no match in `expected_files`). Matching is case-sensitive and exact against the relative path or the basename of the path — a token like `SKILL.md` matches any actual file whose basename is `SKILL.md` (e.g. `skills/do/SKILL.md`).
+      2. **Compute unexpected files**: let `actual_files` = the array stored at `task_changed_files[<task_id>]` in the bundle manifest (from step c.1). Compute `unexpected = actual_files − expected_files` (set difference: files in `actual_files` that have no match in `expected_files`). Matching is case-sensitive and exact against the relative path or the basename of the path — a token like `SKILL.md` matches any actual file whose basename is `SKILL.md` (e.g. `skills/j-do/SKILL.md`).
 
       3. **If `unexpected` is non-empty**:
          a. Write a Markdown conflict report to `project/queue/conflict-<task_id>.md` with the following structure:

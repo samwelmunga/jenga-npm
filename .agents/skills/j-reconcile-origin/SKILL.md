@@ -1,13 +1,12 @@
 ---
 name: j.reconcile-origin
-description: Polyfill alias of the reconcile-origin skill under a collision-safe directory name. Identical behavior to /reconcile-origin — Sync the current (or specified) branch with origin by rebasing local commits on top of the latest upstream state. Use when the bare /reconcile-origin form is shadowed by another tool's own built-in command of the same name.
+description: Sync the current (or specified) branch with origin by rebasing local commits on top of the latest upstream state.
 keywords:
   - "sync branch"
   - "rebase origin"
   - "reconcile origin"
   - "pull rebase"
   - j-reconcile-origin
-  - polyfill
 examples:
   - "sync my branch with origin"
   - "rebase local commits on top of origin"
@@ -17,9 +16,9 @@ examples:
 
 # Reconcile Origin
 
-This skill is a literal-directory-name duplicate of `skills/reconcile-origin/`. It exists so that `/j-reconcile-origin` (and `j.j-reconcile-origin`) give a guaranteed-unshadowed way to reach the same flow as `/reconcile-origin`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/reconcile-origin` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+`skills/j-reconcile-origin/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-reconcile-origin/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `docs/skill-authoring.md`'s "Invocation Convention").
 
-This file is generated/synced by `scripts/generate-j-alias.sh reconcile-origin` from `skills/reconcile-origin/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
+> ⚠️ **`scripts/generate-j-alias.sh` was retired by `E50_S14` and no longer exists — there is nothing to run.** This file was previously generated from a bare `skills/reconcile-origin/SKILL.md` source; `E50_S15` deleted that directory. This file is now the sole canonical, hand-edited source for this skill — edit it directly.
 
 Use this skill to rebase local work on top of the latest `origin/<branch>` state without re-implementing git logic inline.
 

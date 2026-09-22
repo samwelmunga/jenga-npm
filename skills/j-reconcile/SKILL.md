@@ -1,19 +1,18 @@
 ---
 name: j.reconcile
-description: Polyfill alias of the reconcile skill under a collision-safe directory name. Identical behavior to /reconcile — Reconcile the scrum board with actual implementation state. Cross-checks every task's board status against git history and worktrees, merges orphaned worktree branches, demotes unimplemented "Done" items, promotes secretly-implemented items, flags code with no board provenance and offers /uncharted segment for it, and cleans stale entries from todo.md. Use when the board feels out of sync, after a big merge session, when tasks were completed outside the normal workflow, or when todo.md has grown stale. Trigger on phrases like "sync the board", "clean up the board", "reconcile", "board is out of date", "todo is stale", or "check what's really done". Use when the bare /reconcile form is shadowed by another tool's own built-in command of the same name.
+description: Reconcile the scrum board with actual implementation state. Cross-checks every task's board status against git history and worktrees, merges orphaned worktree branches, demotes unimplemented "Done" items, promotes secretly-implemented items, flags code with no board provenance and offers /uncharted segment for it, and cleans stale entries from todo.md. Use when the board feels out of sync, after a big merge session, when tasks were completed outside the normal workflow, or when todo.md has grown stale. Trigger on phrases like "sync the board", "clean up the board", "reconcile", "board is out of date", "todo is stale", or "check what's really done".
 metadata:
   prefered_agent: scrum-master
 output_types: id_list
 keywords:
   - j-reconcile
-  - polyfill
 ---
 
 # Reconcile — Board ↔ Code Synchronisation
 
-This skill is a literal-directory-name duplicate of `skills/reconcile/`. It exists so that `/j-reconcile` (and `j.j-reconcile`) give a guaranteed-unshadowed way to reach the same flow as `/reconcile`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/reconcile` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+`skills/j-reconcile/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-reconcile/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `docs/skill-authoring.md`'s "Invocation Convention").
 
-This file is generated/synced by `scripts/generate-j-alias.sh reconcile` from `skills/reconcile/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
+> ⚠️ **`scripts/generate-j-alias.sh` was retired by `E50_S14` and no longer exists — there is nothing to run.** This file was previously generated from a bare `skills/reconcile/SKILL.md` source; `E50_S15` deleted that directory. This file is now the sole canonical, hand-edited source for this skill — edit it directly.
 
 Walks the full board (epics → stories → tasks), verifies each item's status against what actually exists in git, and fixes any drift. Also cleans `project/todo.md` of entries that are already done. Then runs the same check in reverse — code that exists with no board item and no EST-tagged commit behind it — and offers `/uncharted segment` for what it finds.
 

@@ -1,6 +1,6 @@
 ---
 name: j.distribute
-description: Polyfill alias of the distribute skill under a collision-safe directory name. Identical behavior to /distribute — Distribute Jenga AI framework files from this private monorepo to one or more consuming projects via the local filesystem. Manages release type selection, version bumping, dry-run preview, per-target file copy, and a post-distribution git commit. Use when the bare /distribute form is shadowed by another tool's own built-in command of the same name.
+description: Distribute Jenga AI framework files from this private monorepo to one or more consuming projects via the local filesystem. Manages release type selection, version bumping, dry-run preview, per-target file copy, and a post-distribution git commit.
 keywords:
   - distribute
   - private distribution
@@ -9,7 +9,6 @@ keywords:
   - version bump
   - distribute to projects
   - j-distribute
-  - polyfill
 examples:
   - "/distribute"
   - "/distribute /path/to/consuming-project"
@@ -19,9 +18,9 @@ examples:
 
 # Distribute
 
-This skill is a literal-directory-name duplicate of `skills/distribute/`. It exists so that `/j-distribute` (and `j.j-distribute`) give a guaranteed-unshadowed way to reach the same flow as `/distribute`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/distribute` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+`skills/j-distribute/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-distribute/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `docs/skill-authoring.md`'s "Invocation Convention").
 
-This file is generated/synced by `scripts/generate-j-alias.sh distribute` from `skills/distribute/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
+> ⚠️ **`scripts/generate-j-alias.sh` was retired by `E50_S14` and no longer exists — there is nothing to run.** This file was previously generated from a bare `skills/distribute/SKILL.md` source; `E50_S15` deleted that directory. This file is now the sole canonical, hand-edited source for this skill — edit it directly.
 
 Copies Jenga AI framework files from this monorepo to all active consuming projects registered in `distribute.config.json`. Manages the full version lifecycle: release type selection, `package.json` version bump, dry-run preview, per-target file copy, and a final git commit of the version bump.
 

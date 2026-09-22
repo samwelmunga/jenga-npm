@@ -90,7 +90,37 @@ resolve_project_dir() {
 # Absolute path to this script itself, so the lock-holding re-invocation
 # below works regardless of how this script was originally invoked (a
 # relative path, a PATH lookup, etc.) and regardless of cwd.
-SCRIPT_ABS_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_ABS_PATH="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
+
+# ---------------------------------------------------------------------------
+# Resolve with-lock.sh.
+#
+# scripts/postinstall.js mirrors only skills/ and agents/ into a consumer's
+# .claude/ and .agents/ — scripts/ (which owns with-lock.sh) is never copied
+# there, so a consumer install has no <consumer>/scripts/with-lock.sh at all.
+# Probing "$PROJECT_DIR/scripts/with-lock.sh" alone therefore hard-fails every
+# consumer install, even though the file ships fine inside the package.
+#
+# The sibling probe is what fixes that: with-lock.sh always lands in the same
+# directory as this script, in a monorepo checkout AND inside the installed
+# npm package. The remaining two tiers mirror the three-tier shape already
+# used by skills/j-uncharted/scripts/elicitation-state.sh.
+# ---------------------------------------------------------------------------
+resolve_with_lock() {
+  local candidate
+  for candidate in \
+    "$SCRIPT_DIR/with-lock.sh" \
+    "$PROJECT_DIR/scripts/with-lock.sh" \
+    "$PROJECT_DIR/node_modules/@jenga-ai/agent/scripts/with-lock.sh"
+  do
+    if [ -f "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
 
 # ---------------------------------------------------------------------------
 # Internal locked-mutation entrypoint. Not intended to be invoked directly —
@@ -206,13 +236,13 @@ COUNTER_FILE="$PROJECT_DIR/project/queue/concurrency-slots-${SESSION_ID}.json"
 CONFIG_FILE="$PROJECT_DIR/project/configs/scope-thresholds.json"
 
 command -v jq >/dev/null 2>&1 || die 5 "jq is required but not found on PATH"
-[ -x "$PROJECT_DIR/scripts/with-lock.sh" ] || [ -f "$PROJECT_DIR/scripts/with-lock.sh" ] \
-  || die 5 "scripts/with-lock.sh not found at $PROJECT_DIR/scripts/with-lock.sh"
+WITH_LOCK="$(resolve_with_lock)" \
+  || die 5 "with-lock.sh not found (looked in $SCRIPT_DIR, $PROJECT_DIR/scripts, and $PROJECT_DIR/node_modules/@jenga-ai/agent/scripts)"
 
 mkdir -p "$PROJECT_DIR/project/queue" 2>/dev/null || true
 
 set +e
-"$PROJECT_DIR/scripts/with-lock.sh" "$COUNTER_FILE" -- \
+"$WITH_LOCK" "$COUNTER_FILE" -- \
   "$SCRIPT_ABS_PATH" __locked-acquire "$ROLE" "$HOLDER_ID" "$COUNTER_FILE" "$CONFIG_FILE"
 STATUS=$?
 set -e

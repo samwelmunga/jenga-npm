@@ -1,6 +1,6 @@
 ---
 name: j.dooo
-description: Polyfill alias of the dooo skill under a collision-safe directory name. Identical behavior to /dooo — Parallel execution orchestrator. Calls /do to start implementations via sub-agents, then loops back to the board to identify and offer parallelisable tasks until the user selects "Done". Use when the bare /dooo form is shadowed by another tool's own built-in command of the same name.
+description: Parallel execution orchestrator. Calls /do to start implementations via sub-agents, then loops back to the board to identify and offer parallelisable tasks until the user selects "Done".
 keywords:
   - dooo
   - parallel
@@ -8,7 +8,6 @@ keywords:
   - multiple tasks
   - orchestrate
   - j-dooo
-  - polyfill
 examples:
   - "run all pending tasks in parallel"
   - "execute multiple tasks at once"
@@ -19,9 +18,9 @@ metadata:
 
 # Dooo — Parallel Execution Orchestrator
 
-This skill is a literal-directory-name duplicate of `skills/dooo/`. It exists so that `/j-dooo` (and `j.j-dooo`) give a guaranteed-unshadowed way to reach the same flow as `/dooo`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/dooo` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+`skills/j-dooo/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-dooo/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `docs/skill-authoring.md`'s "Invocation Convention").
 
-This file is generated/synced by `scripts/generate-j-alias.sh dooo` from `skills/dooo/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
+> ⚠️ **`scripts/generate-j-alias.sh` was retired by `E50_S14` and no longer exists — there is nothing to run.** This file was previously generated from a bare `skills/dooo/SKILL.md` source; `E50_S15` deleted that directory. This file is now the sole canonical, hand-edited source for this skill — edit it directly.
 
 ## Instructions
 
@@ -32,19 +31,11 @@ After `/do` hands back control, mark the story/task that was just started as **R
 
 ### 2. Return to the board — identify parallelisable tasks
 
-Collect candidates from two sources:
-
-1. **Stories** — read all files from `project/board/stories/`.
-2. **Tasks derived from stories** — read all files from `project/board/tasks/`. A task is considered in-scope if its parent story (`story_id` in the task's front-matter) is listed in `project/todo.md`, even if the task itself is not directly listed there.
-
-A story or task is **eligible** to be presented as a parallel candidate if ALL of the following are true:
-- Its status is `Pending` (not `Running`, `In Progress`, `Passed`, etc.)
-- It has no unresolved dependencies (all blocking stories/tasks are at least `Running` or `Passed`)
-- It is directly listed in `project/todo.md`, **OR** its parent story is listed in `project/todo.md`
+Run `scripts/render-ranked-list.sh` from the project root. It scans `project/board/stories/` and `project/board/tasks/` against `project/todo.md` and prints the eligible items as a ranked, 1-indexed `<id> — <title>` list (stories first, then tasks) — this is the same eligibility scan and rendering `/dooo` has always used (status `Pending`, no unresolved dependencies, directly listed in `project/todo.md` or — for tasks — parent story listed), now implemented once in a shared script rather than described here as inline prose (`E63_S01_T01`; see `scripts/render-ranked-list.sh`'s own header for the full rule and its env-var overrides). A sibling command, `/todo --ranked-list`, calls the same script for a non-interactive view of this same list.
 
 ### 3. Present choices to the user
 
-Build a numbered list of eligible story titles (use `ask_user` with `choices`). **Always append "Done" as the last option.**
+Relay the script's output as the numbered list (use `ask_user` with `choices`). **Always append "Done" as the last option.**
 
 Example:
 ```

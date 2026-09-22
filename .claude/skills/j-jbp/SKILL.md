@@ -1,6 +1,6 @@
 ---
 name: j.jbp
-description: Polyfill alias of the jbp skill under a collision-safe directory name. Identical behavior to /jbp — Scaffold the project using the JengaBasePlate boilerplate repo template from https://github.com/samwelmunga/JengaBasePlate.git. Use when the bare /jbp form is shadowed by another tool's own built-in command of the same name.
+description: Scaffold the project using the JengaBasePlate boilerplate repo template from https://github.com/samwelmunga/JengaBasePlate.git.
 keywords:
   - jbp
   - boilerplate
@@ -8,7 +8,6 @@ keywords:
   - template
   - jenga base
   - j-jbp
-  - polyfill
 examples:
   - "scaffold with JengaBasePlate"
   - "set up the base template"
@@ -17,9 +16,9 @@ examples:
 
 # JBP — JengaBasePlate Scaffold
 
-This skill is a literal-directory-name duplicate of `skills/jbp/`. It exists so that `/j-jbp` (and `j.j-jbp`) give a guaranteed-unshadowed way to reach the same flow as `/jbp`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/jbp` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+`skills/j-jbp/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-jbp/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `docs/skill-authoring.md`'s "Invocation Convention").
 
-This file is generated/synced by `scripts/generate-j-alias.sh jbp` from `skills/jbp/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
+> ⚠️ **`scripts/generate-j-alias.sh` was retired by `E50_S14` and no longer exists — there is nothing to run.** This file was previously generated from a bare `skills/jbp/SKILL.md` source; `E50_S15` deleted that directory. This file is now the sole canonical, hand-edited source for this skill — edit it directly.
 
 ## Instructions
 

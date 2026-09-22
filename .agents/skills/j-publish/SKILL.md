@@ -1,6 +1,6 @@
 ---
 name: j.publish
-description: Polyfill alias of the publish skill under a collision-safe directory name. Identical behavior to /publish — Configure, validate, and orchestrate scaffolded release workflows through a single `/publish` entry point with bounded sub-commands. Use when the bare /publish form is shadowed by another tool's own built-in command of the same name.
+description: Configure, validate, and orchestrate scaffolded release workflows through a single `/publish` entry point with bounded sub-commands.
 keywords:
   - publish
   - deploy
@@ -12,7 +12,6 @@ keywords:
   - staged publishing
   - stage
   - j-publish
-  - polyfill
 examples:
   - "publish setup --target staging-appstore"
   - "publish setup --type mobile-ios"
@@ -42,9 +41,9 @@ metadata:
 
 # Publish — Deployment Pipeline Orchestrator
 
-This skill is a literal-directory-name duplicate of `skills/publish/`. It exists so that `/j-publish` (and `j.j-publish`) give a guaranteed-unshadowed way to reach the same flow as `/publish`, even if a host tool's own built-in command of the same name would otherwise shadow or override the bare `/publish` alias (Claude Code's native skill resolution is a literal-string, directory-name-based match — see `docs/skill-authoring.md`'s "Invocation Convention").
+`skills/j-publish/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-publish/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `docs/skill-authoring.md`'s "Invocation Convention").
 
-This file is generated/synced by `scripts/generate-j-alias.sh publish` from `skills/publish/SKILL.md` — do not hand-edit it; re-run the generator instead to pick up source changes.
+> ⚠️ **`scripts/generate-j-alias.sh` was retired by `E50_S14` and no longer exists — there is nothing to run.** This file was previously generated from a bare `skills/publish/SKILL.md` source; `E50_S15` deleted that directory. This file is now the sole canonical, hand-edited source for this skill — edit it directly.
 
 `/publish` is the single entry point for release workflows in this repository. It wires configuration validation, setup, gated deployment, release-note drafting, and ledger history into one end-to-end flow, and dispatches the final publish step to a per-type adapter.
 
