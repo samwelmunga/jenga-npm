@@ -510,5 +510,53 @@
     "dist_tag": "latest",
     "result": null,
     "reason": null
+  },
+  {
+    "id": "e101d856-5beb-4a48-aa6a-3bddbf762932",
+    "version": "v3.6.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-09-20T06:48:33Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "staged",
+    "git_tag": "v3.6.0",
+    "commit_sha": "8a04ea4f9bcfa890fc64d0c25f067e834ef44061",
+    "stage_id": "a7cc16d6-dcd7-458b-ae86-245a899b4bc3",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": null
+  },
+  {
+    "id": "e15ebf9f-484f-4a10-a2c5-82a5af766f64",
+    "version": "v3.6.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-09-20T07:06:36Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "stage_tested",
+    "git_tag": "v3.6.0",
+    "commit_sha": "8a04ea4f9bcfa890fc64d0c25f067e834ef44061",
+    "stage_id": "a7cc16d6-dcd7-458b-ae86-245a899b4bc3",
+    "dist_tag": null,
+    "result": "pass",
+    "reason": null
+  },
+  {
+    "id": "32f5229c-b95b-4463-961d-f55e48d2ba39",
+    "version": "v3.6.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-09-24T20:56:58Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "approved",
+    "git_tag": "v3.6.0",
+    "commit_sha": "01138b73f0fc5c82c27ad0179e151ca729037798",
+    "stage_id": "a7cc16d6-dcd7-458b-ae86-245a899b4bc3",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": null
   }
 ]
