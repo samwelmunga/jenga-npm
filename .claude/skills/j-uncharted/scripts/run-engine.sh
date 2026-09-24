@@ -366,10 +366,41 @@ def board_linkage():
         # A substring scan for "." would match every board file; say nothing rather than lie.
         return "n/a — target is the repository root"
     if not (target_abs == root or target_abs.startswith(root + "/")):
-        return "unlinked — target is outside this repository"
+        # Never checked, not verified absent -- this repo's board/ was never searched for an
+        # out-of-repo target. Keep this wording aligned with resolve-segment-target.sh's own
+        # not_checked / "target is outside this repository" convention (see that script's Step 1
+        # role in SKILL.md) rather than claiming "unlinked", which asserts a verified absence.
+        return "not_checked — target is outside this repository"
     board = os.path.join(root, "project", "board")
     if not os.path.isdir(board):
         return "unlinked (no `project/board/` in this repository)"
+    # Path-boundary test, not a bare substring test -- matches resolve-segment-target.sh's own
+    # linkage_for() semantics (its "MATCH SEMANTICS" header comment) so the two never contradict
+    # each other for the same in-repo target. A board file references target_rel when one of its
+    # path-like tokens (trailing "."/"-" stripped) either equals target_rel or is a path
+    # descendant of it -- "docs/hooks/guide.md" does NOT make "hooks" linked; "hooks/foo.sh" does.
+    # Full unification with resolve-segment-target.sh's BOARD_INDEX is a deliberate, separate,
+    # larger follow-up (see SKILL.md) -- this is the same boundary rule, reimplemented minimally.
+    PATH_TOKEN_RE = re.compile(r"[A-Za-z0-9_./-]+")
+
+    def path_tokens(text):
+        for m in PATH_TOKEN_RE.finditer(text):
+            tok = m.group(0).rstrip("./-")
+            if tok:
+                yield tok
+
+    def references(tok, target):
+        return tok == target or tok.startswith(target + "/")
+
+    # Mirror-path equivalence: a board item that names only the generated .agents/ or .claude/
+    # mirror of this target also counts as referencing the canonical root -- those mirrors are
+    # build outputs of the root file (CLAUDE.md's Canonical Naming Contract), not a distinct
+    # path-descendant relationship a bare boundary test would ever catch on its own.
+    mirror_targets = [target_rel]
+    for _prefix in (".agents/", ".claude/"):
+        if not target_rel.startswith(_prefix):
+            mirror_targets.append(_prefix + target_rel)
+
     ids = set()
     for dirpath, _dirnames, filenames in os.walk(board):
         for fn in filenames:
@@ -380,7 +411,10 @@ def board_linkage():
                     text = fh.read()
             except OSError:
                 continue
-            if target_rel in text:
+            matched = any(
+                references(tok, t) for tok in path_tokens(text) for t in mirror_targets
+            )
+            if matched:
                 m = re.match(r"^(E\d+(?:_S\d+)?(?:_T\d+)?)", fn)
                 ids.add(m.group(1) if m else fn[:-3])
     if not ids:

@@ -135,7 +135,41 @@ in-scope tasks when scoped) whose status is **not** a completed status (Pending,
 2. **Check documentation artefacts** as in phase 2.
 3. **Spot-check acceptance criteria** against the codebase.
 
-If implementation **is confirmed**:
+Before treating a matching commit as grounds to promote, run two more checks. These exist because
+a commit referencing a task ID is evidence the code was *touched*, not evidence it is *finished* —
+a separate, still-running `/do` pipeline for this exact task may have a real fix sitting unmerged
+in a worktree while an earlier, incomplete commit already landed on the branch this `/reconcile`
+pass is reading. This is the exact race documented in
+`project/rapports/problems/E40_S01_T05-premature-main-reconcile-vs-worktree-fix.md` — a `/reconcile`
+pass promoted a task to `Passed`/`Done` from a matching commit alone while a fallback developer/tester
+pipeline for that same task still had its bugfix unmerged on a worktree branch.
+
+4. **Check for an active concurrency-slot holder** — glob `project/queue/concurrency-slots-*.json`
+   (there can be several; one per orchestrating session, per `skills/j-do/SKILL.md`'s
+   `### 4.4. Developer Concurrency Slot Enforcement`). For each file found, check both
+   `.developer.holders` and `.tester.holders` for a key matching this task's id (`E##_S##_T##`) —
+   or, if this task belongs to a story-bundle dispatch, the containing story's id (`E##_S##`),
+   since a bundle acquires one shared slot keyed to the story id rather than one per task (`### 1.5`
+   step 3 of that skill). A matching key means a developer or tester subagent for this exact item is
+   (or very recently was) live in another session.
+5. **Check for an unmerged worktree or branch** — run `git worktree list` and `git branch --all`,
+   and look for an entry matching this task's `<E##_S##_T##-short-slug>` naming convention
+   (`skills/j-do/SKILL.md`'s worktree-naming convention, e.g. its Light Execution Path and Fallback
+   to Full Task-Scope Pipeline sections) that has not yet been merged into the branch this
+   `/reconcile` run is executing against. A match means real work for this task exists on a branch
+   this reconcile pass hasn't accounted for yet.
+
+If **either** check 4 or 5 matches, skip promotion for this task:
+- Leave the task's status exactly as it is now — do not touch `date_started`, `date_completed`, or
+  its `project/todo.md` entry.
+- Do **not** merge the branch/worktree found in check 5 yourself — that is a live pipeline's own
+  work-in-progress, not an orphaned branch like phase 2's merge case.
+- Report it in the reconcile report as **"likely still in-flight — skipped"** (see
+  `assets/report_format.md`'s "⏳ IN-FLIGHT — SKIPPED" section) — not silently promoted, and not
+  silently left unmentioned.
+- Continue to the next task in Phase 3 — this is a per-task skip, not a phase abort.
+
+If implementation **is confirmed** and **neither** check 4 nor 5 matched:
 - Update the task's status to **Passed** in its board file.
 - Set `date_completed` to today (ISO 8601).
 - If the task is listed in `project/todo.md`, **comment it out** by wrapping the line:

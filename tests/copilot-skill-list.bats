@@ -42,6 +42,46 @@
 # that sandbox as cwd. This lets the gate validate the root `skills/` tree at
 # all, keeps runs deterministic, and isolates them from user-level Copilot
 # config. Nothing is ever written into this repository's own trees.
+#
+# UPSTREAM DRIFT (E50_S07_T12, 2026-09-24): the colon-rejection behavior this
+# gate depends on already changed once. This file was authored against
+# `copilot` 1.0.83, which rejected a `:` in a skill's frontmatter `name:`
+# value outright (the error text in NAME_VALIDATION_SIGNATURE below). Against
+# `copilot` 1.0.88 (~2 weeks later, no documented changelog entry found for
+# this specific change), a `j:example`-named skill now loads and lists
+# cleanly — zero validation error. Confirmed by direct reproduction, not
+# inferred from a failing test. This is upstream Copilot CLI behavior, not a
+# regression in this repo's own code.
+#
+# This also means Copilot's own enforcement — the ORIGINAL, sole justification
+# recorded in E50_S07's story file for moving the canonical separator from
+# `j:` to `j.` — no longer holds at the Copilot layer on the CLI version
+# installed here. That finding is recorded on E50_S07's story file directly
+# (2026-09-24 note); revisiting the migration itself is out of scope for this
+# gate and for E50_S07_T12.
+#
+# Two tests below (the `j:` rejection test and part of the classifier test)
+# depend entirely on Copilot actually rejecting a colon. Hard-asserting on
+# that external, already-once-drifted behavior would mean the gate silently
+# goes stale the next time Copilot's validator changes again — exactly the
+# failure mode E50_S07_T04's own design notes (see "External-tool coupling"
+# in that task's summary) already flagged as a known risk. Rather than pin to
+# a hardcoded "known-good version range" (no reliable per-version changelog
+# exists to pin against), `require_colon_rejected()` below PROBES the
+# installed CLI's real, current behavior with a throwaway fixture before
+# asserting anything. When the CLI still rejects colons, the tests run and
+# assert exactly as originally designed. When it doesn't (the current state),
+# they skip loudly — never silently — with the installed CLI version named in
+# the skip message, exactly mirroring how `require_copilot()` already skips
+# loudly for an absent/unauthenticated CLI rather than failing or lying about
+# coverage. This makes the gate self-reactivate automatically the instant a
+# future Copilot CLI version reintroduces the rejection, with no maintenance
+# burden and no version list to keep up to date.
+#
+# The classifier test's other two failure classes (empty name, missing
+# frontmatter) do NOT depend on colon-rejection at all and keep reproducing
+# reliably against 1.0.88, so they were split into their own always-on test
+# instead of going down with the colon-dependent skip.
 
 # Shared assertion helpers. A bare `[[ ... ]]` does NOT fail a bats test unless
 # it is the body's final statement -- `[[` is a shell keyword and never fires
@@ -81,6 +121,36 @@ require_copilot() {
   probe_out="$(cd "$probe_dir" && copilot skill list 2>&1 || true)"
   if [[ "$probe_out" != *"Builtin skills:"* ]]; then
     skip "SKIPPED (no coverage): the 'copilot' CLI is present but unusable (likely unauthenticated) — this Copilot load-regression gate did not run. Probe output: ${probe_out:0:200}"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Colon-rejection behavioral probe (E50_S07_T12)
+#
+# probe_colon_rejected
+#   Stages a throwaway `j:probe`-named fixture in its own sandbox and returns
+#   success (0) only if the installed Copilot CLI's real, current output
+#   actually classifies it as a name-validation failure. This is a live
+#   behavioral check, not a version-number pin — see the file header's
+#   "UPSTREAM DRIFT" note for why.
+# ---------------------------------------------------------------------------
+probe_colon_rejected() {
+  local sandbox bad
+  sandbox="$(write_fixture_skill colon-probe probe "j:probe")"
+  bad="$(name_validation_failures "$sandbox")"
+  [ -n "$bad" ]
+}
+
+# require_colon_rejected
+#   Guard for the two colon-dependent assertions below. Skips loudly, naming
+#   the installed CLI version, when the current CLI tolerates a colon in the
+#   frontmatter `name:` value — never silently, and never a hard failure for
+#   a condition this gate does not control.
+require_colon_rejected() {
+  if ! probe_colon_rejected; then
+    local ver
+    ver="$(copilot --version 2>&1 | head -1)"
+    skip "SKIPPED (no coverage): installed Copilot CLI (${ver:-unknown version}) no longer rejects a ':' in a skill's frontmatter 'name:' value -- the E50_S01 colon-rejection this test targets does not currently reproduce at the Copilot layer (confirmed upstream behavior drift, see E50_S07_T12 and this file's UPSTREAM DRIFT header note). This test will re-activate automatically the moment a future Copilot CLI version reintroduces the rejection."
   fi
 }
 
@@ -230,6 +300,7 @@ assert_tree_loads() {
 
 @test "gate FAILS a skill whose frontmatter name uses the 'j:' separator (the E50_S01 regression)" {
   require_copilot
+  require_colon_rejected
 
   local sandbox
   sandbox="$(write_fixture_skill invalid-fixture example "j:example")"
@@ -251,22 +322,40 @@ assert_tree_loads() {
   [ -z "$output" ]
 }
 
-@test "classifier separates non-name-validation load errors from the name-validation class" {
+@test "classifier puts a 'j:' separator failure under the name-validation class, never the other bucket" {
+  require_copilot
+  require_colon_rejected
+
+  # Split out from the combined classifier test (E50_S07_T12) so the
+  # colon-dependent assertion can skip independently of the two
+  # colon-unrelated ones below, instead of taking them down with it.
+  local sandbox
+  sandbox="$(write_fixture_skill colon-fixture bad-separator "j:example")"
+
+  run name_validation_failures "$sandbox"
+  [ "$status" -eq 0 ]
+  assert_output_contains "bad-separator"
+
+  run other_failures "$sandbox"
+  [ "$status" -eq 0 ]
+  assert_output_not_contains "bad-separator"
+}
+
+@test "classifier separates non-name-validation load errors (empty name, missing frontmatter) from the name-validation class" {
   require_copilot
 
-  # Two failures Copilot reports with different wording: an empty name and
-  # malformed frontmatter. Neither is the E50_S01 regression, and neither may
-  # be misreported as it.
+  # These two failure classes are unrelated to colon-rejection and keep
+  # reproducing reliably regardless of the upstream drift described in this
+  # file's header (E50_S07_T12) — they stay unconditional, unlike the
+  # colon-dependent test above.
   local sandbox
-  sandbox="$(write_fixture_skill mixed-fixture bad-separator "j:example")"
-  write_fixture_skill mixed-fixture empty-name '""' > /dev/null
+  sandbox="$(write_fixture_skill mixed-fixture empty-name '""')"
   mkdir -p "$sandbox/.github/skills/no-frontmatter"
   echo "Body only — no YAML frontmatter at all." \
     > "$sandbox/.github/skills/no-frontmatter/SKILL.md"
 
   run name_validation_failures "$sandbox"
   [ "$status" -eq 0 ]
-  assert_output_contains "bad-separator"
   assert_output_not_contains "empty-name"
   assert_output_not_contains "no-frontmatter"
 
@@ -274,7 +363,6 @@ assert_tree_loads() {
   [ "$status" -eq 0 ]
   assert_output_contains "empty-name"
   assert_output_contains "no-frontmatter"
-  assert_output_not_contains "bad-separator"
 }
 
 @test "every skill in the canonical skills/ tree loads in Copilot" {

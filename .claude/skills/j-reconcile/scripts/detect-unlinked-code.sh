@@ -143,7 +143,7 @@
 #   --board-dir <dir>    Board directory to consult.
 #                        Default: <repo-root>/project/board
 #   --resolver <path>    Path to resolve-segment-target.sh.
-#                        Default: ../../uncharted/scripts/resolve-segment-target.sh
+#                        Default: ../../j-uncharted/scripts/resolve-segment-target.sh
 #   --exclude <glob>     Additional exclusion, matched against the repo-relative
 #                        path with shell-glob semantics. Repeatable.
 #   --limit N            Cap on files listed per group. Default 10. 0 = unlimited.
@@ -292,7 +292,7 @@ REPO_ROOT=$(cd -- "$REPO_ROOT" && pwd -P)
 [ -n "$BOARD_DIR" ] || BOARD_DIR="$REPO_ROOT/project/board"
 
 # --- the borrowed linkage check -------------------------------------------------------------
-[ -n "$RESOLVER" ] || RESOLVER="$SCRIPT_DIR/../../uncharted/scripts/resolve-segment-target.sh"
+[ -n "$RESOLVER" ] || RESOLVER="$SCRIPT_DIR/../../j-uncharted/scripts/resolve-segment-target.sh"
 [ -f "$RESOLVER" ] || die 4 "board-linkage checker not found: $RESOLVER
   This script deliberately has no fallback implementation -- see the header. Restore
   skills/j-uncharted/scripts/resolve-segment-target.sh or pass --resolver <path>."

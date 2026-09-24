@@ -183,6 +183,7 @@ EXT_LANG = {
     ".cc": "cpp", ".cpp": "cpp", ".cxx": "cpp", ".hpp": "cpp", ".hh": "cpp",
     ".java": "java", ".kt": "kotlin", ".kts": "kotlin",
     ".php": "php",
+    ".cs": "csharp",
 }
 
 SHEBANG_LANG = [
@@ -539,6 +540,33 @@ def scan_php(text, path, base_dir, language, source):
         add_external(spec.lstrip("\\").split("\\")[0], language, "package", source)
 
 
+CSHARP_USING = re.compile(r"^\s*using\s+(?:static\s+)?([\w.]+)\s*;", re.M)
+# Dot-bounded, matching scan_jvm's JVM_STDLIB_PREFIXES convention: a bare prefix match
+# (e.g. "System") would also swallow unrelated namespaces like "SystemUnderTest.Helpers"
+# or "Systemantics.Foo". "System" and "Microsoft" are also valid bare (undotted) using
+# targets on their own (e.g. "using System;"), so they're checked as an exact match too.
+CSHARP_STDLIB_PREFIXES = ("System.", "Microsoft.")
+CSHARP_STDLIB_EXACT = ("System", "Microsoft")
+CSHARP_SRC_ROOTS = ("", "src", "Source")
+
+
+def scan_csharp(text, path, base_dir, language, source):
+    for spec in CSHARP_USING.findall(text):
+        if spec in CSHARP_STDLIB_EXACT or spec.startswith(CSHARP_STDLIB_PREFIXES):
+            add_external(spec, language, "stdlib", source)
+            continue
+        as_path = spec.replace(".", "/")
+        resolved = None
+        for src_root in CSHARP_SRC_ROOTS:
+            resolved = resolve_path(os.path.join(REPO_ROOT, src_root), as_path, [".cs"])
+            if resolved:
+                break
+        if resolved:
+            add_internal(spec, language, resolved, source)
+        else:
+            add_external(spec, language, "package", source)
+
+
 SCANNERS = {
     "javascript": scan_js, "typescript": scan_js,
     "python": scan_python,
@@ -549,6 +577,7 @@ SCANNERS = {
     "c": scan_c, "cpp": scan_c,
     "java": scan_jvm, "kotlin": scan_jvm,
     "php": scan_php,
+    "csharp": scan_csharp,
 }
 
 # ---------------------------------------------------------------------------
@@ -559,6 +588,7 @@ MANIFEST_NAMES = [
     "package.json", "pyproject.toml", "requirements.txt", "go.mod", "Cargo.toml", "Gemfile",
     "setup.py", "setup.cfg", "Pipfile", "composer.json", "pom.xml",
     "build.gradle", "build.gradle.kts", "Package.swift", "mix.exs", "pubspec.yaml",
+    "packages.config", ".csproj",
 ]
 
 
@@ -620,41 +650,69 @@ def _declared_pyproject(text):
     return sorted({n for n in names if n})
 
 
+CSPROJ_PACKAGE_REF = re.compile(r"""<PackageReference\s+[^>]*\bInclude\s*=\s*["']([^"']+)["']""")
+PACKAGES_CONFIG_PACKAGE = re.compile(r"""<package\s+[^>]*\bid\s*=\s*["']([^"']+)["']""")
+
+
+def _declared_csproj(text):
+    return sorted(set(CSPROJ_PACKAGE_REF.findall(text)))
+
+
+def _declared_packages_config(text):
+    return sorted(set(PACKAGES_CONFIG_PACKAGE.findall(text)))
+
+
 DECLARED_PARSERS = {
     "package.json": _declared_package_json,
     "requirements.txt": _declared_requirements,
     "go.mod": _declared_go_mod,
     "Cargo.toml": _declared_cargo,
     "pyproject.toml": _declared_pyproject,
+    ".csproj": _declared_csproj,
+    "packages.config": _declared_packages_config,
 }
 
 
 def collect_manifests(start_dir):
     found = []
     for directory, distance in find_upwards(start_dir, None):
+        dir_entries = None
         for name in MANIFEST_NAMES:
-            candidate = os.path.join(directory, name)
-            if not os.path.isfile(candidate):
-                continue
-            declared = None
-            parser = DECLARED_PARSERS.get(name)
-            if parser:
-                text = read_text(candidate)
-                if text is not None:
+            # Entries starting with "." (e.g. ".csproj") are extension globs rather than
+            # fixed filenames, since a .csproj's basename varies per project. Everything
+            # else keeps the original exact-filename lookup.
+            if name.startswith("."):
+                if dir_entries is None:
                     try:
-                        declared = parser(text)
-                    except Exception:
-                        notices.append(
-                            "Could not parse declared dependencies from %s; manifest is listed "
-                            "but declared_dependencies is null." % rel(candidate)
-                        )
-            found.append({
-                "name": name,
-                "path": rel(candidate),
-                "location": "target" if distance == 0 else "ancestor",
-                "distance": distance,
-                "declared_dependencies": declared,
-            })
+                        dir_entries = sorted(os.listdir(directory))
+                    except OSError:
+                        dir_entries = []
+                matches = [e for e in dir_entries if e.endswith(name)]
+            else:
+                matches = [name] if os.path.isfile(os.path.join(directory, name)) else []
+            for match_name in matches:
+                candidate = os.path.join(directory, match_name)
+                if not os.path.isfile(candidate):
+                    continue
+                declared = None
+                parser = DECLARED_PARSERS.get(name)
+                if parser:
+                    text = read_text(candidate)
+                    if text is not None:
+                        try:
+                            declared = parser(text)
+                        except Exception:
+                            notices.append(
+                                "Could not parse declared dependencies from %s; manifest is listed "
+                                "but declared_dependencies is null." % rel(candidate)
+                            )
+                found.append({
+                    "name": match_name,
+                    "path": rel(candidate),
+                    "location": "target" if distance == 0 else "ancestor",
+                    "distance": distance,
+                    "declared_dependencies": declared,
+                })
     return found
 
 

@@ -57,13 +57,14 @@ Every mode runs the same shared investigative engine and emits the same understa
 | `segment` | one file, directory, or feature | Two explicit modes since E20_S08_T03: `--mode delivery` (default, unchanged) analyses a target already in the repo and proposes a standard epic/story/task; `--mode investigate` opens a conversational architecture-investigation flow instead. See **`segment`** below for the mode choice. | E40_S02 / E20_S08_T03 |
 | `import` | an external source | Acquires a git URL, an out-of-repo path, or a pasted snippet into the repo at a user-confirmed location, then hands off to `segment`. | E40_S03 |
 | `onboard` | the whole codebase | Conversational by default since E20_S08_T03: discovery scripts seed a human-in-the-loop elicitation that writes `[ARCH]`-tagged board items and coarse graph nodes. `--legacy` reproduces the original fully-automated, zero-prompt, capped-**backfilled**-epic pass unchanged. Board/graph-only — never touches application code, in either mode. | E40_S04 / E20_S08_T03 |
+| `refresh` | the delta since a prior scan | Incremental re-scan for an already-`onboard`ed codebase. Locates a baseline (a committed scan-record, or one inferred from board evidence, or — if neither exists — falls back to a full `onboard` run), diffs the codebase against it, and routes only `changed`/`new` candidates through `onboard`'s own mechanics — same bare-vs-`--legacy` split, same Convergence Loop, same backfilled-epic writer. `removed` candidates are never silently dropped: their graph node(s) are marked superseded and the corresponding board item is flagged for review. Board/graph-only — never touches application code, in either mode. See **`refresh`** below. | E40_S07 |
 
 **Dispatch rules:**
 
-1. If the mode is one of `segment`, `import`, or `onboard`, dispatch to that section below.
-2. If the mode is missing or unrecognised, do **not** guess. Present the three modes as a numbered choice list with a free-text option last, per the Interaction Pattern in `CLAUDE.md`.
+1. If the mode is one of `segment`, `import`, `onboard`, or `refresh`, dispatch to that section below.
+2. If the mode is missing or unrecognised, do **not** guess. Present the four modes as a numbered choice list with a free-text option last, per the Interaction Pattern in `CLAUDE.md`.
 3. If a mode is given but its target is missing, ask for the target the same way — a numbered list of plausible candidates where they can be inferred, free-text last.
-4. Never widen scope across modes in one invocation. `import` may hand off to `segment` because that handoff is part of its contract (E40_S03_T03); nothing else chains implicitly.
+4. Never widen scope across modes in one invocation. Two, and only two, handoffs are part of a mode's own contract rather than a violation of this rule: `import` may hand off to `segment` (E40_S03_T03), and `refresh` may fall back to running `onboard` in full when no baseline exists for the requested root (see **`refresh`** below, and `onboard`'s own Invocation Contract row). Nothing else chains implicitly.
 
 ---
 
@@ -357,7 +358,9 @@ It returns one `results[]` record. Read three fields:
 
 **Report the linkage before doing anything else.** `unlinked` is the condition that justifies this whole workflow; say so. `linked` is a genuine finding — the target *already has* board provenance, so tell the user which items reference it and confirm they still want a segment pass rather than `/redo`. Do not proceed silently past a `linked` target.
 
-> **Step 1 is authoritative on linkage.** `run-engine.sh` keeps its own private substring version for the document's `Board Linkage` row, and the two can disagree: a board item mentioning only `docs/hooks/guide.md` makes the document call `hooks/` *linked* while Step 1 correctly calls it *unlinked*. Where they differ, trust Step 1 and correct the row when you fill in the document — do not hand the user a document that contradicts what you just told them.
+> **Step 1 is authoritative on linkage.** `run-engine.sh` keeps its own private, minimal reimplementation of `resolve-segment-target.sh`'s in-repo linkage check for the document's `Board Linkage` row — as of `E40_S02_T05`, both use the same path-boundary rule (a board reference counts only when a board file's path-like token equals the target or is a path descendant of it, and a board reference to the target's generated `.agents/`/`.claude/` mirror counts as a reference to the canonical root too), so the two should agree for every in-repo target. They can still theoretically diverge — `run-engine.sh`'s version is a minimal reimplementation, not `resolve-segment-target.sh`'s full `BOARD_INDEX`/tokenizer, and full unification (having `run-engine.sh` call `resolve-segment-target.sh --json-only` directly) remains a deliberate, separate follow-up (see below). Where they differ, trust Step 1 and correct the row when you fill in the document — do not hand the user a document that contradicts what you just told them.
+>
+> **When Step 1 reports `not_checked` (e.g. the target is outside this repository), do not render an `unlinked`/`linked` claim at all.** Neither is true — nothing was searched, so nothing was verified absent or present. Render the document's Board Linkage row as `"not applicable — target outside repository"` (or the equivalent `reason` Step 1 returned, worded the same way), and say the same thing out loud per "Report the linkage before doing anything else" above. `run-engine.sh`'s own row for this case is worded consistently (`not_checked — target is outside this repository`), so the two should already agree — but Step 1 stays the source of truth if they ever don't.
 >
 > The same script is also `/reconcile`'s board-linkage check (E40_S05_T02). Collapsing the two implementations into one is a deliberate follow-up, not something to do in passing — see the script's header.
 
@@ -659,7 +662,7 @@ exists as a *board-only* mode rather than a generic migration tool. Its entire o
 without exception, is:
 
 - `project/board/` (backfilled epics in `--legacy` mode; `[ARCH]`-tagged epics/stories/tasks in conversational mode)
-- `project/rapports/analysis/` (understanding documents and the subsystem cap record — `--legacy` mode only; conversational mode's primary output is the graph, not this document type — see Conversational Elicitation above)
+- `project/rapports/analysis/` (understanding documents and the subsystem cap record — `--legacy` mode only; conversational mode's primary output is the graph, not this document type — see Conversational Elicitation above). Both modes additionally write a committed scan-record (`*.scan-record.json`, `E40_S07_T01`) into this same directory at the end of every successful run — distinguished from an understanding document by filename suffix, never overloading one artifact with two purposes.
 - `project/PROJECT_SUMMARY.md` (populated by `E40_S04_T05`, `--legacy` mode only)
 - `project/knowledge-graph/graph.json` (coarse graph nodes/edges — conversational mode only, per the stub schema)
 - `project/queue/elicitation-state/` (multi-session persistence scratch state — conversational mode only, git-ignored, not a durable artifact)
@@ -682,10 +685,10 @@ stated here:
 
 New in **E20_S08_T03**. Runs when `onboard` is invoked without `--legacy`.
 
-**Step 1 — discovery stays scripted.** Run the exact same deterministic discovery chain the legacy pipeline uses — `discover-subsystems.sh` — unchanged. Evidence-gathering is not where this rework touches anything; only what happens with the output differs.
+**Step 1 — discovery stays scripted.** Run the exact same deterministic discovery chain the legacy pipeline uses — `discover-subsystems.sh` — unchanged. Evidence-gathering is not where this rework touches anything; only what happens with the output differs. Capture its output — Step 5 reuses it to write the scan-record once the run completes successfully.
 
 ```bash
-bash skills/j-uncharted/scripts/discover-subsystems.sh <root>
+DISCOVERY_JSON=$(bash skills/j-uncharted/scripts/discover-subsystems.sh <root>)
 ```
 
 **Step 2 — directory triage.** Feed the discovery output's candidate paths into the shared Directory Triage procedure (see Conversational Elicitation above), and stop at its confirmation gate before anything else happens.
@@ -699,6 +702,14 @@ bash skills/j-uncharted/scripts/elicitation-state.sh init --id "onboard-$(basena
 **Step 4 — convergence loop, once per surviving candidate.** Run the shared Convergence Loop procedure (see Conversational Elicitation above) for each candidate that survived triage — this is where the legacy pipeline's `apply-subsystem-cap.sh` and `write-backfilled-epics.sh` would have silently produced a capped set of `provenance: backfilled` epics; the conversational default asks about each one instead, subject to the same risk-weighted gating and hard turn cap. There is deliberately **no subsystem cap** on the conversational path — the turn cap already bounds cost per candidate, and capping the *candidate count* the way the legacy path does would silently drop subsystems from a human-in-the-loop conversation the same way the legacy path drops them from an unattended one, which defeats the point of asking. A codebase with far more subsystems than is practical to walk through conversationally in one sitting is exactly the multi-session case Multi-Session Persistence exists for — pause, resume across sessions, rather than truncate the candidate list.
 
 **Step 5 — on convergence, write the graph and the board item(s).** Per candidate: write the converged node(s)/edge(s) to `project/knowledge-graph/graph.json`, then present an `[ARCH]`-tagged board item proposal at whichever level fits (an individual subsystem is usually story-scale; the whole run may warrant a single `[ARCH]` epic containing one story per converged subsystem — judgement call, not a fixed rule) and stop at a confirmation gate before writing to `project/board/`, exactly as `segment --mode investigate`'s Step 4 does. Call `elicitation-state.sh complete` once every candidate has converged, been deferred, or been resolved past the turn cap.
+
+**Write the scan-record once the run has completed successfully** (`elicitation-state.sh complete` has been called) — not on every candidate, and not gated on `refresh` mode existing or ever being invoked (`E40_S07_T01`). Reuse `$DISCOVERY_JSON` captured at Step 1; this is the only place in the conversational path that needs it after Step 2:
+
+```bash
+bash skills/j-uncharted/scripts/write-scan-record.sh <<< "$DISCOVERY_JSON"
+```
+
+This is deliberately not the elicitation state file — that persistence is transient session scratch (see Multi-Session Persistence above); the scan-record is committed and must survive indefinitely between onboard/refresh runs. Baseline discovery and diff classification against this record are separate, not-yet-implemented follow-on tasks (`E40_S07_T02`, `E40_S07_T03`); this step only writes it.
 
 **`PROJECT_SUMMARY.md` population still applies, unchanged in spirit.** Once the conversational pass has produced its `[ARCH]` items, hand off to the scrum-master for the same `PROJECT_SUMMARY.md` Overview/Architecture & Structure drafting-and-confirmation flow described under **Updating PROJECT_SUMMARY.md from onboard evidence** below (Steps A-D) — substituting the conversational pass's converged understanding for the legacy pipeline's `kept` array as the evidence source. Do not skip the stub-vs-real-content check in Step B just because the evidence came from a conversation instead of a script.
 
@@ -764,7 +775,8 @@ that actually writes backfilled epics to the board — it consumes `apply-subsys
 framed around understanding and integration, never original construction):
 
 ```bash
-bash skills/j-uncharted/scripts/discover-subsystems.sh <root> \
+DISCOVERY_JSON=$(bash skills/j-uncharted/scripts/discover-subsystems.sh <root>)
+echo "$DISCOVERY_JSON" \
   | bash skills/j-uncharted/scripts/apply-subsystem-cap.sh --rapport "$DOC" \
   | bash skills/j-uncharted/scripts/write-backfilled-epics.sh
 ```
@@ -775,6 +787,22 @@ bash skills/j-uncharted/scripts/discover-subsystems.sh <root> \
 | `--json-out <file>` | Also write this script's JSON summary to a file. Same guard applies. |
 | `--dry-run` | Compute IDs and render content without writing anything — useful for previewing what a run would produce. |
 | `--label "<text>"` | Human label for the analysed codebase, used in each epic's Purpose section. |
+
+**Write the scan-record once epic generation has succeeded** (`E40_S07_T01`) — not gated on
+`refresh` mode existing or ever being invoked; every successful `onboard --legacy` run leaves one,
+the same as the conversational default does. Reuse `$DISCOVERY_JSON` captured above — it carries
+`discover-subsystems.sh`'s own `candidates` array, which is what `write-scan-record.sh` expects;
+`apply-subsystem-cap.sh`'s `kept`/`dropped` output is a different shape and is not what gets piped
+here:
+
+```bash
+bash skills/j-uncharted/scripts/write-scan-record.sh <<< "$DISCOVERY_JSON"
+```
+
+This is a committed record (never git-ignored), distinct from `elicitation-state.sh`'s transient
+session scratch — see the conversational default's own note on this above. Baseline discovery and
+diff classification against it are separate, not-yet-implemented follow-on tasks (`E40_S07_T02`,
+`E40_S07_T03`); this step only writes it.
 
 **Epic ID continuation.** The next free `E##` is one past the highest epic number found under
 both `--epics-dir` and the canonical `project/board/epics/`, so generated epics always continue
@@ -908,6 +936,218 @@ a "skip" on one section must not carry an incidental edit to it from a "replace"
 Like epic generation above it, "skip" on both sections is a valid outcome, not a failure: a run
 that leaves `PROJECT_SUMMARY.md` untouched still respects the read/write surface named under **The
 hard constraint** above, since that file was never a required write, only a permitted one.
+
+### `refresh`
+
+Incremental re-scan for a codebase that has already been through `onboard` at least once. Detects
+what changed since the last scan and only reinvestigates the delta, so keeping the board and graph
+current does not mean re-running the whole of `onboard` every time. Like `onboard`, `refresh` has
+the same bare-vs-`--legacy` split (see the Invocation Contract table above) — read **Conversational
+Elicitation** above (Human-Oracle-Availability Limitation, Directory Triage, Convergence Loop,
+Multi-Session Persistence) before running the conversational default. Everything below only
+sequences those shared mechanics, plus the three baseline/diff scripts introduced by this story
+(`E40_S07`), for `refresh`'s own scope — it does not redefine any of them. `refresh` is also bound,
+without exception or restatement, by the **Constraints** section below — read-only against
+application code, confirm before writing to the board, no new rapport type — the same as every
+other mode.
+
+**`refresh` introduces no new understanding mechanism.** Every node, epic, story, and task it
+writes goes through exactly the same write paths `onboard` already uses — the Convergence Loop for
+the conversational default, `write-backfilled-epics.sh` for `--legacy`. `refresh` only changes
+*which* candidates reach those paths: `find-scan-baseline.sh` (`E40_S07_T02`) locates a baseline
+and `diff-since-baseline.sh` (`E40_S07_T03`) classifies each previously-known candidate as
+`unchanged`/`changed`/`new`/`removed` before either write path ever runs.
+
+#### Baseline discovery and diff — shared by both modes
+
+Read `find-scan-baseline.sh`'s and `diff-since-baseline.sh`'s own header comments before invoking
+either — their exact flag names and exit-code numbers are load-bearing for this sequencing, and
+are not restated in full here (per **Shared Investigative Engine**'s "do not restate in prose what
+these scripts do step by step" convention above).
+
+**Step 1 — run fresh discovery once, keep it.** Both the diff below and (for `--legacy`) the
+backfill step later need the same fresh `discover-subsystems.sh` output, so it is captured once
+here rather than re-run per step — the same pattern `onboard`'s own Step 1 already uses:
+
+```bash
+DISCOVERY_JSON=$(bash skills/j-uncharted/scripts/discover-subsystems.sh <root>)
+```
+
+**Step 2 — locate a baseline.**
+
+```bash
+BASELINE_JSON=$(bash skills/j-uncharted/scripts/find-scan-baseline.sh <root>); RC=$?
+```
+
+Three outcomes, per the script's own exit-code contract:
+
+- **Exit 0, `"source": "scan-record"`.** The precise case — a prior `write-scan-record.sh` run for
+  this root was found under `project/rapports/analysis/`. Its `candidates[]` array (`path` +
+  `files`/`lines` per candidate) is what Step 3 below diffs against.
+- **Exit 0, `"source": "inferred"`.** No scan-record exists, but a `provenance: backfilled` epic or
+  an `[ARCH]`-tagged board item whose `docs:` overlaps the root gave an approximate baseline commit
+  via git history on that board file. **This shape carries no `candidates[]` array at all** — only
+  `baseline_commit` and `inferred_from[]`. Say this plainly to the user before proceeding: an
+  inferred baseline has no prior candidate set to compare *membership* against, so `diff-since-
+  baseline.sh` (Step 3) can only ever classify candidates as `unchanged`/`changed` against it — its
+  `new`/`removed` arrays stay empty by construction. A `refresh` against an inferred baseline
+  cannot tell you a subsystem disappeared or a brand-new one appeared, only that a previously-known
+  one did or didn't change. Do not imply otherwise to the user.
+- **Exit 3 — no baseline found.** Neither a scan-record nor board evidence exists for this root.
+  **Stop here and run `onboard`'s own conversational default in full** (its Steps 1-5 above,
+  including its own scan-record write at the end) — this *is* the first scan for this root, and
+  nothing else in this `refresh` subsection applies to that run. The *next* `refresh` invocation
+  against this root then finds that scan-record at Tier 1. `--legacy refresh` takes the equivalent
+  fallback: a full `onboard --legacy` run, which likewise ends by writing the first scan-record per
+  its own "Write the scan-record once epic generation has succeeded" step above.
+
+Any other exit (1 usage error, 2 environment error, 4 write failure) is not "no baseline" — surface
+the script's stderr and fix the invocation rather than falling back to `onboard`.
+
+**Step 3 — classify what changed.**
+
+```bash
+DIFF_JSON=$(echo "$BASELINE_JSON" \
+  | bash skills/j-uncharted/scripts/diff-since-baseline.sh --fresh <(echo "$DISCOVERY_JSON"))
+```
+
+`--fresh` is passed explicitly here (rather than letting the script re-run discovery itself)
+specifically so Step 1's `$DISCOVERY_JSON` is the one candidate set both this diff and the
+`--legacy` backfill step below reason about — one discovery pass per `refresh` run, not two that
+could in principle disagree if the tree changed between them. Read back `unchanged`, `changed`,
+`new`, and `removed` (each entry carrying at least `path`; `changed` entries also carry
+`changed_files`) — see the script's own header for the full shape. As Step 2 already flagged, a
+Tier 2 (`inferred`) baseline always yields empty `new`/`removed` arrays; that is documented,
+intentional behavior of the script, not a defect in this sequencing.
+
+#### Conversational default
+
+Runs when `refresh` is invoked without `--legacy`, once Steps 1-3 above have produced `$DIFF_JSON`.
+
+1. **`unchanged` candidates are skipped entirely.** No Familiarity Check, no Directory Triage
+   entry, no prompt of any kind — they never enter the candidate set below at all.
+2. **`changed` and `new` candidates proceed through Directory Triage (if applicable) and the
+   Convergence Loop exactly as `onboard`'s conversational default already does** (its Steps 2-5
+   above) — no new understanding mechanism, no different gating, no different question templates.
+   The candidate set fed to Directory Triage is the union of `$DIFF_JSON`'s `changed` and `new`
+   paths, in place of `onboard`'s own full `discover-subsystems.sh` output:
+
+   ```bash
+   echo "$DIFF_JSON" | jq -r '.changed[].path, .new[].path' \
+     | bash skills/j-uncharted/scripts/directory-triage.sh <root>
+   ```
+
+   Initialize persistence the same way `onboard`'s own Step 3 does, with an id that distinguishes a
+   `refresh` run from an `onboard` run over the same root:
+
+   ```bash
+   bash skills/j-uncharted/scripts/elicitation-state.sh init \
+     --id "refresh-$(basename "$(cd "$root" && pwd)")-$(date -u +%Y%m%d)" --target "<root>" --cap 5
+   ```
+3. **`removed` candidates are never silently deleted or status-changed.** For each entry in
+   `$DIFF_JSON`'s `removed` array:
+   - **Locate the corresponding graph node(s)** in `project/knowledge-graph/graph.json` — the
+     node(s) written for that path during the run that originally converged it. The stub schema
+     (`project/knowledge-graph/STUB_SCHEMA.md`) has no dedicated path field on a node, so this
+     correspondence is read from what the node's own `label`/`description` and edges recorded
+     about the candidate at convergence time, not looked up by a formal key. Where more than one
+     node plausibly corresponds and the traces don't disambiguate, say so under the board-item
+     flag below rather than guessing which one to mark.
+   - **Mark it `status: superseded`**, per the stub schema's Evidence-Wins Conflict Rule. That
+     rule's `superseded_by` field is documented as "required when `status: superseded`... points at
+     the node that superseded this one," and every worked example in the stub schema is a real
+     replacement node — there is no successor node for a subsystem that was simply removed. Rather
+     than inventing a new schema field to express "no successor" (the stub schema is deliberately
+     minimal per its own header, and the Human-Oracle-Availability Limitation above already
+     establishes the convention for an unrepresentable nuance: say it in the node's `description`
+     text, not a new field), set `superseded_by` to a plain sentinel string that cannot be mistaken
+     for a real node id — `"removed-no-successor"` — and state the reason in the node's own
+     `description`, e.g. "Subsystem removed from the codebase as of the `refresh` run on
+     <YYYY-MM-DD>; no successor node exists." **This sentinel is `refresh`'s own documented
+     convention, not a stub-schema addition** — if it's ever questioned, say so plainly rather than
+     treating it as if the stub schema itself defined it.
+   - **Flag the corresponding board item for review**, reusing existing mechanisms rather than a
+     new frontmatter field (`templates/SCRUM_BOARD_SCHEMA.md` has no `flagged_for_review` field or
+     equivalent, and adding one is a schema change for the scrum-master to make, not something this
+     skill invents in passing):
+     - If the item is already in a terminal status (`Passed`, `Passed with remarks`, `Rejected`,
+       `Done`, `Blocked`), set `reopened_on`/`reopened_reason` per the schema's Reopen Tracking
+       Fields, with a reason naming the removed path and the superseded node's id — **without**
+       changing `status` itself. This keeps the flag visible on the item without the side effect of
+       silently reopening it into active work; a human decides whether it actually needs reopening.
+     - Regardless of status, also append a dated prose note to the board item's body — the same
+       "Reconcile Note" convention already used elsewhere on this board (see e.g.
+       `project/board/stories/E40_S01_shared-investigative-engine.md`'s "Reconcile Note —
+       2026-09-23" section for a live example) — naming the removed path, the superseded node id,
+       and the `refresh` run's date, so a reader sees why the item needs a look even before
+       checking `reopened_reason`.
+     - **Never delete the board item and never change its `status` field** as part of this
+       flagging step — status changes remain the tester's exclusive responsibility (per
+       `agents/developer.md` and `agents/tester.md`), and this is a flag for a human to act on, not
+       an automatic resolution.
+
+   Both the conversational path and `--legacy` (below) use this exact supersede-and-flag treatment
+   for `removed` candidates — it is not conversational-only.
+
+**Write the scan-record once this run completes** (`elicitation-state.sh complete` has been
+called), exactly as `onboard`'s conversational default's own step does. Reuse `$DISCOVERY_JSON`
+from Step 1 above — the full fresh discovery output, not `$DIFF_JSON`'s classified subset, and not
+only the `changed`/`new` candidates that went through the Convergence Loop — so the next baseline
+correctly reflects every candidate currently present, including the `unchanged` ones that were
+skipped this run:
+
+```bash
+bash skills/j-uncharted/scripts/write-scan-record.sh <<< "$DISCOVERY_JSON"
+```
+
+**`PROJECT_SUMMARY.md` population applies the same way `onboard`'s conversational default already
+hands it off** — see **Updating PROJECT_SUMMARY.md from onboard evidence** above (Steps A-D),
+substituting this run's converged understanding (the `changed`/`new` candidates only) as the
+evidence source, the same substitution `onboard`'s own conversational default already makes for its
+own evidence.
+
+#### `--legacy` mode
+
+Baseline discovery and diff are exactly the shared Steps 1-3 above — there is no `--legacy`-specific
+variant of `find-scan-baseline.sh` or `diff-since-baseline.sh`.
+
+1. **Backfill only `changed`/`new` subsystems.** `apply-subsystem-cap.sh` requires `candidates[]`
+   entries carrying `rank` and `score` (see its own header) — fields `diff-since-baseline.sh`'s
+   `changed`/`new` entries do not carry (they carry `path`/`files`/`lines`, plus `changed_files` for
+   `changed`). Building a synthetic report from `$DIFF_JSON` directly would therefore be missing
+   fields `apply-subsystem-cap.sh` actually needs. Instead, filter Step 1's full
+   `$DISCOVERY_JSON` — which already carries `rank`/`score` for every candidate — down to just the
+   paths `$DIFF_JSON` classified as `changed` or `new`:
+
+   ```bash
+   CHANGED_NEW_PATHS=$(echo "$DIFF_JSON" | jq -c '[.changed[].path, .new[].path]')
+   FILTERED_REPORT=$(echo "$DISCOVERY_JSON" | jq --argjson keep "$CHANGED_NEW_PATHS" \
+     '.candidates |= map(select(.path as $p | $keep | index($p) != null))')
+
+   echo "$FILTERED_REPORT" \
+     | bash skills/j-uncharted/scripts/apply-subsystem-cap.sh --rapport "$DOC" \
+     | bash skills/j-uncharted/scripts/write-backfilled-epics.sh
+   ```
+
+   This is the "backfill only" behavior the story's Design section agrees to (`E40_S07` Design,
+   point 6): existing epics for `unchanged` subsystems are never touched, never re-capped, never
+   renumbered — they simply never enter `apply-subsystem-cap.sh`'s input. The subsystem cap
+   (default 8, `apply-subsystem-cap.sh --cap N`) still applies, but now scoped to the changed/new
+   set only, not the full fresh discovery output the way a plain `onboard --legacy` run scopes it.
+2. **`removed` candidates get the identical graph-node-supersede-and-flag treatment** described
+   under the conversational default's step 3 above — mark the corresponding graph node(s)
+   `status: superseded` with the `removed-no-successor` sentinel, and flag the board item via
+   `reopened_on`/`reopened_reason` (terminal items) plus a dated Reconcile Note (any item), never a
+   silent delete or status change. This part of the behavior is identical between the two modes.
+3. **Write the scan-record once epic generation succeeds**, exactly as a plain `onboard --legacy`
+   run's own step does. Reuse the full `$DISCOVERY_JSON` from Step 1 above — not the filtered
+   changed/new-only report built for `apply-subsystem-cap.sh` — for the same reason the
+   conversational default reuses the full set: the next baseline must reflect everything currently
+   present, including the `unchanged` subsystems this run never touched:
+
+   ```bash
+   bash skills/j-uncharted/scripts/write-scan-record.sh <<< "$DISCOVERY_JSON"
+   ```
 
 ---
 

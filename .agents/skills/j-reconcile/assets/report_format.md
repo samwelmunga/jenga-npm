@@ -18,6 +18,10 @@ Scope: <resolved scope — see forms below>
 ⬆️  PROMOTED (were incomplete → now Passed)
    🔧 E##_S##_T## · <Task Title>  — commits found, acceptance criteria met
 
+⏳ IN-FLIGHT — SKIPPED (implementation confirmed by commit, but not promoted — active work appears ongoing)
+   🔧 E##_S##_T## · <Task Title>  — concurrency-slot holder found in <concurrency-slots-file>
+   🔧 E##_S##_T## · <Task Title>  — unmerged branch <branch-name>
+
 🔄 ROLL-UP CHANGES
    📖 E##_S## · <Story Title>  — <old status> → <new status>
    📦 E## · <Epic Title>  — <old status> → <new status>
@@ -51,6 +55,13 @@ Scope: <resolved scope — see forms below>
   own epics/stories/tasks only — not the whole board's.
 - Omit any section that has zero items (e.g. if nothing was demoted, skip the DEMOTED block entirely).
 - The MERGED section should include the branch name that was merged.
+- The IN-FLIGHT — SKIPPED section is distinct from both PROMOTED and the ordinary "implementation
+  not confirmed, no action" case (which is never reported at all): it means Phase 3 found a
+  matching commit (implementation confirmed) but withheld promotion because an active
+  concurrency-slot holder or an unmerged matching worktree/branch was also found — see
+  `/reconcile`'s Phase 3. Name the specific reason found (the concurrency-slots file, or the
+  branch/worktree name) so the report is checkable, not just asserted. Omit this section entirely
+  when no task was skipped for this reason.
 - The TODO CLEANUP section is always shown if `project/todo.md` existed at the start, even if zero changes were made (in that case show all counts as 0).
 - If `project/todo.md` did not exist, omit the TODO CLEANUP section.
 - The DOD GAPS section is omitted if no completed stories have unchecked DoD checkboxes.
