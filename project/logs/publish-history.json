@@ -574,5 +574,21 @@
     "target": "npm-jenga",
     "date": "2026-09-25T13:44:43Z",
     "exit_code": 2
+  },
+  {
+    "id": "d354c09a-152d-439b-825b-fbf3aa6e2a0f",
+    "version": "v3.7.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-09-25T19:09:51Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "staged",
+    "git_tag": "v3.7.0",
+    "commit_sha": "2170aa83daf26156d7916a6799709564c215245a",
+    "stage_id": "fad0d7ff-ecff-42fb-98d3-4bf52962e83d",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": null
   }
 ]
