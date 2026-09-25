@@ -558,5 +558,13 @@
     "dist_tag": "latest",
     "result": null,
     "reason": null
+  },
+  {
+    "event": "gate_failure",
+    "gate": "test",
+    "phase": "pre",
+    "target": "npm-jenga",
+    "date": "2026-09-25T00:23:19Z",
+    "exit_code": 2
   }
 ]
