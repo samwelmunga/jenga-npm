@@ -264,6 +264,14 @@ tests/helpers/router-route.mjs
 # cases exit 127 (command not found) and break `npm test` — the exact failure mode the
 # "a test may never outlive its subject" rule at the top of this file exists to prevent.
 tests/dev-done-post-sync-commit.bats
+# tests/mirror-permission-level-invariant.bats: runs skills/j-mirror-public/scripts/mirror.sh,
+# which lives under the fully-private skills/j-mirror-public/ blocklisted above (both naming
+# forms). Line 48 sets MIRROR_SH to that path and all 12 of its @test cases invoke it, so the
+# file has no publicly-meaningful subset — per docs/public-mirror-content-parity.md's rule
+# section, option 1 (blocklist) is correct when the ENTIRE file depends on a private subject,
+# and a visible skip would skip every case and report nothing. Same failure mode as the
+# dev-done-post-sync-commit.bats entry directly above; caught before it reached the mirror.
+tests/mirror-permission-level-invariant.bats
 
 # --- Private-tooling playbooks and their tests (E50_S13, user decision 2026-09-10) ---
 # brainstorm-to-mirror terminates in `mirror-public`, a deliberately private skill blocklisted
