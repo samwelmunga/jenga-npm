@@ -566,5 +566,13 @@
     "target": "npm-jenga",
     "date": "2026-09-25T00:23:19Z",
     "exit_code": 2
+  },
+  {
+    "event": "gate_failure",
+    "gate": "test",
+    "phase": "pre",
+    "target": "npm-jenga",
+    "date": "2026-09-25T13:44:43Z",
+    "exit_code": 2
   }
 ]
