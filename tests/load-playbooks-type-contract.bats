@@ -20,9 +20,12 @@
 # `templates/playbook-types.json` -- so these tests exercise the genuine shipped vocabulary
 # (`text`, `id_list`, `file_list`) rather than a hand-written stand-in that could drift from it.
 #
-# The TWO deliberate real-catalog exceptions are the last two tests, which the task's Acceptance
-# Criteria explicitly require: all five committed playbooks must still load with empty stderr, and
-# the one live forward edge in the repo must stay compatible.
+# The deliberate real-catalog exceptions are the last four tests, which the task's Acceptance
+# Criteria explicitly require: every committed playbook must still load with empty stderr, and the
+# one live forward edge in the repo must stay compatible. The playbook check is split across three
+# cases — the three public playbooks, asserted unconditionally, plus one guarded case each for the
+# two private ones (brainstorm-to-mirror, improve-to-commit), which skip visibly wherever
+# `.publicignore` has stripped them (see the comment above those cases).
 
 load helpers/assertions
 
@@ -317,10 +320,25 @@ PY
 }
 
 # -----------------------------------------------------------------------------
-# The two real-catalog checks the task's Acceptance Criteria require
+# The real-catalog checks the task's Acceptance Criteria require
 # -----------------------------------------------------------------------------
 
-@test "all five committed playbooks still load, with empty stderr" {
+# Split in two (2026-09-25). This was one case asserting all five committed playbooks load, which
+# made the file pass privately and fail only in the public mirror: brainstorm-to-mirror terminates in
+# the private `mirror-public` skill, so `.publicignore` (E50_S13) strips it there and the catalog has
+# four entries, not five. That is exactly the shape docs/public-mirror-content-parity.md's "a test
+# may never outlive its subject in the mirror" rule forbids.
+#
+# Resolved with that rule's option 2 (ship it, conditioned to skip), NOT option 1 (blocklist the
+# file): only the brainstorm-to-mirror assertion depends on the private playbook, so blocklisting all
+# of this file's cases would have discarded the rest of its public coverage for no reason.
+#
+# Splitting rather than wrapping the single case in a guard is deliberate — the rule's own text
+# prefers a visible skip "where the test can be split". A lone guarded case would have had to skip
+# wholesale in the mirror, taking the four public assertions down with it and reporting nothing about
+# them. Split, public keeps a genuinely passing four-playbook check AND gets a visible skip naming
+# the coverage that was withheld.
+@test "every public committed playbook still loads, with empty stderr" {
   # No fixture override: the real committed builtin + project-local catalog. stderr is captured to
   # its own file rather than merged into $output, so "empty stderr" can be asserted as emptiness
   # rather than as the absence of a substring.
@@ -329,9 +347,37 @@ PY
   [ "$status" -eq 0 ]
   [ ! -s "$stderr_file" ]
   assert_output_contains '"id": "board-hygiene"'
-  assert_output_contains '"id": "brainstorm-to-mirror"'
   assert_output_contains '"id": "idea-to-committed"'
   assert_output_contains '"id": "understand-then-commit"'
+}
+
+# TWO playbooks are private, for unrelated reasons, so they get one guarded case each rather than a
+# shared one — if either becomes public later, the other keeps skipping correctly on its own merits:
+#   - brainstorm-to-mirror (builtin) — E50_S13, terminates in the private `mirror-public` skill.
+#   - improve-to-commit (project-local) — E28_S14_T01 blocklists `project/.playbooks/` wholesale.
+#
+# Each guard keys on its own playbook JSON's absence from disk — never on an env var or an "am I the
+# public mirror" flag. A presence check stays correct automatically if `.publicignore` changes later;
+# a hardcoded flag rots silently. Same rule E50_S20_T02 states for this family of tests.
+@test "the private brainstorm-to-mirror playbook also loads, when it is present on disk" {
+  [ -f "$REPO_ROOT/skills/jenga/playbooks/brainstorm-to-mirror.json" ] \
+    || skip "brainstorm-to-mirror.json is absent here (private per .publicignore) — catalog assertion does not apply"
+
+  local stderr_file="$BATS_TEST_TMPDIR/real-catalog-b2m.err"
+  run bash -c "'$LOADER' 2> '$stderr_file'"
+  [ "$status" -eq 0 ]
+  [ ! -s "$stderr_file" ]
+  assert_output_contains '"id": "brainstorm-to-mirror"'
+}
+
+@test "the project-local improve-to-commit playbook also loads, when it is present on disk" {
+  [ -f "$REPO_ROOT/project/.playbooks/improve-to-commit.json" ] \
+    || skip "project/.playbooks/improve-to-commit.json is absent here (private per .publicignore) — catalog assertion does not apply"
+
+  local stderr_file="$BATS_TEST_TMPDIR/real-catalog-i2c.err"
+  run bash -c "'$LOADER' 2> '$stderr_file'"
+  [ "$status" -eq 0 ]
+  [ ! -s "$stderr_file" ]
   assert_output_contains '"id": "improve-to-commit"'
 }
 
