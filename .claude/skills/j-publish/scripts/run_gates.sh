@@ -292,7 +292,7 @@ run_command_capture() {
   local command="$1"
   LAST_GATE_COMMAND="$command"
   set +e
-  RUN_OUTPUT="$(bash -lc "$command" 2>&1)"
+  RUN_OUTPUT="$(bash -c "$command" 2>&1)"
   RUN_STATUS=$?
   set -e
 }
