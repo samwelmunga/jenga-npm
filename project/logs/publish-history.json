@@ -606,5 +606,21 @@
     "dist_tag": null,
     "result": null,
     "reason": "stage already absent from npm's staging area (npm stage list returned empty) by the time reject was attempted -- likely auto-expired; superseded by the v4.0.0 breaking-change release"
+  },
+  {
+    "event": "gate_failure",
+    "gate": "test",
+    "phase": "pre",
+    "target": "npm-jenga",
+    "date": "2026-09-26T12:38:52Z",
+    "exit_code": 2
+  },
+  {
+    "event": "gate_failure",
+    "gate": "test",
+    "phase": "pre",
+    "target": "npm-jenga",
+    "date": "2026-09-26T12:50:11Z",
+    "exit_code": 2
   }
 ]
