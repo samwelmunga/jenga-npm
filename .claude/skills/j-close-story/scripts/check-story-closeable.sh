@@ -21,11 +21,18 @@ usage() {
   exit 1
 }
 
-# Locate the project root relative to this script's location.
-# Script lives at: skills/j-close-story/scripts/check-story-closeable.sh
-# Project root is three levels up (skills/ → repo root).
+# Locate the project root via git, not a fixed relative climb — this script
+# is deployed both at its source location (skills/j-close-story/scripts/)
+# and mirrored to .claude/skills/j-close-story/scripts/, and a fixed "three
+# levels up" climb lands in the wrong place from the mirror. Same approach as
+# this directory's siblings: check-privatized.sh:138 and
+# compute-scope-divergence.sh:54.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+PROJECT_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -z "$PROJECT_ROOT" ]]; then
+  echo "ERROR: could not locate project root (git rev-parse --show-toplevel failed from $SCRIPT_DIR)" >&2
+  exit 1
+fi
 STORIES_DIR="$PROJECT_ROOT/project/board/stories"
 TASKS_DIR="$PROJECT_ROOT/project/board/tasks"
 

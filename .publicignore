@@ -272,6 +272,12 @@ tests/dev-done-post-sync-commit.bats
 # and a visible skip would skip every case and report nothing. Same failure mode as the
 # dev-done-post-sync-commit.bats entry directly above; caught before it reached the mirror.
 tests/mirror-permission-level-invariant.bats
+# tests/mirror-test-subject-invariant.bats: runs skills/j-mirror-public/scripts/mirror.sh (MIRROR_SH,
+# invoked by every @test case), which lives under the fully-private skills/j-mirror-public/
+# blocklisted above (both naming forms) -- same reasoning as the entry directly above. Added in the
+# same commit that creates this file (E28_S16_T02), so the guard's own regression suite never
+# reproduces, on its first run, the exact defect it exists to prevent.
+tests/mirror-test-subject-invariant.bats
 
 # --- Private-tooling playbooks and their tests (E50_S13, user decision 2026-09-10) ---
 # brainstorm-to-mirror terminates in `mirror-public`, a deliberately private skill blocklisted

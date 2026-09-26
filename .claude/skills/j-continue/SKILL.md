@@ -24,9 +24,9 @@ examples:
 
 1. **Check `project/PROJECT_SUMMARY.md`** — Determine if there is outstanding work at the project level.
 
-2. **Check `project/epics/`** — If the project summary is done, check if any epics have remaining work.
+2. **Check `project/board/epics/`** — If the project summary is done, check if any epics have remaining work.
 
-3. **Check `project/stories/`** — If epics are done, check if any stories have remaining work.
+3. **Check `project/board/stories/`** — If epics are done, check if any stories have remaining work.
 
    **Important:** Always check story status within an epic even if the epic itself is marked as done.
 

@@ -3,8 +3,23 @@
 # Run from the repository root.
 
 IDEA_FILE="project/ideas.md"
-TEMPLATE="skills/j-idea/assets/idea_template.md"
 PLANS_DIR="project/documentation/plans"
+
+# PACKAGE_ROOT locates the package-shipped idea template (skills/j-idea/assets/).
+# This script always lives at scripts/, one level below the package root, in
+# both layouts:
+#   - this monorepo checkout
+#   - a consumer install, inside node_modules/@jenga-ai/agent/
+# BASH_SOURCE-derived resolution is exact in both cases (same reasoning as
+# scripts/jenga-permission-level-switch.sh's PACKAGE_ROOT derivation), with a
+# defensive node_modules-relative fallback matching the PKG_ROOT convention in
+# skills/init/scripts/init.sh, in case BASH_SOURCE resolution is ever
+# unavailable (e.g. the script is sourced rather than executed).
+PACKAGE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TEMPLATE="$PACKAGE_ROOT/skills/j-idea/assets/idea_template.md"
+if [ ! -f "$TEMPLATE" ]; then
+  TEMPLATE="node_modules/@jenga-ai/agent/skills/j-idea/assets/idea_template.md"
+fi
 
 usage() {
   cat >&2 <<EOF

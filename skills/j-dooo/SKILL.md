@@ -27,7 +27,7 @@ metadata:
 ### 1. Invoke `/do`
 Call the `/do` skill to let the user select and start an implementation. `/do` will launch a background sub-agent to handle the implementation. Once the sub-agent is launched, `/do` returns control here.
 
-After `/do` hands back control, mark the story/task that was just started as **Running** in its board file (update the `status:` field in the YAML front-matter).
+After `/do` hands back control, mark the story/task that was just started as **In Progress** in its board file (update the `status:` field in the YAML front-matter).
 
 ### 2. Return to the board — identify parallelisable tasks
 

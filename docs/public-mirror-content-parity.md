@@ -173,6 +173,30 @@ public suite reports: option 1 makes the test invisible, option 2 makes it visib
 is the more honest signal and should be preferred where the test can be split; option 1 is correct
 when the entire file depends on a private subject, as both current cases do.
 
+### Now machine-enforced (`E28_S16`)
+
+Choosing neither option above is no longer caught only downstream. `check_test_subject_invariant`
+in `skills/j-mirror-public/scripts/mirror.sh` runs before every real push (alongside the existing
+publish-config and permission-level invariants), materialises the computed ship set into a temp
+tree, and runs the shipping `.bats` suite there. Any shipping test that fails — because its subject
+was blocklisted without following either sanctioned option, or for any other reason — refuses the
+push and names the failing file. It is skipped by `--dry-run` and `--inventory`, matching the other
+two pre-push invariants, and a missing `bats` binary is a logged skip rather than a hard failure.
+
+**Why this reproduces the failure instead of predicting it.** A measured probe (2026-09-25) tried
+static reference-scanning first — grepping each test for repo-relative paths and classifying them via
+`scripts/check-publicignore-match.sh` — and rejected it on the evidence: 5 raw hits across 4 files, of
+which only 1 was real. The other 3 were a fixture name written into a sandbox `.publicignore`, a
+prose comment citing a script for precedent, and comments citing line numbers — a static checker
+cannot tell an executed reference from a fixture string or a comment, and a 3-in-4 false-positive
+rate gets a gate ignored within a release or two. The shipped implementation instead runs the real
+suite in a mirror-shaped tree, which has zero false positives by construction because it reproduces
+the actual failure rather than guessing at it. Regression coverage: `tests/mirror-test-subject-invariant.bats`
+(`E28_S16_T02`), modeled on `tests/mirror-permission-level-invariant.bats`.
+
+The two sanctioned resolutions above are unchanged and still the correct authoring guidance — this
+gate is what happens when neither was followed, not a replacement for choosing one.
+
 **Which skills are never public.** Six are blocklisted in *both* their bare and `j-` form, so they
 ship in neither and no naming change can make them available: `convert`, `mirror-public`, `route`,
 `self-sync`, `strategy`, `train`. Plus `mcp/router/`. A test touching any of these must take option 1
@@ -181,10 +205,13 @@ referencing *those* by twin name is fine.
 
 **Audit command.** For each `tests/*.bats` and `tests/helpers/*` that
 `scripts/check-publicignore-match.sh` classifies `PUBLIC`, grep for references to the seven
-never-public subjects above. As of 2026-09-10 this reports no violations. This check is **manual and
-unwired** — the same weakness `E50_S19`'s rapport recorded about the `--min-pairs` floor. It was once
-the natural candidate to fold into the twin-parity gate; with that gate retired (see below) it has no
-host, and wiring it is still open.
+never-public subjects above. As of 2026-09-10 this reports no violations. This was originally **manual
+and unwired** — the same weakness `E50_S19`'s rapport recorded about the `--min-pairs` floor — with no
+natural host after the twin-parity gate it was once meant to fold into was retired. `E28_S16`'s
+`check_test_subject_invariant` (see "Now machine-enforced" above) is not that same static grep — it
+runs the real suite instead — but it closes the same gap this audit command existed to catch by hand,
+and does so automatically on every real push. This audit command remains useful as a targeted,
+faster manual spot-check; it is no longer the only thing standing between a violation and a push.
 
 ## Permanently private *by policy*: `brainstorm-to-mirror`
 

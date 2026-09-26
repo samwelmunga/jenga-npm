@@ -9,43 +9,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Features
 
 ### Bug Fixes
-- fix(tests): skip board validation test when project/board is absent (d68e780)
-- fix(jenga): resolve skill catalog paths against canonical j-<name> directories (d600372)
 
 ### Other
-- chore(publish): bump to v3.6.0 for staging (8a04ea4)
-- chore(mirror): sync from private at bfb44ddc 2026-09-20T06:12:06Z (49fb25b)
-- chore(mirror): sync from private at ab88b49a 2026-09-19T16:29:59Z (cbd3704)
-- chore(mirror): sync from private at 75169d4b 2026-09-18T10:10:34Z (695ffee)
-- chore(mirror): sync from private at 81b7f8b6 2026-09-18T00:09:12Z (4c7faa5)
-- chore(mirror): sync from private at 1e808e7e 2026-09-16T15:30:19Z (c306b3e)
-- chore(publish): bump to v3.5.0 for staging (c2f3837)
-- chore(mirror): sync from private at ce3853e7 2026-09-15T19:39:32Z (46f8f58)
-- chore(mirror): sync from private at ced290a0 2026-09-15T19:02:17Z (8d5f9c0)
-- chore(mirror): sync from private at 20d79791 2026-09-15T15:41:38Z (0b79076)
-- chore(mirror): sync from private at 1bce981 2026-09-15T10:19:23Z (60b8596)
-- chore(mirror): sync from private at 6bda753 2026-09-14T18:42:41Z (ec4391c)
-- chore(release): bump version to 3.4.0 (650192c)
-- chore(mirror): sync from private at 98f1ece 2026-09-14T12:59:03Z (793bf12)
-- chore(mirror): sync from private at 2d628e2 2026-09-13T18:04:06Z (8d67cb7)
-- chore(mirror): sync from private at 885a6e1 2026-09-13T16:41:16Z (6ab2827)
-- chore(mirror): sync from private at 885a6e1 2026-09-13T16:40:16Z (472e388)
-- chore(mirror): sync from private at bcbd66d 2026-09-13T04:10:08Z (6aeb966)
-- chore(mirror): sync from private at 64042d9 2026-09-13T01:55:37Z (8fd05f5)
-- chore(mirror): sync from private at 324ae53 2026-09-12T15:32:21Z (c0fdc7d)
-- chore(publish): update npm CI workflow for target npm-jenga (67ac115)
-- chore(publish): bump to v3.3.0 for staging (39a719c)
-- chore(mirror): sync from private at 9756884 2026-09-12T09:41:07Z (056ccd7)
-- chore(mirror): sync from private at 2364c7d 2026-09-12T00:46:44Z (fa03536)
-- chore(publish): bump to v3.2.0 for staging (5a15695)
-- chore: sync local ledger state (78995f4)
-- chore(mirror): sync from private at a211d75 2026-09-10T17:03:16Z (f405e55)
-- chore(mirror): sync from private at 4fd82f4 2026-09-10T11:10:28Z (b8a9972)
-- chore: sync session permission level and staged v3.1.2 ledger entry (711fd08)
-- chore(mirror): sync from private at 58ca1c3 2026-09-09T12:55:06Z (88cd1e9)
-- chore(publish): bump to v3.1.2 for staging (f79fa1d)
-- chore(publish): record v3.1.1 release notes and ledger entry (6a4efad)
-- chore(mirror): sync from private at fac03bb 2026-09-08T23:59:43Z (da2c517)
 
 ## [v3.1.1] — 2026-09-08
 

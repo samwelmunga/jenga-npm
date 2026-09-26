@@ -44,7 +44,7 @@ examples:
 Run the guard script:
 
 ```bash
-bash skills/j-close-story/scripts/check-story-closeable.sh <story-id>
+bash "$([ -f skills/j-close-story/scripts/check-story-closeable.sh ] && echo skills/j-close-story/scripts/check-story-closeable.sh || echo node_modules/@jenga-ai/agent/skills/j-close-story/scripts/check-story-closeable.sh)" <story-id>
 ```
 
 - If it exits with code 0 and prints `CLOSEABLE`, continue.
@@ -71,7 +71,7 @@ For **each task ID** listed in the story's `tasks:` frontmatter array:
 
 3. **Run per-task diff stat extraction:**
    ```bash
-   bash skills/j-close-story/scripts/extract-task-diff-stats.sh <task-id>
+   bash "$([ -f skills/j-close-story/scripts/extract-task-diff-stats.sh ] && echo skills/j-close-story/scripts/extract-task-diff-stats.sh || echo node_modules/@jenga-ai/agent/skills/j-close-story/scripts/extract-task-diff-stats.sh)" <task-id>
    ```
    The script outputs:
    ```
@@ -82,11 +82,11 @@ For **each task ID** listed in the story's `tasks:` frontmatter array:
 
 4. **Write stats to task frontmatter:**
    ```bash
-   bash skills/j-close-story/scripts/update-task-frontmatter.sh \
+   bash "$([ -f skills/j-close-story/scripts/update-task-frontmatter.sh ] && echo skills/j-close-story/scripts/update-task-frontmatter.sh || echo node_modules/@jenga-ai/agent/skills/j-close-story/scripts/update-task-frontmatter.sh)" \
      "project/board/tasks/<task-id>_*.md" \
      actual_files_changed <N>
 
-   bash skills/j-close-story/scripts/update-task-frontmatter.sh \
+   bash "$([ -f skills/j-close-story/scripts/update-task-frontmatter.sh ] && echo skills/j-close-story/scripts/update-task-frontmatter.sh || echo node_modules/@jenga-ai/agent/skills/j-close-story/scripts/update-task-frontmatter.sh)" \
      "project/board/tasks/<task-id>_*.md" \
      actual_lines_delta <N>
    ```
@@ -103,13 +103,13 @@ For **each task ID** listed in the story's `tasks:` frontmatter array:
 
    Run the divergence computation:
    ```bash
-   DIVERGENCE_FLAG=$(bash skills/j-close-story/scripts/compute-scope-divergence.sh \
+   DIVERGENCE_FLAG=$(bash "$([ -f skills/j-close-story/scripts/compute-scope-divergence.sh ] && echo skills/j-close-story/scripts/compute-scope-divergence.sh || echo node_modules/@jenga-ai/agent/skills/j-close-story/scripts/compute-scope-divergence.sh)" \
      "<execution_scope>" <actual_files_changed> <actual_lines_delta>)
    ```
 
    Write the result to task frontmatter:
    ```bash
-   bash skills/j-close-story/scripts/update-task-frontmatter.sh \
+   bash "$([ -f skills/j-close-story/scripts/update-task-frontmatter.sh ] && echo skills/j-close-story/scripts/update-task-frontmatter.sh || echo node_modules/@jenga-ai/agent/skills/j-close-story/scripts/update-task-frontmatter.sh)" \
      "project/board/tasks/<task-id>_*.md" \
      scope_divergence_flag "$DIVERGENCE_FLAG"
    ```
@@ -126,7 +126,7 @@ For **each task ID** listed in the story's `tasks:` frontmatter array:
    frontmatter writes and divergence computation above, check whether this
    task's own work is permanently excluded from the public mirror:
    ```bash
-   bash skills/j-close-story/scripts/check-privatized.sh <task-id> "project/board/tasks/<task-id>_*.md"
+   bash "$([ -f skills/j-close-story/scripts/check-privatized.sh ] && echo skills/j-close-story/scripts/check-privatized.sh || echo node_modules/@jenga-ai/agent/skills/j-close-story/scripts/check-privatized.sh)" <task-id> "project/board/tasks/<task-id>_*.md"
    ```
    This is a **static** check (per `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s "Static
    vs. Reactive Status Setting" section) — it derives the task's touched-file
@@ -176,7 +176,7 @@ against the story's own direct commits (E51_S03_T03) **before** deciding the
 story's terminal status:
 
 ```bash
-bash skills/j-close-story/scripts/check-privatized.sh <story-id> "project/board/stories/<story-id>_*.md"
+bash "$([ -f skills/j-close-story/scripts/check-privatized.sh ] && echo skills/j-close-story/scripts/check-privatized.sh || echo node_modules/@jenga-ai/agent/skills/j-close-story/scripts/check-privatized.sh)" <story-id> "project/board/stories/<story-id>_*.md"
 ```
 
 Passing the story id (`E##_S##`) rather than a task id makes the script's

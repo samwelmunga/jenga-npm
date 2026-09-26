@@ -169,11 +169,11 @@ This branch is entered when `detect-nl-intent.sh` (invoked above) classifies the
 This branch is entered when `detect-nl-intent.sh` classifies the argument as `nl_intent` — every comma-delimited segment failed the ID grammar, so the raw argument is treated as natural-language intent rather than a malformed ID list. This is purely a new *outcome* of the same argument-shape detection above — no new sigil, trigger prefix, or separate entry point is introduced.
 
 1. **Load the catalog** — invoke `skills/jenga/scripts/load-nl-catalog.sh` with no arguments (E53_S01_T02). Its stdout is the full skill catalog (`name`/`description`/`keywords`/`examples`/`prefered_agent` per skill), sourced exclusively from `lib/generate-skill-allow-list.js`'s generated inventory — see the script's own header for the full contract. Never re-derive this catalog by re-scanning `skills/` inline.
-2. **Match** — run `skills/j-route/SKILL.md`'s **Step 2 — Match the Prompt to a Skill** (the three-pass keyword → example-similarity → description match, including its tie-break and no-match handling) against this catalog, treating `detect-nl-intent.sh`'s `raw_argument` field as the prompt. Reuse that section's matching logic by reference — do not re-author its prose here.
-3. **Confident single match** — report the routing decision using `skills/j-route/SKILL.md`'s **Step 7 — Report Routing Decision** format (substitute `/jenga` for `/route` as the invoking command named in the report), then invoke the matched skill exactly as `skills/j-route/SKILL.md`'s **Step 6 — Invoke the Matched Skill** already does: load `agents/<prefered_agent>.md` when the matched skill specifies `metadata.prefered_agent`, otherwise execute the skill instructions directly. The matched skill's own execution takes over from here — do not continue into this `/jenga` invocation's Phase 1.
-4. **No match, or an ambiguous multi-way tie (single-skill match)** — before surfacing `/route`'s generic disambiguation options, attempt a **playbook fallback** (E53_S02): invoke `skills/jenga/scripts/match-playbook.sh "<raw_argument>"`. This step only ever runs when step 3 above did NOT already commit to a confident single-skill match — a confident single-skill match always wins outright and this playbook fallback is never even invoked in that case. Branch on `match-playbook.sh`'s `classification` field:
+2. **Match** — run this section's own **Skill Matching & Invocation Contract** (below) — the three-pass keyword → example-similarity → description match, including its tie-break and no-match handling — against this catalog, treating `detect-nl-intent.sh`'s `raw_argument` field as the prompt.
+3. **Confident single match** — report the routing decision using the **Skill Matching & Invocation Contract**'s **Report** format, then invoke the matched skill exactly as its **Invoke** rule already does: load `agents/<prefered_agent>.md` when the matched skill specifies `metadata.prefered_agent`, otherwise execute the skill instructions directly. The matched skill's own execution takes over from here — do not continue into this `/jenga` invocation's Phase 1.
+4. **No match, or an ambiguous multi-way tie (single-skill match)** — before surfacing the **Skill Matching & Invocation Contract**'s generic disambiguation options, attempt a **playbook fallback** (E53_S02): invoke `skills/jenga/scripts/match-playbook.sh "<raw_argument>"`. This step only ever runs when step 3 above did NOT already commit to a confident single-skill match — a confident single-skill match always wins outright and this playbook fallback is never even invoked in that case. Branch on `match-playbook.sh`'s `classification` field:
    - `playbook_match` → continue to **step 5 (Playbook proposal and execution)** below.
-   - `ambiguous` or `no_match` → continue to **step 6 (Fall through to `/route`'s disambiguation)** below — the exact behavior this branch already had before E53_S02, unchanged.
+   - `ambiguous` or `no_match` → continue to **step 6 (Fall through to the Skill Matching & Invocation Contract's disambiguation)** below — the exact behavior this branch already had before E53_S02, unchanged.
 5. **Playbook proposal and execution** — entered only on a `playbook_match` result from step 4. A proposed playbook is an ordered chain of skills (e.g. the canonical `brainstorm -> j.todo -> j.do -> j.dev-done -> j.mirror-public` chain defined in `skills/jenga/playbooks/brainstorm-to-mirror.json`) that must be confirmed, editable, and confirmable per `CLAUDE.md`'s Interaction Pattern before any step executes — the same confirm-before-execute posture `/jenga` already applies to the bare/scoped branches via `render-confirmation.sh`.
    a. **Resolve conditional metadata** (`E53_S04_T02`/`T04`) — before rendering, inspect the
       matched playbook's own `steps` array (as returned by `load-playbooks.sh`'s catalog, not the
@@ -208,12 +208,73 @@ This branch is entered when `detect-nl-intent.sh` classifies the argument as `nl
          - **Apply the transform** — when both `forward_from` (successfully resolved immediately above) and `resolve` are present, use your own LLM judgment to reshape/filter/type-bridge the forwarded value per `resolve`'s natural-language instructions (e.g. "pick the first three items", "convert this file_list to a text summary"). The transformed value — never the raw forwarded value — becomes this step's actual invocation input.
          - **Hard-fail, never silent pass-through** — if the transform cannot cleanly produce a usable, type-compatible result (the instructions don't plausibly apply to the actual value, the value is empty/malformed for what's being asked, or the result would not plausibly satisfy the target step's expected input shape), do **not** invoke this step and do **not** guess or pass through a differently-shaped value. Instead call `skills/jenga/scripts/run-playbook-step.sh advance <state_file> failed "<note>"`, where `<note>` follows the format `resolve failed on step '<step name>': could not apply "<resolve text>" to raw value <raw pre-transform value> — <short reason>` (the raw pre-transform value is always included, for debugging). Then follow the `halted` handling in 5e-vi below exactly as any other step failure — immediately stop executing further steps, report `failed_step`/`failed_note`/`completed`/`skipped`/`never_run` verbatim.
 
-         Then invoke the step exactly as `skills/j-route/SKILL.md`'s **Step 6 — Invoke the Matched Skill** already does for a single matched skill: load `agents/<prefered_agent>.md` when that step's own `SKILL.md` specifies `metadata.prefered_agent`, otherwise execute its instructions directly.
+         Then invoke the step exactly as this section's **Skill Matching & Invocation Contract**'s **Invoke** rule already does for a single matched skill: load `agents/<prefered_agent>.md` when that step's own `SKILL.md` specifies `metadata.prefered_agent`, otherwise execute its instructions directly.
       iii. After a normally-invoked step's execution concludes, call `skills/jenga/scripts/run-playbook-step.sh advance <state_file> passed ["<typed-output-value>"]` (the step completed successfully — supply the step's declared typed output, per its `output_types`, if it produced one) or `... advance <state_file> failed "<short failure note>"` (the step failed).
       iv. On a `step_ready` result, repeat step 5e for the newly-named step.
       v. On a `complete` result, report the full lists of `completed` AND `skipped` steps to the user and stop — the playbook run is finished; do not continue into this `/jenga` invocation's Phase 1.
       vi. On a `halted` result, **immediately stop executing any further steps** — no silent skip-ahead. Report `failed_step`, `failed_note`, `completed`, `skipped` (steps that already finished or were skipped), and `never_run` (steps that never got a chance to run) to the user verbatim from the halt report. Do not continue into this `/jenga` invocation's Phase 1.
-6. **Fall through to `/route`'s disambiguation** — entered when step 4 found no playbook match (`ambiguous` or `no_match`). Surface the same disambiguation options `skills/j-route/SKILL.md`'s **Step 2** already defines for these cases (browse `/help`, create a new skill via `/btw`, or proceed with the raw prompt) by reference to that section — do not re-copy its prose. Halt this `/jenga` invocation once the user picks an option; none of Phase 0.75's remaining steps or Phases 1-4 run for this branch.
+6. **Fall through to the Skill Matching & Invocation Contract's disambiguation** — entered when step 4 found no playbook match (`ambiguous` or `no_match`). Surface the same disambiguation options this section's **Skill Matching & Invocation Contract** already defines for these cases (browse `/help`, create a new skill via `/btw`, or proceed with the raw prompt). Halt this `/jenga` invocation once the user picks an option; none of Phase 0.75's remaining steps or Phases 1-4 run for this branch.
+
+##### Skill Matching & Invocation Contract
+
+This contract is inlined here — rather than referenced by path to `skills/j-route/SKILL.md` — because
+`j.route` is one of six skills that never ship publicly in either naming form (see
+`docs/public-mirror-content-parity.md`'s "Which skills are never public"), while `/jenga` itself ships
+publicly. A path reference from a shipped file to an unshipped one is a dead reference in the public
+package even though it resolves fine in this private repo (filed via `j.error` 2026-09-26).
+`skills/j-route/SKILL.md`'s own Step 2/6/7 carry the authoritative copy of this same contract for
+`/route`'s own use — the two are intentionally duplicated for public-mirror reasons; keep them in sync
+by hand if either changes.
+
+**Matching** (three passes, stop at first confident match):
+
+- *Pass 1 — Keyword Match* — check whether any phrase from a skill's `keywords` list appears verbatim
+  (case-insensitive) in the prompt.
+- *Pass 2 — Example Similarity* — compare the prompt against each skill's `examples` list as a
+  semantic similarity check; pick the skill whose examples most closely reflect the intent of the
+  prompt.
+- *Pass 3 — Description Match* — if no clear winner has emerged, compare the prompt against each
+  skill's `description` field; pick the skill whose description best captures what the user is trying
+  to do.
+
+**Tie-break** (two or more skills score equally) — present the top candidates and ask the user to
+choose:
+
+```
+More than one skill matches your prompt. Which should I apply?
+1. /<skill-a> — <one-line description>
+2. /<skill-b> — <one-line description>
+3. Neither — describe what you need
+```
+
+**No match** — inform the user and offer:
+
+```
+No matching skill found for: "<prompt>"
+Would you like to:
+1. Browse all available skills (/help)
+2. Create a new skill for this use case (/btw)
+3. Proceed without a skill (raw prompt)
+```
+
+**Invoke** — deliver to the appropriate agent: if the matched skill specifies
+`metadata.prefered_agent`, load that agent's definition from `agents/<prefered_agent>.md` and pass it
+the full context; otherwise execute the skill's instructions directly. Do not summarise or restate the
+matched skill's instructions — deliver them as-is.
+
+**Report** — before invoking, briefly inform the user:
+
+```
+Routing to: /<matched-skill-name>
+Reason: <one sentence explaining why this skill was chosen>
+```
+
+(`skills/j-route/SKILL.md`'s own Step 7 additionally reports `Board items found`/`Docs found` counts
+from its Steps 3-5 board/doc enrichment — this `/jenga` natural-language branch never performs that
+enrichment, so those two fields do not apply here and are intentionally omitted.)
+
+Then proceed immediately — do not wait for user confirmation unless the match was ambiguous (the
+tie-break above already handled that).
 
 #### Shared confirmation step (bare and scoped branches only)
 
@@ -345,8 +406,8 @@ When no eligible candidates remain in Phase 4, exit and output:
 - **Picker cancelled (bare branch)** — the entire `/jenga` run halts immediately after relaying the cancellation acknowledgement; no phase past 0.75 runs, and nothing on the board is modified.
 - **Confirmation cancelled (bare or scoped branch)** — same as picker cancellation: the entire `/jenga` run halts immediately; no scoped set is produced and no later phase runs.
 - **`detect-nl-intent.sh` classifies the argument as `mixed` (scoped branch)** — the whole invocation halts at Phase 0.75 with each rejected segment's `input`/`reason` reported verbatim, per `detect-nl-intent.sh`'s own classification contract (E53_S01_T01); no partial scope is assembled from the segments that did resolve, and no fallback guess is made for the rejected ones. The user must re-invoke `/jenga <ids>` with corrected input.
-- **`detect-nl-intent.sh` classifies the argument as `nl_intent`, no confident single-skill match, and `match-playbook.sh` (E53_S02) also finds no playbook match** — the natural-language branch's step 4 attempts the playbook fallback first (see the Natural-language branch's step 4/6), and only THEN surfaces `skills/j-route/SKILL.md`'s Step 2 no-match disambiguation options (browse `/help`, create a new skill via `/btw`, proceed with the raw prompt) instead of guessing; no phase past 0.75 runs until the user picks one.
-- **`detect-nl-intent.sh` classifies the argument as `nl_intent`, no confident single-skill match, and `match-playbook.sh` returns an ambiguous multi-way tie between playbooks** — treated the same as the no-playbook-match case above: falls through to `skills/j-route/SKILL.md`'s Step 2 tie-break prompt (top candidates + a "neither, describe what you need" option) instead of guessing; no phase past 0.75 runs until the user picks one. (`match-playbook.sh`'s own `ambiguous` result — a tie between playbooks — is intentionally not given its own separate disambiguation UI; it is treated identically to `no_match` and routed to the same `/route` Step 2 fallback prose, which already has its own tie-break handling.)
+- **`detect-nl-intent.sh` classifies the argument as `nl_intent`, no confident single-skill match, and `match-playbook.sh` (E53_S02) also finds no playbook match** — the natural-language branch's step 4 attempts the playbook fallback first (see the Natural-language branch's step 4/6), and only THEN surfaces the **Skill Matching & Invocation Contract**'s no-match disambiguation options (browse `/help`, create a new skill via `/btw`, proceed with the raw prompt) instead of guessing; no phase past 0.75 runs until the user picks one.
+- **`detect-nl-intent.sh` classifies the argument as `nl_intent`, no confident single-skill match, and `match-playbook.sh` returns an ambiguous multi-way tie between playbooks** — treated the same as the no-playbook-match case above: falls through to the **Skill Matching & Invocation Contract**'s tie-break prompt (top candidates + a "neither, describe what you need" option) instead of guessing; no phase past 0.75 runs until the user picks one. (`match-playbook.sh`'s own `ambiguous` result — a tie between playbooks — is intentionally not given its own separate disambiguation UI; it is treated identically to `no_match` and routed to the same fallback prose, which already has its own tie-break handling.)
 - **`match-playbook.sh` returns `playbook_match` and the user confirms the full chain, and every step succeeds** — the Natural-language branch's step 5e reports the full `completed` AND `skipped` steps lists to the user and stops; `/jenga`'s own Phase 1 never runs for this invocation (execution was already fully handled by the playbook's own steps, e.g. `j.do`/`j.dev-done`).
 - **`match-playbook.sh` returns `playbook_match` but the user cancels at the chain confirmation step (step 5c)** — identical posture to the existing picker/confirmation cancellation cases above: the entire `/jenga` run halts immediately after relaying the cancellation acknowledgement, with NO step of the chain executed; nothing on the board is modified by this invocation.
 - **`match-playbook.sh` returns `playbook_match`, the user confirms, and a step mid-chain fails** — the Natural-language branch's step 5e(vi) halts immediately on `run-playbook-step.sh`'s `halted` result: no step after the failed one runs (no silent skip-ahead), and the user is shown exactly which steps already completed or were skipped, which step failed (with its note), and which steps never ran.

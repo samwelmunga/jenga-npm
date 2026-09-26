@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://jenga.local/schemas/jenga-playbook.schema.json",
   "title": "Jenga Multi-Skill Playbook",
-  "description": "Schema for a single multi-skill playbook definition consumed by skills/jenga/scripts/load-playbooks.sh (E53_S02_T01). A playbook is a dedicated, versionable data file describing an ORDERED chain of skills that /jenga's natural-language branch may propose (as an editable, confirmable numbered list -- see skills/jenga/scripts/render-playbook-confirmation.sh, E53_S02_T03) when free-text intent spans more than one skill and does not cleanly resolve to a single one via skills/j-route/SKILL.md's Step 2 matching. This file itself (schema.json) is never treated as a playbook -- load-playbooks.sh explicitly excludes it by filename when scanning skills/jenga/playbooks/*.json.",
+  "description": "Schema for a single multi-skill playbook definition consumed by skills/jenga/scripts/load-playbooks.sh (E53_S02_T01). A playbook is a dedicated, versionable data file describing an ORDERED chain of skills that /jenga's natural-language branch may propose (as an editable, confirmable numbered list -- see skills/jenga/scripts/render-playbook-confirmation.sh, E53_S02_T03) when free-text intent spans more than one skill and does not cleanly resolve to a single one via skills/jenga/SKILL.md's inlined Skill Matching & Invocation Contract. This file itself (schema.json) is never treated as a playbook -- load-playbooks.sh explicitly excludes it by filename when scanning skills/jenga/playbooks/*.json.",
   "type": "object",
   "required": ["id", "name", "description", "keywords", "examples", "steps"],
   "additionalProperties": false,
@@ -18,17 +18,17 @@
     },
     "description": {
       "type": "string",
-      "description": "One-sentence explanation of what this playbook accomplishes end-to-end, used as the lowest-priority match signal (description match, same as skills/j-route/SKILL.md's Step 2 Pass 3) when keywords/examples don't produce a confident match."
+      "description": "One-sentence explanation of what this playbook accomplishes end-to-end, used as the lowest-priority match signal (description match, same as skills/jenga/SKILL.md's inlined Skill Matching & Invocation Contract Pass 3) when keywords/examples don't produce a confident match."
     },
     "keywords": {
       "type": "array",
-      "description": "Short phrases (1-3 words) for verbatim, case-insensitive keyword matching against the raw natural-language prompt -- the highest-priority match signal (Pass 1), mirroring skills/j-route/SKILL.md's Step 2 Pass 1 semantics exactly, but scoped to this playbook's catalog rather than the single-skill catalog.",
+      "description": "Short phrases (1-3 words) for verbatim, case-insensitive keyword matching against the raw natural-language prompt -- the highest-priority match signal (Pass 1), mirroring skills/jenga/SKILL.md's inlined Skill Matching & Invocation Contract Pass 1 semantics exactly, but scoped to this playbook's catalog rather than the single-skill catalog.",
       "items": { "type": "string" },
       "minItems": 1
     },
     "examples": {
       "type": "array",
-      "description": "Natural-language example prompts a user might type that should resolve to this playbook. Used for the semantic similarity match (Pass 2), mirroring skills/j-route/SKILL.md's Step 2 Pass 2 semantics. At least one example must plausibly span the full breadth of this playbook's steps (not just its first step) so it is distinguishable from a plain single-skill match.",
+      "description": "Natural-language example prompts a user might type that should resolve to this playbook. Used for the semantic similarity match (Pass 2), mirroring skills/jenga/SKILL.md's inlined Skill Matching & Invocation Contract Pass 2 semantics. At least one example must plausibly span the full breadth of this playbook's steps (not just its first step) so it is distinguishable from a plain single-skill match.",
       "items": { "type": "string" },
       "minItems": 1
     },
