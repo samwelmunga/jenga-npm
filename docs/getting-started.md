@@ -5,7 +5,7 @@ permalink: /getting-started.html
 ---
 
 
-> **You've run `/init`. Your project directory is scaffolded. Now what?**
+> **You've run `j.init`. Your project directory is scaffolded. Now what?**
 
 This guide answers that question. It covers the philosophy behind Jenga AI, how to think about the system, and four concrete patterns you'll use constantly. It's written for someone at the beginning — not a reference document, but a walkthrough.
 
@@ -15,7 +15,7 @@ For the full command reference, see [reference.md](./reference.md).
 
 ## Table of Contents
 
-1. [What You Have After `/init`](#1-what-you-have-after-init)
+1. [What You Have After `j.init`](#1-what-you-have-after-jinit)
 2. [The Three Pillars](#2-the-three-pillars)
    - [Role Separation](#role-separation)
    - [Board Hierarchy](#board-hierarchy)
@@ -34,9 +34,9 @@ For the full command reference, see [reference.md](./reference.md).
 
 ---
 
-## 1. What You Have After `/init`
+## 1. What You Have After `j.init`
 
-Running `/init` creates the skeleton of a live project:
+Running `j.init` creates the skeleton of a live project:
 
 ```
 project/
@@ -116,7 +116,7 @@ Here's how to go from an empty board to your first task executing. Where you sta
 **Step 1 — Define your project (2–5 min)**
 
 ```
-/brainstorm
+j.brainstorm
 "I'm building a habit tracker with a social feed and analytics"
 ```
 
@@ -124,7 +124,7 @@ The Scrum Master will ask focused questions to shape your goals into Epics. Once
 
 Alternatively, if you already know your epics:
 ```
-/pi-plan
+j.pi-plan
 ```
 This skips the dialogue and lets you define epics directly.
 
@@ -133,7 +133,7 @@ This skips the dialogue and lets you define epics directly.
 **Step 2 — Add your first feature to the board (3–5 min)**
 
 ```
-/todo
+j.todo
 "Add user registration with email/password"
 ```
 
@@ -144,7 +144,7 @@ The Scrum Master creates a Story under the appropriate Epic, decomposes it into 
 **Step 3 — Execute**
 
 ```
-/do
+j.do
 ```
 
 Select a task. The Developer agent takes over: creates a worktree, writes a plan, implements, commits, and hands off to the Tester. The Tester runs the tests and updates the board. You watch it happen.
@@ -154,14 +154,14 @@ Select a task. The Developer agent takes over: creates a worktree, writes a plan
 **Step 4 — Check the result**
 
 ```
-/status
+j.status
 ```
 
 See what passed, what's pending, and what (if anything) needs attention. If a task failed, the Tester will have written a rapport explaining why — the Scrum Master will surface it next session.
 
 Two more ways to verify a fresh task actually did what it was supposed to:
 - **See it running** — `/run` launches the app itself so you can exercise the new behavior directly, not just trust a green test result.
-- **Something looks wrong** — `/error` is guided troubleshooting: it gathers what broke, what you expected, and where it happens, then turns that into a fix task instead of leaving you to debug from scratch.
+- **Something looks wrong** — `j.error` is guided troubleshooting: it gathers what broke, what you expected, and where it happens, then turns that into a fix task instead of leaving you to debug from scratch.
 
 ---
 
@@ -171,23 +171,23 @@ That's the core loop. Everything else is a variation on it.
 
 ### Starting From an Existing Project
 
-If you're adopting Jenga AI into a codebase that already exists — no board, no Epics, nothing tracked yet — don't start with `/brainstorm`. Start with `/uncharted`, which is built specifically for code with no board provenance.
+If you're adopting Jenga AI into a codebase that already exists — no board, no Epics, nothing tracked yet — don't start with `j.brainstorm`. Start with `j.uncharted`, which is built specifically for code with no board provenance.
 
 **Step 1 — Onboard the whole codebase**
 
 ```
-/uncharted onboard .
+j.uncharted onboard .
 ```
 
-By default this is conversational: it discovers the project's subsystems and walks you through confirming what each one does, writing `[ARCH]`-tagged board items as you go. It never touches your application code — its entire output is board files, an analysis rapport, and (in conversational mode) knowledge-graph nodes. If you'd rather skip the back-and-forth and get an automated best-guess pass instead, use `/uncharted onboard . --legacy`.
+By default this is conversational: it discovers the project's subsystems and walks you through confirming what each one does, writing `[ARCH]`-tagged board items as you go. It never touches your application code — its entire output is board files, an analysis rapport, and (in conversational mode) knowledge-graph nodes. If you'd rather skip the back-and-forth and get an automated best-guess pass instead, use `j.uncharted onboard . --legacy`.
 
 **Step 2 — Or onboard just one part**, if you'd rather understand a single file or directory before committing to a whole-codebase pass:
 
 ```
-/uncharted segment path/to/directory
+j.uncharted segment path/to/directory
 ```
 
-**Step 3 — From here, you're on the New Project path.** Once the board reflects what already exists, add your next feature the same way a new project would — pick up at [Step 2](#new-project) above with `/todo`.
+**Step 3 — From here, you're on the New Project path.** Once the board reflects what already exists, add your next feature the same way a new project would — pick up at [Step 2](#new-project) above with `j.todo`.
 
 ---
 
@@ -200,10 +200,10 @@ By default this is conversational: it discovers the project's subsystems and wal
 The full cycle from idea to tested, committed code:
 
 ```
-/brainstorm → /todo → /do → /commit
+j.brainstorm → j.todo → j.do → j.commit
 ```
 
-Use `/brainstorm` before every non-trivial feature. It takes a few minutes and prevents scope creep, missing acceptance criteria, and mid-implementation surprises.
+Use `j.brainstorm` before every non-trivial feature. It takes a few minutes and prevents scope creep, missing acceptance criteria, and mid-implementation surprises.
 
 → [Full walkthrough: Your First Feature](./concepts.md#your-first-feature)
 
@@ -214,12 +214,12 @@ Use `/brainstorm` before every non-trivial feature. It takes a few minutes and p
 Jenga AI is designed for multi-session projects. At the start of a session:
 
 ```
-/continue   ← orient yourself and get a recommendation
-/status     ← full board overview
-/proceed    ← orient and immediately resume execution
+j.continue  ← orient yourself and get a recommendation
+j.status    ← full board overview
+j.proceed   ← orient and immediately resume execution
 ```
 
-Use `/reconcile` if the board has drifted from actual git history.
+Use `j.reconcile` if the board has drifted from actual git history.
 
 → [Full walkthrough: Working Across Sessions](./concepts.md#working-across-sessions)
 
@@ -229,8 +229,8 @@ Use `/reconcile` if the board has drifted from actual git history.
 
 When a new idea surfaces while you're working on something else:
 
-- **`/btw`** — quick capture of a small addition to a known story, returns to current task immediately
-- **`/spinoff`** — deeper capture of a diverging topic, preserves full context, optionally runs `/brainstorm` before deferring
+- **`j.btw`** — quick capture of a small addition to a known story, returns to current task immediately
+- **`j.spinoff`** — deeper capture of a diverging topic, preserves full context, optionally runs `j.brainstorm` before deferring
 
 The Scrum Master also detects topic divergence automatically and will prompt you to choose how to handle it.
 
@@ -243,10 +243,10 @@ The Scrum Master also detects topic divergence automatically and will prompt you
 When multiple tasks are independent of each other:
 
 ```
-/dooo
+j.dooo
 ```
 
-This orchestrates parallel sub-agents, each running a separate task simultaneously. After parallel execution, run `/reconcile` to sync the board with what actually happened.
+This orchestrates parallel sub-agents, each running a separate task simultaneously. After parallel execution, run `j.reconcile` to sync the board with what actually happened.
 
 → [Full walkthrough: Parallel Tasks](./concepts.md#parallel-tasks)
 
@@ -261,7 +261,7 @@ Playbooks surface two ways:
 - **Describe what you want, in plain language, to `/jenga`.** If your request spans more than one skill and matches a playbook, `/jenga` proposes the whole chain — a numbered, editable list — before running anything.
 - **Name a playbook directly**, once you know which one you want:
   ```
-  /playbook idea-to-committed
+  j.playbook idea-to-committed
   ```
 
 Either way, nothing executes until you confirm the chain, and you can uncheck individual steps before accepting.
@@ -269,13 +269,13 @@ Either way, nothing executes until you confirm the chain, and you can uncheck in
 **A basic example.** `idea-to-committed` chains exactly the core loop from [Your First 15 Minutes](#3-your-first-15-minutes) into a single call:
 
 ```
-/playbook idea-to-committed
+j.playbook idea-to-committed
 ```
 
 resolves to:
 
 ```
-/brainstorm → /todo → /do → /commit
+j.brainstorm → j.todo → j.do → j.commit
 ```
 
 — planning, board capture, implementation, and a commit, run as one confirmed sequence. A related playbook builds on the same idea: `understand-then-commit` prepends `j.uncharted` investigation before running the same pipeline — useful when the feature touches code you don't fully understand yet. Note where both chains stop: no built-in playbook publishes or mirrors on your behalf, so a build chain terminates at the commit and publishing stays something you invoke explicitly, when you mean it.
@@ -306,17 +306,17 @@ This section explains the concept once. For which specific skills declare an out
 
 | You want to… | Use |
 |---|---|
-| Plan a feature before building it | `/brainstorm` or `/deep-dive` |
-| Add work to the board | `/todo` or `/btw` |
-| Start implementing | `/do` or `/dooo` |
-| Check progress | `/status` or `/continue` |
-| Rework something | `/redo` |
-| Sync documentation with code | `/doc-sync` |
-| Clean up a messy board | `/reconcile` |
-| Propagate workflow changes | `/distribute` |
-| Bring an existing codebase onto the board | `/uncharted` |
-| Run a pre-defined multi-skill chain | `/jenga` (plain language) or `/playbook <id>` |
+| Plan a feature before building it | `j.brainstorm` or `j.deep-dive` |
+| Add work to the board | `j.todo` or `j.btw` |
+| Start implementing | `j.do` or `j.dooo` |
+| Check progress | `j.status` or `j.continue` |
+| Rework something | `j.redo` |
+| Sync documentation with code | `j.doc-sync` |
+| Clean up a messy board | `j.reconcile` |
+| Propagate workflow changes | `j.distribute` |
+| Bring an existing codebase onto the board | `j.uncharted` |
+| Run a pre-defined multi-skill chain | `/jenga` (plain language) or `j.playbook <id>` |
 
-**When something breaks:** `/error` — guided troubleshooting that gathers context, diagnoses the issue, and creates a fix task.
+**When something breaks:** `j.error` — guided troubleshooting that gathers context, diagnoses the issue, and creates a fix task.
 
-**When you're not sure which skill to use:** `/route` — describe what you want to do in plain language, and it will find the right skill.
+**When you're not sure which skill to use:** `/jenga` — describe what you want to do in plain language, and it will find the right skill (add `--enrich` before your text to also pull in matching board context and docs).

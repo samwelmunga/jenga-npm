@@ -43,6 +43,29 @@ REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
 setup() {
   CONSUMER_DIR="$BATS_TEST_TMPDIR/consumer"
   mkdir -p "$CONSUMER_DIR"
+
+  # init.sh runs `git commit` on the repo it scaffolds, and it deliberately
+  # sets no identity of its own -- it inherits whatever the invoking user has
+  # configured. Every developer machine has a global ~/.gitconfig identity, so
+  # these tests passed locally while silently depending on ambient state they
+  # never declared.
+  #
+  # A bare CI runner has no global identity, so `git commit` aborts with
+  # "Author identity unknown / Please tell me who you are", init.sh exits
+  # non-zero, and every scaffold test fails on `[ "$status" -eq 0 ]`. The
+  # E28_S17 mirror staging gate's `test` job is exactly that environment: it
+  # configures user.name/user.email only in its `promote-main` job, not in the
+  # job that runs npm test. Surfaced by that gate's first run (2026-09-28).
+  #
+  # The GIT_AUTHOR_*/GIT_COMMITTER_* env vars are used rather than `git config`
+  # because init.sh runs `git init` itself, inside CONSUMER_DIR -- there is no
+  # repo here yet to configure, and these vars apply to whatever repo it
+  # creates. They also override, rather than depend on, any ambient identity,
+  # so the test behaves identically on a developer machine and on a bare runner.
+  export GIT_AUTHOR_NAME="Jenga Test"
+  export GIT_AUTHOR_EMAIL="test@example.com"
+  export GIT_COMMITTER_NAME="Jenga Test"
+  export GIT_COMMITTER_EMAIL="test@example.com"
 }
 
 # Mirrors skills/ and agents/ into .claude/ and .agents/ via the real

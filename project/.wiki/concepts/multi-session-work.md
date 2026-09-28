@@ -16,22 +16,22 @@ With Jenga AI, the board, the event log, and the trigger queue hold the context.
 
 **Option 1 — Let the system orient you:**
 ```
-/continue
+j.continue
 → Reads PROJECT_SUMMARY.md and board state
 → "E01_S02 is In Progress. T02 (refresh tokens) is Pending.
-   Recommended next: /do E01_S02_T02"
+   Recommended next: j.do E01_S02_T02"
 ```
 
 **Option 2 — Get the full picture first:**
 ```
-/status
+j.status
 → Prints every epic, story, and task with current status
 → Lists open rapports and queue depth
 ```
 
 **Option 3 — Let the Scrum Master decide:**
 ```
-/proceed
+j.proceed
 → Scrum Master reviews board and immediately resumes execution
 → No prompt needed — it picks up the most logical next task
 ```
@@ -58,12 +58,12 @@ After processing, it clears the queue and reports to you: *"Processed 2 triggers
 
 The board is only as useful as it is accurate. Two things can cause drift:
 
-1. **Work done outside the workflow** — you manually edited a file or committed directly without going through `/do`
+1. **Work done outside the workflow** — you manually edited a file or committed directly without going through `j.do`
 2. **Interrupted sessions** — a task was started but never finished; the board still shows "In Progress"
 
 Fix this with:
 ```
-/reconcile
+j.reconcile
 → Cross-checks every task status against git history
 → Promotes tasks with matching commits that are still marked Pending
 → Demotes tasks marked Done with no commits found
@@ -71,7 +71,7 @@ Fix this with:
 → Cleans stale entries from todo.md
 ```
 
-Run `/reconcile` after any session where things got messy, after a big merge, or whenever the board feels off.
+Run `j.reconcile` after any session where things got messy, after a big merge, or whenever the board feels off.
 
 ---
 
@@ -79,7 +79,7 @@ Run `/reconcile` after any session where things got messy, after a big merge, or
 
 **At the start:**
 ```
-/continue   ← or /status, or /proceed
+j.continue  ← or j.status, or j.proceed
 ```
 
 **At the end:**
@@ -87,14 +87,14 @@ Let the session end hook do its work. If you're ending mid-task, just stop — t
 
 If you've just finished a story and want to commit cleanly:
 ```
-/lgtm       ← approve, commit, continue in one command
+j.lgtm      ← approve, commit, continue in one command
 ```
 
 ---
 
 ## Long Breaks
 
-If you haven't touched a project in weeks, the board is still there and accurate. `PROJECT_SUMMARY.md` holds the high-level context. Run `/status` for a full picture, then `/continue` to get moving again.
+If you haven't touched a project in weeks, the board is still there and accurate. `PROJECT_SUMMARY.md` holds the high-level context. Run `j.status` for a full picture, then `j.continue` to get moving again.
 
 There's no re-onboarding ceremony. The system was designed for this.
 

@@ -733,25 +733,6 @@ Release type? → minor
 
 ---
 
-#### `/route`
-
-**Description:** Intelligently route a prompt to the best-matching skill. Reads available skills, matches semantically and by keyword, enriches the prompt with board context, then invokes the matched skill.
-
-**When to use:** When you know what you want to do but don't know which skill handles it — or just want to describe your intent naturally.
-
-**Example:**
-```
-/route I want to think through the caching approach before we build it
-→ Matches: /deep-dive (keywords: "think through", "analyze")
-→ Invoking /deep-dive with enriched context...
-
-/route something broke in the auth flow
-→ Matches: /error (keywords: "broke", "error")
-→ Invoking /error...
-```
-
----
-
 #### `/improve`
 
 **Description:** Analyse a codebase and produce a structured improvement plan toward a defined goal.

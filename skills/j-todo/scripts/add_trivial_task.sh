@@ -28,7 +28,18 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+# Locate the project root via git, not a fixed relative climb — this script
+# is deployed both at its source location (skills/j-todo/scripts/) and
+# mirrored to .claude/skills/j-todo/scripts/ / .agents/skills/j-todo/scripts/,
+# and a fixed "three levels up" climb lands in the wrong place from a mirror.
+# Same approach as skills/j-close-story/scripts/check-story-closeable.sh,
+# check-privatized.sh:138, and compute-scope-divergence.sh:54.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -z "$REPO_ROOT" ]]; then
+  echo "ERROR: could not locate project root (git rev-parse --show-toplevel failed from $SCRIPT_DIR)" >&2
+  exit 1
+fi
 cd "$REPO_ROOT"
 
 TASKS_DIR="project/board/tasks"

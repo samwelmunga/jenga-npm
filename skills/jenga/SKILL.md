@@ -137,11 +137,33 @@ If all applicable rules pass (or the task is a legacy task), proceed to the next
 
 This phase determines **how `/jenga` was invoked** and, for two of the four entry modes, produces a **scoped set** — a confirmed list of board IDs (epics/stories/tasks) that Phases 1-4 must restrict themselves to. All board scanning, ID parsing, cascade expansion, and rendering used by this phase already live in `skills/jenga/scripts/` per this repo's "Scripts Over Inline Logic" principle — this phase never re-implements any of that logic inline. The executing agent's job here is limited to: invoking the right script with the right arguments, relaying its STDOUT verbatim to the user when the contract calls for that, capturing the `STATE_FILE:` line from STDERR for the next turn, and forwarding the user's raw reply back into the next invocation unmodified.
 
-**Determine the invocation form** from the raw argument (if any) passed to `/jenga`:
+**First, check for the `--enrich` flag** (`E53_S13_T01`, ported from the now-retired `/route`'s board
++ docs enrichment — see the Natural-language branch's step 3 and the Skill Matching & Invocation
+Contract's Report format below for what it actually does). If the raw argument passed to `/jenga`
+begins with the exact leading token `--enrich` followed by at least one space, strip that token
+(and the single space after it) before anything else runs, and remember `enrichment_requested =
+true` for the remainder of this invocation. The **remaining text** — never the original argument
+with the flag still attached — is what every step below (including `detect-nl-intent.sh`) treats as
+"the raw argument passed to `/jenga`"; this is what keeps the flag from ever being visible to
+`detect-nl-intent.sh`'s `all_resolved`/`nl_intent`/`mixed` classification. If `--enrich` is not
+present as a leading token, `enrichment_requested = false` and the argument is used as-is —
+byte-for-byte the same behavior as before this flag existed.
+
+`--enrich` alone (nothing after it, once whitespace is stripped) reduces to an empty remaining
+argument — treat this exactly like no argument at all (**bare branch**); the flag has nothing to
+enrich without free-form text and bare `/jenga` never does skill matching. `--enrich *` reduces to
+the **wildcard branch** the same way (remaining text is the literal `*`); the wildcard branch also
+never does skill matching, so `enrichment_requested` is simply never consulted there. Concretely,
+`enrichment_requested` is only ever read in the **natural-language branch** below, and only once
+that branch's own step 3 confirms a single-skill match — it is inert everywhere else. Passing
+`--enrich` on a scoped (`<ids>`) argument is likewise a no-op: the scoped branch does not perform
+skill matching either, so there is nothing for the flag to attach to.
+
+**Then, determine the invocation form** from the remaining argument (if any) passed to `/jenga`:
 
 - No argument at all → **bare branch**.
 - The argument is the literal string `*` → **wildcard branch**.
-- Any other non-empty argument → invoke `skills/jenga/scripts/detect-nl-intent.sh "<raw argument>"` (E53_S01_T01) and branch on its `classification` field:
+- Any other non-empty argument → invoke `skills/jenga/scripts/detect-nl-intent.sh "<remaining argument>"` (E53_S01_T01) and branch on its `classification` field:
   - `all_resolved` or `mixed` → **scoped branch** (below) — this is the same branch as before; only its internal mechanics changed (see below).
   - `nl_intent` → **natural-language branch** (below) — new for E53_S01, no new sigil or entry point, purely a new outcome of this same argument-shape detection.
 
@@ -170,7 +192,12 @@ This branch is entered when `detect-nl-intent.sh` classifies the argument as `nl
 
 1. **Load the catalog** — invoke `skills/jenga/scripts/load-nl-catalog.sh` with no arguments (E53_S01_T02). Its stdout is the full skill catalog (`name`/`description`/`keywords`/`examples`/`prefered_agent` per skill), sourced exclusively from `lib/generate-skill-allow-list.js`'s generated inventory — see the script's own header for the full contract. Never re-derive this catalog by re-scanning `skills/` inline.
 2. **Match** — run this section's own **Skill Matching & Invocation Contract** (below) — the three-pass keyword → example-similarity → description match, including its tie-break and no-match handling — against this catalog, treating `detect-nl-intent.sh`'s `raw_argument` field as the prompt.
-3. **Confident single match** — report the routing decision using the **Skill Matching & Invocation Contract**'s **Report** format, then invoke the matched skill exactly as its **Invoke** rule already does: load `agents/<prefered_agent>.md` when the matched skill specifies `metadata.prefered_agent`, otherwise execute the skill instructions directly. The matched skill's own execution takes over from here — do not continue into this `/jenga` invocation's Phase 1.
+3. **Confident single match** — if `enrichment_requested` is `true` (the `--enrich` flag was passed, per Phase 0.75's preamble above), first invoke `skills/jenga/scripts/enrich-nl-prompt.sh "<raw_argument>"` (`E53_S13_T01`, ported from `/route`'s Steps 3-5) and assemble the enriched composite message from its JSON output, in this exact order:
+   - **Part A — Matched skill (full content)** — the matched skill's full `SKILL.md` body (everything after its YAML front-matter), wrapped as `<!-- SKILL: /<matched-skill-name> --> ... <!-- END SKILL -->`.
+   - **Part B — Board & documentation context** — a `## 📋 Relevant Board Context` list (one line per `board_items` entry: `- [<status>] **<id>** — <title> (\`<file>\`)`) followed by a `## 📄 Relevant Documentation` list (one line per `docs` entry: `` - `<path>` — <summary> ``). Omit either sub-list entirely (not an empty heading) when its array is empty.
+   - **Part C — Original prompt** — `## 🗣 Original Prompt` followed by the raw prompt, verbatim, in a blockquote.
+
+   Then report the routing decision using the **Skill Matching & Invocation Contract**'s **Report** format (including its `Board items found`/`Docs found` lines, populated from `enrich-nl-prompt.sh`'s `board_items_found`/`docs_found` fields, since `enrichment_requested` is `true` here), and invoke the matched skill exactly as the **Invoke** rule already does — but deliver the enriched composite message as the working input instead of the raw prompt when enrichment ran. When `enrichment_requested` is `false` (the default, unflagged path — unchanged from before this flag existed), skip `enrich-nl-prompt.sh` entirely: report using the **Report** format's default (no `Board items found`/`Docs found` lines) and invoke the matched skill directly with the raw prompt, exactly as before. Either way: load `agents/<prefered_agent>.md` when the matched skill specifies `metadata.prefered_agent`, otherwise execute the skill instructions directly. The matched skill's own execution takes over from here — do not continue into this `/jenga` invocation's Phase 1.
 4. **No match, or an ambiguous multi-way tie (single-skill match)** — before surfacing the **Skill Matching & Invocation Contract**'s generic disambiguation options, attempt a **playbook fallback** (E53_S02): invoke `skills/jenga/scripts/match-playbook.sh "<raw_argument>"`. This step only ever runs when step 3 above did NOT already commit to a confident single-skill match — a confident single-skill match always wins outright and this playbook fallback is never even invoked in that case. Branch on `match-playbook.sh`'s `classification` field:
    - `playbook_match` → continue to **step 5 (Playbook proposal and execution)** below.
    - `ambiguous` or `no_match` → continue to **step 6 (Fall through to the Skill Matching & Invocation Contract's disambiguation)** below — the exact behavior this branch already had before E53_S02, unchanged.
@@ -217,14 +244,11 @@ This branch is entered when `detect-nl-intent.sh` classifies the argument as `nl
 
 ##### Skill Matching & Invocation Contract
 
-This contract is inlined here — rather than referenced by path to `skills/j-route/SKILL.md` — because
-`j.route` is one of six skills that never ship publicly in either naming form (see
-`docs/public-mirror-content-parity.md`'s "Which skills are never public"), while `/jenga` itself ships
-publicly. A path reference from a shipped file to an unshipped one is a dead reference in the public
-package even though it resolves fine in this private repo (filed via `j.error` 2026-09-26).
-`skills/j-route/SKILL.md`'s own Step 2/6/7 carry the authoritative copy of this same contract for
-`/route`'s own use — the two are intentionally duplicated for public-mirror reasons; keep them in sync
-by hand if either changes.
+`/jenga` is the **sole owner** of this contract (`E53_S13_T02`). `/route` — which previously carried
+an independent, hand-synced copy of this same three-pass matching/tie-break/report logic in its own
+Step 2/6/7 — has been retired outright (hard break, no shim; see `E53_S13`'s story). There is no
+other copy of this contract anywhere in the codebase to keep in sync with; if you change the matching
+logic here, this section is the only place that needs updating.
 
 **Matching** (three passes, stop at first confident match):
 
@@ -269,9 +293,20 @@ Routing to: /<matched-skill-name>
 Reason: <one sentence explaining why this skill was chosen>
 ```
 
-(`skills/j-route/SKILL.md`'s own Step 7 additionally reports `Board items found`/`Docs found` counts
-from its Steps 3-5 board/doc enrichment — this `/jenga` natural-language branch never performs that
-enrichment, so those two fields do not apply here and are intentionally omitted.)
+**`Board items found`/`Docs found` (opt-in, `E53_S13_T01`)** — these two lines are appended to the
+Report above, in this order, **only** when the natural-language branch's `enrichment_requested` is
+`true` (i.e. the caller passed `--enrich`, per Phase 0.75's preamble):
+
+```
+Board items found: <count>
+Docs found: <count>
+```
+
+`<count>` is `enrich-nl-prompt.sh`'s `board_items_found`/`docs_found` field respectively (the total
+match count before the top-5/top-3 cap, not the number of items actually listed in the enriched
+prompt's Part B). When `enrichment_requested` is `false` — the default path, unchanged from before
+this flag existed — neither line is emitted; the Report is exactly the two lines above and nothing
+more.
 
 Then proceed immediately — do not wait for user confirmation unless the match was ambiguous (the
 tie-break above already handled that).

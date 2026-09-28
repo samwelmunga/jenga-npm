@@ -61,7 +61,6 @@ skills/                    ← Canonical skill source — invoke with j:<name> (
 ├── reconcile/
 ├── reconcile-origin/
 ├── redo/
-├── route/
 ├── self-sync/
 ├── skillify/
 ├── spinoff/

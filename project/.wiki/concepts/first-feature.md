@@ -7,19 +7,19 @@
 ## The Pattern
 
 ```
-/brainstorm → /todo → /do → /status
+j.brainstorm → j.todo → j.do → j.status
 ```
 
 This is the core loop. Everything in Jenga AI flows through some version of it.
 
 ---
 
-## Step 1: Shape the Work with `/brainstorm`
+## Step 1: Shape the Work with `j.brainstorm`
 
-Don't jump straight to `/todo`. Before anything hits the board, talk through the feature with the Scrum Master.
+Don't jump straight to `j.todo`. Before anything hits the board, talk through the feature with the Scrum Master.
 
 ```
-/brainstorm
+j.brainstorm
 "I want to add a password reset flow to the app"
 ```
 
@@ -31,16 +31,16 @@ The Scrum Master will ask:
 
 This dialogue turns a vague idea into concrete acceptance criteria. Nothing is written to the board until you confirm. If the idea is half-formed, the Scrum Master will say so.
 
-**Skip `/brainstorm` only if** the work is so small and clear that acceptance criteria are obvious. Even then, it's rarely a waste.
+**Skip `j.brainstorm` only if** the work is so small and clear that acceptance criteria are obvious. Even then, it's rarely a waste.
 
 ---
 
-## Step 2: Add to the Board with `/todo`
+## Step 2: Add to the Board with `j.todo`
 
 Once the work is shaped:
 
 ```
-/todo
+j.todo
 "Add password reset flow" → links to E01_S05
 ```
 
@@ -48,10 +48,10 @@ The Scrum Master creates the story and tasks on the board, validates that accept
 
 ---
 
-## Step 3: Execute with `/do`
+## Step 3: Execute with `j.do`
 
 ```
-/do
+j.do
 ```
 
 The skill reads `project/todo.md`, presents the pending tasks, and you select one (or let it auto-pick). It builds the full sender object and invokes the Developer agent.
@@ -74,10 +74,10 @@ You don't need to do anything during this phase. The agents communicate directly
 
 ---
 
-## Step 4: Check Progress with `/status`
+## Step 4: Check Progress with `j.status`
 
 ```
-/status
+j.status
 ```
 
 ```
@@ -95,7 +95,7 @@ If a task failed, the Tester will have written a rapport to `project/rapports/pr
 ## When Things Go Wrong
 
 **Task status: Failed**
-The Tester writes a problem rapport. At the next session start, the Scrum Master reads it and creates a follow-up task. You then run `/do` on that task.
+The Tester writes a problem rapport. At the next session start, the Scrum Master reads it and creates a follow-up task. You then run `j.do` on that task.
 
 **Task status: Blocked**
 The Developer couldn't resolve a conflict after three attempts. The task needs human intervention. Read the rapport in `project/rapports/problems/` — it will describe exactly what's blocking it.

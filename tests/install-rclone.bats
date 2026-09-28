@@ -57,11 +57,34 @@ setup() {
   # other Homebrew prefix) so a real `brew` is never found unless a fake is
   # placed in FAKE_BIN, which -- being first on PATH -- always wins anyway.
   PATH_FULL="$FAKE_BIN:/bin:/usr/bin"
-  # PATH_MINIMAL additionally drops /usr/bin, so curl and sudo (both real
-  # system utilities that live there on this host) are genuinely absent
-  # unless a fake is placed in FAKE_BIN. Only safe for tests that never
-  # reach the mktemp/head/dirname calls further down the Linux branch.
-  PATH_MINIMAL="$FAKE_BIN:/bin"
+  # PATH_MINIMAL contains only FAKE_BIN plus MINIMAL_BIN (below), so any tool
+  # not explicitly faked or symlinked is genuinely absent -- on every platform,
+  # rather than only on one. Only safe for tests that never reach the
+  # mktemp/head/dirname calls further down the Linux branch -- install-rclone.sh
+  # checks `command -v curl` and `command -v sudo` (and dies) BEFORE its first
+  # mktemp, so the curl-missing / sudo-missing tests bail long before they would
+  # need anything from /bin or /usr/bin. The only external binary they do reach,
+  # `uname`, is faked by those tests already.
+  #
+  # This deliberately does NOT keep /bin. The previous value ("$FAKE_BIN:/bin")
+  # assumed dropping /usr/bin hides curl and sudo -- true on macOS, where /bin
+  # and /usr/bin are genuinely distinct directories, but FALSE on any merged-/usr
+  # Linux distro (Ubuntu 20.04+, Debian 12+, Fedora), where /bin is a symlink to
+  # /usr/bin. There, keeping /bin kept the whole of /usr/bin on PATH, so curl and
+  # sudo were still found, install-rclone.sh never took its "not available"
+  # branch, and both tests failed -- passing locally on macOS while failing only
+  # on a Linux CI runner. Surfaced by the E28_S17 mirror staging gate's first run
+  # (2026-09-28), which is the first time this suite had ever executed on Linux.
+  # MINIMAL_BIN holds symlinks to the few real tools the early Linux branch
+  # genuinely needs, and nothing else -- deliberately NOT curl or sudo. `bash`
+  # is required because install-rclone.sh (and every fake_bin stub) starts with
+  # `#!/usr/bin/env bash`: /usr/bin/env is an absolute path and always resolves,
+  # but the `bash` it then looks up must be on PATH or the script dies with exit
+  # 127 before running a single line.
+  MINIMAL_BIN="$BATS_TEST_TMPDIR/minimal-bin"
+  mkdir -p "$MINIMAL_BIN"
+  ln -sf "$(command -v bash)" "$MINIMAL_BIN/bash"
+  PATH_MINIMAL="$FAKE_BIN:$MINIMAL_BIN"
 }
 
 fake_bin() {
@@ -164,9 +187,14 @@ exit 0"
 @test "Linux: curl missing exits non-zero with an actionable message naming curl" {
   fake_bin uname 'echo Linux'
   fake_bin sudo 'exit 0'
-  export PATH="$PATH_MINIMAL"
 
-  run "$INSTALL"
+  # PATH_MINIMAL is applied to the script invocation ONLY, never exported for
+  # the whole test. Exporting it leaks the restricted PATH into bats' own
+  # per-test teardown, which shells out to `rm`; with /usr/bin gone that fails
+  # with "rm: command not found" and the file exits non-zero while every @test
+  # still reports ok -- i.e. exit 1 with no TAP 'not ok' line, which is exactly
+  # what a failed-to-load file looks like to the E28_S17 staging gate.
+  run env PATH="$PATH_MINIMAL" "$INSTALL"
   [ "$status" -eq 1 ]
   assert_output_contains "curl"
   assert_output_contains "not available"
@@ -175,9 +203,14 @@ exit 0"
 @test "Linux: sudo missing exits non-zero with an actionable message naming sudo" {
   fake_bin uname 'echo Linux'
   fake_bin curl 'exit 0'
-  export PATH="$PATH_MINIMAL"
 
-  run "$INSTALL"
+  # PATH_MINIMAL is applied to the script invocation ONLY, never exported for
+  # the whole test. Exporting it leaks the restricted PATH into bats' own
+  # per-test teardown, which shells out to `rm`; with /usr/bin gone that fails
+  # with "rm: command not found" and the file exits non-zero while every @test
+  # still reports ok -- i.e. exit 1 with no TAP 'not ok' line, which is exactly
+  # what a failed-to-load file looks like to the E28_S17 staging gate.
+  run env PATH="$PATH_MINIMAL" "$INSTALL"
   [ "$status" -eq 1 ]
   assert_output_contains "sudo"
   assert_output_contains "not available"

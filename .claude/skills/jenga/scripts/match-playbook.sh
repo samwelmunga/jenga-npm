@@ -6,7 +6,7 @@
 # same three-pass matching *philosophy* as `skills/jenga/SKILL.md`'s inlined Skill Matching &
 # Invocation Contract (keyword -> example similarity -> description), but scoped to the playbook
 # catalog produced by `load-playbooks.sh` (E53_S02_T01) instead of the single-skill catalog
-# `load-nl-catalog.sh` produces for `/route`/`/jenga`'s existing single-skill matching.
+# `load-nl-catalog.sh` produces for `/jenga`'s existing single-skill matching.
 #
 # ---------------------------------------------------------------------------
 # THIS IS A FALLBACK — READ BEFORE WIRING (E53_S02_T04)
@@ -28,7 +28,8 @@
 #
 # ---------------------------------------------------------------------------
 # MATCHING ALGORITHM (deterministic — a shell/python script cannot do semantic judgment the way
-# an agent can, so this is a concrete, repeatable heuristic standing in for /route's Step 2 prose)
+# an agent can, so this is a concrete, repeatable heuristic standing in for the Skill Matching &
+# Invocation Contract's Pass 1/2/3 prose, applied to playbooks instead of single skills)
 # ---------------------------------------------------------------------------
 # Three passes are run in order against the full playbook catalog (from `load-playbooks.sh`).
 # Each pass narrows the candidate pool; the first pass to produce a single unique leader commits

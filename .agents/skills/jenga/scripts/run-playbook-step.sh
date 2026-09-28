@@ -20,8 +20,9 @@
 #      metadata — see CONDITIONALS below) -> get the first step to invoke.
 #   2. `should-skip <state_file>` -> deterministically decide whether the CURRENT step should run.
 #      - `{"skip": true, ...}`  -> do NOT invoke the step; call `advance <state_file> skipped`.
-#      - `{"skip": false, ...}` -> invoke the step (as `/route`'s Step 6 already does for a single
-#        matched skill), then call `advance <state_file> passed ["<typed-output-value>"]` (step
+#      - `{"skip": false, ...}` -> invoke the step (as the Skill Matching & Invocation Contract's
+#        Invoke rule already does for a single matched skill), then call
+#        `advance <state_file> passed ["<typed-output-value>"]` (step
 #        succeeded) or `advance <state_file> failed [note]` (step failed).
 #   3. Any of the three `advance` outcomes returns the next step, a "complete" signal, or (on
 #      failure) a halt report.

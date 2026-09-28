@@ -11,11 +11,15 @@
 # Rule (user, 2026-09-10): a test may never outlive its subject in the mirror.
 # If a test exercises a skill that is not available publicly, it must EITHER be
 # blocklisted here alongside that subject, OR be conditioned to skip when the
-# subject is absent. Choosing neither produces a test that passes privately and
-# fails only in the public mirror — found by a stage-deploy gate rather than by
-# anyone running tests. See docs/public-mirror-content-parity.md, "Rule: a test
-# may never outlive its subject in the mirror", for the two sanctioned options
-# and the list of skills that are never public in either naming form.
+# subject is absent. Choosing neither used to produce a test that passes
+# privately and fails only in the public mirror, found by a stage-deploy gate
+# rather than by anyone running tests. As of E28_S16 this is gate-enforced:
+# skills/j-mirror-public/scripts/mirror.sh's check_test_subject_invariant runs
+# the real shipping suite in a mirror-shaped tree before every real push and
+# refuses to push a stranded test. See docs/public-mirror-content-parity.md,
+# "Rule: a test may never outlive its subject in the mirror", for the two
+# sanctioned authoring options (still correct and unchanged) and the list of
+# skills that are never public in either naming form.
 # ---------------------------------------------------------------------------
 
 # --- Private scrum board (epics, stories, tasks, indices) ---
@@ -120,12 +124,6 @@ skills/convert/
 skills/j-convert/
 .claude/skills/j-convert/
 .agents/skills/j-convert/
-skills/route/
-.claude/skills/route/
-.agents/skills/route/
-skills/j-route/
-.claude/skills/j-route/
-.agents/skills/j-route/
 skills/dev-done/
 .claude/skills/dev-done/
 .agents/skills/dev-done/
@@ -278,6 +276,20 @@ tests/mirror-permission-level-invariant.bats
 # same commit that creates this file (E28_S16_T02), so the guard's own regression suite never
 # reproduces, on its first run, the exact defect it exists to prevent.
 tests/mirror-test-subject-invariant.bats
+# tests/mirror-staging-branch-push.bats: runs skills/j-mirror-public/scripts/mirror.sh (MIRROR_SH,
+# invoked by every @test case), which lives under the fully-private skills/j-mirror-public/
+# blocklisted above (both naming forms) -- same reasoning as the two entries directly above. Added
+# in the same commit that creates this file (E28_S17_T02), for the same reason.
+tests/mirror-staging-branch-push.bats
+# tests/train-cli-root-climb.bats: every one of its 4 @test cases calls install_script_at, which
+# copies skills/j-train/train_cli.py out of the fully-private skills/j-train/ blocklisted above (all
+# three naming forms). In the mirror that source file does not exist, so the cp fails and every case
+# fails with it -- the file has no publicly-meaningful subset, so per
+# docs/public-mirror-content-parity.md's rule section option 1 (blocklist) is correct rather than a
+# visible skip, which here would skip every case and report nothing. Same reasoning as the four
+# entries directly above. Caught by check_test_subject_invariant (E28_S16) on the 2026-09-28 run,
+# before it ever reached the mirror -- which is precisely what that gate exists to do.
+tests/train-cli-root-climb.bats
 
 # --- Private-tooling playbooks and their tests (E50_S13, user decision 2026-09-10) ---
 # brainstorm-to-mirror terminates in `mirror-public`, a deliberately private skill blocklisted

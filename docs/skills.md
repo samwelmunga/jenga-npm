@@ -62,11 +62,11 @@ Skills live in `skills/j-<name>/SKILL.md` — the root-canonical location; `.age
 
 #### `/jenga`
 
-**Description:** Interactive-by-default board orchestrator with a fully automated escape hatch. Bare `/jenga` renders a picker and confirmation tree before scoping the run; `/jenga <ids>` resolves an explicit fuzzy-ID scope and confirms it; `/jenga *` reproduces the original zero-prompt behavior — decomposing any unbroken Epics into Stories, any unbroken Stories into Tasks, queuing all unqueued Tasks into `todo.md`, then executing every eligible item with no user prompts — until the board is fully started.
+**Description:** Interactive-by-default board orchestrator with a fully automated escape hatch. Bare `/jenga` renders a picker and confirmation tree before scoping the run; `/jenga <ids>` resolves an explicit fuzzy-ID scope and confirms it; `/jenga *` reproduces the original zero-prompt behavior — decomposing any unbroken Epics into Stories, any unbroken Stories into Tasks, queuing all unqueued Tasks into `todo.md`, then executing every eligible item with no user prompts — until the board is fully started. `/jenga <free-form text>` (no ID pattern, not `*`) routes to the best-matching skill instead; prefix that free-form text with `--enrich ` (e.g. `/jenga --enrich something broke in the auth flow`) to opt into board-context and documentation enrichment before the matched skill is invoked — reporting `Board items found`/`Docs found` counts alongside the routing decision. The flag is a no-op on the bare/`<ids>`/`*` forms (`E53_S13_T01`); the default (unflagged) natural-language path performs no enrichment scan, unchanged from before this flag existed.
 
 **Output type:** `id_list`
 
-**Invokes:** /j-do, /j-route (conditional)
+**Invokes:** /j-do; any matched skill (conditional, when the argument is free-form natural-language text)
 
 **When to use:** When you want to review and scope a run before it executes (bare `/jenga` or `/jenga <ids>`), or hands-free execution across the whole board via `/jenga *`. Jenga will read existing epics, decompose anything incomplete, and start executing.
 
@@ -495,6 +495,7 @@ You: "Oh, we should also think about caching strategy"
 - `segment` — analyses one file/directory/feature and proposes a standard epic/story/task (or, in `--mode investigate`, a conversational architecture investigation)
 - `import` — acquires an external source (git URL, out-of-repo path, or pasted snippet) into the repo, then hands off to `segment`
 - `onboard` — analyses a whole codebase and writes board-only, `[ARCH]`-tagged or backfilled epics — it never touches application code
+- `refresh` — incremental re-scan of an already-onboarded codebase since its last baseline, skipping unchanged subsystems
 
 **Example:**
 ```
@@ -866,29 +867,6 @@ Proceed with distribution to the above targets? [y/N] → y
 
 ---
 
-#### `/j-route`
-
-**Description:** Intelligently route a prompt to the best-matching skill. Reads available skills, matches semantically and by keyword, enriches the prompt with board context, then invokes the matched skill.
-
-**Output type:** `any`
-
-**Invokes:** none
-
-**When to use:** When you know what you want to do but don't know which skill handles it — or just want to describe your intent naturally.
-
-**Example:**
-```
-/j-route I want to think through the caching approach before we build it
-→ Matches: /j-deep-dive (keywords: "think through", "analyze")
-→ Invoking /j-deep-dive with enriched context...
-
-/j-route something broke in the auth flow
-→ Matches: /j-error (keywords: "broke", "error")
-→ Invoking /j-error...
-```
-
----
-
 #### `/j-improve`
 
 **Description:** Analyse a codebase and produce a structured improvement plan toward a defined goal.
@@ -1224,7 +1202,7 @@ Example: ...
 
 #### `/j-wtf`
 
-**Description:** Alias of `/j-clearify` — identical behaviour, provided only so the `/wtf` slash command resolves to a skill.
+**Description:** Alias of `/j-clearify` — identical behaviour, provided so `j.wtf` (and its `/j-wtf` directory form) resolves to a skill.
 
 **Output type:** `any`
 

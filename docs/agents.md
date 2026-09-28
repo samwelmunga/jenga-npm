@@ -24,7 +24,7 @@ Agents are defined in `.agents/agents/`. Each has a clearly bounded role and exc
 - At every session start, processes `project/queue/scrum_triggers.jsonl`: handles rapport reviews, status reviews, story/epic rollups, and proposed `PROJECT_SUMMARY.md` updates
 - Creates, amends, and rollups board items following the schema in `templates/SCRUM_BOARD_SCHEMA.md`
 - Uses advisory file locks before writing any board file
-- In Brainstorm Mode (invoked via `/brainstorm`): explores ideas openly, challenges assumptions, proposes board mappings — holds off on writing anything until the user confirms
+- In Brainstorm Mode (invoked via `j.brainstorm`): explores ideas openly, challenges assumptions, proposes board mappings — holds off on writing anything until the user confirms
 - In Mediator Mode (ML/AI tasks): translates between user plain language and the `ai_engineer` agent's technical output
 
 **Trigger types it processes:**

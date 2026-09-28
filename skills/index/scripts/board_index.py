@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -33,7 +34,34 @@ EDGE_TYPES = {
     "parent_doc",
 }
 FRONTMATTER_BOUNDARY = "---"
-ROOT_DIR = Path(__file__).resolve().parents[3]
+
+
+def _resolve_project_root() -> Path:
+    """Locate the project root via git, not a fixed relative climb.
+
+    This script is deployed both at its source location
+    (skills/index/scripts/) and mirrored one directory deeper into
+    .claude/skills/index/scripts/ / .agents/skills/index/scripts/ -- a fixed
+    parents[N] climb from __file__ only lands on the real repo root from the
+    source location, not from a mirror. Same approach as
+    skills/j-close-story/scripts/check-story-closeable.sh,
+    check-privatized.sh:138, and compute-scope-divergence.sh:54 use for the
+    equivalent bash case.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=Path(__file__).resolve().parent,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return Path(result.stdout.strip())
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return Path.cwd()
+
+
+ROOT_DIR = _resolve_project_root()
 BOARD_ID_RE = re.compile(r"^E\d{2}(?:_S\d{2})?(?:_T\d{2})?$")
 PLAN_RE = re.compile(r"^(E\d{2}_S\d{2}(?:_T\d{2})?)-plan$")
 SUMMARY_RE = re.compile(r"^(E\d{2}_S\d{2}(?:_T\d{2})?)-summary$")

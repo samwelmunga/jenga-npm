@@ -59,7 +59,7 @@ This means you don't manually mark a story complete — the Tester writes the tr
 **When to create an Epic vs. a Story:**
 - If the work naturally decomposes into 3+ complete user outcomes → Epic
 - If it's a single complete outcome → Story directly under an existing Epic
-- When in doubt, use `/brainstorm` — the Scrum Master will help you decide
+- When in doubt, use `j.brainstorm` — the Scrum Master will help you decide
 
 **When to create a Task vs. a Story:**
 - Tasks are technical sub-steps *within* a story, not standalone features

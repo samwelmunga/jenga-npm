@@ -1,0 +1,142 @@
+# Staging gate for the public /mirror-public payload (E28_S17_T03).
+#
+# Runs entirely on the PUBLIC repo (jenga-npm), against a real checkout of
+# the staging branch skills/j-mirror-public/scripts/mirror.sh pushes to
+# (config.json's stagingBranch, "mirror-staging" as of E28_S17_T01). Nothing
+# in this repo's own mirror.sh invokes this workflow directly -- it triggers
+# on the push itself, exactly like any other GitHub Actions workflow.
+#
+# Three jobs: `test` (npm test against the real checkout), `pack-smoke`
+# (pack + install into a throwaway project, verify postinstall actually
+# mirrors framework files), and `promote-main` (fast-forward $DEFAULT_BRANCH
+# to the staged commit, only once both other jobs succeed).
+#
+# ---------------------------------------------------------------------------
+# Design decision: gate 2 ("test-subject parity check", E28_S16) is
+# fulfilled by the `test` job below, not reimplemented as a separate step.
+# ---------------------------------------------------------------------------
+# E28_S16's check_test_subject_invariant lives inside
+# skills/j-mirror-public/scripts/mirror.sh, which is PERMANENTLY PRIVATE and
+# never ships here -- there is no file in this checkout to re-invoke. What
+# that invariant does privately, pre-push, is MATERIALISE a temp tree and run
+# the shipping suite in it, to *simulate* what a public checkout would see.
+# In this workflow there is nothing to simulate: this checkout already IS
+# that public checkout. So `npm test` below, run for real against the actual
+# staged tree, is what check_test_subject_invariant approximates locally --
+# not a second, independent check. The private guard is what makes this gate
+# meaningful (it keeps a stranded test from ever reaching staging in the
+# first place); this job is what verifies it did its job.
+#
+# A second, statically-parsing "parity" step was deliberately rejected here
+# for the same reason E28_S16's own probe rejected it privately: a static
+# checker cannot tell an executed reference from a fixture string or a
+# comment, and that probe measured a 3-in-4 false-positive rate. Do not add
+# one back in.
+# ---------------------------------------------------------------------------
+
+name: "Mirror staging gate"
+
+on:
+  push:
+    branches:
+      - mirror-staging
+
+permissions: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install bats-core
+        run: sudo apt-get update && sudo apt-get install -y bats
+
+      - name: Run test suite (bats)
+        run: npm test
+
+  pack-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Root package.json declares no workspaces -- project/app/package.json
+      # owns the "api" and "ui" workspaces itself. So the root `npm ci` above
+      # does NOT install vite, and the `prepack` script (`npm run ui:build
+      # --prefix project/app --`) that `npm pack` triggers below then dies with
+      # "sh: 1: vite: not found" (exit 127). Same step, same reason, as
+      # .github/workflows/npm-publish.yml's own "Install project/app workspace
+      # dependencies (E29_S05_T01)" -- this job was added without it.
+      - name: Install project/app workspace dependencies (E29_S05_T01)
+        run: npm ci --prefix project/app
+
+      - name: Pack the package
+        run: npm pack --pack-destination /tmp
+
+      - name: Install the tarball into a throwaway consumer project, then verify postinstall actually mirrored framework files
+        run: |
+          set -euo pipefail
+          TARBALL="$(ls /tmp/*.tgz)"
+          CONSUMER_DIR="$(mktemp -d)"
+          cd "$CONSUMER_DIR"
+          npm init -y >/dev/null
+          npm install "$TARBALL"
+          # postinstall.js mirrors skills/ and agents/ into BOTH .claude/ and
+          # .agents/ (see scripts/postinstall.js's own header) -- a canonical,
+          # always-present file in each is a real, minimal smoke check that
+          # the mirror actually ran, not just that `npm install` exited zero.
+          test -f .claude/skills/jenga/SKILL.md
+          test -f .agents/skills/jenga/SKILL.md
+          test -f .jenga-version
+
+  promote-main:
+    needs: [test, pack-smoke]
+    if: success()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Fast-forward main to the staged, gated commit
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Fast-forward-only is the whole safety property here: if main has
+          # moved (branch protection, a direct push, anything unexpected) this
+          # fails loudly with a normal git error instead of silently forcing
+          # or routing around it. A human needs to see and decide on a
+          # blocked promotion -- this job never force-pushes, never opens an
+          # auto-merge PR, and never retries some other way.
+          #
+          # That property comes from `git push`'s OWN default, not from a flag.
+          # git push already refuses any non-fast-forward update unless --force
+          # (or a + refspec) is given, so a plain push is exactly the intended
+          # behaviour. There is deliberately no --ff-only here: that option
+          # belongs to git merge / git pull, and `git push --ff-only` aborts
+          # with "error: unknown option `ff-only`" and exit 129 -- which is how
+          # this job failed on the staging gate's first otherwise-green run
+          # (2026-09-28), after both test and pack-smoke had passed.
+          git push origin HEAD:main

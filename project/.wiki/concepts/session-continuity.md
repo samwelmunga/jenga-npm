@@ -63,10 +63,10 @@ With Jenga AI, resuming a project is not a re-orientation exercise. It's:
 
 ```
 (New session)
-/continue
+j.continue
 → Scrum Master reads PROJECT_SUMMARY.md and board state
 → "E01_S02 is In Progress. T02 (refresh tokens) is Pending.
-   Recommended next: /do E01_S02_T02"
+   Recommended next: j.do E01_S02_T02"
 ```
 
 Or, if the session-end hook wrote triggers:
@@ -85,9 +85,9 @@ You pick up exactly where you left off. The model doesn't need to remember — t
 
 ## The Practical Implication
 
-The board is not optional overhead. It *is* the memory. If you skip updating it — working directly in the code without going through `/do` and the Tester — that context is lost at the next session boundary.
+The board is not optional overhead. It *is* the memory. If you skip updating it — working directly in the code without going through `j.do` and the Tester — that context is lost at the next session boundary.
 
-Use `/reconcile` if the board has drifted from actual git history. It cross-checks every task status against commits and corrects any discrepancies.
+Use `j.reconcile` if the board has drifted from actual git history. It cross-checks every task status against commits and corrects any discrepancies.
 
 ---
 

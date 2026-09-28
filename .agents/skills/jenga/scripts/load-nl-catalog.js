@@ -20,7 +20,7 @@
  * `keywords`, `examples`, and `metadata.prefered_agent`, and emits `dirName` (not the bare
  * identifier) as the catalog entry's `name` — callers like `/jenga`'s Skill invocation and
  * `playbook-new.sh`'s `validate-skill` need the real, invokable directory name. These are the
- * same fields `/route`'s Step 1 ("Discover Available Skills") collects.
+ * same fields `/jenga`'s own Skill Matching & Invocation Contract needs for matching and invocation.
  *
  * ---------------------------------------------------------------------------
  * USAGE

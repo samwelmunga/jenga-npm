@@ -4,8 +4,9 @@
  *
  * E47_S04_T02 — capture step for `j.dashboard --snapshot`.
  *
- * Calls the dashboard API's `/v1/board`, `/v1/history`, `/v1/architecture`, and `/v1/health` routes
- * exactly once each and writes their combined JSON to a single artifact, consumable by the
+ * Calls the dashboard API's `/v1/board`, `/v1/history`, `/v1/architecture`, `/v1/health`,
+ * `/v1/documentation`, and `/v1/rapports` routes exactly once each and writes their combined JSON
+ * to a single artifact, consumable by the
  * bundling/inlining step in `E47_S04_T03` (implemented) and, for `/v1/health` specifically, by
  * `E47_S06_T02`'s snapshot `<title>` rewrite in `../../ui/scripts/build-snapshot-html.cjs`, which
  * needs the captured project name to bake into the exported HTML's title at build time.
@@ -44,10 +45,12 @@
  *   "captured_at": "<ISO 8601 UTC timestamp>",
  *   "project_root": "<absolute, realpath'd project root this snapshot was captured against>",
  *   "routes": {
- *     "board":        <full API envelope from GET /v1/board,        i.e. { data, meta, error }>,
- *     "history":       <full API envelope from GET /v1/history,      i.e. { data, meta, error }>,
- *     "architecture":  <full API envelope from GET /v1/architecture, i.e. { data, meta, error }>,
- *     "health":        <full API envelope from GET /v1/health,       i.e. { data, meta, error }>
+ *     "board":         <full API envelope from GET /v1/board,         i.e. { data, meta, error }>,
+ *     "history":       <full API envelope from GET /v1/history,       i.e. { data, meta, error }>,
+ *     "architecture":  <full API envelope from GET /v1/architecture,  i.e. { data, meta, error }>,
+ *     "health":        <full API envelope from GET /v1/health,        i.e. { data, meta, error }>,
+ *     "documentation": <full API envelope from GET /v1/documentation, i.e. { data, meta, error }>,
+ *     "rapports":      <full API envelope from GET /v1/rapports,      i.e. { data, meta, error }>
  *   }
  * }
  * Each `routes.<name>` value is the *full* envelope exactly as the route returned it (see
@@ -92,12 +95,14 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 
-const ROUTES = ['/v1/board', '/v1/history', '/v1/architecture', '/v1/health'];
+const ROUTES = ['/v1/board', '/v1/history', '/v1/architecture', '/v1/health', '/v1/documentation', '/v1/rapports'];
 const ROUTE_KEYS = {
   '/v1/board': 'board',
   '/v1/history': 'history',
   '/v1/architecture': 'architecture',
   '/v1/health': 'health',
+  '/v1/documentation': 'documentation',
+  '/v1/rapports': 'rapports',
 };
 
 function printUsage() {

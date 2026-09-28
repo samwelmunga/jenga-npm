@@ -138,8 +138,8 @@ to what consumers actually receive: copy `$MIRROR/skills/` into a fresh `$HYBRID
 over `$HYBRID` with a `--min-pairs 34` floor. It reported `audited 34 twinned pair(s)` and
 `no unexpected divergence`, exit 0.
 
-34, not 40: six skills are blocklisted in **both** forms and ship in neither
-(`mirror-public`, `self-sync`, `train`, `strategy`, `convert`, `route`). A drift in
+34, not 39: five skills are blocklisted in **both** forms and ship in neither
+(`mirror-public`, `self-sync`, `train`, `strategy`, `convert`). A drift in
 those twins is real but has no downstream consumer, so it is out of this run's
 population by construction.
 
@@ -197,14 +197,31 @@ the actual failure rather than guessing at it. Regression coverage: `tests/mirro
 The two sanctioned resolutions above are unchanged and still the correct authoring guidance — this
 gate is what happens when neither was followed, not a replacement for choosing one.
 
-**Which skills are never public.** Six are blocklisted in *both* their bare and `j-` form, so they
-ship in neither and no naming change can make them available: `convert`, `mirror-public`, `route`,
+**Enforced twice as of `E28_S17`.** The rule is now checked at two independent points, not one:
+
+1. **Pre-push, privately.** `check_test_subject_invariant` (above) — unconditional, runs before every
+   real `/mirror-public` push, and cannot be bypassed by using `mirror.sh` normally.
+2. **In CI, on the public repo.** `.github/workflows/mirror-staging-gate.yml`'s `test` job runs the
+   real `npm test` against the real staged checkout. It is not a second implementation of the private
+   guard — `check_test_subject_invariant` lives in `mirror.sh`, which is permanently private and never
+   ships publicly, so there is nothing there to re-invoke. What the private guard *simulates* (a
+   materialised temp tree running the shipping suite) the CI checkout simply *is*, so a real `npm test`
+   run against it serves the same role without reimplementing anything. See that workflow file's own
+   header comment for the full reasoning, including why a second static-parsing step was rejected on
+   the same false-positive evidence as Approach A above.
+
+Layer 1 is what stops a stranded test from ever reaching the mirror in the first place; layer 2 is
+what would catch it if layer 1 were ever bypassed (e.g. a direct push to the staging branch outside
+`mirror.sh`). Neither replaces the other.
+
+**Which skills are never public.** Five are blocklisted in *both* their bare and `j-` form, so they
+ship in neither and no naming change can make them available: `convert`, `mirror-public`,
 `self-sync`, `strategy`, `train`. Plus `mcp/router/`. A test touching any of these must take option 1
 or 2. The other 34 blocklisted skills ship under their `j-<name>` twin and are publicly available —
 referencing *those* by twin name is fine.
 
 **Audit command.** For each `tests/*.bats` and `tests/helpers/*` that
-`scripts/check-publicignore-match.sh` classifies `PUBLIC`, grep for references to the seven
+`scripts/check-publicignore-match.sh` classifies `PUBLIC`, grep for references to the five
 never-public subjects above. As of 2026-09-10 this reports no violations. This was originally **manual
 and unwired** — the same weakness `E50_S19`'s rapport recorded about the `--min-pairs` floor — with no
 natural host after the twin-parity gate it was once meant to fold into was retired. `E28_S16`'s
@@ -234,7 +251,7 @@ behalf, so publishing stays an explicit, separately invoked act. Consequences fo
 - **Its three `.publicignore` entries are permanent.** Do not "fix" them. No step-name cutover,
   skill rename, or parity-audit improvement is meant to make this playbook public, and a future
   audit finding it absent from the mirror has found the intended state, not a defect.
-- **It is out of the parity population by construction**, for the same reason the six
+- **It is out of the parity population by construction**, for the same reason the five
   never-public skills are out of run D's 34 pairs — no downstream consumer exists for it.
 - **`understand-then-ship` was never in this category and is no longer here at all.** It was
   blocklisted only as collateral of composing `brainstorm-to-mirror`; it had no private step of its

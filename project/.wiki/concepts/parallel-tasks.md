@@ -1,6 +1,6 @@
 # Parallel Tasks
 
-> **How-to:** Running multiple tasks simultaneously with `/dooo` or automating board-wide parallel execution with `/jenga`.
+> **How-to:** Running multiple tasks simultaneously with `j.dooo` or automating board-wide parallel execution with `/jenga`.
 
 ---
 
@@ -12,17 +12,17 @@ When tasks have no dependencies on each other, running them in parallel saves re
 
 ---
 
-## `/dooo` — The Parallel Orchestrator
+## `j.dooo` — The Parallel Orchestrator
 
-`/dooo` is the parallel version of `/do`. It:
+`j.dooo` is the parallel version of `j.do`. It:
 
-1. Calls `/do` to start the first implementation in a background sub-agent
+1. Calls `j.do` to start the first implementation in a background sub-agent
 2. Returns to the board immediately and identifies other tasks that could run in parallel
 3. Offers them to you in a loop — each confirmation starts another sub-agent
 4. Monitors all running sub-agents until all complete
 
 ```
-/dooo
+j.dooo
 → Starting E01_S02_T02 (refresh tokens) as sub-agent...
 → Checking for parallelisable tasks...
 → E02_S01_T01 (rate limiting) has no dependencies on E01_S02_T02
@@ -41,7 +41,7 @@ When tasks have no dependencies on each other, running them in parallel saves re
 
 ## `/jenga` — The Automated Board Orchestrator
 
-`/jenga` is the board-wide alternative to approving each parallel batch yourself: bare `/jenga` or `/jenga <ids>` show a picker/scope plus a confirmation tree before anything executes, while `/jenga *` reproduces the original hands-free, zero-prompt run across the whole board. It uses the same background sub-agent mechanism as `/dooo`, but only after its earlier phases have decomposed epics into stories, decomposed stories into tasks, and queued the eligible work.
+`/jenga` is the board-wide alternative to approving each parallel batch yourself: bare `/jenga` or `/jenga <ids>` show a picker/scope plus a confirmation tree before anything executes, while `/jenga *` reproduces the original hands-free, zero-prompt run across the whole board. It uses the same background sub-agent mechanism as `j.dooo`, but only after its earlier phases have decomposed epics into stories, decomposed stories into tasks, and queued the eligible work.
 
 In **Phase 4**, `/jenga` executes by:
 
@@ -61,11 +61,11 @@ In **Phase 4**, `/jenga` executes by:
 → No more eligible tasks in this batch. Continuing until board is exhausted...
 ```
 
-## `/dooo` vs `/jenga`
+## `j.dooo` vs `/jenga`
 
 | Tool | Style | Scope | Prompts | Best when |
 | --- | --- | --- | --- | --- |
-| `/dooo` | Interactive parallel orchestration | A user-selected batch of independent tasks | Asks before starting each additional task | You want to inspect and approve each parallel batch |
+| `j.dooo` | Interactive parallel orchestration | A user-selected batch of independent tasks | Asks before starting each additional task | You want to inspect and approve each parallel batch |
 | `/jenga` | Interactive-by-default orchestration (`*` = fully automated) | The whole board, across all eligible work | Picker + confirmation by default; zero prompts only under `/jenga *` | You want to scope/confirm a board-wide run, or go fully hands-free with `*` |
 
 ---
@@ -87,7 +87,7 @@ The Scrum Master checks for these conditions before suggesting parallel executio
 Running tasks in parallel creates multiple worktree branches that need to be merged. After a parallel session, always run:
 
 ```
-/reconcile
+j.reconcile
 → Merges orphaned worktree branches
 → Cross-checks task statuses against git history
 → Cleans up todo.md
@@ -99,7 +99,7 @@ This ensures the board accurately reflects what happened across all the parallel
 
 ## A Note on Sub-Agent Sessions
 
-Each sub-agent in `/dooo` is a separate Claude Code session. This means:
+Each sub-agent in `j.dooo` is a separate Claude Code session. This means:
 
 - Each has full access to the board and codebase
 - Each creates its own worktree and commits independently
@@ -110,7 +110,7 @@ The board's file locking protocol ensures that concurrent writes don't corrupt s
 
 ---
 
-## When Not to Use `/dooo`
+## When Not to Use `j.dooo`
 
 - When tasks are sequential (T02 needs T01's output)
 - When the codebase is small and parallel overhead isn't worth it
@@ -118,7 +118,7 @@ The board's file locking protocol ensures that concurrent writes don't corrupt s
 - When you're debugging — parallel noise makes it harder to isolate issues
 - When you want to automate the entire board instead of approving each batch manually — use `/jenga`
 
-For most day-to-day work, `/do` is the right tool. Reach for `/dooo` when you have a clear batch of independent tasks and want to move fast.
+For most day-to-day work, `j.do` is the right tool. Reach for `j.dooo` when you have a clear batch of independent tasks and want to move fast.
 
 ---
 

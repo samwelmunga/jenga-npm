@@ -137,7 +137,7 @@ This means you don't manually mark a story complete — the Tester writes the tr
 **When to create an Epic vs. a Story:**
 - If the work naturally decomposes into 3+ complete user outcomes → Epic
 - If it's a single complete outcome → Story directly under an existing Epic
-- When in doubt, use `/brainstorm` — the Scrum Master will help you decide
+- When in doubt, use `j.brainstorm` — the Scrum Master will help you decide
 
 **When to create a Task vs. a Story:**
 - Tasks are technical sub-steps *within* a story, not standalone features
@@ -233,10 +233,10 @@ With Jenga AI, resuming a project is not a re-orientation exercise. It's:
 
 ```
 (New session)
-/continue
+j.continue
 → Scrum Master reads PROJECT_SUMMARY.md and board state
 → "E01_S02 is In Progress. T02 (refresh tokens) is Pending.
-   Recommended next: /do E01_S02_T02"
+   Recommended next: j.do E01_S02_T02"
 ```
 
 Or, if the session-end hook wrote triggers:
@@ -255,9 +255,9 @@ You pick up exactly where you left off. The model doesn't need to remember — t
 
 ### The Practical Implication
 
-The board is not optional overhead. It *is* the memory. If you skip updating it — working directly in the code without going through `/do` and the Tester — that context is lost at the next session boundary.
+The board is not optional overhead. It *is* the memory. If you skip updating it — working directly in the code without going through `j.do` and the Tester — that context is lost at the next session boundary.
 
-Use `/reconcile` if the board has drifted from actual git history. It cross-checks every task status against commits and corrects any discrepancies.
+Use `j.reconcile` if the board has drifted from actual git history. It cross-checks every task status against commits and corrects any discrepancies.
 
 ---
 
@@ -275,19 +275,19 @@ Use `/reconcile` if the board has drifted from actual git history. It cross-chec
 ### The Pattern
 
 ```
-/brainstorm → /todo → /do → /status
+j.brainstorm → j.todo → j.do → j.status
 ```
 
 This is the core loop. Everything in Jenga AI flows through some version of it.
 
 ---
 
-### Step 1: Shape the Work with `/brainstorm`
+### Step 1: Shape the Work with `j.brainstorm`
 
-Don't jump straight to `/todo`. Before anything hits the board, talk through the feature with the Scrum Master.
+Don't jump straight to `j.todo`. Before anything hits the board, talk through the feature with the Scrum Master.
 
 ```
-/brainstorm
+j.brainstorm
 "I want to add a password reset flow to the app"
 ```
 
@@ -299,16 +299,16 @@ The Scrum Master will ask:
 
 This dialogue turns a vague idea into concrete acceptance criteria. Nothing is written to the board until you confirm. If the idea is half-formed, the Scrum Master will say so.
 
-**Skip `/brainstorm` only if** the work is so small and clear that acceptance criteria are obvious. Even then, it's rarely a waste.
+**Skip `j.brainstorm` only if** the work is so small and clear that acceptance criteria are obvious. Even then, it's rarely a waste.
 
 ---
 
-### Step 2: Add to the Board with `/todo`
+### Step 2: Add to the Board with `j.todo`
 
 Once the work is shaped:
 
 ```
-/todo
+j.todo
 "Add password reset flow" → links to E01_S05
 ```
 
@@ -316,10 +316,10 @@ The Scrum Master creates the story and tasks on the board, validates that accept
 
 ---
 
-### Step 3: Execute with `/do`
+### Step 3: Execute with `j.do`
 
 ```
-/do
+j.do
 ```
 
 The skill reads `project/todo.md`, presents the pending tasks, and you select one (or let it auto-pick). It builds the full sender object and invokes the Developer agent.
@@ -342,10 +342,10 @@ You don't need to do anything during this phase. The agents communicate directly
 
 ---
 
-### Step 4: Check Progress with `/status`
+### Step 4: Check Progress with `j.status`
 
 ```
-/status
+j.status
 ```
 
 ```
@@ -363,7 +363,7 @@ If a task failed, the Tester will have written a rapport to `project/rapports/pr
 ### When Things Go Wrong
 
 **Task status: Failed**
-The Tester writes a problem rapport. At the next session start, the Scrum Master reads it and creates a follow-up task. You then run `/do` on that task.
+The Tester writes a problem rapport. At the next session start, the Scrum Master reads it and creates a follow-up task. You then run `j.do` on that task.
 
 **Task status: Blocked**
 The Developer couldn't resolve a conflict after three attempts. The task needs human intervention. Read the rapport in `project/rapports/problems/` — it will describe exactly what's blocking it.
@@ -396,22 +396,22 @@ With Jenga AI, the board, the event log, and the trigger queue hold the context.
 
 **Option 1 — Let the system orient you:**
 ```
-/continue
+j.continue
 → Reads PROJECT_SUMMARY.md and board state
 → "E01_S02 is In Progress. T02 (refresh tokens) is Pending.
-   Recommended next: /do E01_S02_T02"
+   Recommended next: j.do E01_S02_T02"
 ```
 
 **Option 2 — Get the full picture first:**
 ```
-/status
+j.status
 → Prints every epic, story, and task with current status
 → Lists open rapports and queue depth
 ```
 
 **Option 3 — Let the Scrum Master decide:**
 ```
-/proceed
+j.proceed
 → Scrum Master reviews board and immediately resumes execution
 → No prompt needed — it picks up the most logical next task
 ```
@@ -438,12 +438,12 @@ After processing, it clears the queue and reports to you: *"Processed 2 triggers
 
 The board is only as useful as it is accurate. Two things can cause drift:
 
-1. **Work done outside the workflow** — you manually edited a file or committed directly without going through `/do`
+1. **Work done outside the workflow** — you manually edited a file or committed directly without going through `j.do`
 2. **Interrupted sessions** — a task was started but never finished; the board still shows "In Progress"
 
 Fix this with:
 ```
-/reconcile
+j.reconcile
 → Cross-checks every task status against git history
 → Promotes tasks with matching commits that are still marked Pending
 → Demotes tasks marked Done with no commits found
@@ -451,7 +451,7 @@ Fix this with:
 → Cleans stale entries from todo.md
 ```
 
-Run `/reconcile` after any session where things got messy, after a big merge, or whenever the board feels off.
+Run `j.reconcile` after any session where things got messy, after a big merge, or whenever the board feels off.
 
 ---
 
@@ -459,7 +459,7 @@ Run `/reconcile` after any session where things got messy, after a big merge, or
 
 **At the start:**
 ```
-/continue   ← or /status, or /proceed
+j.continue  ← or j.status, or j.proceed
 ```
 
 **At the end:**
@@ -467,14 +467,14 @@ Let the session end hook do its work. If you're ending mid-task, just stop — t
 
 If you've just finished a story and want to commit cleanly:
 ```
-/lgtm       ← approve, commit, continue in one command
+j.lgtm      ← approve, commit, continue in one command
 ```
 
 ---
 
 ### Long Breaks
 
-If you haven't touched a project in weeks, the board is still there and accurate. `PROJECT_SUMMARY.md` holds the high-level context. Run `/status` for a full picture, then `/continue` to get moving again.
+If you haven't touched a project in weeks, the board is still there and accurate. `PROJECT_SUMMARY.md` holds the high-level context. Run `j.status` for a full picture, then `j.continue` to get moving again.
 
 There's no re-onboarding ceremony. The system was designed for this.
 
@@ -495,17 +495,17 @@ There's no re-onboarding ceremony. The system was designed for this.
 
 You're three tasks into implementing a feature when a better idea surfaces — or a separate concern entirely. If you chase it, you lose the thread of your current work. If you ignore it, you lose the idea.
 
-Jenga AI has two skills designed for exactly this tension: `/btw` and `/spinoff`.
+Jenga AI has two skills designed for exactly this tension: `j.btw` and `j.spinoff`.
 
 ---
 
-### `/btw` — Capture and Continue
+### `j.btw` — Capture and Continue
 
-Use `/btw` when you have a new idea that's clearly related to your current epic or story but isn't what you're working on right now.
+Use `j.btw` when you have a new idea that's clearly related to your current epic or story but isn't what you're working on right now.
 
 ```
 (You're implementing E01_S02 — Refresh Tokens)
-/btw add a "remember me" checkbox to the login form
+j.btw add a "remember me" checkbox to the login form
 ```
 
 The Scrum Master:
@@ -516,28 +516,28 @@ The Scrum Master:
 
 The idea is captured. Your current work is uninterrupted. Nothing is lost.
 
-**`/btw` is for:** Small additions, clarifications, or enhancements that you can classify in 30 seconds and defer cleanly.
+**`j.btw` is for:** Small additions, clarifications, or enhancements that you can classify in 30 seconds and defer cleanly.
 
 ---
 
-### `/spinoff` — Capture a Diverging Thread
+### `j.spinoff` — Capture a Diverging Thread
 
-Use `/spinoff` when the new topic is more substantial — it needs its own story or epic, or it requires prerequisite thinking before it can be properly sized.
+Use `j.spinoff` when the new topic is more substantial — it needs its own story or epic, or it requires prerequisite thinking before it can be properly sized.
 
 ```
 (Mid-session on rate limiting)
 You bring up caching strategy
-/spinoff
+j.spinoff
 ```
 
 The Scrum Master:
 1. Confirms or asks you to describe the diverging topic
 2. Summarises all context gathered so far in the conversation
-3. Asks: *"Are the requirements clear enough to act on, or would you like to run `/brainstorm` first?"*
-4. Saves a `/todo` entry with the full context summary
+3. Asks: *"Are the requirements clear enough to act on, or would you like to run `j.brainstorm` first?"*
+4. Saves a `j.todo` entry with the full context summary
 5. Returns focus to the primary thread
 
-**`/spinoff` is for:** Topics that need their own planning, have prerequisites to flesh out, or would take more than a few minutes to properly size.
+**`j.spinoff` is for:** Topics that need their own planning, have prerequisites to flesh out, or would take more than a few minutes to properly size.
 
 ---
 
@@ -547,19 +547,19 @@ The Scrum Master is trained to detect when a conversation shifts subject. When i
 
 ```
 It looks like we're moving into a new topic. How would you like to handle it?
-1. Capture the new topic as a /todo (I'll return to what we were working on)
-2. Capture the current topic as a /todo (I'll continue with the new topic)
-3. Capture both as /todo items (you choose which to continue first)
+1. Capture the new topic as a j.todo (I'll return to what we were working on)
+2. Capture the current topic as a j.todo (I'll continue with the new topic)
+3. Capture both as j.todo items (you choose which to continue first)
 4. Ignore it — tell me which topic to continue with
 ```
 
-This prompt appears automatically. You don't have to remember to use `/btw` or `/spinoff` — the Scrum Master will surface the choice for you.
+This prompt appears automatically. You don't have to remember to use `j.btw` or `j.spinoff` — the Scrum Master will surface the choice for you.
 
 ---
 
 ### A Note on Context Preservation
 
-Every `/todo` created through `/btw` or `/spinoff` includes:
+Every `j.todo` created through `j.btw` or `j.spinoff` includes:
 - A one-sentence summary of the captured topic
 - Key details and decisions already discussed
 - Open questions or unknowns raised so far
@@ -568,17 +568,17 @@ This isn't just a title. It's everything the Developer and Tester will need when
 
 ---
 
-### Choosing Between `/btw` and `/spinoff`
+### Choosing Between `j.btw` and `j.spinoff`
 
 | Situation | Use |
 |---|---|
-| Quick addition to a known story | `/btw` |
-| Needs its own story or epic | `/spinoff` |
-| Unclear whether it belongs to current epic | `/spinoff` (Scrum Master will size it) |
-| Already have full context, just need to defer | `/btw` |
-| Needs `/brainstorm` before it can be sized | `/spinoff` |
+| Quick addition to a known story | `j.btw` |
+| Needs its own story or epic | `j.spinoff` |
+| Unclear whether it belongs to current epic | `j.spinoff` (Scrum Master will size it) |
+| Already have full context, just need to defer | `j.btw` |
+| Needs `j.brainstorm` before it can be sized | `j.spinoff` |
 
-When in doubt, `/spinoff` — it's the safer choice because it always preserves full context.
+When in doubt, `j.spinoff` — it's the safer choice because it always preserves full context.
 
 ---
 
@@ -589,7 +589,7 @@ When in doubt, `/spinoff` — it's the safer choice because it always preserves 
 ## Parallel Tasks
 
 
-> **How-to:** Running multiple tasks simultaneously with `/dooo` or automating board-wide parallel execution with `/jenga`.
+> **How-to:** Running multiple tasks simultaneously with `j.dooo` or automating board-wide parallel execution with `/jenga`.
 
 ---
 
@@ -601,17 +601,17 @@ When tasks have no dependencies on each other, running them in parallel saves re
 
 ---
 
-### `/dooo` — The Parallel Orchestrator
+### `j.dooo` — The Parallel Orchestrator
 
-`/dooo` is the parallel version of `/do`. It:
+`j.dooo` is the parallel version of `j.do`. It:
 
-1. Calls `/do` to start the first implementation in a background sub-agent
+1. Calls `j.do` to start the first implementation in a background sub-agent
 2. Returns to the board immediately and identifies other tasks that could run in parallel
 3. Offers them to you in a loop — each confirmation starts another sub-agent
 4. Monitors all running sub-agents until all complete
 
 ```
-/dooo
+j.dooo
 → Starting E01_S02_T02 (refresh tokens) as sub-agent...
 → Checking for parallelisable tasks...
 → E02_S01_T01 (rate limiting) has no dependencies on E01_S02_T02
@@ -630,7 +630,7 @@ When tasks have no dependencies on each other, running them in parallel saves re
 
 ### `/jenga` — The Automated Board Orchestrator
 
-`/jenga` is the board-wide alternative to approving each parallel batch yourself: bare `/jenga` or `/jenga <ids>` show a picker/scope plus a confirmation tree before anything executes, while `/jenga *` reproduces the original hands-free, zero-prompt run across the whole board. It uses the same background sub-agent mechanism as `/dooo`, but only after its earlier phases have decomposed epics into stories, decomposed stories into tasks, and queued the eligible work.
+`/jenga` is the board-wide alternative to approving each parallel batch yourself: bare `/jenga` or `/jenga <ids>` show a picker/scope plus a confirmation tree before anything executes, while `/jenga *` reproduces the original hands-free, zero-prompt run across the whole board. It uses the same background sub-agent mechanism as `j.dooo`, but only after its earlier phases have decomposed epics into stories, decomposed stories into tasks, and queued the eligible work.
 
 In **Phase 4**, `/jenga` executes by:
 
@@ -650,11 +650,11 @@ In **Phase 4**, `/jenga` executes by:
 → No more eligible tasks in this batch. Continuing until board is exhausted...
 ```
 
-### `/dooo` vs `/jenga`
+### `j.dooo` vs `/jenga`
 
 | Tool | Style | Scope | Prompts | Best when |
 | --- | --- | --- | --- | --- |
-| `/dooo` | Interactive parallel orchestration | A user-selected batch of independent tasks | Asks before starting each additional task | You want to inspect and approve each parallel batch |
+| `j.dooo` | Interactive parallel orchestration | A user-selected batch of independent tasks | Asks before starting each additional task | You want to inspect and approve each parallel batch |
 | `/jenga` | Interactive-by-default orchestration (`*` = fully automated) | The whole board, across all eligible work | Picker + confirmation by default; zero prompts only under `/jenga *` | You want to scope/confirm a board-wide run, or go fully hands-free with `*` |
 
 ---
@@ -676,7 +676,7 @@ The Scrum Master checks for these conditions before suggesting parallel executio
 Running tasks in parallel creates multiple worktree branches that need to be merged. After a parallel session, always run:
 
 ```
-/reconcile
+j.reconcile
 → Merges orphaned worktree branches
 → Cross-checks task statuses against git history
 → Cleans up todo.md
@@ -688,7 +688,7 @@ This ensures the board accurately reflects what happened across all the parallel
 
 ### A Note on Sub-Agent Sessions
 
-Each sub-agent in `/dooo` is a separate Claude Code session. This means:
+Each sub-agent in `j.dooo` is a separate Claude Code session. This means:
 
 - Each has full access to the board and codebase
 - Each creates its own worktree and commits independently
@@ -699,7 +699,7 @@ The board's file locking protocol ensures that concurrent writes don't corrupt s
 
 ---
 
-### When Not to Use `/dooo`
+### When Not to Use `j.dooo`
 
 - When tasks are sequential (T02 needs T01's output)
 - When the codebase is small and parallel overhead isn't worth it
@@ -707,7 +707,7 @@ The board's file locking protocol ensures that concurrent writes don't corrupt s
 - When you're debugging — parallel noise makes it harder to isolate issues
 - When you want to automate the entire board instead of approving each batch manually — use `/jenga`
 
-For most day-to-day work, `/do` is the right tool. Reach for `/dooo` when you have a clear batch of independent tasks and want to move fast.
+For most day-to-day work, `j.do` is the right tool. Reach for `j.dooo` when you have a clear batch of independent tasks and want to move fast.
 
 ---
 

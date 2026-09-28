@@ -19,6 +19,8 @@ const SNAPSHOT_ROUTE_KEYS = {
   '/v1/history': 'history',
   '/v1/architecture': 'architecture',
   '/v1/health': 'health',
+  '/v1/documentation': 'documentation',
+  '/v1/rapports': 'rapports',
 }
 
 let embeddedSnapshotLoaded = false

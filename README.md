@@ -1,5 +1,5 @@
 # Jenga AI
-### No agent merges its own code.
+### The AI framework for serious projects.
 
 Jenga AI is an agentic software engineering framework for AI-assisted development: it splits work across three role-bounded agents — a Scrum Master that plans, a Developer that implements in an isolated git worktree, and a Tester that runs your test suite and owns the board status. Work survives session boundaries as Epics, Stories, and Tasks on a Markdown board your agent reads at the start of every session.
 
@@ -28,6 +28,37 @@ You've had this happen: Claude wrote the feature, said it worked, and the sessio
 | **Sessions just end** | Work-in-progress, unresolved problems, and incomplete stories silently vanish |
 
 Jenga AI solves each of these with structure: persistent engineering context maintained via board state, strict agent roles, typed inter-agent contracts, and session-end hooks that carry that context between sessions.
+
+### Documentation
+
+Start here, then go deeper as you need it:
+
+| Guide | What it covers |
+|---|---|
+| [Intro Guide](project/.wiki/intro-guide.md) | Start here. The philosophy, how to think about the system, and a first-15-minutes walkthrough for a new project or an existing codebase. Also on the [docs site](https://samwelmunga.github.io/jenga-npm/getting-started.html). |
+
+**Core concepts** — the three pillars, in the order they build on each other:
+
+| Concept | What it covers |
+|---|---|
+| [Role Separation](project/.wiki/concepts/role-separation.md) | Why Jenga AI uses three distinct agents instead of one. |
+| [Board Hierarchy](project/.wiki/concepts/board-hierarchy.md) | Why work is structured as Epics → Stories → Tasks, and how to use that hierarchy well. |
+| [Session Continuity](project/.wiki/concepts/session-continuity.md) | Why AI sessions losing context is the core problem — and how Jenga AI solves it structurally. |
+
+**How-to guides** — day-to-day working patterns:
+
+| Guide | What it covers |
+|---|---|
+| [Your First Feature](project/.wiki/concepts/first-feature.md) | Building a feature end-to-end, from idea to verified, committed code. |
+| [Capturing Mid-Flow Ideas](project/.wiki/concepts/mid-flow-capture.md) | Handling a new thought, tangent, or feature idea without derailing your current work. |
+| [Working Across Sessions](project/.wiki/concepts/multi-session-work.md) | Picking up a project after a break — without losing momentum or context. |
+| [Parallel Tasks](project/.wiki/concepts/parallel-tasks.md) | Running multiple tasks simultaneously with `j.dooo`, or automating board-wide parallel execution with `j.jenga`. |
+
+**Full reference:**
+
+| Reference | What it covers |
+|---|---|
+| [Documentation Reference](project/.wiki/documentation.md) | Every skill, every agent, MCP tools, hooks, and the inter-agent communication contract. Also on the [docs site](https://samwelmunga.github.io/jenga-npm/reference.html). |
 
 ---
 

@@ -8,17 +8,17 @@
 
 You're three tasks into implementing a feature when a better idea surfaces — or a separate concern entirely. If you chase it, you lose the thread of your current work. If you ignore it, you lose the idea.
 
-Jenga AI has two skills designed for exactly this tension: `/btw` and `/spinoff`.
+Jenga AI has two skills designed for exactly this tension: `j.btw` and `j.spinoff`.
 
 ---
 
-## `/btw` — Capture and Continue
+## `j.btw` — Capture and Continue
 
-Use `/btw` when you have a new idea that's clearly related to your current epic or story but isn't what you're working on right now.
+Use `j.btw` when you have a new idea that's clearly related to your current epic or story but isn't what you're working on right now.
 
 ```
 (You're implementing E01_S02 — Refresh Tokens)
-/btw add a "remember me" checkbox to the login form
+j.btw add a "remember me" checkbox to the login form
 ```
 
 The Scrum Master:
@@ -29,28 +29,28 @@ The Scrum Master:
 
 The idea is captured. Your current work is uninterrupted. Nothing is lost.
 
-**`/btw` is for:** Small additions, clarifications, or enhancements that you can classify in 30 seconds and defer cleanly.
+**`j.btw` is for:** Small additions, clarifications, or enhancements that you can classify in 30 seconds and defer cleanly.
 
 ---
 
-## `/spinoff` — Capture a Diverging Thread
+## `j.spinoff` — Capture a Diverging Thread
 
-Use `/spinoff` when the new topic is more substantial — it needs its own story or epic, or it requires prerequisite thinking before it can be properly sized.
+Use `j.spinoff` when the new topic is more substantial — it needs its own story or epic, or it requires prerequisite thinking before it can be properly sized.
 
 ```
 (Mid-session on rate limiting)
 You bring up caching strategy
-/spinoff
+j.spinoff
 ```
 
 The Scrum Master:
 1. Confirms or asks you to describe the diverging topic
 2. Summarises all context gathered so far in the conversation
-3. Asks: *"Are the requirements clear enough to act on, or would you like to run `/brainstorm` first?"*
-4. Saves a `/todo` entry with the full context summary
+3. Asks: *"Are the requirements clear enough to act on, or would you like to run `j.brainstorm` first?"*
+4. Saves a `j.todo` entry with the full context summary
 5. Returns focus to the primary thread
 
-**`/spinoff` is for:** Topics that need their own planning, have prerequisites to flesh out, or would take more than a few minutes to properly size.
+**`j.spinoff` is for:** Topics that need their own planning, have prerequisites to flesh out, or would take more than a few minutes to properly size.
 
 ---
 
@@ -60,19 +60,19 @@ The Scrum Master is trained to detect when a conversation shifts subject. When i
 
 ```
 It looks like we're moving into a new topic. How would you like to handle it?
-1. Capture the new topic as a /todo (I'll return to what we were working on)
-2. Capture the current topic as a /todo (I'll continue with the new topic)
-3. Capture both as /todo items (you choose which to continue first)
+1. Capture the new topic as a j.todo (I'll return to what we were working on)
+2. Capture the current topic as a j.todo (I'll continue with the new topic)
+3. Capture both as j.todo items (you choose which to continue first)
 4. Ignore it — tell me which topic to continue with
 ```
 
-This prompt appears automatically. You don't have to remember to use `/btw` or `/spinoff` — the Scrum Master will surface the choice for you.
+This prompt appears automatically. You don't have to remember to use `j.btw` or `j.spinoff` — the Scrum Master will surface the choice for you.
 
 ---
 
 ## A Note on Context Preservation
 
-Every `/todo` created through `/btw` or `/spinoff` includes:
+Every `j.todo` created through `j.btw` or `j.spinoff` includes:
 - A one-sentence summary of the captured topic
 - Key details and decisions already discussed
 - Open questions or unknowns raised so far
@@ -81,17 +81,17 @@ This isn't just a title. It's everything the Developer and Tester will need when
 
 ---
 
-## Choosing Between `/btw` and `/spinoff`
+## Choosing Between `j.btw` and `j.spinoff`
 
 | Situation | Use |
 |---|---|
-| Quick addition to a known story | `/btw` |
-| Needs its own story or epic | `/spinoff` |
-| Unclear whether it belongs to current epic | `/spinoff` (Scrum Master will size it) |
-| Already have full context, just need to defer | `/btw` |
-| Needs `/brainstorm` before it can be sized | `/spinoff` |
+| Quick addition to a known story | `j.btw` |
+| Needs its own story or epic | `j.spinoff` |
+| Unclear whether it belongs to current epic | `j.spinoff` (Scrum Master will size it) |
+| Already have full context, just need to defer | `j.btw` |
+| Needs `j.brainstorm` before it can be sized | `j.spinoff` |
 
-When in doubt, `/spinoff` — it's the safer choice because it always preserves full context.
+When in doubt, `j.spinoff` — it's the safer choice because it always preserves full context.
 
 ---
 
