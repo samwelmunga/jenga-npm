@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from datetime import date
 from pathlib import Path
@@ -18,6 +19,31 @@ BOARD_DIRS = (
 )
 
 
+def _resolve_project_root() -> Path:
+    """Locate the project root via git, not a fixed relative climb.
+
+    This script is deployed both at its source location
+    (skills/j-doc/scripts/) and mirrored one directory deeper into
+    .claude/skills/j-doc/scripts/ / .agents/skills/j-doc/scripts/ -- a fixed
+    parents[N] climb from __file__ only lands on the real repo root from the
+    source location, not from a mirror. Same approach as
+    skills/j-close-story/scripts/check-story-closeable.sh,
+    check-privatized.sh:138, and compute-scope-divergence.sh:54 use for the
+    equivalent bash case.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=Path(__file__).resolve().parent,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return Path(result.stdout.strip())
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return Path.cwd()
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Resolve the latest completed board date for a documentation target.",
@@ -25,7 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("target_path", help="Repo-relative documentation target path, e.g. README.md")
     parser.add_argument(
         "--root",
-        default=Path(__file__).resolve().parents[3],
+        default=_resolve_project_root(),
         type=Path,
         help="Repository root containing project/board/",
     )

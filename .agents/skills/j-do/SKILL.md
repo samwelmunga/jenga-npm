@@ -398,14 +398,20 @@ After resolving the task context (step 4), passing override validation (step 4.1
 **If `execution_scope: inline`** (including tasks corrected above), execute the task directly in the current session without spawning a developer subagent:
 
 1. Read the task file and load its full content (description, acceptance criteria). Do NOT create a worktree. Do NOT spawn a developer subagent.
-2. Implement the task inline — make the required changes to files directly in the current session.
-3. Run the smoke test harness before committing anything:
-   - Run `bash "$([ -f scripts/smoke-harness.sh ] && echo scripts/smoke-harness.sh || echo node_modules/@jenga-ai/agent/scripts/smoke-harness.sh)" <changed_file>...`, passing the paths changed in step 2. With no arguments the harness infers them from `git diff --name-only HEAD`. It exits `0` on pass and `1` on failure.
+2. **Before implementation begins** — write `status: In Progress` and `date_started: <today>` to the task's frontmatter using the same file-locking protocol as `### 1.5` step 4a above:
+   1. Locate the task file: `project/board/tasks/<task_id>_*.md`.
+   2. Check for an existing lock file at `project/board/tasks/<task_id>_*.md.lock`. If it exists and is less than 60 seconds old, wait 10 seconds and retry once. If still locked after the retry, log a warning and skip this status write (do not block task execution).
+   3. Create the lock file: write the current ISO 8601 timestamp into `project/board/tasks/<task_id>_*.md.lock`.
+   4. Update the task frontmatter fields `status: In Progress` and `date_started: <YYYY-MM-DD>` (today's date).
+   5. Delete the lock file immediately after the write completes.
+3. Implement the task inline — make the required changes to files directly in the current session.
+4. Run the smoke test harness before committing anything:
+   - Run `bash "$([ -f scripts/smoke-harness.sh ] && echo scripts/smoke-harness.sh || echo node_modules/@jenga-ai/agent/scripts/smoke-harness.sh)" <changed_file>...`, passing the paths changed in step 3. With no arguments the harness infers them from `git diff --name-only HEAD`. It exits `0` on pass and `1` on failure.
    - If neither `scripts/smoke-harness.sh` nor `node_modules/@jenga-ai/agent/scripts/smoke-harness.sh` exists, log a warning and treat the result as a pass:
      ```
      WARNING [<task_id>]: smoke-harness.sh not found. Smoke test skipped (stub pass).
      ```
-4. **If the smoke test exits non-zero**:
+5. **If the smoke test exits non-zero**:
    - **If this is a `--trivial`-forced run** (marker set in step 4.1.5 — and `crucial_level` is not `locked`, which never falls back, per 4.1.5's precedence note): do NOT write `status: Failed`. `--trivial` always forces `inline` with no softer "lightest safe tier" to fall back to first, so a smoke-harness failure here goes straight to the shared `#### Fallback to Full Task-Scope Pipeline` procedure below (origin: `trivial`). Do not proceed with the remaining inline steps below — the Fallback procedure takes over from here.
    - **Otherwise** (an organically-assigned `inline` task, `--trivial` not involved): behavior is unchanged from before —
      - Write `status: Failed` to the task's frontmatter.
@@ -414,15 +420,15 @@ After resolving the task context (step 4), passing override validation (step 4.1
        INLINE TASK FAILED [<task_id>]: smoke test returned non-zero exit code. Task marked Failed. Halting.
        ```
      - Do not commit. Do not proceed to the next task.
-5. **If the smoke test passes**:
+6. **If the smoke test passes**:
    - Commit the changes using the standard commit convention (`task(<task_id>): <short description>`) via `/commit` in inline mode (E32_S04_T03).
    - Run the **Intent-vs-Diff Check** (see `### 5.1. Intent-vs-Diff Check` below) for this task.
    - Self-verify the implementation against the acceptance criteria.
    - Write `status: Passed` and `date_completed: <today>` to the task's frontmatter if verification passes.
    - Remove the task from `project/todo.md`.
-6. `inline` tasks do not invoke the tester agent — the smoke test and self-verification are the only gates.
-7. `inline` tasks always have `needs_docs: false` — skip plan and summary documentation for the implemented task.
-8. Continue to `### 6. Verify documentation`, then `### 7. After successful completion`.
+7. `inline` tasks do not invoke the tester agent — the smoke test and self-verification are the only gates.
+8. `inline` tasks always have `needs_docs: false` — skip plan and summary documentation for the implemented task.
+9. Continue to `### 6. Verify documentation`, then `### 7. After successful completion`.
 
 If the implementation cannot be completed inline (scope is larger than anticipated — detected scope creep mid-run):
 - **If this is a `--trivial`-forced run** (and `crucial_level` is not `locked`): invoke the shared `#### Fallback to Full Task-Scope Pipeline` procedure below (origin: `trivial`) — the same procedure the smoke-harness-failure branch above uses, not a second bespoke re-route.
@@ -439,24 +445,31 @@ After resolving the task context (step 4), passing override validation (step 4.1
 
 `light` sits between `inline` and `task`: unlike `inline`, it spawns a real developer subagent (so it can handle small branching logic that inline's main-session execution isn't suited for); unlike `task`, it does not create a dedicated worktree and does not invoke the tester as a separate step.
 
-1. **Acquire a developer concurrency slot, then spawn a developer subagent.** Acquire first, per `### 4.4. Developer Concurrency Slot Enforcement` below (`<id>` = this task's id). On a full cap (`capacity_blocked` outcome), do not spawn anything — `### 4.4` already reverts this task's status to `Pending`, logs the `capacity_blocked` event, and tracks the consecutive-block count; stop here and let `/jenga` Phase 4 retry this task on a later wave once a slot frees up. On a successful acquire, spawn the subagent (Agent tool, `subagent_type: "developer"`) with the same sender object and context payload as step 5 would use, but with an explicit instruction added to the dispatch prompt: **do not create a worktree** — implement directly against the current checkout (the session's existing working tree), not an isolated `.claude/worktrees/<slug>` copy. This is the one concrete difference from the step-5 `task` path: everything else about how the subagent implements the task (reading the task file, following acceptance criteria, following repo conventions) is unchanged.
+1. **Before spawning the developer subagent** — write `status: In Progress` and `date_started: <today>` to the task's frontmatter using the same file-locking protocol as `### 1.5` step 4a above:
+   1. Locate the task file: `project/board/tasks/<task_id>_*.md`.
+   2. Check for an existing lock file at `project/board/tasks/<task_id>_*.md.lock`. If it exists and is less than 60 seconds old, wait 10 seconds and retry once. If still locked after the retry, log a warning and skip this status write (do not block task execution).
+   3. Create the lock file: write the current ISO 8601 timestamp into `project/board/tasks/<task_id>_*.md.lock`.
+   4. Update the task frontmatter fields `status: In Progress` and `date_started: <YYYY-MM-DD>` (today's date).
+   5. Delete the lock file immediately after the write completes.
 
-2. **After the developer subagent reports implementation complete**, first **release the developer concurrency slot** acquired in step 1: `"$([ -f scripts/release-concurrency-slot.sh ] && echo scripts/release-concurrency-slot.sh || echo node_modules/@jenga-ai/agent/scripts/release-concurrency-slot.sh)" developer <task_id> <orchestrator_session_id>` (per `### 4.4` step 2) — this subagent's session has ended, so the slot is released now regardless of what it reports, before the smoke test result is even known. Then run the smoke test harness using the same invocation convention as `### 4.2. Inline Execution Path`:
+2. **Acquire a developer concurrency slot, then spawn a developer subagent.** Acquire first, per `### 4.4. Developer Concurrency Slot Enforcement` below (`<id>` = this task's id). On a full cap (`capacity_blocked` outcome), do not spawn anything — `### 4.4` already reverts this task's status to `Pending`, logs the `capacity_blocked` event, and tracks the consecutive-block count; stop here and let `/jenga` Phase 4 retry this task on a later wave once a slot frees up. On a successful acquire, spawn the subagent (Agent tool, `subagent_type: "developer"`) with the same sender object and context payload as step 5 would use, but with an explicit instruction added to the dispatch prompt: **do not create a worktree** — implement directly against the current checkout (the session's existing working tree), not an isolated `.claude/worktrees/<slug>` copy. This is the one concrete difference from the step-5 `task` path: everything else about how the subagent implements the task (reading the task file, following acceptance criteria, following repo conventions) is unchanged.
+
+3. **After the developer subagent reports implementation complete**, first **release the developer concurrency slot** acquired in step 2: `"$([ -f scripts/release-concurrency-slot.sh ] && echo scripts/release-concurrency-slot.sh || echo node_modules/@jenga-ai/agent/scripts/release-concurrency-slot.sh)" developer <task_id> <orchestrator_session_id>` (per `### 4.4` step 2) — this subagent's session has ended, so the slot is released now regardless of what it reports, before the smoke test result is even known. Then run the smoke test harness using the same invocation convention as `### 4.2. Inline Execution Path`:
    - Run `bash "$([ -f scripts/smoke-harness.sh ] && echo scripts/smoke-harness.sh || echo node_modules/@jenga-ai/agent/scripts/smoke-harness.sh)" <changed_file>...`, passing the paths the subagent changed. With no arguments the harness infers them from `git diff --name-only HEAD`. It exits `0` on pass and `1` on failure.
    - If neither `scripts/smoke-harness.sh` nor `node_modules/@jenga-ai/agent/scripts/smoke-harness.sh` exists, log a warning and treat the result as a pass:
      ```
      WARNING [<task_id>]: smoke-harness.sh not found. Smoke test skipped (stub pass).
      ```
 
-3. **If the smoke test passes**:
-   - The developer subagent self-verifies the implementation against the task's acceptance criteria. No tester subagent is invoked for a `light`-scoped task — this is a deliberate, documented exception to "the tester is the sole status-writer" (`agents/tester.md`), mirroring the same exception already established for `inline` scope in step 5 of `### 4.2`. Since no tester runs, the developer/orchestrator is the one who writes the terminal status for a `light`-scoped task.
+4. **If the smoke test passes**:
+   - The developer subagent self-verifies the implementation against the task's acceptance criteria. No tester subagent is invoked for a `light`-scoped task — this is a deliberate, documented exception to "the tester is the sole status-writer" (`agents/tester.md`), mirroring the same exception already established for `inline` scope in step 6 of `### 4.2`. Since no tester runs, the developer/orchestrator is the one who writes the terminal status for a `light`-scoped task.
    - Commit the changes using the standard commit convention (`task(<task_id>): <short description>`) via `/commit`.
    - Run the **Intent-vs-Diff Check** (see `### 5.1. Intent-vs-Diff Check` below) for this task.
    - Write `status: Passed` and `date_completed: <today>` to the task's frontmatter if self-verification passes.
    - Remove the task from `project/todo.md`.
    - Continue to `### 6. Verify documentation`, then `### 7. After successful completion`.
 
-4. **If the smoke test fails (non-zero exit)**: do NOT write `status: Failed` and do NOT halt. Instead, invoke `#### Fallback to Full Task-Scope Pipeline` below (origin: `light`).
+5. **If the smoke test fails (non-zero exit)**: do NOT write `status: Failed` and do NOT halt. Instead, invoke `#### Fallback to Full Task-Scope Pipeline` below (origin: `light`).
 
 #### Fallback to Full Task-Scope Pipeline
 
@@ -464,7 +477,7 @@ This is a self-contained, reusable procedure with two current callers — `### 4
 
 1. **Do not mark the task `Failed`.** A smoke-harness failure (or detected scope creep) under a reduced-overhead scope means the scope was too small for the task, not that the task itself is unworkable — the correct response is to retry under full isolation, not to reject the work.
 2. **Create a worktree** for the task, named `<E##_S##_T##-short-slug>` per standard Worktree Management conventions, if one does not already exist for this task. (A task dispatched under `light` scope, or forced `inline` via `--trivial`, never had one — both premises skip worktree creation — so this step always creates a fresh worktree in that case.)
-3. **Acquire a developer concurrency slot** (per `### 4.4. Developer Concurrency Slot Enforcement` below, `<id>` = this task's id). This fallback spawn is a distinct developer-subagent lifecycle from whatever `light`/`trivial` attempt preceded it — that attempt's own slot, if any, was already acquired and released around it (`### 4.3` step 1/2, or no slot at all for a `--trivial`-forced inline attempt, which never spawns a subagent) — so this step always acquires its own fresh slot. On a full cap (`capacity_blocked` outcome), do not spawn anything here either: apply `### 4.4`'s Pending-revert/log/consecutive-block handling for this task id and stop the fallback. The task remains exactly as the reduced-overhead attempt left it (any commits already made by that attempt stay in the worktree/branch just created in step 2), and `/jenga` Phase 4 retries it on a later wave once a slot frees up.
+3. **Acquire a developer concurrency slot** (per `### 4.4. Developer Concurrency Slot Enforcement` below, `<id>` = this task's id). This fallback spawn is a distinct developer-subagent lifecycle from whatever `light`/`trivial` attempt preceded it — that attempt's own slot, if any, was already acquired and released around it (`### 4.3` step 2/3, or no slot at all for a `--trivial`-forced inline attempt, which never spawns a subagent) — so this step always acquires its own fresh slot. On a full cap (`capacity_blocked` outcome), do not spawn anything here either: apply `### 4.4`'s Pending-revert/log/consecutive-block handling for this task id and stop the fallback. The task remains exactly as the reduced-overhead attempt left it (any commits already made by that attempt stay in the worktree/branch just created in step 2), and `/jenga` Phase 4 retries it on a later wave once a slot frees up.
 4. **Spawn a developer subagent** in that worktree and have it pick up from the current state of the code (the changes already made by the reduced-overhead attempt are still present in the working tree / already committed, if any commit occurred — the subagent continues from there rather than starting over).
 5. **Invoke the tester agent** per the normal `### 5. Invoke the developer agent` flow's contract — full sender object, commit SHAs, worktree path. The tester is responsible for the terminal status write, exactly as in the standard `task`-scope pipeline. Once this developer subagent's session ends — tester-verified, failed, or errored — **release the slot** acquired in step 3: `"$([ -f scripts/release-concurrency-slot.sh ] && echo scripts/release-concurrency-slot.sh || echo node_modules/@jenga-ai/agent/scripts/release-concurrency-slot.sh)" developer <task_id> <orchestrator_session_id>` (per `### 4.4` step 2).
 6. **Emit a clear, non-fatal fallback notice** to the user/orchestrator, using the message matching the caller's origin:
@@ -480,7 +493,7 @@ This is a self-contained, reusable procedure with two current callers — `### 4
 
 ### 4.4. Developer Concurrency Slot Enforcement (Shared Procedure)
 
-This is a self-contained, reusable procedure with four current callers — the Story-Bundle Execution Mode's developer-subagent spawn (`### 1.5` step 3, one acquire for the whole bundle, never one per task inside it), the Light Execution Path's developer-subagent spawn (`### 4.3` step 1/2), the standard task-scope developer invocation (`### 5` below), and the `Fallback to Full Task-Scope Pipeline`'s developer-subagent spawn (step 3/5 above). Every one of these is a genuine "spawn a developer subagent" moment — `inline` scope (`### 4.2`, including a `--trivial`-forced run that hasn't yet fallen back) is the only path that never spawns a subagent and therefore never calls this procedure at all.
+This is a self-contained, reusable procedure with four current callers — the Story-Bundle Execution Mode's developer-subagent spawn (`### 1.5` step 3, one acquire for the whole bundle, never one per task inside it), the Light Execution Path's developer-subagent spawn (`### 4.3` step 2/3), the standard task-scope developer invocation (`### 5` below), and the `Fallback to Full Task-Scope Pipeline`'s developer-subagent spawn (step 3/5 above). Every one of these is a genuine "spawn a developer subagent" moment — `inline` scope (`### 4.2`, including a `--trivial`-forced run that hasn't yet fallen back) is the only path that never spawns a subagent and therefore never calls this procedure at all.
 
 **`<id>`** is the task id (`E##_S##_T##`) for a single-task dispatch (the `### 5`, `### 4.3`, and Fallback call sites), or the story id (`E##_S##`) for the bundle path — one acquire call covers the whole bundle, never one per task inside it.
 

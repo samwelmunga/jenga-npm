@@ -330,13 +330,27 @@ run_install "$PKG2C" "$CONSUMER_C" "$FIXTURE/case-v2.log"
 
 # Detect whether this filesystem is even case-insensitive; on a case-SENSITIVE fs
 # both names legitimately coexist and the old one is genuinely stale.
-if [ -f "$CONSUMER_C/.agents/skills/alpha/skill.md" ] && \
-   [ -f "$CONSUMER_C/.agents/skills/alpha/SKILL.md" ] && \
-   [ "$(cat "$CONSUMER_C/.agents/skills/alpha/skill.md" 2>/dev/null)" != "$(cat "$CONSUMER_C/.agents/skills/alpha/SKILL.md" 2>/dev/null)" ]; then
-  CASE_INSENSITIVE=0
-else
+#
+# This probes the filesystem DIRECTLY rather than inferring the answer from the
+# mirrored tree. The previous inference was circular -- it asked whether both
+# skill.md and SKILL.md exist with DIFFERENT content, but both fixture packages
+# above write the identical body ("# alpha"), so the inequality was false by
+# construction and the branch concluded "case-insensitive" on every filesystem.
+# On macOS that happened to be the right answer; on a case-SENSITIVE fs (any
+# Linux CI runner) it was wrong, and the case-insensitive branch below then ran
+# an assert_grep for "written-this-run" that can only hold when the two names
+# collide -- recording a FAIL that no individual @test asserts, so only
+# "harness reports zero failures overall" caught it. Surfaced by the E28_S17
+# mirror staging gate's first Linux runs (2026-09-28).
+CASE_PROBE="$FIXTURE/case-probe"
+mkdir -p "$CASE_PROBE"
+: > "$CASE_PROBE/probe"
+if [ -e "$CASE_PROBE/PROBE" ]; then
   CASE_INSENSITIVE=1
+else
+  CASE_INSENSITIVE=0
 fi
+rm -rf "$CASE_PROBE"
 
 if [ "$CASE_INSENSITIVE" -eq 1 ]; then
   # The whole point: the skill must still exist under SOME name after the upgrade.
@@ -353,8 +367,20 @@ if [ "$CASE_INSENSITIVE" -eq 1 ]; then
   assert_grep "written-this-run" "$FIXTURE/case-v2.log" \
     "identity guard reports the spared entry as written-this-run"
 else
-  pass "case-only rename (skipped: filesystem is case-sensitive)"
-  pass "case-only rename (skipped: filesystem is case-sensitive) (.claude)"
+  # These names must remain PREFIX-COMPATIBLE with the case-insensitive branch
+  # above: assert_check in tests/postinstall-delete-reconciliation.bats matches
+  # with grep -F on "<tab><name>", a substring match, so a trailing "(n/a ...)"
+  # qualifier still satisfies an assertion written against the canonical name
+  # while keeping the skip visible in the harness output. The identity-guard
+  # line below already followed this convention; the two case-only-rename lines
+  # did not -- they were renamed wholesale to "case-only rename (skipped: ...)",
+  # which shares no prefix with the canonical name, so on a case-sensitive fs
+  # the "case-only rename does not delete the file the run just wrote" @test
+  # would fail with "no such check recorded by the harness". That never fired
+  # before only because the broken detection above forced every filesystem down
+  # the case-insensitive branch.
+  pass "case-only rename does not delete the just-written file (.agents) (n/a: filesystem is case-sensitive, both names legitimately coexist)"
+  pass "case-only rename does not delete the just-written file (.claude) (n/a: filesystem is case-sensitive, both names legitimately coexist)"
   pass "identity guard reports the spared entry as written-this-run (n/a on case-sensitive fs)"
 fi
 
