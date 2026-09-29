@@ -50,6 +50,18 @@ directly rather than adding a third skill-local wrapper script:
    (including an unreachable public repo) is logged as a warning only and never prevents `/status`
    from printing whatever board state it already has, and never causes a non-zero exit.
 
+6.7. **Check `project/todo.md` formatting** — invoke
+   ```
+   bash "$([ -f scripts/check-todo-format.sh ] && echo scripts/check-todo-format.sh || echo node_modules/@jenga-ai/agent/scripts/check-todo-format.sh)"
+   ```
+   Same script `/j-reconcile` uses (never a second, independently-maintained check) — it reuses
+   `parsers/todo.js`'s own `LEADING_REF_MISORDER_PATTERN` so both skills and the dashboard's
+   `/v1/todo-warnings` route always agree on the same set of lines. Exit `0` with no output means
+   nothing to report — skip the warning line in step 7 entirely. A non-zero exit prints one
+   `line <N>: <text>` per malformed entry — carry the count (and, per `assets/output_format.md`,
+   the first couple of lines) into the summary. Report only, same as `/j-reconcile`: never edit
+   `project/todo.md` here.
+
 7. **Print the summary** following the layout and icon conventions in `assets/output_format.md`.
 
 8. If no epics exist, print: `No board items found. Run /pi-plan to define epics or /todo to add items.`

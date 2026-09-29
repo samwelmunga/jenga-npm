@@ -12,3 +12,37 @@
   border-radius: 4px;
   color: #b91c1c;
 }
+
+.todo-warnings-banner {
+  margin: 0.75rem 1rem 0;
+  padding: 0.75rem 1rem;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 4px;
+  color: #92400e;
+  font-size: 0.875rem;
+}
+
+.todo-warnings-banner-title {
+  font-weight: 600;
+}
+
+.todo-warnings-banner-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.todo-warnings-banner-line {
+  font-weight: 600;
+}
+
+.todo-warnings-banner-hint {
+  margin-top: 0.5rem;
+  opacity: 0.85;
+}
+
+.todo-warnings-banner-hint code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+}

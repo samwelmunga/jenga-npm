@@ -38,6 +38,10 @@ Scope: <resolved scope — see forms below>
    Commented out: <N> newly-reconciled entries
    todo.md deleted: yes/no
 
+⚠️  MALFORMED TODO ENTRIES (won't be recognized as queued — see scripts/check-todo-format.sh)
+   line <N>: <raw line text>
+   line <N>: <raw line text>
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
@@ -64,6 +68,13 @@ Scope: <resolved scope — see forms below>
   when no task was skipped for this reason.
 - The TODO CLEANUP section is always shown if `project/todo.md` existed at the start, even if zero changes were made (in that case show all counts as 0).
 - If `project/todo.md` did not exist, omit the TODO CLEANUP section.
+- The MALFORMED TODO ENTRIES section is omitted entirely when `scripts/check-todo-format.sh` finds
+  nothing (exit code `0`, no output) — this is the common case and should not appear as an empty
+  section. Never auto-fix these lines: report only, exactly as written, with the line number so the
+  user can locate and correct them (or leave them, if the line was never meant to queue anything).
+  This section is purely additive to TODO CLEANUP above — a malformed line is invisible to `_queued`
+  promotion, so it is never a candidate for the "already-done" or "newly-reconciled" cleanup rules,
+  which both require a resolvable ref.
 - The DOD GAPS section is omitted if no completed stories have unchecked DoD checkboxes.
 - When `Scope:` is not `full board`, the UNLINKED CODE section's `groups[]` / `covered_groups[]` /
   `not_checked[]` have been filtered to the resolved scope's `owned_path_hints` on a best-effort,

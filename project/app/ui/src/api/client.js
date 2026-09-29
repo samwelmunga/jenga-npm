@@ -21,6 +21,7 @@ const SNAPSHOT_ROUTE_KEYS = {
   '/v1/health': 'health',
   '/v1/documentation': 'documentation',
   '/v1/rapports': 'rapports',
+  '/v1/todo-warnings': 'todoWarnings',
 }
 
 let embeddedSnapshotLoaded = false

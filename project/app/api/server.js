@@ -41,6 +41,7 @@ const historyRouter       = require('./routes/history');
 const architectureRouter  = require('./routes/architecture');
 const rapportsRouter      = require('./routes/rapports');
 const documentationRouter = require('./routes/documentation');
+const todoWarningsRouter  = require('./routes/todo-warnings');
 
 const { API_VERSION } = require('./response');
 
@@ -59,6 +60,7 @@ app.use('/v1/history',       historyRouter);
 app.use('/v1/architecture',  architectureRouter);
 app.use('/v1/rapports',      rapportsRouter);
 app.use('/v1/documentation', documentationRouter);
+app.use('/v1/todo-warnings', todoWarningsRouter);
 
 // ── Fallback routes ────────────────────────────────────────────────────────────
 // Registered on demand (not at require-time) so callers that mount additional

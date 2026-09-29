@@ -5,6 +5,7 @@ import HistoryTab from './tabs/HistoryTab'
 import ArchitectureTab from './tabs/ArchitectureTab'
 import RapportsTab from './tabs/RapportsTab'
 import DocumentationTab from './tabs/DocumentationTab'
+import TodoWarningsBanner from './components/TodoWarningsBanner'
 import { get } from './api/client'
 import './App.css'
 
@@ -52,6 +53,7 @@ export default function App() {
           </button>
         ))}
       </nav>
+      <TodoWarningsBanner />
       <div className="tab-content">
         {activeTab === 'board' && <BoardTab />}
         {activeTab === 'active-sprint' && <ActiveSprintTab />}

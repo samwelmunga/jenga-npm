@@ -7,6 +7,11 @@
  * with `_queued: true` (E06_S05_T04) — the Active Sprint tab's In Progress column promotes those
  * items even though their board status hasn't moved yet.
  *
+ * Also reports `unrecognized` — active-looking lines that don't parse as a valid `<title>: <ref>`
+ * entry (e.g. the ref written first instead of last). Such a line is silently invisible to the
+ * `_queued` promotion above; `routes/todo-warnings.js`, `/j-reconcile`, and `/j-status` all surface
+ * this list so a malformed line doesn't go unnoticed indefinitely.
+ *
  * ── Path resolution ───────────────────────────────────────────────────────────────────────────
  * `todo.md` is resolved via `resolveProjectRoot()` (`../lib/resolve-project-root.js`), exactly the
  * way `parsers/board.js` resolves `BOARD_ROOT` — never a fixed `path.resolve(__dirname, '../../..')`
@@ -61,6 +66,21 @@ const { resolveProjectRoot } = require('../lib/resolve-project-root');
  */
 const TODO_ENTRY_PATTERN = /^(.*?):[ \t]*(E\d+_S\d+(?:_T\d+)?)[ \t]*$/i;
 
+/**
+ * Matches the one specific "looks like a mistake, not prose" shape: a ref-shaped token leading the
+ * line, immediately followed (after optional whitespace) by a separator character — dash, en/em dash,
+ * colon, or pipe — the punctuation a human reaches for between an id and a description. This is
+ * deliberately narrow and anchored to line-start, not "a ref appears anywhere in the line": a broader
+ * check (tried and reverted — see the git history of this file) false-positived heavily on this
+ * project's own real `todo.md`, which contains long free-text notes that cite refs mid-prose (e.g.
+ * "...traced directly back to E50_S19's own stated purpose") and even a wrapped-paragraph line that
+ * coincidentally starts with a ref pair (`E61_S05/E61_S06's planned...` — excluded here since `/`
+ * immediately follows with no separator character, not because of *where* the ref sits in the line).
+ * Only a line shaped like `E01_S02_T03 - Some title` or `E01_S02_T03: Some title` — the exact inverse
+ * of `TODO_ENTRY_PATTERN` — trips this.
+ */
+const LEADING_REF_MISORDER_PATTERN = /^E\d+_S\d+(?:_T\d+)?\s*[-–—:|]/i;
+
 /** A balanced HTML comment block, `s`-flag-free so it works on older Node too. */
 const HTML_COMMENT_BLOCK = /<!--[\s\S]*?-->/g;
 
@@ -96,14 +116,23 @@ function stripComments(content) {
  * Pure parse of `todo.md` content into the board refs its active entries name.
  *
  * @param {string} content raw file content
- * @returns {{ refs: string[], entries: { title: string, ref: string, line: number }[] }}
+ * @returns {{ refs: string[], entries: { title: string, ref: string, line: number }[], unrecognized: { text: string, line: number }[] }}
  *   `refs` is upper-cased and de-duplicated, in first-appearance order. `entries` keeps every
  *   matching line for debuggability; its 1-based `line` numbers always match the original content,
- *   since `stripComments` preserves the newlines of the blocks it removes.
+ *   since `stripComments` preserves the newlines of the blocks it removes. `unrecognized` collects
+ *   every line matching `LEADING_REF_MISORDER_PATTERN` — a ref written first, e.g.
+ *   `E01_S02_T03 - Fix the thing`, instead of `TODO_ENTRY_PATTERN`'s documented `Fix the thing:
+ *   E01_S02_T03`. Deliberately narrow: it does not flag every line a ref merely *appears* in (free
+ *   prose citing a ticket mid-sentence is common and legitimate in this file — see that pattern's own
+ *   comment for real examples that must NOT be flagged). Such a misordered line silently never becomes
+ *   a `_queued` flag on anything (board.js/kanbanColumns.js), so surfacing it here is what lets
+ *   `/reconcile`, `/status`, and the dashboard warn a human that the line they added won't do what
+ *   they expect.
  */
 function parseTodoContent(content) {
   const lines = stripComments(content).split(/\r?\n/);
   const entries = [];
+  const unrecognized = [];
   const seen = new Set();
   const refs = [];
 
@@ -112,7 +141,12 @@ function parseTodoContent(content) {
     if (!line || line.startsWith('#')) return;
 
     const match = TODO_ENTRY_PATTERN.exec(line);
-    if (!match) return;
+    if (!match) {
+      if (LEADING_REF_MISORDER_PATTERN.test(line)) {
+        unrecognized.push({ text: line, line: index + 1 });
+      }
+      return;
+    }
 
     const title = match[1].trim();
     const ref = match[2].toUpperCase();
@@ -124,7 +158,7 @@ function parseTodoContent(content) {
     }
   });
 
-  return { refs, entries };
+  return { refs, entries, unrecognized };
 }
 
 /**
@@ -145,14 +179,14 @@ function resolveTodoPath() {
  * take down `GET /v1/board`.
  *
  * @param {string} [filePath] explicit path; defaults to `<projectRoot>/project/todo.md`
- * @returns {{ exists: boolean, path: string, refs: string[], entries: Object[], error?: string }}
+ * @returns {{ exists: boolean, path: string, refs: string[], entries: Object[], unrecognized: Object[], error?: string }}
  */
 function readTodoRefs(filePath) {
   let todoPath;
   try {
     todoPath = filePath || resolveTodoPath();
   } catch (err) {
-    return { exists: false, path: '', refs: [], entries: [], error: err.message };
+    return { exists: false, path: '', refs: [], entries: [], unrecognized: [], error: err.message };
   }
 
   let raw;
@@ -161,13 +195,13 @@ function readTodoRefs(filePath) {
   } catch (err) {
     if (err.code !== 'ENOENT') {
       console.warn(`[todo] Could not read ${todoPath} — ${err.message}`);
-      return { exists: false, path: todoPath, refs: [], entries: [], error: err.message };
+      return { exists: false, path: todoPath, refs: [], entries: [], unrecognized: [], error: err.message };
     }
-    return { exists: false, path: todoPath, refs: [], entries: [] };
+    return { exists: false, path: todoPath, refs: [], entries: [], unrecognized: [] };
   }
 
-  const { refs, entries } = parseTodoContent(raw);
-  return { exists: true, path: todoPath, refs, entries };
+  const { refs, entries, unrecognized } = parseTodoContent(raw);
+  return { exists: true, path: todoPath, refs, entries, unrecognized };
 }
 
 module.exports = {
@@ -176,4 +210,5 @@ module.exports = {
   stripComments,
   resolveTodoPath,
   TODO_ENTRY_PATTERN,
+  LEADING_REF_MISORDER_PATTERN,
 };

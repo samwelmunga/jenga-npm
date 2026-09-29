@@ -179,6 +179,66 @@ check('entry line numbers survive a multi-line comment earlier in the file', () 
 });
 
 // ---------------------------------------------------------------------------------------------
+// 2.5. unrecognized — ref-shaped lines that don't match the documented <title>: <ref> shape
+// ---------------------------------------------------------------------------------------------
+
+check('flags a ref-first line as unrecognized — the real japyo/todo.md defect shape', () => {
+  const { unrecognized, refs } = parseTodoContent(
+    'E05_S01_T02 – Verify terraform plan parity for dev and prod post-refactor (infra)\n'
+  );
+  assert.equal(unrecognized.length, 1);
+  assert.equal(unrecognized[0].line, 1);
+  assert.ok(unrecognized[0].text.startsWith('E05_S01_T02'));
+  assert.deepEqual(refs, [], 'the malformed line must not also be silently accepted as a ref');
+});
+
+check('does NOT flag a legitimate ref-free free-text line (documented shape 3)', () => {
+  const { unrecognized } = parseTodoContent('invoke /brainstorm project/rapports/analysis/some-eval.md\n');
+  assert.deepEqual(unrecognized, [], 'a line with no ref-shaped token at all is not a formatting mistake');
+});
+
+check('does NOT flag an epic-only trailing ref (documented decision, not a mistake)', () => {
+  const { unrecognized } = parseTodoContent('Fix hardcoded paths: E34\n');
+  assert.deepEqual(unrecognized, []);
+});
+
+check('does NOT flag a ref cited only inside a path/filename', () => {
+  const line =
+    'Fix hardcoded project/ paths in board_resolver.sh (see project/rapports/problems/' +
+    'E31_S05_T01-hidden-mode-path-resolution-gaps.md, F1/F2)\n';
+  const { unrecognized } = parseTodoContent(line);
+  assert.deepEqual(unrecognized, [], 'a ref embedded in a filename is a citation, not a malformed queue entry');
+});
+
+check('records the correct line number for an unrecognized line among valid ones', () => {
+  const { unrecognized } = parseTodoContent('a: E01_S01\nE02_S02_T01 - bad shape\nc: E03_S03\n');
+  assert.equal(unrecognized.length, 1);
+  assert.equal(unrecognized[0].line, 2);
+});
+
+check('flags a ref-first line using a colon separator too (same underlying mistake)', () => {
+  const { unrecognized } = parseTodoContent('E01_S02_T03: Some title written backwards\n');
+  assert.equal(unrecognized.length, 1);
+});
+
+check('does NOT flag a ref cited mid-prose inside a free-text note (real todo.md shape)', () => {
+  const line =
+    'Flagged independently by the tester during E41_S04_T02 verification on 2026-08-29. Needs ' +
+    '6c/6d reworded to scope DoD verification to the task\'s own criteria.\n';
+  const { unrecognized } = parseTodoContent(line);
+  assert.deepEqual(unrecognized, [], 'a ref cited mid-sentence, not leading the line, is prose, not a malformed entry');
+});
+
+check('does NOT flag a wrapped-paragraph line that happens to start with two slash-joined refs', () => {
+  // Real false positive found against this repo's own todo.md before this pattern was narrowed:
+  // a hard-wrapped free-text line starting with "E61_S05/E61_S06's ..." — the '/' immediately
+  // after the first ref (no separator, no whitespace) is what correctly excludes it.
+  const line = "E61_S05/E61_S06's planned mirror-write guards are the forward-looking answer, and both are already\n";
+  const { unrecognized } = parseTodoContent(line);
+  assert.deepEqual(unrecognized, []);
+});
+
+// ---------------------------------------------------------------------------------------------
 // 3. readTodoRefs — filesystem behavior
 // ---------------------------------------------------------------------------------------------
 console.log('readTodoRefs:');
@@ -206,6 +266,20 @@ try {
     assert.equal(result.exists, false);
     assert.deepEqual(result.refs, []);
     assert.ok(result.error, 'the failure reason should be surfaced, not thrown');
+  });
+
+  check('readTodoRefs propagates unrecognized lines from parseTodoContent', () => {
+    const p = path.join(fixtureDir, 'todo-malformed.md');
+    fs.writeFileSync(p, '# Todo\nE09_S01_T01 - wrong order\ngood entry: E09_S02\n');
+    const result = readTodoRefs(p);
+    assert.equal(result.unrecognized.length, 1);
+    assert.equal(result.unrecognized[0].line, 2);
+    assert.deepEqual(result.refs, ['E09_S02']);
+  });
+
+  check('missing file reports unrecognized: [] alongside refs: []', () => {
+    const result = readTodoRefs(path.join(fixtureDir, 'does-not-exist-2.md'));
+    assert.deepEqual(result.unrecognized, []);
   });
 } finally {
   fs.rmSync(fixtureDir, { recursive: true, force: true });
@@ -280,6 +354,17 @@ if (!fs.existsSync(realTodoPath)) {
         `${ref} appears only inside a path/filename but was reported as queued`
       );
     }
+  });
+
+  check('unrecognized stays empty against this repo\'s own real todo.md (no false positives)', () => {
+    // This file contains long free-text notes that cite refs mid-prose, and at least one
+    // hard-wrapped line that happens to start with a ref pair (E61_S05/E61_S06's ...) — the
+    // narrow, line-start-anchored LEADING_REF_MISORDER_PATTERN must not flag any of them.
+    assert.deepEqual(
+      real.unrecognized,
+      [],
+      `expected no false-positive unrecognized lines, got: ${JSON.stringify(real.unrecognized)}`
+    );
   });
 
   console.log(`  (parsed ${real.refs.length} queued refs from ${realTodoPath})`);

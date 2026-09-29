@@ -331,6 +331,9 @@ When unscoped, every entry from phase 1 is eligible, exactly as before.
 - **Newly-reconciled entries** — entries that were commented out in phase 3 stay as `<!-- RECONCILED: ... -->`.
 - If `project/todo.md` is left with only the header, the format comment, and blank lines, delete the file.
 
+### 6.5. Check `project/todo.md` formatting
+Run `bash "$([ -f scripts/check-todo-format.sh ] && echo scripts/check-todo-format.sh || echo node_modules/@jenga-ai/agent/scripts/check-todo-format.sh)"`. This runs unconditionally and is never scope-filtered — a malformed line has no resolvable ref, so it cannot be attributed to any particular epic/story/task scope the way phase 6's cleanup rules can. Exit `0` with no output means nothing to report; skip the MALFORMED TODO ENTRIES section entirely. A non-zero exit prints one `line <N>: <text>` per malformed entry — carry these verbatim into the report's MALFORMED TODO ENTRIES section (see `assets/report_format.md`). Report only: never edit `project/todo.md` on the strength of this check, since fixing a line correctly requires knowing the author's actual intent (which ref, and whether the trailing "(infra)"-style suffix in a misordered line was meant to stay in the title).
+
 ### 7. Print a summary
 Output a reconciliation report using the format in `assets/report_format.md` — the report's very
 first substantive line is always `Scope: ...`, reflecting the scope resolved in Phase 0 (see that

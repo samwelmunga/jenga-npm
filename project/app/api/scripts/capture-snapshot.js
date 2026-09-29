@@ -5,8 +5,8 @@
  * E47_S04_T02 — capture step for `j.dashboard --snapshot`.
  *
  * Calls the dashboard API's `/v1/board`, `/v1/history`, `/v1/architecture`, `/v1/health`,
- * `/v1/documentation`, and `/v1/rapports` routes exactly once each and writes their combined JSON
- * to a single artifact, consumable by the
+ * `/v1/documentation`, `/v1/rapports`, and `/v1/todo-warnings` routes exactly once each and writes
+ * their combined JSON to a single artifact, consumable by the
  * bundling/inlining step in `E47_S04_T03` (implemented) and, for `/v1/health` specifically, by
  * `E47_S06_T02`'s snapshot `<title>` rewrite in `../../ui/scripts/build-snapshot-html.cjs`, which
  * needs the captured project name to bake into the exported HTML's title at build time.
@@ -50,7 +50,8 @@
  *     "architecture":  <full API envelope from GET /v1/architecture,  i.e. { data, meta, error }>,
  *     "health":        <full API envelope from GET /v1/health,        i.e. { data, meta, error }>,
  *     "documentation": <full API envelope from GET /v1/documentation, i.e. { data, meta, error }>,
- *     "rapports":      <full API envelope from GET /v1/rapports,      i.e. { data, meta, error }>
+ *     "rapports":      <full API envelope from GET /v1/rapports,      i.e. { data, meta, error }>,
+ *     "todoWarnings":  <full API envelope from GET /v1/todo-warnings, i.e. { data, meta, error }>
  *   }
  * }
  * Each `routes.<name>` value is the *full* envelope exactly as the route returned it (see
@@ -95,7 +96,7 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 
-const ROUTES = ['/v1/board', '/v1/history', '/v1/architecture', '/v1/health', '/v1/documentation', '/v1/rapports'];
+const ROUTES = ['/v1/board', '/v1/history', '/v1/architecture', '/v1/health', '/v1/documentation', '/v1/rapports', '/v1/todo-warnings'];
 const ROUTE_KEYS = {
   '/v1/board': 'board',
   '/v1/history': 'history',
@@ -103,6 +104,7 @@ const ROUTE_KEYS = {
   '/v1/health': 'health',
   '/v1/documentation': 'documentation',
   '/v1/rapports': 'rapports',
+  '/v1/todo-warnings': 'todoWarnings',
 };
 
 function printUsage() {
