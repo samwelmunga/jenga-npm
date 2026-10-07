@@ -16,7 +16,7 @@
 # rather than by anyone running tests. As of E28_S16 this is gate-enforced:
 # skills/j-mirror-public/scripts/mirror.sh's check_test_subject_invariant runs
 # the real shipping suite in a mirror-shaped tree before every real push and
-# refuses to push a stranded test. See docs/public-mirror-content-parity.md,
+# refuses to push a stranded test. See project/documentation/public-mirror-content-parity.md,
 # "Rule: a test may never outlive its subject in the mirror", for the two
 # sanctioned authoring options (still correct and unchanged) and the list of
 # skills that are never public in either naming form.
@@ -66,7 +66,7 @@ project/instructions/
 # fixtures under $BATS_TEST_TMPDIR and never read the real directory; no file under tests/, scripts/
 # or skills/ references `improve-to-commit` by name, and the only mentions anywhere outside the
 # private project/ tree are the explanatory prose in this block and in
-# docs/public-mirror-content-parity.md, which depend on nothing and strand no test; and
+# project/documentation/public-mirror-content-parity.md, which depend on nothing and strand no test; and
 # load-playbooks.sh treats a missing
 # `project/.playbooks/` as a SILENT no-op (no warning, no error). So no test is stranded and the
 # mirror simply has no PROJECT playbook source.
@@ -265,7 +265,7 @@ tests/dev-done-post-sync-commit.bats
 # tests/mirror-permission-level-invariant.bats: runs skills/j-mirror-public/scripts/mirror.sh,
 # which lives under the fully-private skills/j-mirror-public/ blocklisted above (both naming
 # forms). Line 48 sets MIRROR_SH to that path and all 12 of its @test cases invoke it, so the
-# file has no publicly-meaningful subset — per docs/public-mirror-content-parity.md's rule
+# file has no publicly-meaningful subset — per project/documentation/public-mirror-content-parity.md's rule
 # section, option 1 (blocklist) is correct when the ENTIRE file depends on a private subject,
 # and a visible skip would skip every case and report nothing. Same failure mode as the
 # dev-done-post-sync-commit.bats entry directly above; caught before it reached the mirror.
@@ -285,7 +285,7 @@ tests/mirror-staging-branch-push.bats
 # copies skills/j-train/train_cli.py out of the fully-private skills/j-train/ blocklisted above (all
 # three naming forms). In the mirror that source file does not exist, so the cp fails and every case
 # fails with it -- the file has no publicly-meaningful subset, so per
-# docs/public-mirror-content-parity.md's rule section option 1 (blocklist) is correct rather than a
+# project/documentation/public-mirror-content-parity.md's rule section option 1 (blocklist) is correct rather than a
 # visible skip, which here would skip every case and report nothing. Same reasoning as the four
 # entries directly above. Caught by check_test_subject_invariant (E28_S16) on the 2026-09-28 run,
 # before it ever reached the mirror -- which is precisely what that gate exists to do.

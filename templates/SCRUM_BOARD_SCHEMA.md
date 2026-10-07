@@ -36,6 +36,128 @@ project/
 
 > **Note:** `project/epics/` and `project/stories/` and `project/tasks/` are legacy paths from earlier skills. All new board items are written under `project/board/`. Skills and agents that reference the legacy paths should migrate to `project/board/` when next touched.
 
+> **Note:** The `project/` paths shown here are the conventional defaults. See "Working-File Path Resolution" below for how scripts locate the working-file tree and resolve each path when it is not at `./project/`.
+
+---
+
+## Working-File Path Resolution
+
+`project/configs/workflow.json` carries a `paths` map naming every working-file location. Scripts must not
+hardcode `project/...` literals; they resolve paths through the shared resolver, `scripts/resolve-root.sh`
+(introduced by E34_S01). This section is the single place agents and scripts learn how resolution works.
+
+> Agent and skill **prose** (the `project/...` strings inside `skills/*.md` and `agents/*.md`) is out of scope
+> here: that convention is E34_S04's. This section governs scripts and hooks.
+
+### Anchor semantics
+
+The resolver finds an **anchor directory** (normally the repo root). Every `paths` value is relative to the
+anchor, because the values already carry their own `project/` prefix (for example `"board": "project/board"`).
+The anchor is **not** the `project/` directory itself. Reason: it keeps every registry value valid as written,
+so a registry needs no rewriting to be resolved.
+
+### Resolution order
+
+Highest priority first. The first layer that applies decides; a failing layer never falls through to a lower one
+unless stated.
+
+1. **`JENGA_PROJECT_ROOT` environment variable**, naming the anchor directly. If it is set and non-empty but no
+   registry file is found under it, that is a hard error (exit `3`). It never falls through silently, because a
+   caller that names a root and gets a different one has been given a wrong answer with a success code.
+2. **Upward search** from the current working directory, checking `project/configs/workflow.json` and then
+   `.project/configs/workflow.json` in each directory, starting at the working directory and continuing through
+   at most 25 ancestors or the filesystem root, whichever comes first. The nearest directory wins; within one
+   directory `project/` beats `.project/`. `.project/` is the relocation target the epic's motivating `hidden`
+   mode used. **Limitation:** only these two candidate locations are searched, so a tree relocated anywhere else
+   is not discoverable by search, and is reachable through the environment variable only if it still matches one
+   of the two candidates under the named anchor.
+3. **Conventional default**: anchor is the current working directory, tree is `./project/`, and every key takes
+   its built-in default from the table below. This preserves today's behavior for every project that has not
+   relocated, including a project with no `workflow.json` at all.
+
+### Provenance and strict mode
+
+The resolver reports which layer won: `env`, `search`, or `default` (`resolve-root.sh source`), and which tree
+name matched: `project` or `.project` (`resolve-root.sh tree`). `--strict` makes layer 3 an error: the resolver
+exits `3` instead of using the default. This lets a migrated consumer hard-fail on an unresolvable registry
+while callers that have not migrated keep the backward-compatible default.
+
+### Keys and conventional defaults
+
+All 18 keys in `workflow.json`'s `paths` map. A key absent from a given registry (or an absent registry in
+default mode) falls back to the default below, so a partially populated registry still works. When the matched
+tree is `.project`, a default's leading `project/` is rewritten to `.project/`, so a partial registry in a
+relocated tree never points back at `./project/`. `strategy` was added by E34_S06; since E34_S07 it defaults to `project/documentation/STRATEGY.md`, so the relocated-tree rewrite applies to it like every other default.
+
+| Key | Conventional default |
+|---|---|
+| `board` | `project/board` |
+| `epics` | `project/board/epics` |
+| `stories` | `project/board/stories` |
+| `tasks` | `project/board/tasks` |
+| `rapports_problems` | `project/rapports/problems` |
+| `rapports_analysis` | `project/rapports/analysis` |
+| `queue` | `project/queue` |
+| `scrum_triggers` | `project/queue/scrum_triggers.jsonl` |
+| `developer_triggers` | `project/queue/developer_triggers.jsonl` |
+| `tester_triggers` | `project/queue/tester_triggers.jsonl` |
+| `session_handoff` | `project/queue/handoffs` |
+| `logs` | `project/logs` |
+| `data` | `project/data` |
+| `configs` | `project/configs` |
+| `documentation` | `project/documentation` |
+| `documentation_plans` | `project/documentation/plans` |
+| `documentation_summaries` | `project/documentation/summaries` |
+| `strategy` | `project/documentation/STRATEGY.md` |
+
+### Output contract
+
+- `get <key>` prints an **absolute** path by default (anchor joined with the registry value); `--relative`
+  prints the path relative to the anchor, as stored. `list` prints every `key=path` pair, one per line, in the
+  table's order, honouring `--relative`. A registry value that is already absolute is printed unchanged.
+- No trailing slash, ever. `session_handoff` is stored in the registry as `project/queue/handoffs/` and is
+  normalized. A caller that wants a trailing slash (such as `board_resolver.sh`) appends it itself.
+- `root` prints the anchor (absolute, no trailing slash).
+
+| Exit code | Meaning |
+|---|---|
+| `0` | Success |
+| `1` | The registry file is malformed JSON (`Error: <file> contains malformed JSON` on stderr) |
+| `2` | Unknown key, missing argument, or other usage error |
+| `3` | Unresolvable in `--strict` mode, or `JENGA_PROJECT_ROOT` names a root that holds no registry |
+
+Without `jq`, malformed-JSON detection is limited to checking that the file starts with `{` or `[`, the same
+check `scripts/board_resolver.sh` has always used.
+
+### No-`jq` behavior
+
+The resolver works when `jq` is absent, using the same grep/sed fallback pattern `scripts/board_resolver.sh`
+uses, restricted to the `paths` object so a same-named key elsewhere in the file cannot be picked up.
+
+### Usage
+
+Executed:
+
+```bash
+scripts/resolve-root.sh root                    # anchor directory
+scripts/resolve-root.sh source                  # env | search | default
+scripts/resolve-root.sh tree                    # project | .project
+scripts/resolve-root.sh get queue               # absolute path
+scripts/resolve-root.sh get queue --relative    # project/queue
+scripts/resolve-root.sh list                    # key=path, all 18 keys
+scripts/resolve-root.sh --strict get board      # exit 3 rather than use the default
+```
+
+Sourced (sourcing prints nothing, exits nothing, and creates nothing):
+
+```bash
+. scripts/resolve-root.sh
+jenga_resolve_root                # anchor on stdout
+jenga_resolve_path queue          # same as `get queue`
+```
+
+The script is compatible with macOS `bash` 3.2 and is safe under `set -u`. It never creates a file or directory.
+
 ---
 
 ## ID & Filename Conventions
@@ -72,6 +194,8 @@ All status fields must use one of the following exact strings:
 | `Privatized`         | Set at ticket-close time via a static `.publicignore` blocklist membership check (no run dependency) |
 | `Deployed to Stage`  | Set when the public `jenga-npm` repo's CI tags a `vX.Y.Z-stage` tag that resolves back (via the `Source-Commit:` trailer) to this ticket's commit |
 | `Deployed to Prod`   | Set when the public `jenga-npm` repo's CI tags a `vX.Y.Z` (prod) tag that resolves back to this ticket's commit |
+
+**Mid-story pass status (`E17_S08`):** when the tester verifies a task that is not the last non-terminal task of its story, it writes `In Progress` (not `Pending`, which means "not yet started") to the parent story and leaves any DoD items gated on still-outstanding sibling tasks unticked. The existing `In Progress` value covers this case, so no status row is added or redefined here. See `agents/tester.md` step 6c-6e.
 
 Only the **tester agent** may write status values to story and task files. Only the **scrum master** may write status values to epic files and may update story status as part of rollup.
 
@@ -451,7 +575,7 @@ These two fields record that a scrum-master heuristic proposed a `crucial_level`
 
 - **Required** — the section must exist in every story file.
 - **Must use `- [ ]` checkboxes** — plain bullet points (`- text`) are **not** valid. Each criterion must be written as an unchecked checkbox so the Tester can tick it during verification.
-- **Owner: Scrum Master** writes the DoD checkboxes when creating or amending the story. **Tester** ticks each `- [ ]` to `- [x]` during the test run, before writing any `Passed` or `Passed with remarks` status.
+- **Owner: Scrum Master** writes the DoD checkboxes when creating or amending the story. **Tester** ticks each `- [ ]` to `- [x]` during the test run, and on the story-closing pass (every task in the story's `tasks:` list terminal) every box must be ticked before it writes any `Passed` or `Passed with remarks` status. On a mid-story pass, boxes gated on a still-outstanding sibling task are legitimately left unticked and the story is set to `In Progress`, never `Passed` (see `agents/tester.md` step 6c-6e).
 
 ### Validation script
 
@@ -613,7 +737,8 @@ Located at `project/configs/workflow.json`. Scaffolded by `/init` and owned by t
     "configs": "project/configs",
     "documentation": "project/documentation",
     "documentation_plans": "project/documentation/plans",
-    "documentation_summaries": "project/documentation/summaries"
+    "documentation_summaries": "project/documentation/summaries",
+    "strategy": "project/documentation/STRATEGY.md"
   },
   "agents": ["developer", "tester", "scrum-master"]
 }

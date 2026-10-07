@@ -1,10 +1,11 @@
 {
-  "threshold_version": 3,
+  "threshold_version": 4,
   "inline_max_files": 3,
   "inline_max_lines": 75,
   "story_max_files": 5,
   "bundle_lock_ttl_minutes": 30,
   "max_concurrent_developers": 3,
   "max_concurrent_testers": 3,
-  "slot_ttl_minutes": 45
+  "slot_ttl_minutes": 45,
+  "marker_ttl_minutes": 60
 }

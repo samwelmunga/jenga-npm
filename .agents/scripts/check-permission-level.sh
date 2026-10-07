@@ -2,7 +2,7 @@
 #
 # check-permission-level.sh — read-only gate for a skill's declared minimum
 # permission level (the `minimum_permission_level` SKILL.md frontmatter field,
-# see docs/skill-authoring.md).
+# see project/documentation/skill-authoring.md).
 #
 # ============================================================================
 # CHECK vs ENFORCE — READ THIS BEFORE WIRING THIS SCRIPT INTO A SKILL

@@ -349,23 +349,23 @@ You: "Oh, we should also think about caching strategy"
 
 #### `/strategy`
 
-**Description:** Walk through a guided conversation to capture or update `docs/STRATEGY.md`. The skill asks one focused question per section, shows a summary before writing, and requires explicit confirmation before touching the file.
+**Description:** Walk through a guided conversation to capture or update the strategy brief (`project/documentation/STRATEGY.md` by default, resolved through `paths.strategy` and `scripts/strategy_path_resolver.sh`). The skill asks one focused question per section, shows a summary before writing, and requires explicit confirmation before touching the file.
 
-**When to use:** When starting a project and you want to capture the strategic brief interactively, or when you want to update specific sections of an existing `docs/STRATEGY.md` without rewriting the whole thing.
+**When to use:** When starting a project and you want to capture the strategic brief interactively, or when you want to update specific sections of an existing strategy brief without rewriting the whole thing. A legacy `docs/STRATEGY.md` (from a project scaffolded before E34_S07) is still found and updated in place; nothing is migrated automatically. To adopt the new location, move it yourself: `git mv docs/STRATEGY.md project/documentation/STRATEGY.md`.
 
 **Covers:** Vision, Value Proposition, Scope (In/Out), and Target Audience only. Never asks about revenue models, pricing, or competitive positioning.
 
 **Example:**
 ```
 /strategy
-→ No existing docs/STRATEGY.md found — starting new capture
+→ No existing project/documentation/STRATEGY.md found — starting new capture
 → "What is the long-term direction for this project?"
   (user answers)
 → "What makes this project uniquely valuable?"
   (user answers)
 → ... (Value Proposition, Scope, Target Audience)
 → Summary displayed — "Does this look right? Type yes to write."
-→ Written to docs/STRATEGY.md
+→ Written to project/documentation/STRATEGY.md
 ```
 
 ---
@@ -656,9 +656,9 @@ Release type? → minor
 
 ---
 
-#### `docs/STRATEGY.md` Convention
+#### `project/documentation/STRATEGY.md` Convention
 
-**File:** `docs/STRATEGY.md`
+**File:** `project/documentation/STRATEGY.md` (the default of `paths.strategy`; `/init` scaffolds it there and creates no `docs/` directory. Under `project_files_visibility: ignored` it is ignored with the rest of `project/`. A project that still has the brief at the legacy `docs/STRATEGY.md` keeps working through the resolver's legacy fallback, and no script migrates it; the manual migration is `git mv docs/STRATEGY.md project/documentation/STRATEGY.md`.)
 
 **Intended audience:** Investors and strategic partners.
 
@@ -666,7 +666,7 @@ Release type? → minor
 
 **Generate or update with:**
 ```
-/doc docs/STRATEGY.md
+/doc project/documentation/STRATEGY.md
 ```
 
 **Required sections:**
@@ -678,7 +678,7 @@ Release type? → minor
 | **Scope** | What the project covers (In Scope) and what it explicitly does not cover (Out of Scope) |
 | **Target Audience** | Who the project is built for — personas, roles, or use cases |
 
-**Out of scope for this document:** Revenue model, pricing strategy, monetisation plans, competitive analysis, and financial projections must not appear in `docs/STRATEGY.md`. If source files contain this information, it is omitted during generation.
+**Out of scope for this document:** Revenue model, pricing strategy, monetisation plans, competitive analysis, and financial projections must not appear in the strategy brief. If source files contain this information, it is omitted during generation.
 
 **Sourcing:** Content is drawn from `PROJECT_SUMMARY.md` and existing `docs/`. The generator does not invent facts. If there is insufficient context to fill a section, it produces a stub with a clear TODO note rather than hallucinating content.
 

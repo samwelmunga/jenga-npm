@@ -1,0 +1,30 @@
+{
+  "id": "github",
+  "name": "GitHub CLI (gh) authentication",
+  "docs": [
+    "https://cli.github.com/manual/"
+  ],
+  "detect": {
+    "command": ["gh", "--version"]
+  },
+  "install": {
+    "docs_url": "https://github.com/cli/cli#installation",
+    "methods": [
+      { "platform": "darwin", "manager": "brew", "package": "gh" }
+    ]
+  },
+  "auth": {
+    "type": "browser",
+    "docs_url": "https://cli.github.com/manual/gh_auth_login",
+    "instructions": "Run `gh auth login` yourself in a terminal and choose the browser or device flow. Open the URL and enter the one-time code that gh prints, then tell me when you are done.",
+    "check": {
+      "command": ["gh", "auth", "status"]
+    }
+  },
+  "register_mcp": {
+    "supported": false
+  },
+  "verify": {
+    "command": ["gh", "auth", "status"]
+  }
+}

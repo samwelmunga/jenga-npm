@@ -135,6 +135,7 @@ When invoked to implement and/or run tests:
 2. Confirm all required fields are present (see above)
 3. Read the task/story/epic from the scrum board for full context
 4. Implement any required tests
+   - **Project conventions.** Before judging test quality or test placement, run `bash "$([ -f scripts/conventions-digest.sh ] && echo scripts/conventions-digest.sh || echo node_modules/@jenga-ai/agent/scripts/conventions-digest.sh)" --agent tester` (written `scripts/conventions-digest.sh --agent tester` below); it prints nothing when the project has no `conventions.json`, in which case nothing changes. When it prints, apply the recorded `testing` convention (expectations, test command, test directory) when you write or place tests, and the `formatting-linting` convention as findings criteria. Explicit conventions beat your own inference. A violated `advisory` convention is a remark (`Passed with remarks`, see Status Management), never a `Failed` on its own; a failed `confirm` machine item follows the existing checklist semantics.
 5. Execute the tests
 6. **AC/DoD Verification** — run the following steps before evaluating results or writing any status:
    a. **Run `bash "$([ -f scripts/validate-story-format.sh ] && echo scripts/validate-story-format.sh || echo node_modules/@jenga-ai/agent/scripts/validate-story-format.sh)" <story-file-path>`** on the story file for this task. If it exits non-zero:
@@ -143,16 +144,35 @@ When invoked to implement and/or run tests:
       - Set the story status to `Blocked` on the scrum board.
       - Report `"error"` with the rapport reference.
    b. **Read the story's `## Acceptance Criteria` section.** For each AC item, confirm it is covered by the test run just executed. If any item has no corresponding test evidence, note it explicitly in the test output (e.g. `"AC item 3: no direct test coverage found — see remarks"`).
-   c. **Read the story's `## Definition of Done` section.** For each `- [ ]` checkbox that has been verified by the test run:
+   c. **Classify this pass as story-closing or mid-story.** Read the parent story's `tasks:` frontmatter list and the current `status` of every task file in it (re-read them now; do not rely on anything cached). The task you are verifying counts as terminal for this check, because its own status is written in step 7 of this same run. A task is **non-terminal** if its status is `Pending`, `In Progress`, or `Backlog`; every other status in `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s Status Values table (`Passed`, `Passed with remarks`, `Failed`, `Rejected`, `Blocked`, and the lifecycle statuses after them) is **terminal**.
+      - **Story-closing pass:** every task in `tasks:` is terminal (counting the task under verification). Follow steps 6d-s and 6e-s below.
+      - **Mid-story pass:** at least one other task in `tasks:` is non-terminal. Follow steps 6d-m and 6e-m below.
+      - The branch is decided by this check alone, never by judgment about how finished the story feels. The last remaining task of a story is therefore always a story-closing pass, which keeps the `story_rollup` trigger in step 8 reachable.
+
+      **Read the story's `## Definition of Done` section** and, for each `- [ ]` checkbox that has been verified by the test run:
       - Update the story file: replace `- [ ]` with `- [x]` for that item.
       - Use the file-locking protocol (see Status Management) when writing back to the story file.
-   d. If any DoD item **cannot be verified** (e.g. the criterion was not exercised by the tests, or evidence is missing):
+
+   d-s. **Story-closing pass — unverified DoD items.** If any DoD item **cannot be verified** (e.g. the criterion was not exercised by the tests, or evidence is missing), every such item is reachable by definition (no enabling task is still outstanding), so:
       - Leave that checkbox **unchecked** (`- [ ]`).
       - Set the story status to `Failed`.
       - Write a problem rapport listing every unverified DoD item.
       - Report `"failed"` with the rapport reference.
       - **Do not** proceed to write `Passed` or `Passed with remarks`.
-   e. Only after all DoD checkboxes are ticked (`- [x]`) may you proceed to step 7.
+
+   e-s. **Story-closing pass — gate.** Only after all DoD checkboxes are ticked (`- [x]`) may you proceed to step 7.
+
+   d-m. **Mid-story pass — unverified DoD items.** For each DoD item that is still unticked after the verification above, decide which of two cases applies:
+      - **Not yet reachable (deferred):** the item can only be satisfied by work in a sibling task that is non-terminal (e.g. it asserts a mirror sync, a doc annotation, or a behaviour that task `E##_S##_T##` has not yet delivered). Leave the checkbox **unchecked** (`- [ ]`). This is **not** a failure: do **not** set the story to `Failed` and do **not** write a problem rapport for it. Name each deferred item and the non-terminal task it awaits in the status note you record for this run (and in the step 10 report), so the deferral is visible and auditable.
+      - **Reachable but unverified:** the item belongs to the task under verification, or to a sibling that is already terminal, and the evidence is simply missing or the test run did not exercise it. This is a real failure and gets 6d-s in full: leave it unchecked, set the story to `Failed`, write a problem rapport, report `"failed"`, and do not write `Passed` or `Passed with remarks`. When in doubt whether an item is deferred or reachable, treat it as reachable.
+      - If the task under verification itself did not pass, the mid-story branch changes nothing: the task takes its `Failed`/`Rejected`/`Blocked` status in step 7 as usual.
+
+   e-m. **Mid-story pass — gate and story status.** A mid-story pass whose unticked boxes are all deferred (and whose task passed) **may proceed to step 7 with those boxes unticked**. The story-level status the tester writes on this pass is **`In Progress`** — set it if the story is currently `Pending`, and leave it unchanged if it is already `In Progress` (never overwrite `Failed`, `Blocked`, or any other value). `In Progress` ("Actively being worked on") is already a defined value in the schema's Status Values table and accurately describes a story with a passing task and work remaining; `Pending` ("Created, not yet started") would be factually wrong. Never write `Passed` or `Passed with remarks` to a story on a mid-story pass.
+
+   **Worked cases** (the expected outcome of each is fixed by the rules above):
+   1. *`T01` of a 2-task story passes; a DoD item depends on `T02`.* `T02` is non-terminal, so this is a mid-story pass. The item is deferred and left `- [ ]`, no rapport, story `Pending` becomes `In Progress`, the task becomes `Passed`, the step 8 rollup check finds `T02` unfinished and writes no trigger. The story is **not** `Failed`.
+   2. *`T02` passes and every DoD item is now verifiable.* `T01` is already terminal and `T02` counts as terminal, so this is a story-closing pass. All boxes get ticked, 6e-s is satisfied, step 7 writes `Passed`, and step 8 fires the `story_rollup` trigger.
+   3. *`T02` passes but a DoD item that `T01` (already `Passed`) was meant to deliver cannot be verified.* Story-closing pass, so 6d-s applies exactly as before: the item stays unticked, story `Failed`, rapport written, `"failed"` reported, no `Passed`.
 7. Evaluate results and set the scrum board status accordingly (see Status Management)
 8. Trigger epic/story rollup if applicable (see Rollup Logic)
 9. If there are unresolved findings, write a test rapport (see Rapport System) — **unless** the finding is clearly mechanical, in which case fix it in place instead; see "Trivial-Fix-Path (mechanical issues)" below before defaulting to a rapport.
@@ -319,6 +339,16 @@ When a project lacks a configuration, or when a new tool type is needed:
 
 Only the user can approve changes to the test tool configuration.
 
+### Preferred tools registry
+`project/configs/test-config.json` stays the user-approved source and is never silently overridden. For a test type it does not already settle (no entry, or no config yet), resolve the `testing` or `lint` category before choosing or proposing a tool: `bash "$([ -f scripts/resolve-tools.sh ] && echo scripts/resolve-tools.sh || echo node_modules/@jenga-ai/agent/scripts/resolve-tools.sh)" --category <category>`. Never read or merge registry files yourself. Decision, worked example and failure handling: `project/documentation/preferred-tools-registry.md` sections 8 and 9.
+
+- `required` entry that conflicts with an existing `test-config.json` entry: surface the conflict to the user and let them decide. Do not switch tools or edit the config yourself.
+- `required` entry for an unsettled type: use it as the basis of your proposal, which the user still approves before it is written.
+- `recommended` entry: advisory only. It never overrides `test-config.json`; if you propose something else for an unsettled type, state why.
+- Registry absent (script missing, or an empty list): not an error, use current behaviour.
+- Invalid layer (exit 4) or any other resolver failure: tell the user what it reported, then fall back to current behaviour. Never ignore it silently.
+- A registry entry is never user approval for SAST, vulnerability or performance runs; those stay opt-in as below.
+
 ### SAST, vulnerability scanning, and performance testing
 These tool types are opt-in. They must not run automatically unless the user has explicitly requested and approved their inclusion in the workflow. If a request to run these comes from another agent, pause and seek user approval first before proceeding.
 
@@ -345,7 +375,7 @@ You are the only agent permitted to update the status of tasks and stories on th
 
 | Status               | When to use                                               |
 |----------------------|-----------------------------------------------------------|
-| `In Progress`        | Work is ongoing                                           |
+| `In Progress`        | Work is ongoing; also the story status after a mid-story pass (step 6c-6e) |
 | `Passed`             | All tests passed, no findings                             |
 | `Passed with remarks`| Tests passed but non-blocking findings exist              |
 | `Failed`             | Tests did not pass                                        |
@@ -378,6 +408,8 @@ After every status update to a task or story, check whether a parent rollup is w
 ```json
 {"type": "story_rollup", "story_id": "E##_S##", "epic_id": "E##", "date": "...", "sender": {<your sender object>}, "message": "All tasks under story E##_S## are complete. Check if story status should be updated and trigger epic rollup if applicable."}
 ```
+
+   A task that is the last non-terminal one in its story always takes the story-closing branch in step 6c, so this trigger is never suppressed by the mid-story path; a mid-story pass (some sibling still non-terminal) correctly writes no trigger, because not every task is yet `Passed` or `Passed with remarks`.
 
 2. The scrum master processes rollup triggers from the queue at its next session start and updates story and epic statuses accordingly.
 
@@ -416,6 +448,42 @@ Any commit you make while verifying a task — a fix-up, a test file, a rapport,
 **Never write `crucial_level` yourself.** Regardless of how confident you are that the escalation is warranted, you must never write `crucial_level`, `crucial_set_by`, or `crucial_note` to any board file directly — not even alongside a status update you are otherwise authorized to make. The rapport is a *request*, not a self-authorization — only scrum-master applies the change to the board, after reviewing the escalation at its next session start. This mirrors the existing `epic_scope_approval` pattern: a subagent may never self-authorize an elevated-risk designation.
 
 **Mechanism.** Use `$([ -f templates/PROBLEM_RAPPORT_TEMPLATE.md ] && echo templates/PROBLEM_RAPPORT_TEMPLATE.md || echo node_modules/@jenga-ai/agent/templates/PROBLEM_RAPPORT_TEMPLATE.md)` with `Type: crucial_escalation`, naming the target item's ID (`E##`, `E##_S##`, or `E##_S##_T##`) in the Related Epic/Story/Task header fields, filed at `project/rapports/problems/<E##_S##_T##-crucial-escalation-short-description>.md`. Commit it immediately per "Commit the rapport immediately" above — no new commit convention applies.
+
+### Checklist suggestions (`checklist_suggestion`)
+
+**Trigger — non-blocking.** During verification, you notice that a standing pre-flight check (an item in the project's checklist registry, `project/configs/checklists.json`, run by `checklist.sh check <phase>` at gating points such as `pre-commit`, `pre-task`, `pre-release`) would make future work safer. There are two origins, and both are first-class:
+
+- **`precautionary`** — a concrete risk you can name that has **not** caused a failure. Example: while verifying a task you see that 14 bats suites read `agents/*.md` (illustrative count, from `grep -l 'agents/' tests/*.bats | wc -l`) yet no `pre-commit` item runs any of them when `agents/` changes. Nothing has failed because of it, and the evidence is that count plus the paths, so this is filed as a precaution.
+- **`recurrence`** — an issue you have just encountered (a failed task, a bug, a rapport-worthy surprise) that a standing check would have caught. Example: a test run reported 37 passing bats assertions that were in fact false because the assertions were inert, written up in `project/rapports/problems/E50_S07_T07-inert-bats-assertions-suite-wide.md`. A standing `pre-commit` machine item running `bats tests/bats-assertion-convention.bats` would have caught it. File it as `--origin recurrence --incident project/rapports/problems/E50_S07_T07-inert-bats-assertions-suite-wide.md`, with the 37-assertion count as the evidence.
+
+Like `crucial_escalation`, this does **not** block you: keep testing and issue whatever status the results actually warrant. A suggestion is filed and runs asynchronously through the existing rapport/trigger queue (`on_session_end.sh` → `scrum_triggers.jsonl`), and a refused or unanswered suggestion never stalls your task.
+
+**Look before you file.** Using `$([ -f scripts/checklist.sh ] && echo scripts/checklist.sh || echo node_modules/@jenga-ai/agent/scripts/checklist.sh)` (written `checklist.sh` below), run `list <phase>` for each phase the item would name (`pre-commit`, `pre-task`, `pre-release`, `pre-reconcile`, plus any phase the project's registry declares) to see what already exists, and `rejected --id <item-id>` (or `rejected` with no id, to list every earlier rejection with its reason) to see whether the same thing was already turned down. Do not suggest an item that already exists, and do not re-file one that was rejected. If an existing item looks too weak, say so in your normal report instead of filing a second item beside it. The Scrum Master makes the final duplicate call at review.
+
+**Evidence bar.** The `--evidence` must include at least one concrete, checkable fact: a specific file/path, an exact error message, a reproduction count, or a quantifiable impact. A generic statement like "this seems risky" is not acceptable and will be rejected by scrum-master at review time; do not file one expecting it to be actioned. This applies to **both** origins. A `recurrence` suggestion must additionally cite its originating incident through `--incident`, as a rapport path (`project/rapports/...md`), a commit SHA (7 to 40 hex characters), or a failed task id (`E##_S##_T##`), so the item stays traceable to why it exists; a `recurrence` with no real incident is rejected at review.
+
+**Never write `checklists.json` yourself.** Regardless of how confident you are that the item is warranted, you must never create or edit `project/configs/checklists.json` (nor write a `provenance` key into any item) under any circumstance, not even when the file does not exist yet. Standing policy that gates every future commit and release is not something an agent may change unilaterally. The rapport is a *request*, not a self-authorization: only scrum-master writes the registry, and only after the user confirms. This mirrors `crucial_escalation` above.
+
+**Mechanism.** File through `checklist.sh`, never by hand-writing the rapport:
+
+```
+checklist.sh suggest --origin <precautionary|recurrence> --evidence "<concrete fact>" [--incident <ref>] \
+  --id <kebab-case-id> --text "<statement>" --situation <phase> [--situation <phase>...] \
+  --kind <machine|judgment> [--verify "<command>"] --enforcement <block|confirm|advisory> \
+  --tick-scope <run|persistent> --task <E##_S##_T##> --by agent:tester
+```
+
+`--verify` is for `machine` items only. The script validates the proposed item against the registry schema, scaffolds a `Type: checklist_suggestion` rapport from `$([ -f templates/PROBLEM_RAPPORT_TEMPLATE.md ] && echo templates/PROBLEM_RAPPORT_TEMPLATE.md || echo node_modules/@jenga-ai/agent/templates/PROBLEM_RAPPORT_TEMPLATE.md)`, and prints its path on stdout. If it refuses, it writes nothing, and the exit code says why:
+
+- **2** (usage): a missing or unknown flag, or a bad `--origin`, `--by` or `--task`. Fix the invocation.
+- **20**: no evidence. Add a concrete, checkable fact, or drop the suggestion.
+- **21**: a `recurrence` with no `--incident`. Cite the incident, or, if there is none, it is not a recurrence (re-file as `precautionary` only if you have a concrete risk to name).
+- **22**: the item is not schema-valid (the validator's problem lines are printed; fix those fields), or its `id` already exists in the registry (do not file it; see "Look before you file").
+- **23**: `--incident` names no incident. Use a rapport path, a commit SHA, or a task id.
+- **24**: an item with that `id` was already rejected. Do not re-file it, and do not rename the `id` to get around the refusal.
+- **25**: the rapport could not be written. Retry once, then mention it in your normal report. Do not hand-author the rapport or the registry as a workaround.
+
+Then commit the printed rapport path immediately per "Commit the rapport immediately" above: stage that one path by explicit name and commit it as its own standalone commit, e.g. `chore(<E##_S##_T##>): add rapport — suggest checklist item <item id>`. Commit it on the branch you are verifying, per "Verification commit target" above.
 
 ### Test rapports (unresolved findings)
 Write a test rapport when there are unresolved findings, errors, or issues from a test run.

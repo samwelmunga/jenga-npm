@@ -53,6 +53,18 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Task|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 30,
+            "command": "for H in \"${CLAUDE_PROJECT_DIR:-.}/hooks/on_preflight_check.sh\" \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/on_preflight_check.sh\" \"${CLAUDE_PROJECT_DIR:-.}/node_modules/@jenga-ai/agent/hooks/on_preflight_check.sh\"; do [ -x \"$H\" ] && exec \"$H\"; done; exit 0\n"
+          }
+        ]
+      }
     ]
   }
 }

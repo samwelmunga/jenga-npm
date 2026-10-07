@@ -204,10 +204,10 @@ EOF
   assert_output_contains 'No public playbook may contain a publishing or mirroring step; public build chains terminate at `j-commit`.'
 }
 
-@test "the policy sentence the guard emits is the one docs/skill-authoring.md states" {
+@test "the policy sentence the guard emits is the one project/documentation/skill-authoring.md states" {
   # Guards against the guard quoting a paraphrase of the rule it enforces.
   run grep -c 'No public playbook may contain a publishing or mirroring step; public build chains' \
-    "$REPO_ROOT/docs/skill-authoring.md"
+    "$REPO_ROOT/project/documentation/skill-authoring.md"
   [ "$status" -eq 0 ]
   run grep -c 'No public playbook may contain a publishing or mirroring step; public build chains' \
     "$REPO_ROOT/scripts/check-public-playbook-steps.sh"

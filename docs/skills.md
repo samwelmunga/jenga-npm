@@ -297,7 +297,7 @@ You: "Oh, we should also think about caching strategy"
 
 #### `/j-strategy`
 
-**Description:** Walk through a guided conversation to capture or update `docs/STRATEGY.md` — covering Vision, Value Proposition, Scope, and Target Audience — one section at a time.
+**Description:** Walk through a guided conversation to capture or update `project/documentation/STRATEGY.md` — covering Vision, Value Proposition, Scope, and Target Audience — one section at a time.
 
 **Output type:** `any`
 
@@ -310,10 +310,10 @@ You: "Oh, we should also think about caching strategy"
 **Example:**
 ```
 /j-strategy
-→ docs/STRATEGY.md does not exist — running new capture flow
+→ project/documentation/STRATEGY.md does not exist — running new capture flow
 "What is the long-term direction or ambition for this project?" → [answer]
 ...
-→ Written to docs/STRATEGY.md — captured Vision, Value Proposition, Scope, and Target Audience.
+→ Written to project/documentation/STRATEGY.md — captured Vision, Value Proposition, Scope, and Target Audience.
 ```
 
 ---
@@ -1067,6 +1067,64 @@ How far should I take the untracking? → 2 (commit locally)
 Pick a backend: 1. Google Drive 2. S3 3. Dropbox ... → 1
 → Opening auth URL: https://accounts.google.com/...
 → PASS: remote 'gdrive' is configured and verified working.
+```
+
+---
+
+#### `/j-connect`
+
+**Description:** Guided service setup — lists the service descriptors on disk, detects your platform, then installs the service's CLI (opt-in), authenticates, registers its MCP server where one exists, and independently verifies the result, skipping whatever is already done and never handling a secret value.
+
+**Output type:** `any`
+
+**Invokes:** none
+
+**When to use:** To wire a third-party service into a project (CLI installed and authenticated, MCP server registered) without hand-running vendor-specific steps. Adding a service is a descriptor-only change (`project/documentation/service-descriptor.md`), not a new skill.
+
+**What it does:**
+- Builds the service picker from the descriptors on disk (never a hardcoded list)
+- Detects the platform; on an undeterminable one it prints the official instructions URL instead of guessing an install command
+- Skips an already installed CLI and an already authenticated account, and reports what was skipped
+- Asks before running any install; hands browser sign-in and token steps to you and re-checks afterwards
+- Refers to secrets by environment-variable name only; values are never echoed or committed
+- Ends with a pass/fail report from independent verification, never from your confirmation alone
+
+**Example:**
+```
+/j-connect
+Which service would you like to connect? 1. <service from a descriptor> 2. Other (type a service id) -> 1
+[SKIPPED] install - already installed
+[ACTION] auth - set the environment variable <NAME>. ...
+→ (after you set it, re-run) VERIFIED: <service>
+```
+
+---
+
+#### `/j-tools`
+
+**Description:** Guided wizard for the preferred-tools registry: choose the user or project layer, then add, edit, remove or suppress an entry, or show the effective merged list. Every input is validated as it is given and the written file is self-validated before success is reported.
+
+**Output type:** `any`
+
+**Invokes:** none
+
+**When to use:** To declare which tools Jenga agents should reach for, and whether each choice is `required` (binding) or `recommended` (advisory), without hand-writing alternatives, version constraints and descriptor links. Hand-editing the registry files stays fully supported; the wizard preserves every entry it did not touch.
+
+**What it does:**
+- Writes the user layer (`~/.jenga/tools.json`) or the project layer (`preferred-tools.json` under the project's configs path); the curated shipped list is read-only
+- Validates the category against the vocabulary (extensible per layer), the enforcement flag, the version constraint format, and the install-hint descriptor against the real `j-connect` descriptors on disk
+- Adds, edits and removes entries, and suppresses a shipped entry at the chosen layer
+- Replaces the file atomically and only after the result validates; an invalid change leaves the file untouched
+- Ends with an independent validator run and never reports success on a failed one
+
+**Example:**
+```
+/j-tools
+What would you like to do? 1. Add a tool -> 1
+Which layer? 1. Project -> 1
+Name: shellcheck   Category: lint   Enforcement: 1. required
+→ Written to project/configs/preferred-tools.json
+→ VALID: project/configs/preferred-tools.json
 ```
 
 ---

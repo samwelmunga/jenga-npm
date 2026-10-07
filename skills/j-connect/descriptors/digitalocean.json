@@ -1,0 +1,35 @@
+{
+  "id": "digitalocean",
+  "name": "DigitalOcean CLI (doctl) and MCP server",
+  "docs": [
+    "https://docs.digitalocean.com/reference/doctl/how-to/install/",
+    "https://docs.digitalocean.com/reference/mcp/configure-mcp/"
+  ],
+  "detect": {
+    "command": ["doctl", "version"]
+  },
+  "install": {
+    "docs_url": "https://docs.digitalocean.com/reference/doctl/how-to/install/",
+    "hint": "Official methods vary by platform (Homebrew on macOS; Snap, pacman, dnf or a release archive on Linux; a release archive on Windows); follow the docs page for yours. Only Homebrew on macOS is automated here; Linux and Windows use the docs page. Not verified against a real machine: see project/documentation/digitalocean-connect-research.md.",
+    "methods": [
+      { "platform": "darwin", "manager": "brew", "package": "doctl" }
+    ]
+  },
+  "auth": {
+    "type": "browser",
+    "docs_url": "https://docs.digitalocean.com/reference/doctl/reference/auth/init/",
+    "instructions": "Create a DigitalOcean API token in your DigitalOcean control panel yourself, then run `doctl auth init` in a terminal and enter the token at its own prompt (add `--context <name>` to keep several accounts apart). doctl keeps the token in its own credential store: do not paste it into this chat, and do not put it in a project file. Tell me when you are done. Afterwards, approve the digitalocean-droplets MCP server in Claude Code and complete its own DigitalOcean sign-in (OAuth); that is a separate consent from the doctl token. DigitalOcean's hosted MCP server has one endpoint per service and only the Droplets one is registered here; add others from the MCP docs page by hand (re-running this does not remove them).",
+    "check": {
+      "command": ["doctl", "account", "get"]
+    }
+  },
+  "register_mcp": {
+    "supported": true,
+    "name": "digitalocean-droplets",
+    "type": "http",
+    "url": "https://droplets.mcp.digitalocean.com/mcp"
+  },
+  "verify": {
+    "command": ["doctl", "account", "get"]
+  }
+}

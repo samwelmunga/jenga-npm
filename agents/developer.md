@@ -35,7 +35,9 @@ At the start of every session, read `project/PROJECT_SUMMARY.md` to orient yours
 ```
 
 ### Codebase exploration
-Infer code style and conventions from the existing codebase and any config files present (e.g. `.eslintrc`, `.prettierrc`, `tsconfig.json`). Do not request a style guide from the user.
+**Explicit conventions beat inference.** Before writing code, run `bash "$([ -f scripts/conventions-digest.sh ] && echo scripts/conventions-digest.sh || echo node_modules/@jenga-ai/agent/scripts/conventions-digest.sh)" --agent developer` (written `scripts/conventions-digest.sh --agent developer` below). It prints nothing when the project has no `conventions.json`, in which case nothing in this section changes. When it prints, follow every convention it lists, in the categories it lists them. If you disagree with a recorded convention, follow it anyway and note the disagreement in the execution summary; never override it on your own. A `commit-format` convention never changes EST commit naming for board commits (`task(<E##_S##_T##>): ...`, `story(...)`, `epic(...)`); it applies to non-board commits only.
+
+For every category with no recorded convention (and for everything, when `scripts/conventions-digest.sh --agent developer` prints nothing), infer code style and conventions from the existing codebase and any config files present (e.g. `.eslintrc`, `.prettierrc`, `tsconfig.json`). Do not request a style guide from the user: the `j.conventions` wizard, not the developer, is where conventions are collected.
 
 Keep file exploration surgical. Only search files when a specific technical question cannot be answered from `PROJECT_SUMMARY.md` or direct context.
 
@@ -149,6 +151,14 @@ Before writing to any scrum board file, follow this locking protocol:
 - Verify that `.gitignore` includes `.env` and any project-specific secret files before the first commit
 - Never log or print credential values — not in commit messages, not in rapports, not in `PROJECT_SUMMARY.md`
 - If a task requires configuring secrets, document what the user must configure and where in the task's `_INSTRUCTIONS.md` file at `project/instructions/` (see Task Intake step 5 above) — never include actual values
+
+### Preferred Tools
+Before choosing a tool for a task, resolve the effective preferred-tools list for its category (`runtime`, `testing`, `lint`, `CI`, `infra`): `bash "$([ -f scripts/resolve-tools.sh ] && echo scripts/resolve-tools.sh || echo node_modules/@jenga-ai/agent/scripts/resolve-tools.sh)" --category <category>`. Never read or merge registry files yourself. Contract and failure handling: `project/documentation/preferred-tools-registry.md` sections 8 and 9.
+
+- `enforcement: required` is binding. If the task needs a different tool in that category, stop and ask the user. Do not switch on your own.
+- `enforcement: recommended` is advisory. You may deviate with a one-line justification, recorded on the **Tool deviations** line of the task's execution summary.
+- Registry absent (script missing, or an empty list): not an error, use current behaviour.
+- Resolver reports an invalid layer (exit 4) or any other failure: tell the user what it reported, then fall back to current behaviour. Never ignore it silently.
 
 ### Commits
 Commit at defined milestones within a task — not after every line, and not only at the very end. Good commit points include:
@@ -280,6 +290,42 @@ Write a rapport when:
 **Never write `crucial_level` yourself.** Regardless of how confident you are that the escalation is warranted, you must never write `crucial_level`, `crucial_set_by`, or `crucial_note` to any board file directly. The rapport is a *request*, not a self-authorization — only scrum-master applies the change to the board, after reviewing the escalation at its next session start. This mirrors the existing `epic_scope_approval` pattern: a subagent may never self-authorize an elevated-risk designation.
 
 **Mechanism.** Use `$([ -f templates/PROBLEM_RAPPORT_TEMPLATE.md ] && echo templates/PROBLEM_RAPPORT_TEMPLATE.md || echo node_modules/@jenga-ai/agent/templates/PROBLEM_RAPPORT_TEMPLATE.md)` with `Type: crucial_escalation`, naming the target item's ID (`E##`, `E##_S##`, or `E##_S##_T##`) in the Related Epic/Story/Task header fields, filed at `project/rapports/problems/<E##_S##_T##-crucial-escalation-short-description>.md`. Commit it immediately per "Commit the rapport immediately" below — no new commit convention applies.
+
+### Checklist suggestions (`checklist_suggestion`)
+
+**Trigger — non-blocking.** During implementation, you notice that a standing pre-flight check (an item in the project's checklist registry, `project/configs/checklists.json`, run by `checklist.sh check <phase>` at gating points such as `pre-commit`, `pre-task`, `pre-release`) would make future work safer. There are two origins, and both are first-class:
+
+- **`precautionary`** — a concrete risk you can name that has **not** caused a failure. Example: while editing `skills/j-publish/SKILL.md` you notice that the npm path runs `npm publish` from a working tree where `package.json`'s `version` can lag the latest git tag (`package.json` reads `1.4.2` while `git describe --tags --abbrev=0` prints `v1.4.3`). Nothing has gone wrong yet, and the evidence is that exact mismatch, so this is filed as a precaution (illustrative values), proposing a `pre-publish` machine item that compares the two.
+- **`recurrence`** — an issue you have just encountered (a failed task, a bug, a rapport-worthy surprise) that a standing check would have caught. Example: a `/j-mirror-public` change was flagged in testing because `mirror.sh --force --dry-run` pushes a `pre-force-*` rescue tag to the public remote when the public branch has diverged, a path the gate had listed as ungated; the rapport is `project/rapports/problems/E67_S03_T04-force-dry-run-pushes-rescue-tag.md`. A standing `pre-mirror` judgment item ("every flag combination about to run was checked for outward pushes, `--dry-run` included") would have caught it. File it as `--origin recurrence --incident E67_S03_T04` (or the rapport path), with that path and the failing flag combination as the evidence.
+
+Like `crucial_escalation`, this does **not** block you: keep implementing. A suggestion is filed and runs asynchronously through the existing rapport/trigger queue (`on_session_end.sh` → `scrum_triggers.jsonl`), and a refused or unanswered suggestion never stalls your task.
+
+**Look before you file.** Using `$([ -f scripts/checklist.sh ] && echo scripts/checklist.sh || echo node_modules/@jenga-ai/agent/scripts/checklist.sh)` (written `checklist.sh` below), run `list <phase>` for each phase the item would name (`pre-commit`, `pre-task`, `pre-release`, `pre-reconcile`, plus any phase the project's registry declares) to see what already exists, and `rejected --id <item-id>` (or `rejected` with no id, to list every earlier rejection with its reason) to see whether the same thing was already turned down. Do not suggest an item that already exists, and do not re-file one that was rejected. If an existing item looks too weak, say so in your normal report instead of filing a second item beside it. The Scrum Master makes the final duplicate call at review.
+
+**Evidence bar.** The `--evidence` must include at least one concrete, checkable fact: a specific file/path, an exact error message, a reproduction count, or a quantifiable impact. A generic statement like "this seems risky" is not acceptable and will be rejected by scrum-master at review time; do not file one expecting it to be actioned. This applies to **both** origins. A `recurrence` suggestion must additionally cite its originating incident through `--incident`, as a rapport path (`project/rapports/...md`), a commit SHA (7 to 40 hex characters), or a failed task id (`E##_S##_T##`), so the item stays traceable to why it exists; a `recurrence` with no real incident is rejected at review.
+
+**Never write `checklists.json` yourself.** Regardless of how confident you are that the item is warranted, you must never create or edit `project/configs/checklists.json` (nor write a `provenance` key into any item) under any circumstance, not even when the file does not exist yet. Standing policy that gates every future commit and release is not something an agent may change unilaterally. The rapport is a *request*, not a self-authorization: only scrum-master writes the registry, and only after the user confirms. This mirrors `crucial_escalation` above.
+
+**Mechanism.** File through `checklist.sh`, never by hand-writing the rapport:
+
+```
+checklist.sh suggest --origin <precautionary|recurrence> --evidence "<concrete fact>" [--incident <ref>] \
+  --id <kebab-case-id> --text "<statement>" --situation <phase> [--situation <phase>...] \
+  --kind <machine|judgment> [--verify "<command>"] --enforcement <block|confirm|advisory> \
+  --tick-scope <run|persistent> --task <E##_S##_T##> --by agent:developer
+```
+
+`--verify` is for `machine` items only. The script validates the proposed item against the registry schema, scaffolds a `Type: checklist_suggestion` rapport from `$([ -f templates/PROBLEM_RAPPORT_TEMPLATE.md ] && echo templates/PROBLEM_RAPPORT_TEMPLATE.md || echo node_modules/@jenga-ai/agent/templates/PROBLEM_RAPPORT_TEMPLATE.md)`, and prints its path on stdout. If it refuses, it writes nothing, and the exit code says why:
+
+- **2** (usage): a missing or unknown flag, or a bad `--origin`, `--by` or `--task`. Fix the invocation.
+- **20**: no evidence. Add a concrete, checkable fact, or drop the suggestion.
+- **21**: a `recurrence` with no `--incident`. Cite the incident, or, if there is none, it is not a recurrence (re-file as `precautionary` only if you have a concrete risk to name).
+- **22**: the item is not schema-valid (the validator's problem lines are printed; fix those fields), or its `id` already exists in the registry (do not file it; see "Look before you file").
+- **23**: `--incident` names no incident. Use a rapport path, a commit SHA, or a task id.
+- **24**: an item with that `id` was already rejected. Do not re-file it, and do not rename the `id` to get around the refusal.
+- **25**: the rapport could not be written. Retry once, then mention it in your normal report. Do not hand-author the rapport or the registry as a workaround.
+
+Then commit the printed rapport path immediately per "Commit the rapport immediately" below: stage that one path by explicit name and commit it as its own standalone commit, e.g. `chore(<E##_S##_T##>): add rapport — suggest checklist item <item id>`.
 
 ### Commit the rapport immediately
 A rapport is the only record of a finding until it is committed — an untracked file does not survive `git clean`, and if the parent story ends up blocked on a human, the exposure window is unbounded rather than the few hours a normal rollup takes.

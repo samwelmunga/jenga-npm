@@ -78,7 +78,7 @@
 #      below). If no earlier match exists, the playbook is rejected.
 #
 #   2. DECLARED OUTPUT — the source skill's own `skills/<name>/SKILL.md` frontmatter must declare
-#      a non-empty `output_types` field (see `docs/skill-authoring.md`'s `output_types` section,
+#      a non-empty `output_types` field (see `project/documentation/skill-authoring.md`'s `output_types` section,
 #      E53_S03_T02). A skill with no declared `output_types` cannot be a forward source — this is
 #      the design's partial-adoption rule (`templates/playbook-types.json`, E53_S03_T02) made
 #      load-time-enforced: only `j.status`, `j.uncharted`, `j.jenga`, and `j.reconcile` declare it
@@ -189,7 +189,7 @@
 # today's behavior EXACTLY: the forward is allowed on the existing source-declaredness check alone,
 # and Check 2 short-circuits before any comparison is made. The ABSENCE of a declaration is never a
 # violation. Adding the input side must not, and does not, retroactively break a single existing
-# playbook. (`docs/skill-authoring.md`'s `input_types` section states the same guarantee from the
+# playbook. (`project/documentation/skill-authoring.md`'s `input_types` section states the same guarantee from the
 # skill author's side.)
 #
 # `text` IS NOT A WILDCARD. `text` carries `"verify": null` in the registry because prose has no
@@ -789,7 +789,7 @@ def extract_types_field(skill_md_path, field):
     """Best-effort extraction of a type-declaration frontmatter field from a SKILL.md.
 
     `field` is `output_types` or `input_types` (E62_S01_T04) -- both take the SAME two shapes (see
-    docs/skill-authoring.md), so they are read by this one parser rather than two copies of it.
+    project/documentation/skill-authoring.md), so they are read by this one parser rather than two copies of it.
 
     Returns None if the file/field is missing or unparseable, a `str` for the single-static-type
     form, or a `list[dict]` for the `{when, type}` list form. This is a small, targeted parser for

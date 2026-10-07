@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-29T07:55:14.482Z",
-  "skill_count": 41,
+  "generated_at": "2026-10-07T20:20:45.190Z",
+  "skill_count": 44,
   "skills": [
     "brainstorm",
     "btw",
@@ -8,7 +8,9 @@
     "close-story",
     "cloud-connect",
     "commit",
+    "connect",
     "continue",
+    "conventions",
     "dashboard",
     "dashboard-share",
     "deep-dive",
@@ -41,6 +43,7 @@
     "spinoff",
     "status",
     "todo",
+    "tools",
     "uncharted",
     "wtf"
   ]

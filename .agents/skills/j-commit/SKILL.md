@@ -16,7 +16,7 @@ examples:
 
 # Commit — Commit Completed Work
 
-`skills/j-commit/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-commit/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `docs/skill-authoring.md`'s "Invocation Convention").
+`skills/j-commit/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-commit/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `project/documentation/skill-authoring.md`'s "Invocation Convention").
 
 > ⚠️ **`scripts/generate-j-alias.sh` was retired by `E50_S14` and no longer exists — there is nothing to run.** This file was previously generated from a bare `skills/commit/SKILL.md` source; `E50_S15` deleted that directory. This file is now the sole canonical, hand-edited source for this skill — edit it directly.
 
@@ -27,12 +27,14 @@ When invoked with the `--inline` flag OR when the environment variable `JENGA_CO
 1. **Skip** the reconcile step, the `/doc-sync` scan, and the user-action prerequisites check (steps 1-3 in normal mode). No `/reconcile` invocation, `/doc-sync` invocation, or `_INSTRUCTIONS.md` lookup is performed — inline tasks are single, already-scoped-small changes that reconcile and doc-sync would add overhead to, not risk, disproportionate to the size of the change.
 2. **Skip** any worktree merge logic — inline tasks execute in the main session with no dedicated worktree to merge.
 3. Stage all changed files relevant to the task (use `git add -A` or specific files if a list was provided by the caller).
-4. Commit using the EST naming convention:
+4. **Pre-commit gate** — fire phase `pre-commit` per "Pre-commit gate" below. Inline mode skips reconcile and doc-sync but **not** this gate. On a `block` failure nothing is committed.
+5. Commit using the EST naming convention:
    ```
    task(<E##_S##_T##>): <short description of what was done>
    ```
    The task ID (`E##_S##_T##`) must be taken from the context provided by `/do` — do not inspect task frontmatter independently.
-5. **Exit** — do not check for the next epic and do not emit "All Done!" in inline mode. `/do` manages the loop and next-epic detection.
+   An inline commit is always a board commit, so the project's commit-format convention never applies here (see "Project commit-format convention" below).
+6. **Exit** — do not check for the next epic and do not emit "All Done!" in inline mode. `/do` manages the loop and next-epic detection.
 
 If `--inline` is absent **and** `JENGA_COMMIT_INLINE` is not set (or is not `1`), ignore this section entirely and proceed with normal mode below.
 
@@ -51,7 +53,7 @@ If no epic, task, or story has been implemented, exit with the message: "No impl
         - If matched ids span more than one distinct story, or more than one distinct epic, this case does not resolve — do not guess between them; fall through to case 4.
         - **If no board files at all are staged, skip `/reconcile` entirely — do not fall through to case 4.** A commit that touches no board file cannot itself commit board drift, so there is nothing for a pre-commit reconcile to protect against; running a full unscoped scan here would be pure waste, not a safety net. This is distinct from the multi-item case immediately above, which still falls through to case 4 since board files genuinely are changing there.
      4. Otherwise — no argument, no sender context, and staged board files span more than one distinct story or epic — fall back to unscoped `/reconcile` (full board), unchanged from prior behavior.
-   - **Invoke** `/reconcile <scope>` when a scope was determined in cases 1-3, unscoped `/reconcile` on the case-4 fallback, or skip the reconcile step entirely per case 3's no-board-files-staged outcome. Do not re-derive or duplicate `/reconcile`'s own default-scope-to-epic expansion here — passing a bare story or task id through is sufficient; `/reconcile` itself resolves that to the containing epic.
+   - **Invoke** `/reconcile <scope> --from-commit` when a scope was determined in cases 1-3, `/reconcile --from-commit` (unscoped) on the case-4 fallback, or skip the reconcile step entirely per case 3's no-board-files-staged outcome. `--from-commit` marks this call as part of the commit flow, so `/reconcile` does not fire its own `pre-reconcile` pre-flight gate here (the commit's own `pre-commit` gate in step 4 covers it); `/commit` is the only caller that passes it. Do not re-derive or duplicate `/reconcile`'s own default-scope-to-epic expansion here — passing a bare story or task id through is sufficient; `/reconcile` itself resolves that to the containing epic.
    - **If `/reconcile` was skipped** (case 3's no-board-files-staged outcome) — continue silently to the next step, exactly as the no-drift outcome below.
    - **If reconcile detects and corrects drift** — inform the user what changed (e.g. demoted/promoted statuses, merged orphaned worktrees, cleaned `todo.md` entries) before proceeding.
    - **If reconcile finds no drift** — continue silently to the next step.
@@ -63,10 +65,56 @@ If no epic, task, or story has been implemented, exit with the message: "No impl
 
 3. **Verify user-action prerequisites** — Check whether an `_INSTRUCTIONS.md` file exists for this task at `project/instructions/<E##_S##_T##>_INSTRUCTIONS.md`. If the task has out-of-scope prerequisites but no instructions file was created, create one now using `assets/user_instructions_template.md`. If one already exists, surface it to the user as a reminder. (The developer should have created this file during task intake — this is a final safety check.)
 
-4. **Commit** using the following format:
+4. **Pre-commit gate** — fire phase `pre-commit` per "Pre-commit gate" below: after the reconcile, doc-sync and prerequisites steps above, immediately before the commit command. On a `block` failure nothing is committed.
+
+5. **Commit** using the following format:
    - **Epic:** `epic(<Epic Title>): <MAX_50_CHAR_SUMMARY>`
    - **Task/Story:** `story(<Epic Title>_<Story Title>): <MAX_50_CHAR_SUMMARY>`
    
    **Fallback: Group changes logically** — prefer one commit per coherent unit of work, but don't force splits. When in doubt, keep it together.
 
-5. **Check for next epic** — If a new epic is to be started, inform the user that a new conversation should be initiated. If there are no subsequent epics left, show the message: "All Done! 🎉"
+   **Non-board commits** (chore, docs, a change with no board item) follow the project's recorded commit-format convention, if any; see "Project commit-format convention" below. EST naming above is unchanged for every board commit.
+
+6. **Check for next epic** — If a new epic is to be started, inform the user that a new conversation should be initiated. If there are no subsequent epics left, show the message: "All Done! 🎉"
+
+---
+
+## Project commit-format convention
+
+A project may have recorded a `commit-format` convention through `j.conventions` (`project/documentation/project-conventions.md`). It shapes the message of **non-board** commits only. EST naming is never overridden by it.
+
+1. **Classify the commit.** It is a **board commit** when it implements or closes an epic, story or task (EST work, which `/reconcile` relies on): the calling context names a `task_id`, `story_id` or `epic_id`, or the work being committed is board work. Its subject is EST naming: `task(<E##_S##_T##>): ...`, `story(...)` or `epic(...)`. Otherwise (chore, docs, a change with no board item) it is a **non-board commit**.
+2. **Board commits: EST naming exactly as written above, unchanged and mandatory.** A recorded `commit-format` convention never changes it, whatever it says (a regex, a style, a length limit). Do not run the digest for the purpose of reshaping a board commit message.
+3. **Non-board commits: apply the convention.** Run `bash "$([ -f scripts/conventions-digest.sh ] && echo scripts/conventions-digest.sh || echo node_modules/@jenga-ai/agent/scripts/conventions-digest.sh)" --agent commit` (written `scripts/conventions-digest.sh --agent commit`). If its `commit-format` line is present, write the message in that format; otherwise use the existing default. After composing the subject, run `bash "$([ -f skills/j-commit/scripts/commit-subject-check.sh ] && echo skills/j-commit/scripts/commit-subject-check.sh || echo node_modules/@jenga-ai/agent/skills/j-commit/scripts/commit-subject-check.sh)" "<subject>"`: it classifies the subject (board subjects are always reported as `kind=board`, exit 0, the convention not consulted) and, for a non-board subject, checks it against the recorded `message_regex` and `subject_max_length`. Exit 1 means rewrite the subject and re-check; this is an advisory self-check on a message you wrote, not a gate on anything else (the `pre-commit` gate fires before any message exists and cannot test one).
+4. **Empty digest: behave exactly as before.** If `scripts/conventions-digest.sh --agent commit` prints nothing (no `conventions.json`, or no `commit-format` line), or it fails, this section changes nothing: the commit flow, the EST formats above and the pre-commit gate behave exactly as they did before this section existed.
+
+---
+
+## Pre-commit gate
+
+Fires pre-flight checklist phase `pre-commit` (`project/documentation/preflight-checklists.md`) at exactly one
+point: immediately before the commit command, after staging and after the reconcile and doc-sync steps. It
+fires in normal mode (step 4) and in `--inline` mode (step 4 of Inline Mode).
+
+Follow "Calling the checker from a skill" in that document: mint a run id for this commit, call
+`checklist.sh check pre-commit --run <id>`, and branch on the exit code and each item's `action`. A `block`
+failure halts here and **nothing is committed**; the reconcile and doc-sync results already shown stand, but no
+`git commit` runs until the item is satisfied or the user stops. With no registry, or an empty one, this gate
+is silent and the commit proceeds exactly as before.
+
+**Mark the situation.** Immediately after minting the run id and **before** the first `check`, write
+the situation marker, and clear it on **every** exit path (success, a `block` halt, a declined
+`confirm`, an error):
+
+```bash
+MARKER="$([ -f scripts/checklist-marker.sh ] && echo scripts/checklist-marker.sh || echo node_modules/@jenga-ai/agent/scripts/checklist-marker.sh)"
+TOKEN="$(bash "$MARKER" write --situation pre-commit --run "$RUN_ID" --skill j.commit)"
+bash "$MARKER" clear --token "$TOKEN"
+```
+
+This is what lets the enforcing hook see the phase; the protocol, the stack semantics and the TTL are
+in "Situation marker" in that document. A failed `write` is **not** a reason to abandon the phase — the
+gate above still runs and only the hook-enforced backstop is lost: report its stderr and continue.
+
+Phases nest here: a `/commit` run from inside `/do`'s `pre-task` phase pushes its `pre-commit` frame on top
+of that one, and clearing by token pops only its own. Never clear without a token in this skill.

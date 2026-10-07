@@ -1,0 +1,30 @@
+{
+  "id": "expo",
+  "name": "Expo account CLI (EAS CLI)",
+  "docs": ["https://docs.expo.dev/eas/cli/", "https://docs.expo.dev/mcp/"],
+  "detect": {
+    "command": ["eas", "--version"]
+  },
+  "install": {
+    "docs_url": "https://docs.expo.dev/eas/cli/",
+    "hint": "Connects the Expo account CLI (EAS CLI, installed globally as the eas-cli package), not the project-local expo CLI. Only a global install through the npm package manager is automated here, on macOS and Linux, and only when the npm tool is on your PATH; yarn, pnpm, bun, Windows and anything else use the docs page. The Node.js requirement and the exact version command are not stated on the pages read, and the check used here (eas --version) was not verified against a real machine: if it is not detected, follow the docs page. See project/documentation/figma-expo-connect-research.md. Out of scope on purpose: EAS Build, EAS Submit, signing and store credentials. Native iOS App Store delivery belongs to j.publish (its mobile-ios target).",
+    "methods": [
+      { "platform": "darwin", "manager": "npm", "package": "eas-cli" },
+      { "platform": "linux", "manager": "npm", "package": "eas-cli" }
+    ]
+  },
+  "auth": {
+    "type": "browser",
+    "docs_url": "https://docs.expo.dev/eas/cli/",
+    "instructions": "Run `eas login` yourself in a terminal (add `--no-browser` for CLI-based login on a headless machine, or `--sso` for SSO) and sign in to your Expo account at its own prompt or in the browser it opens, then tell me when you are done. The CLI keeps its own credentials: do not paste a password or token into this chat and do not put one in a project file. Expo's hosted MCP server is not registered here: if you want it, add it yourself from https://docs.expo.dev/mcp/ (the Expo plugin for Claude Code registers it already, so check /mcp first to avoid a duplicate) and sign in through /mcp; it is a separate consent from the CLI login, and its tools reach EAS builds and store data, which stay with you and j.publish, not this setup. Whether the check command fails when you are logged out was not verified against a real account.",
+    "check": {
+      "command": ["eas", "whoami"]
+    }
+  },
+  "register_mcp": {
+    "supported": false
+  },
+  "verify": {
+    "command": ["eas", "whoami"]
+  }
+}

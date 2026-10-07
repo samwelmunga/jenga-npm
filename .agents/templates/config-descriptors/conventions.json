@@ -1,0 +1,23 @@
+{
+  "descriptor_version": 1,
+  "file": "conventions.json",
+  "description": "The project's recorded conventions. Listed read-only: it has no scalar setting, conventions_version is pinned to 1 by scripts/validate-conventions.sh so it gets no bump rule, and the file is written by the j.conventions wizard rather than by jenga config.",
+  "keys": [
+    {
+      "key": "conventions_version",
+      "label": "Conventions version",
+      "type": "integer",
+      "description": "Schema version, pinned to the integer 1 by the validator; never edited and never bumped by jenga config.",
+      "editable": false,
+      "pointer": "scripts/validate-conventions.sh"
+    },
+    {
+      "key": "categories",
+      "label": "Convention categories",
+      "type": "object",
+      "description": "The recorded convention per category (commit format, branching, naming and so on); written by the j.conventions wizard, never by jenga config.",
+      "editable": false,
+      "pointer": "scripts/validate-conventions.sh"
+    }
+  ]
+}

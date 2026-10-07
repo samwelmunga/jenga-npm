@@ -103,10 +103,17 @@ cp "$PKG_ROOT/templates/KNOWLEDGE_GRAPH_STUB_SCHEMA_TEMPLATE.md" project/knowled
 echo "→ Creating project/knowledge-graph/graph.json..."
 echo '{"nodes": [], "edges": []}' > project/knowledge-graph/graph.json
 
-# ─── 9. Create docs/STRATEGY.md ──────────────────────────────────────────────
-echo "→ Creating docs/STRATEGY.md (strategic brief for investors, partners, and the product team)..."
-mkdir -p docs
-cp "$ASSETS_DIR/strategy_stub_template.md" docs/STRATEGY.md
+# ─── 9. Create the strategy brief (STRATEGY.md) ──────────────────────────────
+# The destination comes from scripts/strategy_path_resolver.sh -- the same resolver
+# /strategy uses -- so the two cannot drift (E34_S06_T03). It reads paths.strategy
+# from the workflow.json copied in step 5 (project/documentation/STRATEGY.md unless configured
+# otherwise). The brief is an ordinary project/documentation/ file, so this step creates no
+# docs/ directory (E34_S07); an existing consumer docs/STRATEGY.md is found by the resolver's
+# legacy fallback and is never moved.
+STRATEGY_PATH="$(bash "$PKG_ROOT/scripts/strategy_path_resolver.sh")"
+echo "→ Creating $STRATEGY_PATH (strategic brief, kept with the other project documentation; no docs/ directory is created)..."
+mkdir -p "$(dirname "$STRATEGY_PATH")"
+cp "$ASSETS_DIR/strategy_stub_template.md" "$STRATEGY_PATH"
 
 # ─── 10. Create CHANGELOG.md ──────────────────────────────────────────────────
 echo "→ Creating CHANGELOG.md from template..."

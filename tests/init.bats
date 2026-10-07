@@ -76,7 +76,9 @@ setup() {
 mirror_as_npm_consumer() {
   INIT_CWD="$CONSUMER_DIR" node "$REPO_ROOT/scripts/postinstall.js" >/dev/null
   mkdir -p "$CONSUMER_DIR/node_modules/@jenga-ai/agent"
-  cp -R "$REPO_ROOT/lib" "$REPO_ROOT/templates" "$REPO_ROOT/package.json" \
+  # scripts/ ships in the package ("files" in package.json) and init.sh reads
+  # scripts/strategy_path_resolver.sh from it (E34_S06_T03).
+  cp -R "$REPO_ROOT/lib" "$REPO_ROOT/templates" "$REPO_ROOT/scripts" "$REPO_ROOT/package.json" \
     "$CONSUMER_DIR/node_modules/@jenga-ai/agent/"
 }
 
@@ -162,7 +164,8 @@ assert_full_scaffold() {
   [ -f "$dir/project/configs/test-config.json" ]
   [ -f "$dir/project/data/baselines.json" ]
   [ -f "$dir/project/logs/events.json" ]
-  [ -f "$dir/docs/STRATEGY.md" ]
+  [ -f "$dir/project/documentation/STRATEGY.md" ]
+  [ ! -e "$dir/docs" ]
   [ -f "$dir/CHANGELOG.md" ]
   [ -f "$dir/jenga.config.json" ]
   [ -f "$dir/CLAUDE.md" ]

@@ -1,0 +1,133 @@
+{
+  "registry_version": 1,
+  "categories": [],
+  "suppress": [],
+  "tools": [
+    {
+      "name": "bash",
+      "category": "runtime",
+      "enforcement": "required",
+      "rationale": "The framework's shell scripts, hooks and skill scripts are bash (most use #!/usr/bin/env bash), and newer ones are written to run on macOS bash 3.2, so the framework cannot run without it.",
+      "alternatives": [
+        { "name": "zsh", "why_not": "The scripts and hooks are written and shellchecked as bash; they are not guaranteed to behave the same under zsh." },
+        { "name": "POSIX sh", "why_not": "The scripts use bash features such as [[ ]], arrays and BASH_SOURCE." }
+      ],
+      "version": ">=3.2",
+      "install_hint": { "text": "Preinstalled on macOS (version 3.2) and on most Linux distributions; no install step is normally needed." }
+    },
+    {
+      "name": "jq",
+      "category": "runtime",
+      "enforcement": "required",
+      "rationale": "JSON handling in the framework scripts (events log, board and queue files, the registry validator and merge scripts) goes through jq; validate-tools-registry.sh and merge-tools-registry.sh exit 3 when it is missing.",
+      "alternatives": [
+        { "name": "python3 -c with the json module", "why_not": "Heavier to read and quote inside shell scripts, and most existing scripts already standardise on jq." },
+        { "name": "node -e", "why_not": "Same quoting cost, and starts a full runtime for one-line filters." }
+      ],
+      "version": "*",
+      "install_hint": { "text": "brew install jq on macOS, or your distribution's jq package on Linux." }
+    },
+    {
+      "name": "git",
+      "category": "runtime",
+      "enforcement": "required",
+      "rationale": "The developer workflow creates an isolated git worktree per task and commits at milestones; git worktree needs git 2.5 or later.",
+      "alternatives": [
+        { "name": "jj (Jujutsu)", "why_not": "The worktree hooks, commit skills and mirror scripts call git directly." }
+      ],
+      "version": ">=2.5",
+      "install_hint": { "text": "Xcode command line tools or brew install git on macOS, or your distribution's git package on Linux." }
+    },
+    {
+      "name": "node",
+      "category": "runtime",
+      "enforcement": "required",
+      "rationale": "The package is installed through npm and its postinstall step (scripts/postinstall.js) runs on node; the dashboard API and several scripts also run on node. The constraint is the engines field in package.json.",
+      "alternatives": [
+        { "name": "bun", "why_not": "package.json declares only a node engine range, and postinstall and the dashboard are not exercised under bun." },
+        { "name": "deno", "why_not": "Not a declared or exercised runtime for this package." }
+      ],
+      "version": ">=14.13.1",
+      "install_hint": { "text": "Install from nodejs.org or through a version manager such as nvm." }
+    },
+    {
+      "name": "npm",
+      "category": "runtime",
+      "enforcement": "recommended",
+      "rationale": "The project's test script is run as npm test, and the publish pipelines (npm ci, npm pack, npm publish and npm stage publish in the j-publish skill and .github/workflows) use it.",
+      "alternatives": [
+        { "name": "pnpm", "why_not": "package.json's postinstall note covers pnpm consumer opt-in, but the repo's own lockfile and publish workflows use npm." },
+        { "name": "yarn", "why_not": "No yarn lockfile or workflow step exists in this repo." }
+      ],
+      "version": "*",
+      "install_hint": { "text": "Ships with node; installing node installs npm." }
+    },
+    {
+      "name": "python3",
+      "category": "runtime",
+      "enforcement": "recommended",
+      "rationale": "Used by several helper scripts, for example scripts/validate-board.sh, scripts/check-public-playbook-steps.sh and scripts/verify-postinstall-reconcile.sh. The core workflow does not need it, but those checks do.",
+      "alternatives": [
+        { "name": "node", "why_not": "The existing board and playbook checks are already written in python3; porting them is not worth it." }
+      ],
+      "version": ">=3",
+      "install_hint": { "text": "Preinstalled on macOS with the Xcode command line tools; otherwise brew install python or your distribution's python3 package." }
+    },
+    {
+      "name": "bats",
+      "category": "testing",
+      "enforcement": "required",
+      "rationale": "The whole test suite under tests/ is bats (npm test runs bats tests/*.bats) and the Tester agent verifies work by running it; bats ^1.13.0 is the devDependency.",
+      "alternatives": [
+        { "name": "shunit2", "why_not": "No existing test uses it, and every current test relies on bats features such as run --separate-stderr." },
+        { "name": "plain shell test scripts", "why_not": "No TAP output, no per-test isolation, no test-level setup and teardown." }
+      ],
+      "version": ">=1.13",
+      "install_hint": { "text": "npm install (it is a devDependency), or brew install bats-core on macOS." }
+    },
+    {
+      "name": "shellcheck",
+      "category": "lint",
+      "enforcement": "recommended",
+      "rationale": "Shell scripts in this repo are authored to pass shellcheck, and tasks that add scripts name a clean shellcheck run as an acceptance criterion. It is not wired into CI or package.json, so it is advisory rather than binding.",
+      "alternatives": [
+        { "name": "bash -n", "why_not": "Only checks syntax; it does not catch quoting, portability or unset-variable mistakes." }
+      ],
+      "version": "*",
+      "install_hint": { "text": "brew install shellcheck on macOS, or your distribution's shellcheck package on Linux." }
+    },
+    {
+      "name": "gh",
+      "category": "CI",
+      "enforcement": "recommended",
+      "rationale": "The j-publish skill triggers and watches GitHub Actions workflows through gh workflow run and gh run watch; gh is the single authenticated CLI for that.",
+      "alternatives": [
+        { "name": "curl against the GitHub REST API", "why_not": "Needs hand-rolled authentication and polling for every call." }
+      ],
+      "version": "*",
+      "install_hint": { "descriptor": "github", "text": "brew install gh" }
+    },
+    {
+      "name": "rclone",
+      "category": "infra",
+      "enforcement": "recommended",
+      "rationale": "j-cloud-connect configures it and j-dashboard-share uploads the dashboard snapshot through it, giving one provider-neutral way to reach cloud storage.",
+      "alternatives": [
+        { "name": "provider CLIs such as aws s3 or gsutil", "why_not": "Each is tied to one provider, while rclone covers the provider list j-cloud-connect offers." }
+      ],
+      "version": "*",
+      "install_hint": { "text": "brew install rclone on macOS, or run j.cloud-connect, which installs it when it is missing." }
+    },
+    {
+      "name": "doctl",
+      "category": "infra",
+      "enforcement": "recommended",
+      "rationale": "The DigitalOcean command line client that j.connect digitalocean sets up. The droplet publish adapter itself deploys over SSH through GitHub Actions and does not call doctl, so this is for managing DigitalOcean resources, not for publishing.",
+      "alternatives": [
+        { "name": "DigitalOcean web console", "why_not": "Not scriptable, so an agent cannot use it." }
+      ],
+      "version": "*",
+      "install_hint": { "descriptor": "digitalocean", "text": "brew install doctl, or run j.connect digitalocean." }
+    }
+  ]
+}

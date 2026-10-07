@@ -16,7 +16,7 @@ examples:
 
 # Doc-Sync — Keep Documentation in Sync with the Codebase
 
-`skills/j-doc-sync/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-doc-sync/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `docs/skill-authoring.md`'s "Invocation Convention").
+`skills/j-doc-sync/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-doc-sync/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `project/documentation/skill-authoring.md`'s "Invocation Convention").
 
 > ⚠️ **`scripts/generate-j-alias.sh` was retired by `E50_S14` and no longer exists — there is nothing to run.** This file was previously generated from a bare `skills/doc-sync/SKILL.md` source; `E50_S15` deleted that directory. This file is now the sole canonical, hand-edited source for this skill — edit it directly.
 
@@ -44,7 +44,11 @@ Before doing anything, check the user's message for arguments. Arguments may app
 - `doc-sync minify: 50 update: docs/API.md`
 - `doc-sync minify: update: README.md` *(uses default 70%)*
 
-All paths are interpreted relative to the project root.
+All paths are interpreted relative to the project root. The `docs/...` paths above are examples of a
+consumer's own documentation files named by the user; `doc-sync` does not treat `docs/` as a default
+location. When it must pick a home for a new maintainer-internal file, it uses the `documentation` path
+from `project/configs/workflow.json` (`paths.documentation`, default `project/documentation`) and reserves
+`docs/` for published-site content (see `CLAUDE.md`'s "Documentation Placement").
 
 ---
 
@@ -67,7 +71,7 @@ If `update_targets` is **empty**, resolve targets from `assets/doc_targets.md`:
 - If no entry matches an existing file, skip it and note it as missing.
 
 If neither source has targets (no arguments and no doc_targets), scan the project for documentation files:
-- Look for `*.md`, `docs/`, `documentation/`, `project/documentation/`, `README*`, `CHANGELOG*`, `CONTRIBUTING*`.
+- Look for `*.md`, `docs/` (a published-site directory, if the project has one), the `documentation` path from `project/configs/workflow.json` (default `project/documentation/`), `documentation/`, `README*`, `CHANGELOG*`, `CONTRIBUTING*`.
 - Ask the user: *"I found the following documentation files. Which should I update?"* — present the list and let them select.
 
 ### 3. Resolve analysis sources

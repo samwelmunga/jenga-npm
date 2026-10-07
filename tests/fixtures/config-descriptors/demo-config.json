@@ -1,0 +1,8 @@
+{
+  "demo_version": 1,
+  "size": 3,
+  "mode": "fast",
+  "flag": true,
+  "tags": ["a", "b"],
+  "nested": { "x": 1 }
+}

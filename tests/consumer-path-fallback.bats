@@ -6,7 +6,7 @@
 # postinstall.js only mirrors skills/ and agents/ into a consumer's .claude/
 # and .agents/ -- scripts/ and templates/ stay inside
 # node_modules/@jenga-ai/agent/ and must be reached via a fallback idiom
-# documented in docs/skill-authoring.md. A real consumer on a published
+# documented in project/documentation/skill-authoring.md. A real consumer on a published
 # version hit "scripts/jenga-permission-level-switch.sh doesn't exist"
 # because that exact call site had no fallback (E46_S05_T01); templates/ had
 # the identical problem with no fallback idiom ever written for it at all

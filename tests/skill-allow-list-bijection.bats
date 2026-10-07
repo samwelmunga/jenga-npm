@@ -92,7 +92,7 @@ description: Synthetic fixture for the jenga-permission-level permanent exceptio
 # jenga-permission-level
 SKILL
 
-  # index/ deliberately has NO SKILL.md -- it is not a skill (docs/skill-authoring.md, "not a
+  # index/ deliberately has NO SKILL.md -- it is not a skill (project/documentation/skill-authoring.md, "not a
   # skill, no SKILL.md, not part of routing"). getSkillAllowListIdentifiers must skip it silently
   # rather than error, matching its documented "missing SKILL.md is skipped" behavior.
 }

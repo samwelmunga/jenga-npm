@@ -1,0 +1,10 @@
+{
+  "id": "fake-prereq",
+  "name": "Fake shared prerequisite (throwaway e2e fixture)",
+  "docs": ["https://example.invalid/fake-prereq/docs"],
+  "detect": { "command": ["prereqcli", "--version"] },
+  "install": { "docs_url": "https://example.invalid/fake-prereq/install" },
+  "auth": { "type": "none" },
+  "register_mcp": { "supported": false },
+  "verify": { "command": ["prereqcli", "verify"] }
+}

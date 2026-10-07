@@ -1,0 +1,55 @@
+{
+  "id": "fakeservice",
+  "name": "Fake Service (test fixture)",
+  "docs": [
+    "https://example.invalid/fakeservice/docs"
+  ],
+  "requires": [],
+  "secrets": {
+    "env_vars": [
+      "FAKESERVICE_TOKEN"
+    ],
+    "env_file": ".env"
+  },
+  "detect": {
+    "command": [
+      "fakecli",
+      "--version"
+    ]
+  },
+  "install": {
+    "docs_url": "https://example.invalid/fakeservice/install",
+    "hint": "Non-authoritative: your package manager may offer 'fakecli'.",
+    "methods": [
+      {
+        "platform": "darwin",
+        "manager": "brew",
+        "package": "fakecli"
+      },
+      {
+        "platform": "linux",
+        "manager": "npm",
+        "package": "fakecli"
+      }
+    ]
+  },
+  "register_mcp": {
+    "supported": true,
+    "name": "fakeservice",
+    "type": "stdio",
+    "command": "fakecli",
+    "args": [
+      "mcp",
+      "serve"
+    ],
+    "env": [
+      "FAKESERVICE_TOKEN"
+    ]
+  },
+  "verify": {
+    "command": [
+      "fakecli",
+      "whoami"
+    ]
+  }
+}

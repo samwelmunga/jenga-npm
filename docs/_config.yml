@@ -32,23 +32,13 @@ description: >-
 
 theme: minima
 
-# IMPORTANT: docs/ predates this Pages site — it is also this repo's
-# existing home for internal/engineering reference docs (linked from
-# CLAUDE.md, AGENTS.md, README.md, and many skills/*/SKILL.md files by
-# their docs/<name>.md path, e.g. "See docs/skill-authoring.md"). Those
-# files carry no Jekyll front matter, were never meant to be part of a
-# public Pages site, and must not be moved (their paths are referenced
-# throughout the repo). `exclude:` keeps Jekyll from building/publishing
-# them as site pages while leaving them exactly where every other doc
-# reference expects them.
+# docs/ holds only content meant for this published site (see docs/README.md,
+# "Contents by audience"). Maintainer-internal documents live under
+# project/documentation/. The files below are the exceptions that sit here
+# without being rendered as pages: they carry no Jekyll front matter, and
+# `exclude:` keeps Jekyll from copying them into the built site as raw files.
 exclude:
-  - JENGA_PROTOCOL.md
-  - STRATEGY.md
-  - api-contract.md
-  - distribution.md
-  - hook-parity.md
   - jenga-config.md
-  - skill-authoring.md
 
 # Top-of-page navigation. Minima's default layout renders a nav link for
 # each entry here — this is what keeps the site "genuinely navigable" per

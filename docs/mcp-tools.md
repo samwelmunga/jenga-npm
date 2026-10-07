@@ -7,6 +7,8 @@ permalink: /mcp-tools.html
 
 MCP (Model Context Protocol) tools extend Claude Code with additional capabilities. They are configured in `settings.json`.
 
+> Where a project registers an MCP *server* for Claude Code (`.mcp.json` vs `.claude/settings.json`) is recorded in [mcp-registration-decision.md](https://github.com/samwelmunga/jenga-npm/blob/main/project/documentation/mcp-registration-decision.md).
+
 ---
 
 ### `mcp/help`

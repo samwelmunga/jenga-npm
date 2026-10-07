@@ -75,3 +75,26 @@ project/queue/elicitation-state/*.json
 # templates/SCRUM_BOARD_SCHEMA.md's resolved_context subsection.
 project/queue/context/*.json
 !project/queue/context/.gitkeep
+
+# Pre-flight checklist tick state (project/queue/checklist-ticks/,
+# scripts/checklist.sh tick — E67_S02_T03) is private operational state: the
+# shared persistent.json, one run-<digest>.json per run id, and the transient
+# *.lock.d / .tmp-* entries the lock and the write-then-rename leave beside
+# them. A persistent tick is meant to outlive a session, which is exactly why
+# it must never become a durable git artifact (a committed tick would satisfy
+# a checklist item on every clone). Mirrors the handoffs/ rule above; the
+# directory is also blocklisted for the public mirror via project/queue/.
+project/queue/checklist-ticks/*
+!project/queue/checklist-ticks/.gitkeep
+
+# Situation marker (project/queue/checklist-markers/,
+# scripts/checklist-marker.sh — E67_S04_T01) is the transient "which
+# lifecycle phase is this session in" value the enforcing hook reads: one
+# marker-<digest>.json per session key, plus the *.lock.d / .tmp-* entries the
+# lock and the write-then-rename leave beside them. It is meaningful only for
+# the session that wrote it and only until its TTL expires, so committing one
+# would gate every clone on a phase that is not running. Sibling of the
+# checklist-ticks/ rule above; also blocklisted for the public mirror via
+# project/queue/.
+project/queue/checklist-markers/*
+!project/queue/checklist-markers/.gitkeep

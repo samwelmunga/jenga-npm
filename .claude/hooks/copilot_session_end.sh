@@ -4,7 +4,7 @@
 # Copilot CLI session-end entry point.
 #
 # GitHub Copilot CLI DOES fire a native `sessionEnd` hook (confirmed empirically against a real
-# installed `copilot` CLI under E16_S03_T03 — see docs/hook-parity.md). This script is wired as
+# installed `copilot` CLI under E16_S03_T03 — see project/documentation/hook-parity.md). This script is wired as
 # that hook's command via `.github/hooks/jenga.json` (committed here; generated per-consumer at
 # `jenga init` / npm postinstall time via lib/generate-copilot-hooks.js — see E16_S03_T04).
 # It can also still be called manually — e.g. as a post-step in a skill, or on a Copilot install

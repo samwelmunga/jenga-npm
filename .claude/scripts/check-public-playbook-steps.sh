@@ -43,8 +43,8 @@
 # Terminal-step deny-list (E28_S14_T02, enforcing E53_S10's policy): "is this step blocklisted?"
 # is a LOADABILITY question and cannot catch a publish step, because `j-publish` ships publicly.
 # A public playbook chaining it therefore passes the blocklist check completely clean while
-# violating the policy outright. The DATA block below closes that gap. See docs/skill-authoring.md
-# ("Public Playbooks Terminate at `j-commit`") and docs/public-mirror-content-parity.md.
+# violating the policy outright. The DATA block below closes that gap. See project/documentation/skill-authoring.md
+# ("Public Playbooks Terminate at `j-commit`") and project/documentation/public-mirror-content-parity.md.
 #
 # Usage:
 #   scripts/check-public-playbook-steps.sh [<repo-root>]
@@ -65,7 +65,7 @@ set -euo pipefail
 #   "No public playbook may contain a publishing or mirroring step; public build chains
 #    terminate at `j-commit`."
 #
-# Rationale lives in docs/skill-authoring.md's "Public Playbooks Terminate at `j-commit`"
+# Rationale lives in project/documentation/skill-authoring.md's "Public Playbooks Terminate at `j-commit`"
 # section: most users would not want a playbook that publishes or pushes to a public destination
 # on their behalf, so publishing stays an explicit, separately invoked act. Note the rule forbids
 # publish/mirror STEPS — it is not a requirement that every playbook end at `j-commit`; a

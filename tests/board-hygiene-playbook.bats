@@ -257,7 +257,7 @@ PY
 @test "none of board-hygiene's steps is on the guard's terminal-step deny-list" {
   # Terminating at j-status rather than j-commit is intentional and compliant: E53_S10's rule
   # forbids publish/mirror STEPS, and this is a read/triage chain producing no commit of its own
-  # (see docs/skill-authoring.md, "Public Playbooks Terminate at j-commit", consequence 3).
+  # (see project/documentation/skill-authoring.md, "Public Playbooks Terminate at j-commit", consequence 3).
   # This asserts the mechanical half of that claim against the guard's own DATA block.
   run python3 - "$PLAYBOOK" "$GUARD" <<'PY'
 import json, re, sys

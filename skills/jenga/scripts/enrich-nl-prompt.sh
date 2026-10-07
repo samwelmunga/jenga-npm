@@ -48,7 +48,7 @@
 #       ...                                                    // up to 5
 #     ],
 #     "docs": [
-#       {"path": "docs/skill-authoring.md", "summary": "<first heading or filename>"},
+#       {"path": "project/documentation/skill-authoring.md", "summary": "<first heading or filename>"},
 #       ...                                                    // up to 3
 #     ],
 #     "board_items_found": 2,     // total matches BEFORE the top-5 cap

@@ -1,0 +1,36 @@
+{
+  "id": "supabase",
+  "name": "Supabase CLI and MCP server",
+  "docs": [
+    "https://supabase.com/docs/guides/local-development/cli/getting-started",
+    "https://supabase.com/docs/guides/getting-started/mcp"
+  ],
+  "detect": {
+    "command": ["supabase", "--version"]
+  },
+  "install": {
+    "docs_url": "https://supabase.com/docs/guides/local-development/cli/getting-started",
+    "hint": "Official methods vary by platform (Homebrew on macOS and Linux, Scoop on Windows, distro packages from GitHub Releases, npm as a per-project dev dependency); follow the docs page for yours. Only Homebrew is automated here. Not verified against a real machine: see project/documentation/supabase-connect-research.md.",
+    "methods": [
+      { "platform": "darwin", "manager": "brew", "package": "supabase/tap/supabase" },
+      { "platform": "linux", "manager": "brew", "package": "supabase/tap/supabase" }
+    ]
+  },
+  "auth": {
+    "type": "browser",
+    "docs_url": "https://supabase.com/docs/reference/cli/supabase-login",
+    "instructions": "Run `supabase login` yourself in a terminal (add `--no-browser` on a headless machine). Open the URL or enter the code it prints, approve the sign-in in your browser, then tell me when you are done. Afterwards, approve the supabase MCP server in Claude Code and complete its own browser sign-in; that is a separate consent from the CLI login.",
+    "check": {
+      "command": ["supabase", "projects", "list"]
+    }
+  },
+  "register_mcp": {
+    "supported": true,
+    "name": "supabase",
+    "type": "http",
+    "url": "https://mcp.supabase.com/mcp"
+  },
+  "verify": {
+    "command": ["supabase", "projects", "list"]
+  }
+}

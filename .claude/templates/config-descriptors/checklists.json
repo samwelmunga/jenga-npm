@@ -1,0 +1,31 @@
+{
+  "descriptor_version": 1,
+  "file": "checklists.json",
+  "description": "The project's pre-flight checklist registry. Listed read-only: it has no scalar setting, and checklist_version is pinned to 1 by scripts/validate-checklists.sh so it gets no bump rule.",
+  "keys": [
+    {
+      "key": "checklist_version",
+      "label": "Checklist version",
+      "type": "integer",
+      "description": "Schema version, pinned to the integer 1 by the validator; never edited and never bumped by jenga config.",
+      "editable": false,
+      "pointer": "scripts/validate-checklists.sh"
+    },
+    {
+      "key": "situations",
+      "label": "Extra situations",
+      "type": "array",
+      "description": "Extension names added to the four base phases (pre-commit, pre-task, pre-release, pre-reconcile); edited by hand.",
+      "editable": false,
+      "pointer": "scripts/validate-checklists.sh"
+    },
+    {
+      "key": "items",
+      "label": "Checklist items",
+      "type": "array",
+      "description": "The standing pre-flight items; edited by hand, and new ones are proposed through scripts/checklist.sh suggest, never by jenga config.",
+      "editable": false,
+      "pointer": "scripts/validate-checklists.sh (suggestions are filed through scripts/checklist.sh)"
+    }
+  ]
+}

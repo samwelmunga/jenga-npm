@@ -141,7 +141,7 @@ GitHub Copilot CLI does not fire a native session-end hook. To replicate the cle
 bash "$(node -p "path.dirname(require.resolve('jenga-agent/package.json'))")/hooks/copilot_session_end.sh"
 ```
 
-The `hooks/`, `lib/`, `scripts/`, `templates/`, and `mcp/` directories all live inside the installed `jenga-agent` package (`node_modules/jenga-agent/…`) — they are **not** copied into the project. The script above sources `lib/resolve-project-dir.sh` and delegates to `hooks/on_session_end.sh` (both from the same package), which handle queue routing, rapport detection, handoff file processing, and todo cleanup. See [`docs/hook-parity.md`](docs/hook-parity.md) for the full Claude Code ↔ Copilot hook parity reference.
+The `hooks/`, `lib/`, `scripts/`, `templates/`, and `mcp/` directories all live inside the installed `jenga-agent` package (`node_modules/jenga-agent/…`) — they are **not** copied into the project. The script above sources `lib/resolve-project-dir.sh` and delegates to `hooks/on_session_end.sh` (both from the same package), which handle queue routing, rapport detection, handoff file processing, and todo cleanup. See [`project/documentation/hook-parity.md`](project/documentation/hook-parity.md) for the full Claude Code ↔ Copilot hook parity reference.
 
 ### Notes
 

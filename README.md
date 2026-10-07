@@ -147,7 +147,7 @@ npm install -g @jenga-ai/agent
 > mirror `skills/`/`agents/` into your project — if your package manager blocks lifecycle
 > scripts by default (pnpm v8+) or you install with `--ignore-scripts`/`ignore-scripts=true`,
 > the install will silently produce none of the framework files with no error shown. See
-> [`docs/distribution.md`](docs/distribution.md#prerequisite--lifecycle-scripts-must-be-allowed-to-run-e26_s09)
+> [`project/documentation/distribution.md`](project/documentation/distribution.md#prerequisite--lifecycle-scripts-must-be-allowed-to-run-e26_s09)
 > for the exact npm/pnpm opt-in step.
 
 Or clone directly:
@@ -167,7 +167,7 @@ also ships a couple of maintenance commands, distinct from the in-agent `j.<name
 
 | Command | Description |
 |---|---|
-| `jenga doctor` (alias: `jenga clean`) | Scans `.agents/` and `.claude/` for orphaned package-owned files left behind by an upgrade (or any other mirror drift), previews them, and deletes only on explicit confirmation. Never deletes unattended — add `--dry-run` to preview only. See `docs/distribution.md` for the ownership heuristic and its false-positive posture. |
+| `jenga doctor` (alias: `jenga clean`) | Scans `.agents/` and `.claude/` for orphaned package-owned files left behind by an upgrade (or any other mirror drift), previews them, and deletes only on explicit confirmation. Never deletes unattended — add `--dry-run` to preview only. See `project/documentation/distribution.md` for the ownership heuristic and its false-positive posture. |
 
 ---
 
@@ -245,6 +245,27 @@ Nothing executes until you confirm the chain, and any step can be unchecked firs
 When a step forwards its result into the next one, that value has a declared **output type** (a plain string, a list of board IDs, a list of files) so the chain can be validated before it runs. See [Getting Started](https://samwelmunga.github.io/jenga-npm/getting-started.html#how-playbooks-know-what-a-skill-produces) for how that works.
 
 Want your own recurring chain? `j.playbook-new` walks you through authoring one — id, name, description, keywords, examples, and an ordered list of skills — writes it to `project/.playbooks/<id>.json` alongside the built-in ones, and self-validates the result before reporting success.
+
+---
+
+## Pre-Flight Checklists
+
+A **pre-flight checklist** is a standing list of checks that must hold before a gated action goes ahead: no `.env` file staged before a commit, a clean working tree before a release, "I have re-read the acceptance criteria" before a task starts. Each item says which lifecycle **phase** it applies to and how strictly it is enforced (`block`, `confirm` or `advisory`). The four base phases are:
+
+| Phase | Fires when |
+|---|---|
+| `pre-commit` | Work is about to be committed (`j.commit`) |
+| `pre-task` | A board task is about to start executing (`j.do`) |
+| `pre-release` | A release is about to be published or mirrored (`j.publish`, `j.mirror-public`) |
+| `pre-reconcile` | The board is about to be reconciled against the implementation (`j.reconcile`) |
+
+**Defaults and your own checklist.** Jenga ships a small generic default at `templates/checklists.json` (`node_modules/@jenga-ai/agent/templates/checklists.json` in a consumer install). It applies as-is until you author your own `project/configs/checklists.json`. Once that file exists it **replaces the shipped default wholesale**: the two are never merged, so copy any shipped items you want to keep into your own file. A project instance with `"items": []` is a deliberate "nothing applies here". When there is no registry at all, or the registry has no item for a phase, the checker prints nothing and exits `0`: a silent no-op, with no warning and no prompt.
+
+**Three layers.** (1) The gating skills call `scripts/checklist.sh` themselves and honour the answer. That layer is instructions the running agent follows, not enforcement. (2) A skill records the active phase in a situation marker (`scripts/checklist-marker.sh`). (3) A `PreToolUse` hook (`hooks/on_preflight_check.sh`) reads that marker and refuses the active phase's own irreversible command (for example `git commit` during `pre-commit`) while a `block` item fails; a failing `confirm` item makes it ask instead. With no marker the hook does nothing. What the hook's tests demonstrate is its behaviour in a sandbox; in a live session it rests on Claude Code honouring the hook's exit code `2`.
+
+Agents can also *suggest* new items when they spot a risk. A suggestion is only a rapport: the Scrum Master reviews it and nothing reaches `project/configs/checklists.json` without your confirmation.
+
+> 📖 **Authoring reference** (item fields, enforcement levels, exit codes): [Docs site](https://samwelmunga.github.io/jenga-npm/preflight-checklists.html) — mirrored at [project/.wiki/preflight-checklists.md](project/.wiki/preflight-checklists.md)
 
 ---
 

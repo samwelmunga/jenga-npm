@@ -1,0 +1,13 @@
+{
+  "descriptor_version": 1,
+  "file": "demo.json",
+  "description": "Fixture config used by tests/config-descriptors.bats.",
+  "keys": [
+    { "key": "demo_version", "label": "Demo version", "type": "integer", "description": "Version counter owned by the command.", "editable": false, "pointer": "project/configs/README.md" },
+    { "key": "size", "label": "Size", "type": "integer", "description": "A bounded integer.", "editable": true, "default": 3, "min": 1, "max": 10, "bump_on_change": "demo_version" },
+    { "key": "mode", "label": "Mode", "type": "string", "description": "A closed set of strings.", "editable": true, "default": "fast", "allowed": ["fast", "slow"], "bump_on_change": "demo_version" },
+    { "key": "flag", "label": "Flag", "type": "boolean", "description": "A boolean.", "editable": true, "default": true },
+    { "key": "tags", "label": "Tags", "type": "array", "description": "A nested list, read-only.", "editable": false, "pointer": "scripts/resolve-root.sh" },
+    { "key": "nested", "label": "Nested", "type": "object", "description": "A nested object, read-only.", "editable": false, "pointer": "j.tools" }
+  ]
+}

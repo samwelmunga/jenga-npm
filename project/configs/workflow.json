@@ -18,7 +18,8 @@
     "configs": "project/configs",
     "documentation": "project/documentation",
     "documentation_plans": "project/documentation/plans",
-    "documentation_summaries": "project/documentation/summaries"
+    "documentation_summaries": "project/documentation/summaries",
+    "strategy": "project/documentation/STRATEGY.md"
   },
   "agents": ["developer", "tester", "scrum-master"],
   "pipeline": [

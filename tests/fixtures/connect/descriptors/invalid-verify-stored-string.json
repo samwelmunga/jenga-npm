@@ -1,0 +1,68 @@
+{
+  "id": "fakeservice",
+  "name": "Fake Service (test fixture)",
+  "docs": [
+    "https://example.invalid/fakeservice/docs"
+  ],
+  "requires": [],
+  "secrets": {
+    "env_vars": [
+      "FAKESERVICE_TOKEN"
+    ],
+    "env_file": ".env"
+  },
+  "detect": {
+    "command": [
+      "fakecli",
+      "--version"
+    ]
+  },
+  "install": {
+    "docs_url": "https://example.invalid/fakeservice/install",
+    "hint": "Non-authoritative: your package manager may offer 'fakecli'.",
+    "methods": [
+      {
+        "platform": "darwin",
+        "manager": "brew",
+        "package": "fakecli"
+      },
+      {
+        "platform": "linux",
+        "manager": "npm",
+        "package": "fakecli"
+      }
+    ]
+  },
+  "auth": {
+    "type": "env-token",
+    "env_var": "FAKESERVICE_TOKEN",
+    "docs_url": "https://example.invalid/fakeservice/auth",
+    "instructions": "Create a token in the Fake Service dashboard and set FAKESERVICE_TOKEN in .env.",
+    "check": {
+      "command": [
+        "fakecli",
+        "whoami"
+      ]
+    }
+  },
+  "register_mcp": {
+    "supported": true,
+    "name": "fakeservice",
+    "type": "stdio",
+    "command": "fakecli",
+    "args": [
+      "mcp",
+      "serve"
+    ],
+    "env": [
+      "FAKESERVICE_TOKEN"
+    ]
+  },
+  "verify": {
+    "command": [
+      "fakecli",
+      "--version"
+    ],
+    "expect_output": "fakecli 1.2.3"
+  }
+}

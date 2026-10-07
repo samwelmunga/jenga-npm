@@ -37,7 +37,7 @@
 # `forward_from` (E53_S03) and conditional step execution (E53_S04_T02) both need a single,
 # shared record of "what typed output did step X actually produce when it ran" -- this is that
 # record, and there is no second, separate capture path. Every step that produces a forwardable
-# typed output value (per its own `output_types` declaration, see `docs/skill-authoring.md`)
+# typed output value (per its own `output_types` declaration, see `project/documentation/skill-authoring.md`)
 # reports that value on its `advance ... passed` call; this script stores it in the state file's
 # `captured_outputs` map, keyed by the step name that just completed. A step with no typed output
 # to report simply omits the argument -- `captured_outputs` only ever gains entries for steps that

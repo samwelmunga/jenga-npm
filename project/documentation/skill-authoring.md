@@ -365,7 +365,7 @@ the real script) replaced with a hand-written fixture encoding the same divergen
 used to produce, since that suite could no longer invoke a deleted script to build its own test
 fixtures. That audit suite has itself since been retired, along with the twin-parity gate it covered
 and the audit script beneath it — see `E42_S07` and the "Retired" section of
-`docs/public-mirror-content-parity.md`. The reason is the same one that retired the generator, one
+`project/documentation/public-mirror-content-parity.md`. The reason is the same one that retired the generator, one
 step further along: with no bare-name directory left anywhere, there is no source to reconstruct a
 twin from and no pair to audit.
 
@@ -873,6 +873,83 @@ references and are not part of this idiom — that skill's entire job is to oper
 monorepo's own root-level `templates/` directory as a whole, which by definition only exists in
 this monorepo's own dev checkout (there is no consumer-side installation for `/self-sync` to run
 against in the first place).
+
+### Resolving the project root from inside a script
+
+The `scripts/`/`templates/` idioms above are for prose in a `SKILL.md`. A skill's own `.sh`/`.py`
+script has the opposite situation — it knows where it lives (`$SCRIPT_DIR`, `__file__`), and the
+tempting way to find the project root from there is a fixed climb:
+
+```bash
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"   # wrong: assumes skills/<name>/scripts/ depth
+```
+
+That climb is only right at one depth. The same file is also deployed at `.claude/skills/<name>/scripts/`
+and `.agents/skills/<name>/scripts/` (by `/self-sync` and `postinstall.js`) and, for an npm consumer,
+under `node_modules/@jenga-ai/agent/skills/<name>/scripts/`. At any depth other than the source one it
+silently lands on `.claude/`, `.agents/`, or the package directory instead of the project, and the script
+then reads and writes the wrong board. `E46_S01` found this in `/init`; `E46_S02` then audited 16 further
+occurrences and fixed the 8 that were still broken (the rest had already been fixed by other work).
+
+**Convention.** Resolve the *project* root from git, not from the script's depth:
+
+```bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -z "$PROJECT_ROOT" ]]; then
+  echo "ERROR: could not locate project root (git rev-parse --show-toplevel failed from $SCRIPT_DIR)" >&2
+  exit 1
+fi
+```
+
+- **Consumer-facing scripts** (anything a consumer's own install can run — `/todo`, `/close-story`,
+  `/doc`, `/index`, and so on) must fail hard as above, or accept an explicit project-root override.
+  Never fall back to a fixed climb: a wrong root that "works" is worse than a clear error. See
+  `skills/j-close-story/scripts/check-story-closeable.sh` and `skills/j-todo/scripts/add_trivial_task.sh`.
+- **Maintainer-only tooling** (`/distribute`, `/publish` pipelines, `smoke_test.sh` — never run against a
+  consumer's install) may keep the fixed climb as a last-resort fallback for the non-git case, in the
+  shape used by `skills/j-publish/scripts/run_gates.sh`:
+
+  ```bash
+  if REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null)"; then
+    :
+  else
+    REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+  fi
+  ```
+
+  Still prefer git resolution as the primary path — "assumed maintainer-only" is the reasoning that let
+  `/init`'s original defect ship.
+- **Locating the package** (its `templates/`, `lib/`, `scripts/`) is a different question from locating the
+  project, and git cannot answer it. Use a `PKG_ROOT` check that prefers the monorepo checkout and falls
+  back to `$PWD/node_modules/@jenga-ai/agent`, as `skills/j-init/scripts/init.sh` does.
+
+Python helpers follow the same rule: do not use `Path(__file__).resolve().parents[N]` for the project
+root; call `git rev-parse --show-toplevel` (or take a `--root` argument) instead.
+
+**Testing it.** Every script fixed this way carries a `tests/<script>-root-climb.bats` file built on a
+fixture tree: one test runs the script from its real source location, one runs a copy placed at a
+simulated `.claude/skills/<name>/scripts/` mirror location (where the old fixed climb landed on `.claude/`),
+and, for maintainer-only scripts, one covers the non-git fallback. See
+`tests/check-story-closeable-root-climb.bats` (consumer-facing) and
+`tests/distribute-changes-root-climb.bats` (maintainer-only, with fallback).
+
+---
+
+## Service descriptors (`j.connect`)
+
+Skills that connect third-party services (a vendor CLI plus, where one exists, an MCP server) do not get
+one skill per service. They are driven by per-service **data descriptors** executed by shared scripts under
+`skills/j-connect/scripts/`; the descriptor format, its validator, and the step result vocabulary are
+documented in [`service-descriptor.md`](service-descriptor.md). MCP servers are registered in the
+project-root `.mcp.json`, and why is recorded in
+[`mcp-registration-decision.md`](mcp-registration-decision.md).
+
+**Adding a service is a data-only change:** add a new descriptor (validated by
+`skills/j-connect/scripts/validate-descriptor.sh`). No `SKILL.md` and no shared-script edit is needed. Per
+the Scripts Over Inline Logic principle, every deterministic step lives in the scripts; the end-to-end
+composition is exercised by `tests/connect-e2e.bats` against a throwaway fixture under
+`tests/fixtures/connect/e2e/`.
 
 ---
 

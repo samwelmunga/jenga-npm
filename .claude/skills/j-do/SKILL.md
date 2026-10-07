@@ -23,7 +23,7 @@ Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `s
 from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real
 directory under a distinct name, so a host tool shipping its own same-named built-in command cannot
 shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see
-`docs/skill-authoring.md`'s "Invocation Convention").
+`project/documentation/skill-authoring.md`'s "Invocation Convention").
 
 > ⚠️ **`scripts/generate-j-alias.sh` was retired by `E50_S14` and no longer exists — there is
 > nothing to run.** This file was previously generated from a bare `skills/do/SKILL.md` source;
@@ -76,6 +76,8 @@ When `/do` is invoked with a story ID (e.g., `/do E##_S##`), skip steps 2–4 an
    ERROR: Story file for <story_id> not found. Cannot execute bundle.
    ```
    and halt.
+
+**Pre-task gate — once per bundle dispatch.** This mode skips steps 2–4, so it does not reach `### 4.1.2` by falling through; run that gate here instead, once, with the story as the unit (`<id>` = `<E##_S##>`) and never once per task inside the bundle. It runs **before** the epic lock below is acquired, so a halt or deferral leaves no lock, manifest or slot to clean up and no task status touched. Pass any `remind` items to the shared subagent in step 3 alongside the task context.
 
 #### Epic-Level Bundle Lock
 
@@ -330,7 +332,7 @@ Before starting:
 Before invoking the developer, check whether this task was manually scoped by a human operator.
 
 1. Read `jenga_assigned` from the resolved task's frontmatter.
-2. If `jenga_assigned` is `true` or the field is absent — proceed to step 4.2 without any further check.
+2. If `jenga_assigned` is `true` or the field is absent — proceed to step 4.1.2 (the pre-task gate) without any further override check.
 3. If `jenga_assigned` is `false`:
    a. Read `override_justification` from the task's frontmatter.
    b. If `override_justification` is absent or its value is an empty string, **halt execution** and emit:
@@ -342,11 +344,70 @@ Before invoking the developer, check whether this task was manually scoped by a 
       ```
       Override acknowledged for <task_id>: <override_justification>
       ```
-      Then proceed to step 4.2.
+      Then proceed to step 4.1.2 (the pre-task gate).
+
+### 4.1.2. Pre-task gate
+
+Fires pre-flight checklist phase `pre-task` (`project/documentation/preflight-checklists.md`) **exactly once per
+dispatched unit of work**, here. Every path that starts work reaches this one step: the task path falls
+through 4.1 into it on the way to 4.1.5, 4.2, 4.3 and step 5; Story-Bundle mode (`### 1.5`) calls it
+explicitly; the `Fallback to Full Task-Scope Pipeline` re-uses its result and does not fire it again. The unit
+is whatever step 4 resolved, or the story for a bundle.
+
+**Position.** After 4.1 (read-only), before 4.1.5, before the locked-task guard in 4.2, and before every
+worktree creation and every `### 4.4` slot acquisition. 4.1.5 and the locked guard write frontmatter, so
+firing first means a halt leaves the item exactly as it was: still `Pending`, no status write, no
+`execution_scope` rewrite, no slot consumed, nothing to release, `project/todo.md` entry kept.
+
+Follow "Calling the checker from a skill" in that document: mint a run id for this unit (`do-<UTC time>-<rand>`),
+call `checklist.sh check pre-task --run "$RUN_ID"`, and branch on the exit code and each item's `action`. Exit
+`3` from this base phase is a genuine error, not "no items". Keep `RUN_ID` for the rest of the unit,
+including any Fallback; each pass through the step 8 loop is a new unit and mints a new one. A `block` halt
+stops here, before any work begins.
+
+**Who answers a judgment or `confirm` item.** This `/do` execution's own session, never the developer
+subagent. If the user can answer a prompt in this session now (a standalone `/do`, including one run by
+`/dooo`, per `### 4.4` case (a)), put the item to the user with the numbered prompt and tick it only on their
+explicit confirmation. If `/do` is itself a background sub-agent (a caller-supplied session id, `### 4.4` case
+(b), such as `/jenga` Phase 4) or you cannot tell, there is no live user channel: **never self-certify.** An
+exit `10` or `11` outcome **defers** the unit instead:
+
+- Start nothing: no worktree, no slot, no subagent; write no status. If the caller already marked the item
+  `In Progress`, revert it to `Pending` with `### 4.4` step 1a's locking protocol.
+- Append `{"event": "preflight_deferred", "agent": "orchestrator", "session_id": "<orchestrator_session_id>",
+  "item_id": "<id>", "phase": "pre-task", "run_id": "<RUN_ID>", "items": ["<checklist item ids>"], "date":
+  "<ISO 8601 UTC>"}` to `project/logs/events.json`. Never write `capacity_blocked`; this is a different cause.
+- Report "deferred: pre-flight checklist needs a user decision (`<ids>`: `<reasons>`)", never "failed".
+
+**Mark the situation.** Immediately after minting the run id and **before** the first `check`, write
+the situation marker, and clear it on **every** exit path (success, a `block` halt, a declined
+`confirm`, a deferral, an error):
+
+```bash
+MARKER="$([ -f scripts/checklist-marker.sh ] && echo scripts/checklist-marker.sh || echo node_modules/@jenga-ai/agent/scripts/checklist-marker.sh)"
+TOKEN="$(bash "$MARKER" write --situation pre-task --run "$RUN_ID" --skill j.do)"
+bash "$MARKER" clear --token "$TOKEN"
+```
+
+This is what lets the enforcing hook see the phase; the protocol, the stack semantics and the TTL are
+in "Situation marker" in that document. A failed `write` is **not** a reason to abandon the phase — the
+gate above still runs and only the hook-enforced backstop is lost: report its stderr and continue.
+
+The marker's lifetime is the **unit's**, not this gate step's:
+write it here and clear it when the unit finishes or is deferred, so a `/j-commit` run inside the unit nests
+its own `pre-commit` frame on top rather than replacing it. A Fallback re-route is the same unit — it reuses
+this marker exactly as it reuses `RUN_ID`, and neither re-writes nor clears it.
+
+A unit that may outlive `marker_ttl_minutes` (60) should periodically run `bash "$MARKER" refresh --token "$TOKEN"` — never a second `write`, which would push a duplicate frame; exit `3` means the frame already expired, so `write` again and keep the new token.
+
+Items whose `action` is `remind` never halt or defer: show them, and pass them to the developer subagent as a
+"Pre-flight reminders" block in the context payload (`### 5`, `### 4.3`, bundle spawn, Fallback). The inline
+path has no subagent, so they are simply shown. With no registry, or an empty one, the gate is silent and
+`/do` behaves exactly as before.
 
 ### 4.1.5. `--trivial` Dispatch-Time Override
 
-After override validation (step 4.1) and before branching on `execution_scope` in step 4.2, check whether this invocation was `/do <id> --trivial`.
+After override validation (step 4.1) and the pre-task gate (step 4.1.2), and before branching on `execution_scope` in step 4.2, check whether this invocation was `/do <id> --trivial`.
 
 1. **Detect the flag.** If the task was invoked as `/do <id>` with no `--trivial` flag, skip this entire section and proceed directly to `### 4.2`.
 
@@ -377,7 +438,7 @@ After override validation (step 4.1) and before branching on `execution_scope` i
 
 ### 4.2. Inline Execution Path (execution_scope: inline)
 
-After resolving the task context (step 4), passing override validation (step 4.1), and applying the `--trivial` dispatch-time override if present (step 4.1.5), read `execution_scope` from the task frontmatter.
+After resolving the task context (step 4), passing override validation (step 4.1), passing the pre-task gate (step 4.1.2, which has already fired once for this unit), and applying the `--trivial` dispatch-time override if present (step 4.1.5), read `execution_scope` from the task frontmatter.
 
 **Locked-task dispatch guard (defense-in-depth).** Before branching on `execution_scope` below, read `crucial_level` from the task frontmatter (per `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s Crucial Flag Fields). If `crucial_level: locked`:
 
@@ -441,7 +502,7 @@ If the implementation cannot be completed inline (scope is larger than anticipat
 
 ### 4.3. Light Execution Path (execution_scope: light)
 
-After resolving the task context (step 4), passing override validation (step 4.1), and applying the `--trivial` dispatch-time override if present (step 4.1.5 — note `--trivial` always forces `inline`, so a `light`-scoped task only reaches this section if `--trivial` was *not* passed), if `execution_scope: light` and `crucial_level` is not `locked` (per the locked-task dispatch guard in 4.2, which runs first and always wins), route the task through this path instead of the full `task`-scope pipeline in step 5.
+After resolving the task context (step 4), passing override validation (step 4.1), passing the pre-task gate (step 4.1.2, already fired once for this unit; do not fire it again here), and applying the `--trivial` dispatch-time override if present (step 4.1.5 — note `--trivial` always forces `inline`, so a `light`-scoped task only reaches this section if `--trivial` was *not* passed), if `execution_scope: light` and `crucial_level` is not `locked` (per the locked-task dispatch guard in 4.2, which runs first and always wins), route the task through this path instead of the full `task`-scope pipeline in step 5.
 
 `light` sits between `inline` and `task`: unlike `inline`, it spawns a real developer subagent (so it can handle small branching logic that inline's main-session execution isn't suited for); unlike `task`, it does not create a dedicated worktree and does not invoke the tester as a separate step.
 
@@ -472,6 +533,8 @@ After resolving the task context (step 4), passing override validation (step 4.1
 5. **If the smoke test fails (non-zero exit)**: do NOT write `status: Failed` and do NOT halt. Instead, invoke `#### Fallback to Full Task-Scope Pipeline` below (origin: `light`).
 
 #### Fallback to Full Task-Scope Pipeline
+
+**The pre-task gate does not fire here.** A fallback is a re-route of a unit already gated once at `### 4.1.2`, not a new unit. Reuse that gate's `RUN_ID` and result: do not call `checklist.sh check pre-task` again, and do not re-ask any judgment item the user already confirmed. Its `remind` items go to this fallback's developer subagent too.
 
 This is a self-contained, reusable procedure with two current callers — `### 4.2`'s `--trivial`-forced inline failure branches (origin: `trivial`) and `### 4.3`'s `light`-scope smoke-harness failure (origin: `light`) — given a task that was attempted under a reduced-overhead execution scope and failed its smoke-harness check (or, for `trivial`, showed detected scope creep mid-run), do the following. The only thing that varies by caller is the notice text in step 5; steps 1–4 and 6 are identical regardless of origin.
 
@@ -558,6 +621,8 @@ Detecting which case applies is mechanical: if the dispatch context already cont
 
 ### 5. Invoke the developer agent
 
+The pre-task gate (`### 4.1.2`) has already fired for this unit, before this section and before the slot below; do not fire it again here.
+
 **Acquire a developer concurrency slot first.** Follow `### 4.4. Developer Concurrency Slot Enforcement` above with `<id>` = this task's id, before doing anything else in this section. On a full cap (`capacity_blocked` outcome), do not invoke the developer agent at all — `### 4.4` already reverts the task's status to `Pending`, logs the `capacity_blocked` event, and tracks the consecutive-block count for this task; simply stop here and let `/jenga` Phase 4 retry this task on a later wave once a slot frees up. This is a distinct outcome from the ordinary `/do` failure→skip→`Pending` path below — see `### 4.4`'s "capacity_blocked vs. the existing failure→skip→Pending path" note.
 
 On a successful acquire, pass the following to the developer agent:
@@ -568,6 +633,7 @@ On a successful acquire, pass the following to the developer agent:
 - Full task/story file content (title, description, acceptance criteria)
 - Parent story and epic summaries (read from board files)
 - Any relevant context from `project/PROJECT_SUMMARY.md`
+- A "Pre-flight reminders" block with the `text` of each `pre-task` item whose `action` was `remind` (omit when there are none)
 
 The developer agent will:
 - Log the incoming sender object to `project/logs/events.json`

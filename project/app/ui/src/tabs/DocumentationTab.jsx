@@ -15,7 +15,7 @@ import EntryDetailPanel from '../components/history/EntryDetailPanel'
  *
  * Each entry is shaped `{ file, data, content, category, date }`, covering all 4 source categories
  * aggregated by `readDocumentation()`: `summary` (`project/PROJECT_SUMMARY.md`), `readme`
- * (`README.md`), `strategy` (`docs/STRATEGY.md`), and `example`
+ * (`README.md`), `strategy` (`project/documentation/STRATEGY.md`, or the legacy `docs/STRATEGY.md`), and `example`
  * (every file under `project/documentation/examples/`).
  *
  * Selection follows `EntryListItem.jsx`'s documented wrapping contract — `onSelect` receives the

@@ -82,7 +82,7 @@ const REPO_ROOT = path.join(__dirname, '..');
 export const DEFAULT_OUTPUT_PATH = path.join(REPO_ROOT, 'lib', 'legacy-shipped-paths.json');
 export const DEFAULT_PACKAGE_NAME = '@jenga-ai/agent';
 
-/** Discovery-bound directories mirrored into a consumer's .agents/ and .claude/ (see docs/distribution.md §1). */
+/** Discovery-bound directories mirrored into a consumer's .agents/ and .claude/ (see project/documentation/distribution.md §1). */
 const COPY_SET = ['skills', 'agents'];
 
 // ── walk a real directory tree ──────────────────────────────────────────────

@@ -92,6 +92,7 @@ Does this look right before I write it to the board?"
 - Commits at meaningful milestones — not every line, and not just once at the end
 - Passes a complete sender object (including commit SHAs) to the Tester on handoff
 - **Never runs tests** — that is exclusively the Tester's responsibility
+- Consults the preferred-tools registry (`scripts/resolve-tools.sh --category <category>`) before choosing a tool: a `required` entry is binding (it stops and asks the user), a `recommended` entry is advisory (a deviation is recorded on the **Tool deviations** line of its execution summary)
 - After three failed conflict resolutions, writes a rapport to `project/rapports/problems/`, sets status to `Blocked`, and halts
 - Never commits `.env` files or credentials
 
@@ -127,6 +128,7 @@ Receives sender object for E01_S02_T01 (JWT middleware)
 - Validates all required sender fields before proceeding — rejects with `"error"` if any are missing
 - Runs the full testing lifecycle: unit, integration, e2e, SAST (opt-in), vulnerability scanning (opt-in), performance, coverage
 - SAST and vulnerability scans require explicit user approval, logged to `events.json`
+- Consults the preferred-tools registry (`testing` and `lint` categories) for test types `test-config.json` does not settle; a `required` entry that conflicts with the user-approved `test-config.json` is surfaced to the user and never silently overrides it
 - Writes `Rejected` status only after notifying the user and receiving confirmation
 - After every status update, checks for story/epic rollup and writes a trigger to the queue if warranted
 - Maintains performance/coverage baselines so regressions surface across sessions
@@ -442,7 +444,7 @@ You: "Oh, we should also think about caching strategy"
 
 #### `/j-strategy`
 
-**Description:** Walk through a guided conversation to capture or update `docs/STRATEGY.md` — covering Vision, Value Proposition, Scope, and Target Audience — one section at a time.
+**Description:** Walk through a guided conversation to capture or update `project/documentation/STRATEGY.md` — covering Vision, Value Proposition, Scope, and Target Audience — one section at a time.
 
 **Output type:** `any`
 
@@ -455,10 +457,10 @@ You: "Oh, we should also think about caching strategy"
 **Example:**
 ```
 /j-strategy
-→ docs/STRATEGY.md does not exist — running new capture flow
+→ project/documentation/STRATEGY.md does not exist — running new capture flow
 "What is the long-term direction or ambition for this project?" → [answer]
 ...
-→ Written to docs/STRATEGY.md — captured Vision, Value Proposition, Scope, and Target Audience.
+→ Written to project/documentation/STRATEGY.md — captured Vision, Value Proposition, Scope, and Target Audience.
 ```
 
 ---
@@ -1216,6 +1218,64 @@ Pick a backend: 1. Google Drive 2. S3 3. Dropbox ... → 1
 
 ---
 
+#### `/j-connect`
+
+**Description:** Guided service setup — lists the service descriptors on disk, detects your platform, then installs the service's CLI (opt-in), authenticates, registers its MCP server where one exists, and independently verifies the result, skipping whatever is already done and never handling a secret value.
+
+**Output type:** `any`
+
+**Invokes:** none
+
+**When to use:** To wire a third-party service into a project (CLI installed and authenticated, MCP server registered) without hand-running vendor-specific steps. Adding a service is a descriptor-only change (`project/documentation/service-descriptor.md`), not a new skill.
+
+**What it does:**
+- Builds the service picker from the descriptors on disk (never a hardcoded list)
+- Detects the platform; on an undeterminable one it prints the official instructions URL instead of guessing an install command
+- Skips an already installed CLI and an already authenticated account, and reports what was skipped
+- Asks before running any install; hands browser sign-in and token steps to you and re-checks afterwards
+- Refers to secrets by environment-variable name only; values are never echoed or committed
+- Ends with a pass/fail report from independent verification, never from your confirmation alone
+
+**Example:**
+```
+/j-connect
+Which service would you like to connect? 1. <service from a descriptor> 2. Other (type a service id) -> 1
+[SKIPPED] install - already installed
+[ACTION] auth - set the environment variable <NAME>. ...
+→ (after you set it, re-run) VERIFIED: <service>
+```
+
+---
+
+#### `/j-tools`
+
+**Description:** Guided wizard for the preferred-tools registry: choose the user or project layer, then add, edit, remove or suppress an entry, or show the effective merged list. Every input is validated as it is given and the written file is self-validated before success is reported.
+
+**Output type:** `any`
+
+**Invokes:** none
+
+**When to use:** To declare which tools Jenga agents should reach for, and whether each choice is `required` (binding) or `recommended` (advisory), without hand-writing alternatives, version constraints and descriptor links. Hand-editing the registry files stays fully supported; the wizard preserves every entry it did not touch.
+
+**What it does:**
+- Writes the user layer (`~/.jenga/tools.json`) or the project layer (`preferred-tools.json` under the project's configs path); the curated shipped list is read-only
+- Validates the category against the vocabulary (extensible per layer), the enforcement flag, the version constraint format, and the install-hint descriptor against the real `j-connect` descriptors on disk
+- Adds, edits and removes entries, and suppresses a shipped entry at the chosen layer
+- Replaces the file atomically and only after the result validates; an invalid change leaves the file untouched
+- Ends with an independent validator run and never reports success on a failed one
+
+**Example:**
+```
+/j-tools
+What would you like to do? 1. Add a tool -> 1
+Which layer? 1. Project -> 1
+Name: shellcheck   Category: lint   Enforcement: 1. required
+→ Written to project/configs/preferred-tools.json
+→ VALID: project/configs/preferred-tools.json
+```
+
+---
+
 #### `/j-convert`
 
 **Description:** Convert JSON, JSONL, YAML, or YML dataset files to CSV format. Pass-through for files already in CSV. Flattens nested structures using dot-notation.
@@ -1367,7 +1427,7 @@ Example: ...
 
 A playbook is a dedicated, versionable JSON file describing an ORDERED chain of skills that `/jenga`'s natural-language branch may propose as an editable, confirmable numbered list when free-text intent spans more than one skill and doesn't cleanly resolve to a single one (see `skills/jenga/SKILL.md`'s Skill Matching & Invocation Contract and `skills/jenga/scripts/load-playbooks.sh`, which loads and validates every entry at run time). Built-in playbooks live under `skills/jenga/playbooks/*.json`; project-local playbooks (authored via `/j-playbook-new`) live under `project/.playbooks/*.json` and are merged into the same catalog. `skills/jenga/playbooks/schema.json` is the schema file itself, not a playbook — `load-playbooks.sh` excludes it by filename. Invoke a specific playbook directly (skipping natural-language matching) via `/j-playbook <id>`.
 
-Each entry below lists a playbook's `id`, display `name`, `description`, `keywords` (the highest-priority natural-language match signal), and its `steps` — the ordered skill chain it runs, in execution order. A step may itself be a StepObject (e.g. `forward_from`, `conditional`, or a nested `playbook` composing another playbook by id) rather than a bare skill name — see `docs/skill-authoring.md`'s Playbook StepObject Schema section for the full per-field contract; this reference shows each step's target skill/playbook only.
+Each entry below lists a playbook's `id`, display `name`, `description`, `keywords` (the highest-priority natural-language match signal), and its `steps` — the ordered skill chain it runs, in execution order. A step may itself be a StepObject (e.g. `forward_from`, `conditional`, or a nested `playbook` composing another playbook by id) rather than a bare skill name — see `project/documentation/skill-authoring.md`'s Playbook StepObject Schema section for the full per-field contract; this reference shows each step's target skill/playbook only.
 
 ### Built-in Playbooks (`skills/jenga/playbooks/`)
 

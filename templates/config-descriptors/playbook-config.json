@@ -1,0 +1,26 @@
+{
+  "descriptor_version": 1,
+  "file": "playbook-config.json",
+  "description": "Playbook safety limits read by skills/jenga/scripts/load-playbooks.sh; every successful set also increments config_version.",
+  "keys": [
+    {
+      "key": "config_version",
+      "label": "Config version",
+      "type": "integer",
+      "description": "Version counter for this file; jenga config increments it on every successful set, so it is never set directly.",
+      "editable": false,
+      "pointer": "project/configs/README.md"
+    },
+    {
+      "key": "max_composition_depth",
+      "label": "Max composition depth",
+      "type": "integer",
+      "description": "Deepest playbook-to-playbook nesting load-playbooks.sh accepts (1 is a playbook's own steps); deeper chains are dropped with a warning.",
+      "editable": true,
+      "default": 3,
+      "min": 1,
+      "max": 10,
+      "bump_on_change": "config_version"
+    }
+  ]
+}

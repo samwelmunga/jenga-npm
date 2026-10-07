@@ -326,7 +326,7 @@ PY
 # Split in two (2026-09-25). This was one case asserting all five committed playbooks load, which
 # made the file pass privately and fail only in the public mirror: brainstorm-to-mirror terminates in
 # the private `mirror-public` skill, so `.publicignore` (E50_S13) strips it there and the catalog has
-# four entries, not five. That is exactly the shape docs/public-mirror-content-parity.md's "a test
+# four entries, not five. That is exactly the shape project/documentation/public-mirror-content-parity.md's "a test
 # may never outlive its subject in the mirror" rule forbids.
 #
 # Resolved with that rule's option 2 (ship it, conditioned to skip), NOT option 1 (blocklist the

@@ -14,7 +14,7 @@ input_types: <type>              # optional — forwarded input type(s) this ski
 ---
 
 > Type values come from the canonical vocabulary in `templates/playbook-types.json`. See
-> `docs/skill-authoring.md`'s `output_types` and `input_types` sections for the full contract,
+> `project/documentation/skill-authoring.md`'s `output_types` and `input_types` sections for the full contract,
 > including the `text` rule and the normalize-versus-convert boundary.
 
 # <Skill Title> — <Short tagline>

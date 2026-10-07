@@ -9,7 +9,7 @@
 The **Jenga system** is a two-part framework that makes skill-based prompt routing **automatic and transparent** inside Claude Code (or any AI coding agent):
 
 - **`mcp/router/index.js`** — a Node.js stdio MCP server (the "brain"). It is auto-spawned by the AI client (e.g. Claude Code) when a session opens, holds a live index of your skills, and decides what to do with every prompt: invoke a skill or pass through unchanged.
-- **`bin/jenga.js`** — a CLI tool (`jenga init / attach / status`) that wires everything together: creates the config, registers the router as an MCP server in both the project's `.claude/settings.json` (Claude Code) and `.agents/settings.json` (GitHub Copilot CLI), and shows its health.
+- **`bin/jenga.js`** — a CLI tool (`jenga init / attach / status`) that wires everything together: creates the config, registers the router as an MCP server in the project-root `.mcp.json` (the file Claude Code reads project-scope MCP servers from), and shows its health.
 
 Each project maintains its own router state under `.jenga/` (gitignored), so multiple projects can run simultaneous router instances without conflict.
 
@@ -82,8 +82,7 @@ This means two projects can run their routers simultaneously without conflict. `
 ### Router lifecycle
 
 ```
-jenga attach  →  writes mcpServers.jenga entry into .claude/settings.json
-                 and .agents/settings.json
+jenga attach  →  merges the mcpServers.jenga entry into the project-root .mcp.json
                  ↓
 AI client opens session  →  auto-spawns router via stdio MCP
                  ↓
@@ -152,8 +151,8 @@ Run `jenga attach` to register the router with your AI client.
 
 $ jenga attach
 Attached. Open a new session in this project to start routing through Jenga.
-  ✓ .claude/settings.json updated
-  ✓ .agents/settings.json updated
+  ✓ .mcp.json updated
+  Claude Code shows new .mcp.json servers as "Pending approval": run `claude` in this project and approve the `jenga` server.
 
 $ jenga status
 ✓ Router running (PID: 48291) | No active session
@@ -161,7 +160,7 @@ $ jenga status
 
 > **Note:** The router is started automatically by the AI client (e.g. Claude Code or GitHub Copilot CLI) when it opens
 > a new session — there is no `jenga start` command. `jenga attach` writes the MCP server entry
-> into `.claude/settings.json` and `.agents/settings.json` once; every subsequent session
+> into the project-root `.mcp.json` once (you approve it once in Claude Code); every subsequent session
 > auto-spawns the router via stdio.
 > Running `jenga status` right after a session opens will show "No active session" — this is
 > expected. An active session only exists while a skill invocation is in progress.
@@ -200,7 +199,7 @@ $ jenga status
 }
 ```
 
-### Example D — `.claude/settings.json` after `jenga attach`
+### Example D — `.mcp.json` after `jenga attach`
 
 ```json
 {
@@ -214,23 +213,11 @@ $ jenga status
 }
 ```
 
-### Example E — `.agents/settings.json` after `jenga attach`
+Running `jenga attach` again is safe — it only touches the `"jenga"` entry in `.mcp.json` (other servers and keys are left alone; an up-to-date file is not rewritten) and refreshes it to the current router path (useful after upgrading Jenga). An unparseable `.mcp.json` makes it exit non-zero and leave the file untouched.
 
-```json
-{
-  "mcpServers": {
-    "jenga": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["/absolute/path/to/jenga/mcp/router/index.js"]
-    }
-  }
-}
-```
+> **Migrating from an older `jenga attach`:** earlier versions wrote `mcpServers.jenga` into `.claude/settings.json`, which Claude Code does not read for MCP servers. `jenga attach` leaves that stale entry untouched and prints a note; you can delete it by hand. See `project/documentation/mcp-registration-decision.md`.
 
-Running `jenga attach` again is safe — it overwrites the `"jenga"` key in both config files with the current router path (useful after upgrading Jenga).
-
-### Example F — MCP tools exposed
+### Example E — MCP tools exposed
 
 ```
 ping()              → { ok: true, uptime: 42, skill_count: 22 }

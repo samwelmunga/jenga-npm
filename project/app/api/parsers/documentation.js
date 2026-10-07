@@ -7,7 +7,7 @@
  * Four sources, none of which any existing parser touches today:
  *   - `project/PROJECT_SUMMARY.md`                    -> category `summary`
  *   - `README.md` (repo root)                         -> category `readme`
- *   - `docs/STRATEGY.md`                               -> category `strategy`
+ *   - `project/documentation/STRATEGY.md` (falls back to the legacy `docs/STRATEGY.md`) -> category `strategy`
  *   - every `.md` file under `project/documentation/examples/` -> category `example`
  *
  * The first three are single named files, read directly and parsed with `gray-matter` for
@@ -20,7 +20,7 @@
  * it is added here per entry — same pattern already used by `parsers/ideas.js` (E58_S01_T02) and
  * `parsers/rapports.js`: prefer frontmatter's `date` field, stringified, else `null`.
  *
- * A missing single-file source (e.g. no `docs/STRATEGY.md` yet in some projects) is skipped, not
+ * A missing single-file source (e.g. no strategy brief yet in some projects) is skipped, not
  * thrown — the same non-throwing precedent used throughout `api/parsers/`.
  */
 
@@ -79,6 +79,27 @@ function readSingleMarkdownFile(absPath, fileLabel, category) {
 }
 
 /**
+ * Locate the strategy brief, mirroring `scripts/strategy_path_resolver.sh`'s order (E34_S07): the
+ * configured default `project/documentation/STRATEGY.md` when that file exists, else the legacy
+ * `docs/STRATEGY.md` when only that exists, else the default (which `readSingleMarkdownFile()`
+ * then skips as missing).
+ *
+ * Inline two-location check instead of shelling out to the resolver: this parser is a synchronous
+ * in-process module unit-tested against scratch directories, and spawning bash per request would
+ * add a process dependency and a failure mode for a two-line rule. The legacy `docs/STRATEGY.md`
+ * literal is the intentional fallback for consumer projects that have not moved the file; nothing
+ * here moves or copies it.
+ * @param {string} root - project root.
+ * @returns {string} absolute path to read.
+ */
+function resolveStrategyPath(root) {
+  const configured = path.join(root, 'project', 'documentation', 'STRATEGY.md');
+  const legacy = path.join(root, 'docs', 'STRATEGY.md');
+  if (!fs.existsSync(configured) && fs.existsSync(legacy)) return legacy;
+  return configured;
+}
+
+/**
  * Aggregate all documentation sources into one flat list of full-content, categorized entries.
  * Returns [] entries for any source that does not exist rather than throwing.
  * @returns {Promise<Object[]>}
@@ -99,7 +120,7 @@ async function readDocumentation() {
       category: 'readme',
     },
     {
-      absPath: path.join(root, 'docs', 'STRATEGY.md'),
+      absPath: resolveStrategyPath(root),
       fileLabel: 'STRATEGY.md',
       category: 'strategy',
     },

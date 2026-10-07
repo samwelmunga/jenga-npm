@@ -83,7 +83,7 @@ test('aggregates all four sources with correct categories, skipping a missing so
   const root = makeTmpProjectRoot();
   writeFile(root, 'project/PROJECT_SUMMARY.md', '# Project Summary\n\nHello summary.');
   writeFile(root, 'README.md', '# My Project\n\nHello readme.');
-  // docs/STRATEGY.md intentionally omitted — must be skipped, not thrown.
+  // The strategy brief is intentionally omitted at both locations — must be skipped, not thrown.
   writeFile(
     root,
     'project/documentation/examples/foo.md',
@@ -157,6 +157,63 @@ test('all three single-file sources missing and no examples directory yields an 
     delete require.cache[require.resolve('./documentation')];
     delete require.cache[require.resolve('../lib/resolve-project-root')];
   }
+});
+
+// E34_S07: the strategy brief lives at project/documentation/STRATEGY.md, with docs/STRATEGY.md
+// as the legacy fallback. Shared helper: read documentation with a scratch root and return entries.
+async function readWithRoot(root) {
+  const originalEnv = process.env.JENGA_PROJECT_ROOT;
+  process.env.JENGA_PROJECT_ROOT = root;
+  try {
+    delete require.cache[require.resolve('./documentation')];
+    delete require.cache[require.resolve('../lib/resolve-project-root')];
+    const { readDocumentation } = require('./documentation');
+    return await readDocumentation();
+  } finally {
+    if (originalEnv === undefined) delete process.env.JENGA_PROJECT_ROOT;
+    else process.env.JENGA_PROJECT_ROOT = originalEnv;
+    delete require.cache[require.resolve('./documentation')];
+    delete require.cache[require.resolve('../lib/resolve-project-root')];
+  }
+}
+
+test('strategy entry is returned from project/documentation/STRATEGY.md when only that exists', async () => {
+  const root = makeTmpProjectRoot();
+  writeFile(root, 'project/documentation/STRATEGY.md', '# Strategy\n\nNew location content.');
+  const entries = await readWithRoot(root);
+  const strategy = entries.filter((e) => e.category === 'strategy');
+  assert.strictEqual(strategy.length, 1, 'expected exactly one strategy entry');
+  assert.strictEqual(strategy[0].file, 'STRATEGY.md');
+  assert.ok(strategy[0].content.includes('New location content.'));
+});
+
+test('strategy entry falls back to the legacy docs/STRATEGY.md when only that exists', async () => {
+  const root = makeTmpProjectRoot();
+  writeFile(root, 'docs/STRATEGY.md', '# Strategy\n\nLegacy location content.');
+  const entries = await readWithRoot(root);
+  const strategy = entries.filter((e) => e.category === 'strategy');
+  assert.strictEqual(strategy.length, 1, 'expected exactly one strategy entry');
+  assert.strictEqual(strategy[0].file, 'STRATEGY.md');
+  assert.ok(strategy[0].content.includes('Legacy location content.'));
+});
+
+test('strategy entry is skipped without throwing when the brief exists at neither location', async () => {
+  const root = makeTmpProjectRoot();
+  writeFile(root, 'README.md', '# Only a readme');
+  const entries = await readWithRoot(root);
+  assert.strictEqual(entries.filter((e) => e.category === 'strategy').length, 0);
+  assert.strictEqual(entries.length, 1, 'only the README entry should be present');
+});
+
+test('when the brief exists at both locations the new location wins', async () => {
+  const root = makeTmpProjectRoot();
+  writeFile(root, 'project/documentation/STRATEGY.md', '# Strategy\n\nNew location content.');
+  writeFile(root, 'docs/STRATEGY.md', '# Strategy\n\nLegacy location content.');
+  const entries = await readWithRoot(root);
+  const strategy = entries.filter((e) => e.category === 'strategy');
+  assert.strictEqual(strategy.length, 1, 'expected exactly one strategy entry');
+  assert.ok(strategy[0].content.includes('New location content.'));
+  assert.ok(!strategy[0].content.includes('Legacy location content.'));
 });
 
 run();

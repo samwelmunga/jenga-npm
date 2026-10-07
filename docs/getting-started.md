@@ -294,7 +294,7 @@ That's what a skill's **output type** declares. The vocabulary is small and fixe
 
 **Adoption is partial by design.** Most skills don't declare an output type, and that's expected — it doesn't mean the skill is broken or unfinished. Only a skill that declares one can be named as a `forward_from` source in a playbook step; skills with no declared type simply aren't eligible for that role.
 
-This section explains the concept once. For which specific skills declare an output type today, see the **Skills** section of the [full reference](./documentation.md#skills) — each skill's entry there shows its Output type, or `any` if it doesn't declare one.
+This section explains the concept once. For which specific skills declare an output type today, see the **Skills** section of the [Skills Reference](./skills.md) — each skill's entry there shows its Output type, or `any` if it doesn't declare one.
 
 ---
 

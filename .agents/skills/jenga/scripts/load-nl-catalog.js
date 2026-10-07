@@ -12,7 +12,7 @@
  * artifact) — this script does not independently re-scan `skills/` for a name list of its own,
  * per E53_S01_T02's acceptance criteria and the drift lesson E41_S04 already documented for that
  * generator. That inventory holds bare identifiers (e.g. "brainstorm"), stripped of the `j.`
- * frontmatter prefix — but per docs/skill-authoring.md's Canonical Naming Contract, the actual
+ * frontmatter prefix — but per project/documentation/skill-authoring.md's Canonical Naming Contract, the actual
  * on-disk directory is `skills/j-<name>/`, except the three permanent exceptions (`jenga`,
  * `jenga-permission-level`, `index`) which keep their bare directory name. For each name in the
  * inventory, this script re-derives that canonical directory name, reads exactly one file —
@@ -68,7 +68,7 @@ import { join } from "path";
 import { pathToFileURL } from "url";
 
 // The three permanent exceptions to the `j-<name>` canonical directory convention — see
-// docs/skill-authoring.md's Canonical Naming Contract, and scripts/repoint-skill-refs.sh's
+// project/documentation/skill-authoring.md's Canonical Naming Contract, and scripts/repoint-skill-refs.sh's
 // REPOINT_SKILL_REFS_EXCEPTIONS list, which this mirrors. (It previously mirrored the
 // twin-divergence audit script's NEVER_TWINNED tuple; that script was deleted when
 // E42_S07 retired the twin-parity gate, so both this comment and the cross-check in

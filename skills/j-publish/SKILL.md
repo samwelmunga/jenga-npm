@@ -41,7 +41,7 @@ metadata:
 
 # Publish — Deployment Pipeline Orchestrator
 
-`skills/j-publish/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-publish/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `docs/skill-authoring.md`'s "Invocation Convention").
+`skills/j-publish/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-publish/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `project/documentation/skill-authoring.md`'s "Invocation Convention").
 
 > ⚠️ **`scripts/generate-j-alias.sh` was retired by `E50_S14` and no longer exists — there is nothing to run.** This file was previously generated from a bare `skills/publish/SKILL.md` source; `E50_S15` deleted that directory. This file is now the sole canonical, hand-edited source for this skill — edit it directly.
 
@@ -90,6 +90,51 @@ If config or env validation fails, the skill exits with code `4` and does not co
 | `/publish stage` | Stage an npm release into npm's staged-publishing area, smoke-test it in isolation, then approve or reject it | `skills/j-publish/scripts/npm_stage_pipeline.sh` (the `publish` sub-command) and `skills/j-publish/scripts/npm_stage_inspect.sh` (`list`, `view`, `download`, `test`, `approve`, `reject`) | Supported for `npm` and `npm-ci` target types only |
 | `/publish history` | Read the canonical publish ledger | `skills/j-publish/scripts/show_history.sh` | Target-agnostic; filter by `--target <name>` |
 | `/publish release-notes` | Merge new release notes into the standing `CHANGELOG.md` (or a standalone draft via `--output`) without publishing | `skills/j-publish/scripts/generate_release_notes.sh` | Target-agnostic |
+
+## Pre-release gate
+
+Fires pre-flight checklist phases `pre-release` **then** `pre-publish` (`project/documentation/preflight-checklists.md`)
+at exactly one point per gated invocation: after the Invocation Contract's config validation and **before the
+sub-command's implementation script is started**, so nothing outward-facing has happened and nothing local
+has been written (`deploy` edits `CHANGELOG.md` in its step 6, so the check must come first).
+
+Gated, because each performs an action on the registry, the git remote or CI that cannot be taken back:
+
+- `deploy`, when **not** `--dry-run`
+- `stage publish`, when **not** `--dry-run`
+- `stage approve`, when **not** `--dry-run`
+
+Not gated: `setup` (writes only local `publish.json`), `history`, `release-notes`, `stage list`, `view`,
+`download`, `test` and `reject`, and **any `--dry-run`** (every adapter skips its outward step). The reasoning for
+each is in the schema document's "Release skills: gated sub-commands and modes".
+
+Follow "Calling the checker from a skill" in that document: mint **one** run id for the invocation, call
+`checklist.sh check pre-release --run <id>`, resolve it fully, and only then call
+`checklist.sh check pre-publish --run <id>` with the same id. A `block` failure from either phase halts before
+the script starts. Exit `3` from `pre-publish` means "no items for this phase" and continues silently; exit `3`
+from `pre-release` is a genuine error and is surfaced. `--yes` and `--non-interactive` configure the deploy
+script's own prompts only: they do **not** answer a checklist `confirm` item, and with no user to ask, an
+unresolved `confirm` or `block` item means stop with the reason stated, never proceed. With no registry, or an
+empty one, the gate is silent and `/publish` behaves exactly as before.
+
+**Mark the situation.** Immediately after minting the run id and **before** the first `check`, write
+the situation marker, and clear it on **every** exit path (success, a `block` halt, a declined
+`confirm`, an error):
+
+```bash
+MARKER="$([ -f scripts/checklist-marker.sh ] && echo scripts/checklist-marker.sh || echo node_modules/@jenga-ai/agent/scripts/checklist-marker.sh)"
+TOKEN="$(bash "$MARKER" write --situation pre-release --run "$RUN_ID" --skill j.publish)"
+bash "$MARKER" clear --token "$TOKEN"
+```
+
+This is what lets the enforcing hook see the phase; the protocol, the stack semantics and the TTL are
+in "Situation marker" in that document. A failed `write` is **not** a reason to abandon the phase — the
+gate above still runs and only the hook-enforced backstop is lost: report its stderr and continue.
+
+Two phases, so write a second frame for `pre-publish`
+before its own `check` and clear innermost-first — or just clear the `pre-release` token, which pops the inner
+frame with it. Only a **gated** invocation writes a marker: the ungated sub-commands and every `--dry-run`
+listed above have no phase to mark.
 
 ## Quality Gate Policy
 

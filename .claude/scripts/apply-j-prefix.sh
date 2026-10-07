@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/apply-j-prefix.sh — mechanical j. prefix rename for skill invocation
 #
-# Implements the mechanism decided in docs/skill-authoring.md's "Invocation Convention"
+# Implements the mechanism decided in project/documentation/skill-authoring.md's "Invocation Convention"
 # section (E50_S01_T01), with the separator corrected from ":" to "." in E50_S07_T01:
 #
 #   1. Frontmatter-only rename. For every skills/<name>/SKILL.md, rewrites the
@@ -46,7 +46,7 @@
 # skipping them would silently leave a Copilot-breaking name in place.
 #
 # Retire-or-fix decision (E50_S14_T02, 2026-09-19): kept, not retired — see
-# docs/skill-authoring.md's "The Canonical Naming Contract" > "Generation" subsection
+# project/documentation/skill-authoring.md's "The Canonical Naming Contract" > "Generation" subsection
 # for the full reasoning. Fixed in place for E50_S10's settled contract (canonical
 # directory skills/j-<name>/, frontmatter name: j.<name> — NOT j.j-<name>):
 #   - Step 1's directory-name<->frontmatter-name check no longer requires exact
@@ -158,7 +158,7 @@ if os.path.isdir(skills_dir):
         # E50_S14_T02: under E50_S10's settled contract the canonical skill directory
         # carries a "j-" prefix (skills/j-<name>/) while its frontmatter name is the
         # UNPREFIXED "j.<name>" — deliberately not "j.j-<name>" (see
-        # docs/skill-authoring.md's "The Canonical Naming Contract"). A plain
+        # project/documentation/skill-authoring.md's "The Canonical Naming Contract"). A plain
         # base_name != entry equality would reject every "j-<name>" directory by
         # construction (e.g. directory "j-commit", frontmatter "commit", stripped
         # "commit" != "j-commit"). expected_base strips that one directory-name prefix
@@ -210,7 +210,7 @@ if do_agents and os.path.isdir(agents_dir):
         (so the pattern still finds it), but the emitted replacement must strip the
         "j-" directory prefix before prepending "j." — otherwise this would emit the
         doubled "j.j-<name>" form the settled contract rejects (see
-        docs/skill-authoring.md's "The Canonical Naming Contract"). Bare names
+        project/documentation/skill-authoring.md's "The Canonical Naming Contract"). Bare names
         without a "j-" prefix (including the jenga/jenga-permission-level
         exceptions, which never carry one) are returned unchanged.
         """

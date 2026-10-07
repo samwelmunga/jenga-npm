@@ -27,7 +27,7 @@ examples:
 
 # Uncharted — Investigative Workflow for Foreign & Pre-Existing Code
 
-`skills/j-uncharted/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-uncharted/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `docs/skill-authoring.md`'s "Invocation Convention").
+`skills/j-uncharted/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-uncharted/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `project/documentation/skill-authoring.md`'s "Invocation Convention").
 
 > ⚠️ **`scripts/generate-j-alias.sh` was retired by `E50_S14` and no longer exists — there is nothing to run.** This file was previously generated from a bare `skills/uncharted/SKILL.md` source; `E50_S15` deleted that directory. This file is now the sole canonical, hand-edited source for this skill — edit it directly.
 
@@ -936,6 +936,21 @@ a "skip" on one section must not carry an incidental edit to it from a "replace"
 Like epic generation above it, "skip" on both sections is a valid outcome, not a failure: a run
 that leaves `PROJECT_SUMMARY.md` untouched still respects the read/write surface named under **The
 hard constraint** above, since that file was never a required write, only a permitted one.
+
+#### Closing suggestion — `j.conventions` (non-blocking)
+
+The very last thing `onboard` does, in **both** modes (conversational default and `--legacy`), after the
+`PROJECT_SUMMARY.md` step above has finished or been skipped: run
+`bash "$([ -f scripts/conventions-suggest.sh ] && echo scripts/conventions-suggest.sh || echo node_modules/@jenga-ai/agent/scripts/conventions-suggest.sh)"`
+and print its output, if any (a one-line tip to run `j.conventions`; it prints nothing when the project already has
+a `conventions.json`).
+
+This is a **non-blocking suggestion, not a question**. It must not interrupt `onboard`'s conversational flow (it
+runs only after the convergence loop, the board items and the `PROJECT_SUMMARY.md` step are complete), must not
+change its convergence or exit status, and must not halt the run, ask a blocking question, or run `j.conventions`
+on the user's behalf. The script always exits 0 and writes nothing, so it adds nothing to the output surface named
+under **The hard constraint**. If it cannot be run or prints nothing, say nothing and finish. Only `onboard` has this
+step: `segment`, `import` and `refresh` do not.
 
 ### `refresh`
 

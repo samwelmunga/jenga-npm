@@ -62,7 +62,7 @@ const __dirname = path.dirname(__filename);
 /** Default package root: this file lives at <package>/lib/commands/doctor.js. */
 const DEFAULT_PACKAGE_ROOT = path.join(__dirname, '..', '..');
 
-/** Mirror roots a consumer install writes into (see docs/distribution.md). */
+/** Mirror roots a consumer install writes into (see project/documentation/distribution.md). */
 const MIRROR_ROOTS = ['.agents', '.claude'];
 
 /** Jenga skill-name prefix regex — matches lib/generate-skill-allow-list.js's guard exactly. */

@@ -10,7 +10,7 @@ keywords:
 
 # Reconcile — Board ↔ Code Synchronisation
 
-`skills/j-reconcile/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-reconcile/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `docs/skill-authoring.md`'s "Invocation Convention").
+`skills/j-reconcile/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-reconcile/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `project/documentation/skill-authoring.md`'s "Invocation Convention").
 
 > ⚠️ **`scripts/generate-j-alias.sh` was retired by `E50_S14` and no longer exists — there is nothing to run.** This file was previously generated from a bare `skills/reconcile/SKILL.md` source; `E50_S15` deleted that directory. This file is now the sole canonical, hand-edited source for this skill — edit it directly.
 
@@ -46,11 +46,42 @@ Scope resolution itself is deterministic and handled entirely by
 only interprets that script's output; it does not re-parse scope arguments or re-derive range
 expansion.
 
+## Commit-flow marker (`--from-commit`)
+
+`/reconcile` also accepts the flag `--from-commit`, alongside (never instead of) the scope argument. It is
+**not** a scope argument and does not change what is reconciled. It means exactly one thing: *this call is
+`/commit`'s own mandatory reconcile step (`/commit` step 1)*, and `/reconcile` therefore does not fire its
+`pre-reconcile` pre-flight gate (see "Pre-reconcile gate" below). Only `/commit` step 1 passes it; any call
+without the flag, including one a user types, is a direct invocation and fires the gate. Remove the flag from
+the argument list before Phase 0: `resolve-reconcile-scope.sh` accepts at most one argument and must never see
+it.
+
 ## Instructions
 
 ### 0. Read configuration
 Read `project/configs/workflow.json` for board paths. Fall back to `project/board/` if missing.
-The statuses that count as "completed" are: **Done**, **Passed**, **Passed with remarks**.
+
+**Load the completion vocabulary — before anything else, on every run (this includes `--from-commit`).**
+Never type the list of completed statuses by hand; derive it from the schema:
+
+```bash
+skills/j-reconcile/scripts/completed-statuses.sh
+```
+
+It prints one JSON object, `{"completed":[...],"ladder":[...],"incomplete":[...]}`, built from the `## Status
+Values` table in `templates/SCRUM_BOARD_SCHEMA.md` (`--classify "<status>"` answers for a single status, and
+prints `unknown` for a value the schema does not define; treat `unknown` as incomplete). Carry it through every
+phase below:
+
+- **Completed-or-beyond** = `completed` ∪ `ladder`. This is what every "completed status" test below means.
+  `completed` is the tester/scrum-master-set finished statuses; `ladder` is every script-set status the schema
+  defines after `Passed` (e.g. `Merged`, and any the schema adds later). Ladder statuses are
+  *completed-and-beyond*: reconcile must never promote one, demote one, or touch its `date_completed`. They
+  are script-set and never agent-judged (see the schema), so reconcile does not second-guess them.
+- **Incomplete** = `incomplete` ∪ `unknown` (Pending, In Progress, Blocked, ...).
+- **Non-zero exit** (the schema is missing, unparseable, or has drifted from the pinned core): stop and report
+  the script's stderr as the reconcile failure. Do **not** fall back to a hand-typed list and do not touch any
+  board file.
 
 ### Phase 0 — Resolve scope
 Before touching anything else, resolve the scope argument (if any — see "Scope argument" above)
@@ -86,6 +117,39 @@ path, matching today's default).
   `owned_path_hints` is best-effort and non-authoritative (see Phase 5) — treat it only as a
   positive filter, never as proof that an unlisted path is unrelated to the scope.
 
+### Pre-reconcile gate
+Fires pre-flight checklist phase `pre-reconcile` (`project/documentation/preflight-checklists.md`) at exactly
+one point: after Phase 0 has resolved the scope successfully (a read-only step) and before Phase 1 or any
+other step touches a board file, `project/todo.md`, a worktree or a branch.
+
+- **If `--from-commit` was passed** (this is `/commit` step 1's reconcile): **do not fire the gate.** Skip this
+  section and go straight to Phase 1. A reconcile run inside a commit flow runs while the work being committed
+  is still uncommitted, so a `pre-reconcile` item would warn on every commit; the commit's own `pre-commit` gate
+  covers it.
+- **Otherwise** (a direct invocation): follow "Calling the checker from a skill" in the schema document: mint a
+  run id, call `checklist.sh check pre-reconcile --run <id>`, and branch on the exit code and each item's
+  `action`. A `block` failure halts here, before Phase 1: no board file is touched and no reconcile report is
+  written.
+
+**Mark the situation.** Immediately after minting the run id and **before** the first `check`, write
+the situation marker, and clear it on **every** exit path (success, a `block` halt, a declined
+`confirm`, an error):
+
+```bash
+MARKER="$([ -f scripts/checklist-marker.sh ] && echo scripts/checklist-marker.sh || echo node_modules/@jenga-ai/agent/scripts/checklist-marker.sh)"
+TOKEN="$(bash "$MARKER" write --situation pre-reconcile --run "$RUN_ID" --skill j.reconcile)"
+bash "$MARKER" clear --token "$TOKEN"
+```
+
+This is what lets the enforcing hook see the phase; the protocol, the stack semantics and the TTL are
+in "Situation marker" in that document. A failed `write` is **not** a reason to abandon the phase — the
+gate above still runs and only the hook-enforced backstop is lost: report its stderr and continue.
+
+The `--from-commit` skip above skips the marker too: a run
+that does not fire the gate has no phase to mark.
+
+With no registry, or an empty one, the gate is silent and `/reconcile` behaves exactly as before.
+
 ### 1. Snapshot the board
 **When unscoped (`scope_type: "full"`):** scan every file in `epics/`, `stories/`, and `tasks/`,
 exactly as before.
@@ -107,7 +171,8 @@ entirely, which is what keeps Phase 6 from touching them later.
 
 ### 2. Verify "completed" tasks — are they really implemented?
 For every task recorded in Phase 1 (i.e. every task on the board when unscoped, or only the
-in-scope tasks when scoped) whose status is a completed status:
+in-scope tasks when scoped) whose status is completed-or-beyond (a `completed` or `ladder` status; see
+Section 0):
 
 1. **Search git history** — run `git log --all --oneline --grep="<task_id>"` (e.g. `E01_S01_T01`). A matching commit is strong evidence of implementation.
 2. **Check documentation artefacts** — look for a plan or summary file under `project/documentation/plans/` or `project/documentation/summaries/` whose name contains the task ID.
@@ -123,13 +188,21 @@ If implementation **cannot be confirmed**:
    - After a successful merge, the task stays at its completed status.
    - If the merge has conflicts, alert the user and **do not** change the status — leave it for manual resolution.
 3. If **no** matching branch or worktree exists:
-   - Change the task's status to **Pending** in its board file.
-   - Clear `date_started` and `date_completed`.
-   - Report the demotion.
+   - **If the task's status is a `completed` status** (the `completed` class, not `ladder`):
+     - Change the task's status to **Pending** in its board file.
+     - Clear `date_started` and `date_completed`.
+     - Report the demotion.
+   - **If the task's status is a `ladder` status**: change **nothing** — no status, no `date_started`, no
+     `date_completed`. A ladder status is set by a script from observed evidence, not by an agent's judgment,
+     so reconcile does not overturn it. Report it under "LADDER STATUS — UNVERIFIED, LEFT UNCHANGED" (see
+     `assets/report_format.md`) so a human can look.
 
 ### 3. Verify "incomplete" tasks — are they secretly implemented?
 For every task recorded in Phase 1 (i.e. every task on the board when unscoped, or only the
-in-scope tasks when scoped) whose status is **not** a completed status (Pending, In Progress, Running, Blocked, etc.):
+in-scope tasks when scoped) whose status is **not** completed-or-beyond — i.e. an `incomplete` or `unknown`
+status (Pending, In Progress, Running, Blocked, etc.; see Section 0). A task in a `ladder` status is never a
+candidate here: it is not promoted to `Passed`, its status is not rewritten, and its `date_completed` is not
+stamped or changed.
 
 1. **Search git history** for commits referencing the task ID.
 2. **Check documentation artefacts** as in phase 2.
@@ -191,15 +264,16 @@ or only the in-scope tasks when scoped):
   epic(s) in `epic_ids` (the epic(s) those named stories belong to) — never an unrelated story in
   the same epic(s) that wasn't itself named in the range, per the story's AC.
 
-For each story being rolled up: if all of its tasks are now in a completed status, set the story
-to **Done** (if not already). If any task was demoted, and the story was previously completed, set
-the story back to **In Progress**. For each epic being rolled up: apply the same roll-up logic
-over its stories.
+For each story being rolled up: if all of its tasks are now completed-or-beyond (a `ladder` task counts as
+completed), set the story to **Done** (if not already) — **unless the story's own status is a `ladder`
+status, in which case leave it exactly as it is** (rewriting it to `Done` would be a demotion). If any task was
+demoted, and the story was previously completed-or-beyond, set the story back to **In Progress**. For each
+epic being rolled up: apply the same roll-up logic over its stories, including the same ladder exemption.
 
 #### DoD Gap Detection
 
-After rolling up statuses, scan every story being rolled up (every completed-status story on the
-board when unscoped, or only the in-scope stories when scoped) whose status is a completed status (`Passed`, `Passed with remarks`, `Done`) for unchecked Definition of Done items:
+After rolling up statuses, scan every story being rolled up (every completed-or-beyond story on the
+board when unscoped, or only the in-scope stories when scoped) whose status is completed-or-beyond (a `completed` or `ladder` status; see Section 0) for unchecked Definition of Done items:
 
 1. Read the story file and locate the `## Definition of Done` section. If the section is absent, skip this story gracefully (no error).
 2. Scan the DoD section for any lines matching `^- \[ \]` (unchecked checkboxes).
@@ -207,6 +281,8 @@ board when unscoped, or only the in-scope stories when scoped) whose status is a
 4. If all DoD boxes are already ticked (`- [x]`), or the DoD section is absent, no gap is reported for that story.
 
 At the end of Phase 4, if any DoD gaps were found across any stories, include a **"DoD Gaps"** section in the reconcile report (see `assets/report_format.md`) listing each affected story and its unchecked items.
+
+**Unaffected by the mid-story verification rule (`E17_S08`):** the tester's mid-story pass leaves not-yet-reachable DoD boxes unticked but writes story status `In Progress`, never a completed status, so a story with legitimately-unchecked mid-story boxes is never in this scan's completed-or-beyond scope. An unchecked box on a `Passed`/`Done` story therefore remains a genuine gap and is reported as before.
 
 **Important:** Gap detection is **report-only**. Do not automatically change the status of any story or epic based on unchecked DoD boxes — surface the gaps so a human can review and decide.
 
@@ -327,7 +403,7 @@ doesn't reference an in-scope id (Phase 1 only parsed in-scope lines), so this p
 or comments out an out-of-scope entry even if it would otherwise qualify under the rules below.
 When unscoped, every entry from phase 1 is eligible, exactly as before.
 
-- **Already-done entries** — if an entry references a task/story/epic whose pre-reconcile status (from the snapshot in phase 1) was already a completed status **and** whose implementation has been confirmed (phase 2), **remove the line entirely** from `project/todo.md`.
+- **Already-done entries** — if an entry references a task/story/epic whose pre-reconcile status (from the snapshot in phase 1) was already completed-or-beyond (a `completed` or `ladder` status; see Section 0) **and** whose implementation has been confirmed (phase 2), **remove the line entirely** from `project/todo.md`.
 - **Newly-reconciled entries** — entries that were commented out in phase 3 stay as `<!-- RECONCILED: ... -->`.
 - If `project/todo.md` is left with only the header, the format comment, and blank lines, delete the file.
 

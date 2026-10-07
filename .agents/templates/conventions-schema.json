@@ -1,0 +1,110 @@
+{
+  "_comment": "Machine-readable contract for a project's conventions.json and for the general-standard preset catalog (E69_S01_T01). scripts/validate-conventions.sh reads THIS file as its single source for the top-level keys, the category ids, each category's values fields and the allowed source and strength values; the preset catalog (templates/conventions-presets.json), the detector, the wizard and the checklist generator read the same category list, so no consumer keeps a second copy. Human guide: project/documentation/project-conventions.md (section Schema). -- FIELD SPEC VOCABULARY for the values fields: 'type' is string | boolean | integer | string_array; 'required' is true when the field must be present in a category entry's values; 'single_line' forbids newline characters (a value flows into checklist item text and possibly a verify command line, so newlines are rejected); 'non_empty' forbids an empty or whitespace-only string (and an empty array for string_array). -- Adding a field type here without teaching the validator is rejected by the validator at load time, never silently ignored. -- 'block' is never legal for conventions (epic E69, Decision 4): it is forbidden under any strength or enforcement key anywhere in a file.",
+  "schema_version": 1,
+  "conventions_version": 1,
+  "top_level_keys": ["conventions_version", "categories"],
+  "sources": ["detected", "preset", "custom"],
+  "strength": {
+    "key": "strength",
+    "allowed": ["advisory", "confirm"],
+    "forbidden": ["block"],
+    "forbidden_keys": ["strength", "enforcement"]
+  },
+  "entry_fields": {
+    "source": { "type": "string", "required": true, "single_line": true, "non_empty": true },
+    "preset": { "type": "string", "required": "when_source_is_preset", "forbidden_when_source": "custom", "single_line": true, "non_empty": true, "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+    "summary": { "type": "string", "required": true, "single_line": true, "non_empty": true },
+    "values": { "type": "object", "required": true },
+    "strength": { "type": "string", "required": false }
+  },
+  "presets": {
+    "presets_version": 1,
+    "min_per_category": 2,
+    "max_per_category": 3,
+    "top_level_keys": ["presets_version", "categories"],
+    "preset_fields": {
+      "id": { "type": "string", "required": true, "single_line": true, "non_empty": true, "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+      "label": { "type": "string", "required": true, "single_line": true, "non_empty": true },
+      "description": { "type": "string", "required": true, "single_line": true, "non_empty": true },
+      "values": { "type": "object", "required": true },
+      "strength": { "type": "string", "required": false }
+    }
+  },
+  "categories": {
+    "commit-format": {
+      "label": "Commit format",
+      "applies_to": "non-board commits only: EST naming (task(E##_S##_T##):, story(...), epic(...)) stays mandatory for board commits",
+      "values": {
+        "style": { "type": "string", "required": true, "single_line": true, "non_empty": true },
+        "message_regex": { "type": "string", "required": false, "single_line": true, "non_empty": true },
+        "subject_max_length": { "type": "integer", "required": false }
+      }
+    },
+    "branching": {
+      "label": "Branching",
+      "values": {
+        "model": { "type": "string", "required": true, "single_line": true, "non_empty": true },
+        "branch_pattern": { "type": "string", "required": false, "single_line": true, "non_empty": true },
+        "default_branch": { "type": "string", "required": false, "single_line": true, "non_empty": true }
+      }
+    },
+    "naming": {
+      "label": "Naming",
+      "values": {
+        "identifier_case": { "type": "string", "required": true, "single_line": true, "non_empty": true },
+        "file_case": { "type": "string", "required": false, "single_line": true, "non_empty": true },
+        "type_case": { "type": "string", "required": false, "single_line": true, "non_empty": true }
+      }
+    },
+    "code-comments": {
+      "label": "Code comments and docs-in-code",
+      "values": {
+        "policy": { "type": "string", "required": true, "single_line": true, "non_empty": true },
+        "public_api_docs_required": { "type": "boolean", "required": false },
+        "doc_comment_style": { "type": "string", "required": false, "single_line": true, "non_empty": true }
+      }
+    },
+    "formatting-linting": {
+      "label": "Formatting and linting",
+      "values": {
+        "approach": { "type": "string", "required": true, "single_line": true, "non_empty": true },
+        "format_command": { "type": "string", "required": false, "single_line": true, "non_empty": true },
+        "lint_command": { "type": "string", "required": false, "single_line": true, "non_empty": true },
+        "editorconfig": { "type": "boolean", "required": false }
+      }
+    },
+    "testing": {
+      "label": "Testing expectations",
+      "values": {
+        "expectation": { "type": "string", "required": true, "single_line": true, "non_empty": true },
+        "test_command": { "type": "string", "required": false, "single_line": true, "non_empty": true },
+        "test_dir": { "type": "string", "required": false, "single_line": true, "non_empty": true }
+      }
+    },
+    "file-layout": {
+      "label": "File and directory layout",
+      "values": {
+        "layout": { "type": "string", "required": true, "single_line": true, "non_empty": true },
+        "source_dir": { "type": "string", "required": false, "single_line": true, "non_empty": true },
+        "test_dir": { "type": "string", "required": false, "single_line": true, "non_empty": true }
+      }
+    },
+    "language-tooling": {
+      "label": "Language and tooling",
+      "values": {
+        "version_policy": { "type": "string", "required": true, "single_line": true, "non_empty": true },
+        "runtime": { "type": "string", "required": false, "single_line": true, "non_empty": true },
+        "package_manager": { "type": "string", "required": false, "single_line": true, "non_empty": true },
+        "lockfile_committed": { "type": "boolean", "required": false }
+      }
+    },
+    "documentation-placement": {
+      "label": "Documentation placement",
+      "values": {
+        "policy": { "type": "string", "required": true, "single_line": true, "non_empty": true },
+        "public_docs_dir": { "type": "string", "required": false, "single_line": true, "non_empty": true },
+        "internal_docs_dir": { "type": "string", "required": false, "single_line": true, "non_empty": true }
+      }
+    }
+  }
+}

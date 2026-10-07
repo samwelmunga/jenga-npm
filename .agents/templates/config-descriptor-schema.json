@@ -1,0 +1,35 @@
+{
+  "_comment": "Machine-readable contract for config descriptors (E68_S01_T01). lib/config/descriptors.js reads THIS file as its single source for which fields exist, which are required, which apply to which type, and which value shapes are legal; it carries no second copy of the field list. Human guide: project/documentation/config-descriptors.md. A descriptor lives at templates/config-descriptors/<file-id>.json, where <file-id> is the config basename without .json (override the directory with JENGA_CONFIG_DESCRIPTORS_DIR); files whose name starts with an underscore are ignored by the loader. -- FIELD SPEC VOCABULARY: 'kind' is the value shape (integer | string | boolean | array_of_keys | array_of_scalars | regex | enum | key_ref | scalar_of_type); 'required' is when the field must be present (always | editable | readonly | never); 'only_when' restricts the field to editable or read-only keys; 'applies_to' restricts it to the listed types; 'single_line' forbids newline characters; 'non_empty' forbids an empty or whitespace-only string; 'pattern' is a JavaScript regular expression the string must match; 'const' fixes the exact value; 'enum_from' names the top-level list that supplies the allowed values. -- Adding a field here without teaching the validator its 'kind' is rejected by the validator at load time, never silently ignored.",
+  "schema_version": 1,
+  "types": ["integer", "string", "boolean", "array", "object"],
+  "scalar_types": ["integer", "string", "boolean"],
+  "top_level": {
+    "descriptor_version": { "kind": "integer", "required": "always", "const": 1 },
+    "file": { "kind": "string", "required": "always", "single_line": true, "non_empty": true, "pattern": "^[a-z0-9]+(-[a-z0-9]+)*\\.json$" },
+    "description": { "kind": "string", "required": "always", "single_line": true, "non_empty": true },
+    "keys": { "kind": "array_of_keys", "required": "always" }
+  },
+  "key_fields": {
+    "key": { "kind": "string", "required": "always", "single_line": true, "non_empty": true, "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$" },
+    "label": { "kind": "string", "required": "always", "single_line": true, "non_empty": true },
+    "type": { "kind": "enum", "required": "always", "enum_from": "types" },
+    "description": { "kind": "string", "required": "always", "single_line": true, "non_empty": true },
+    "editable": { "kind": "boolean", "required": "always" },
+    "default": { "kind": "scalar_of_type", "required": "editable", "only_when": "editable", "applies_to": ["integer", "string", "boolean"] },
+    "min": { "kind": "integer", "required": "never", "only_when": "editable", "applies_to": ["integer"] },
+    "max": { "kind": "integer", "required": "never", "only_when": "editable", "applies_to": ["integer"] },
+    "allowed": { "kind": "array_of_scalars", "required": "never", "only_when": "editable", "applies_to": ["integer", "string", "boolean"] },
+    "pattern": { "kind": "regex", "required": "never", "only_when": "editable", "applies_to": ["string"] },
+    "pointer": { "kind": "string", "required": "readonly", "only_when": "readonly", "single_line": true, "non_empty": true },
+    "bump_on_change": { "kind": "key_ref", "required": "never", "only_when": "editable" }
+  },
+  "bump_target": { "type": "integer", "editable": false },
+  "exit_codes": {
+    "ok": 0,
+    "usage": 2,
+    "unknown_file_or_key": 3,
+    "invalid_value": 4,
+    "read_only_key": 5,
+    "config_unavailable": 6
+  }
+}

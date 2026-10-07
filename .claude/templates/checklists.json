@@ -1,0 +1,48 @@
+{
+  "checklist_version": 1,
+  "items": [
+    {
+      "id": "no-env-files-staged",
+      "text": "No .env file (other than .env.example, .env.sample or .env.template) is staged for commit.",
+      "situations": ["pre-commit"],
+      "kind": "machine",
+      "verify": "! git diff --cached --name-only | grep -E '(^|/)\\.env(\\.[^/]+)?$' | grep -Eqv '\\.(example|sample|template)$'",
+      "enforcement": "block",
+      "tick_scope": "run"
+    },
+    {
+      "id": "no-conflict-markers-staged",
+      "text": "No unresolved merge conflict markers are present in the staged changes.",
+      "situations": ["pre-commit"],
+      "kind": "machine",
+      "verify": "! git diff --cached | grep -Eq '^\\+(<<<<<<<|>>>>>>>) '",
+      "enforcement": "block",
+      "tick_scope": "run"
+    },
+    {
+      "id": "acceptance-criteria-reread",
+      "text": "I have re-read the task's acceptance criteria and confirmed the intended change fits within them.",
+      "situations": ["pre-task"],
+      "kind": "judgment",
+      "enforcement": "advisory",
+      "tick_scope": "run"
+    },
+    {
+      "id": "working-tree-clean-before-release",
+      "text": "The working tree is clean, so what is released is exactly what is committed.",
+      "situations": ["pre-release"],
+      "kind": "machine",
+      "verify": "test -z \"$(git status --porcelain)\"",
+      "enforcement": "confirm",
+      "tick_scope": "run"
+    },
+    {
+      "id": "tests-pass-before-release",
+      "text": "The project's test suite has been run and passes on the exact commit being released.",
+      "situations": ["pre-release"],
+      "kind": "judgment",
+      "enforcement": "confirm",
+      "tick_scope": "run"
+    }
+  ]
+}

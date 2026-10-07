@@ -81,7 +81,7 @@ description: Fixture for the jenga-permission-level permanent exception.
 SKILL
 
   # "index" is deliberately NOT included in the allow-list fixture below: it has no
-  # SKILL.md in the real repo (it is not a skill at all -- docs/skill-authoring.md), so
+  # SKILL.md in the real repo (it is not a skill at all -- project/documentation/skill-authoring.md), so
   # it never appears as a genuine allow-listed identifier. Only NEVER_TWINNED's set
   # membership is what this file's cross-check test cares about for "index".
 

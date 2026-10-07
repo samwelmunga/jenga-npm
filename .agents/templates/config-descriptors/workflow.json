@@ -1,0 +1,47 @@
+{
+  "descriptor_version": 1,
+  "file": "workflow.json",
+  "description": "The working-file registry and workflow vocabulary. Listed read-only: every key is a nested list or object, owned by the scrum master and edited by hand, so none is editable here.",
+  "keys": [
+    {
+      "key": "statuses",
+      "label": "Statuses",
+      "type": "array",
+      "description": "Allowed board status values; edited by hand.",
+      "editable": false,
+      "pointer": "templates/SCRUM_BOARD_SCHEMA.md (Status Values; owned by agents/scrum-master.md)"
+    },
+    {
+      "key": "rapport_types",
+      "label": "Rapport types",
+      "type": "array",
+      "description": "Allowed rapport type names; edited by hand.",
+      "editable": false,
+      "pointer": "templates/SCRUM_BOARD_SCHEMA.md (workflow.json section)"
+    },
+    {
+      "key": "paths",
+      "label": "Paths",
+      "type": "object",
+      "description": "Map of working-file path keys to locations; edited by hand and resolved by every script through resolve-root.sh.",
+      "editable": false,
+      "pointer": "scripts/resolve-root.sh"
+    },
+    {
+      "key": "agents",
+      "label": "Agents",
+      "type": "array",
+      "description": "Agent names the workflow knows about; edited by hand.",
+      "editable": false,
+      "pointer": "agents/scrum-master.md (owner of workflow.json)"
+    },
+    {
+      "key": "pipeline",
+      "label": "Pipeline",
+      "type": "array",
+      "description": "Ordered hand-off steps between the agents; edited by hand.",
+      "editable": false,
+      "pointer": "templates/SCRUM_BOARD_SCHEMA.md (workflow.json section)"
+    }
+  ]
+}

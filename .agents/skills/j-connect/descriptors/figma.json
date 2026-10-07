@@ -1,0 +1,26 @@
+{
+  "id": "figma",
+  "name": "Figma MCP server (detect and report)",
+  "docs": [
+    "https://developers.figma.com/docs/figma-mcp-server/remote-server-installation/",
+    "https://help.figma.com/hc/en-us/articles/39888612464151-Claude-Code-and-Figma-Set-up-the-MCP-server"
+  ],
+  "detect": {
+    "command": ["claude", "mcp", "get", "claude.ai Figma"]
+  },
+  "install": {
+    "docs_url": "https://developers.figma.com/docs/figma-mcp-server/remote-server-installation/",
+    "hint": "Figma's MCP server needs no CLI install here. Detection looks for the claude.ai Figma connector by its exact name (exit status only), so it cannot see a Figma server added under another name, in user or local scope, or through the Figma plugin; if you already have Figma connected one of those ways, nothing more is needed. When none is connected, add Figma's server yourself from the official page (the Figma plugin for Claude Code, or the manual MCP command it documents). This does not register it for you: that could duplicate an existing Figma connection and j.connect cannot see every place one can live. Not verified against a real Figma account or the Figma plugin: see project/documentation/figma-expo-connect-research.md."
+  },
+  "auth": {
+    "type": "none",
+    "docs_url": "https://help.figma.com/hc/en-us/articles/39888612464151-Claude-Code-and-Figma-Set-up-the-MCP-server",
+    "instructions": "Figma's MCP server signs you in with OAuth inside Claude Code: open /mcp (or /plugin for the plugin install), choose the Figma server and click Allow access on the Figma page it opens. j.connect never does this for you and never handles a token. A successful check only means the server is configured in Claude Code, not that you have approved it."
+  },
+  "register_mcp": {
+    "supported": false
+  },
+  "verify": {
+    "command": ["claude", "mcp", "get", "claude.ai Figma"]
+  }
+}

@@ -39,6 +39,12 @@
 
 ---
 
+## Tool Deviations
+
+<"None", or one line per deviation from a `recommended` preferred-tools entry: the tool used instead, the entry it deviated from, and the justification. A `required` entry is never deviated from without asking the user.>
+
+---
+
 ## Edge Cases & Known Concerns
 
 <Describe any edge cases encountered or known concerns that the tester should be aware of.>

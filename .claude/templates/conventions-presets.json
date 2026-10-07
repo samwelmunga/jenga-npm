@@ -1,0 +1,250 @@
+{
+  "presets_version": 1,
+  "categories": {
+    "commit-format": [
+      {
+        "id": "conventional-commits",
+        "label": "Conventional Commits",
+        "description": "Commit subjects follow type(scope): subject, e.g. feat(api): add retry.",
+        "values": {
+          "style": "conventional-commits",
+          "message_regex": "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\\([^)]+\\))?!?: .+"
+        }
+      },
+      {
+        "id": "imperative-subject",
+        "label": "Imperative short subject",
+        "description": "A short imperative subject with no type prefix, e.g. Add retry to the client.",
+        "values": {
+          "style": "imperative-subject",
+          "subject_max_length": 72
+        }
+      },
+      {
+        "id": "free-form",
+        "label": "Free-form",
+        "description": "No required commit message format.",
+        "values": {
+          "style": "free-form"
+        }
+      }
+    ],
+    "branching": [
+      {
+        "id": "trunk-based",
+        "label": "Trunk-based",
+        "description": "Short-lived branches off the default branch, merged back quickly.",
+        "values": {
+          "model": "trunk-based"
+        }
+      },
+      {
+        "id": "github-flow",
+        "label": "GitHub Flow",
+        "description": "One feature branch per change, named feature/<slug>, merged through review.",
+        "values": {
+          "model": "github-flow",
+          "branch_pattern": "feature/<slug>"
+        }
+      },
+      {
+        "id": "git-flow",
+        "label": "Git Flow",
+        "description": "Long-lived develop plus feature/, release/ and hotfix/ branches.",
+        "values": {
+          "model": "git-flow",
+          "branch_pattern": "feature/<slug>, release/<version>, hotfix/<slug>"
+        }
+      }
+    ],
+    "naming": [
+      {
+        "id": "kebab-files-camel-identifiers",
+        "label": "kebab-case files, camelCase identifiers",
+        "description": "File names are kebab-case and variables and functions are camelCase.",
+        "values": {
+          "identifier_case": "camelCase",
+          "file_case": "kebab-case"
+        }
+      },
+      {
+        "id": "snake-case-throughout",
+        "label": "snake_case throughout",
+        "description": "File names and identifiers are all snake_case.",
+        "values": {
+          "identifier_case": "snake_case",
+          "file_case": "snake_case"
+        }
+      },
+      {
+        "id": "pascal-types-camel-values",
+        "label": "PascalCase types, camelCase values",
+        "description": "Types and classes are PascalCase and variables and functions are camelCase.",
+        "values": {
+          "identifier_case": "camelCase",
+          "type_case": "PascalCase"
+        }
+      }
+    ],
+    "code-comments": [
+      {
+        "id": "comment-the-why",
+        "label": "Comment the why, not the what",
+        "description": "Comments explain intent and constraints, not what the code plainly does.",
+        "values": {
+          "policy": "comment-why-not-what"
+        }
+      },
+      {
+        "id": "public-api-doc-comments",
+        "label": "Doc-comments on public API",
+        "description": "Every public function, type and module carries a doc-comment.",
+        "values": {
+          "policy": "public-api-doc-comments-required",
+          "public_api_docs_required": true
+        }
+      },
+      {
+        "id": "minimal-comments",
+        "label": "Minimal comments",
+        "description": "Prefer self-explanatory code and comment only the non-obvious.",
+        "values": {
+          "policy": "minimal-comments",
+          "public_api_docs_required": false
+        }
+      }
+    ],
+    "formatting-linting": [
+      {
+        "id": "formatter-and-linter",
+        "label": "Formatter and linter enforced",
+        "description": "A formatter and linter are run by command; the commands shown are placeholders you must replace with your own.",
+        "values": {
+          "approach": "formatter-and-linter",
+          "format_command": "<format command>",
+          "lint_command": "<lint command>"
+        }
+      },
+      {
+        "id": "editorconfig-only",
+        "label": ".editorconfig only",
+        "description": "Whitespace and encoding are governed by an .editorconfig file, with no enforced formatter.",
+        "values": {
+          "approach": "editorconfig-only",
+          "editorconfig": true
+        }
+      },
+      {
+        "id": "none-enforced",
+        "label": "None enforced",
+        "description": "No standing formatting or linting requirement.",
+        "values": {
+          "approach": "none-enforced"
+        }
+      }
+    ],
+    "testing": [
+      {
+        "id": "tests-for-every-change",
+        "label": "Tests for every change",
+        "description": "Every code change ships with a test that covers it.",
+        "values": {
+          "expectation": "tests-for-every-change"
+        }
+      },
+      {
+        "id": "tests-for-fixes-and-public-behaviour",
+        "label": "Tests for bug fixes and public behaviour",
+        "description": "Bug fixes and public behaviour need a test; internal refactors do not.",
+        "values": {
+          "expectation": "tests-for-fixes-and-public-behaviour"
+        }
+      },
+      {
+        "id": "no-standing-expectation",
+        "label": "No standing expectation",
+        "description": "Testing is decided case by case.",
+        "values": {
+          "expectation": "no-standing-expectation"
+        }
+      }
+    ],
+    "file-layout": [
+      {
+        "id": "src-and-tests",
+        "label": "src/ plus tests/",
+        "description": "Source lives under src/ and tests under tests/ at the top level.",
+        "values": {
+          "layout": "src-and-tests",
+          "source_dir": "src",
+          "test_dir": "tests"
+        }
+      },
+      {
+        "id": "co-located-tests",
+        "label": "Co-located tests",
+        "description": "Each test file sits next to the module it covers.",
+        "values": {
+          "layout": "co-located-tests"
+        }
+      },
+      {
+        "id": "flat-modules",
+        "label": "Flat top-level modules",
+        "description": "Modules live directly at the top level without a src/ wrapper.",
+        "values": {
+          "layout": "flat-top-level-modules"
+        }
+      }
+    ],
+    "language-tooling": [
+      {
+        "id": "pinned-runtime-with-lockfile",
+        "label": "Pinned runtime and committed lockfile",
+        "description": "The runtime version is pinned and the dependency lockfile is committed.",
+        "values": {
+          "version_policy": "pinned-runtime-and-lockfile",
+          "lockfile_committed": true
+        }
+      },
+      {
+        "id": "latest-stable",
+        "label": "Latest stable, no pinning",
+        "description": "Use the latest stable runtime and dependencies without pinning.",
+        "values": {
+          "version_policy": "latest-stable",
+          "lockfile_committed": false
+        }
+      }
+    ],
+    "documentation-placement": [
+      {
+        "id": "published-docs-in-docs",
+        "label": "Published docs in docs/",
+        "description": "Content for readers goes in docs/ and internal notes are kept elsewhere.",
+        "values": {
+          "policy": "published-docs-in-docs-internal-elsewhere",
+          "public_docs_dir": "docs"
+        }
+      },
+      {
+        "id": "everything-in-docs",
+        "label": "Everything in docs/",
+        "description": "All documentation, public and internal, lives in docs/.",
+        "values": {
+          "policy": "everything-in-docs",
+          "public_docs_dir": "docs",
+          "internal_docs_dir": "docs"
+        }
+      },
+      {
+        "id": "readme-only",
+        "label": "README only",
+        "description": "Documentation lives in the README with no docs directory.",
+        "values": {
+          "policy": "readme-only"
+        }
+      }
+    ]
+  }
+}

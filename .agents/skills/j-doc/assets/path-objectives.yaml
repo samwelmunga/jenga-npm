@@ -1,4 +1,12 @@
 default_target: README.md
+# Paths below are matched exactly against a path the USER names, so docs/API.md, docs/CLI.md,
+# docs/CONTRIBUTING.md and project/documentation/STRATEGY.md are objectives for a consumer's own files, not framework
+# default write targets. Framework or maintainer documentation the agent creates itself belongs under the
+# `documentation` path in project/configs/workflow.json (default project/documentation), never docs/.
+# project/documentation/STRATEGY.md is the default of `paths.strategy` (E34_S07). A project that changes
+# `paths.strategy` can name the new path; a project whose brief is still at the legacy docs/STRATEGY.md
+# (found in place by scripts/strategy_path_resolver.sh, never migrated automatically) names that path
+# and is asked to confirm the objective.
 rules:
   - path: README.md
     objective: project overview
@@ -36,7 +44,7 @@ rules:
     required_sections:
       - Release Entries
       - Notable Changes
-  - path: docs/STRATEGY.md
+  - path: project/documentation/STRATEGY.md
     objective: strategy brief
     summary: Produce a high-level strategy brief suitable for investors and strategic partners. Covers vision, value proposition, scope, and target audience. Does not include revenue model, pricing, or competitive analysis.
     required_sections:

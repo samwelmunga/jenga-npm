@@ -1,0 +1,15 @@
+{
+  "descriptor_version": 1,
+  "file": "test-config.json",
+  "description": "The tester's tool stack. Listed read-only: its only key is a nested tool list that changes only through the tester's user-approval flow, so nothing is editable here.",
+  "keys": [
+    {
+      "key": "tools",
+      "label": "Test tools",
+      "type": "array",
+      "description": "One entry per test type (unit, integration, e2e, sast, vulnerability, performance, coverage); changed only with the user's approval.",
+      "editable": false,
+      "pointer": "agents/tester.md (Tool Stack Management: tools are added only with user approval)"
+    }
+  ]
+}

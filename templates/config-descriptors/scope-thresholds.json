@@ -1,0 +1,103 @@
+{
+  "descriptor_version": 1,
+  "file": "scope-thresholds.json",
+  "description": "Execution-scope thresholds and concurrency limits read by /jenga and /do; every successful set also increments threshold_version.",
+  "keys": [
+    {
+      "key": "threshold_version",
+      "label": "Threshold version",
+      "type": "integer",
+      "description": "Version counter for this file; jenga config increments it on every successful set, so it is never set directly.",
+      "editable": false,
+      "pointer": "project/configs/README.md"
+    },
+    {
+      "key": "inline_max_files",
+      "label": "Inline max files",
+      "type": "integer",
+      "description": "Most files a task may touch and still run inline (no subagent, no worktree).",
+      "editable": true,
+      "default": 3,
+      "min": 1,
+      "max": 50,
+      "bump_on_change": "threshold_version"
+    },
+    {
+      "key": "inline_max_lines",
+      "label": "Inline max lines",
+      "type": "integer",
+      "description": "Most total lines changed for a task to still run inline.",
+      "editable": true,
+      "default": 75,
+      "min": 1,
+      "max": 1000,
+      "bump_on_change": "threshold_version"
+    },
+    {
+      "key": "story_max_files",
+      "label": "Story max files",
+      "type": "integer",
+      "description": "Most files a task may touch to qualify for story-scope bundling (several tasks in one developer context).",
+      "editable": true,
+      "default": 5,
+      "min": 1,
+      "max": 100,
+      "bump_on_change": "threshold_version"
+    },
+    {
+      "key": "bundle_lock_ttl_minutes",
+      "label": "Bundle lock TTL (minutes)",
+      "type": "integer",
+      "description": "Minutes after which a story-bundle lock counts as stale and may be reclaimed.",
+      "editable": true,
+      "default": 30,
+      "min": 1,
+      "max": 1440,
+      "bump_on_change": "threshold_version"
+    },
+    {
+      "key": "max_concurrent_developers",
+      "label": "Max concurrent developers",
+      "type": "integer",
+      "description": "Most developer subagents (one slot per story bundle) one orchestrating session may run at once.",
+      "editable": true,
+      "default": 3,
+      "min": 1,
+      "max": 20,
+      "bump_on_change": "threshold_version"
+    },
+    {
+      "key": "max_concurrent_testers",
+      "label": "Max concurrent testers",
+      "type": "integer",
+      "description": "Most in-session tester invocations one orchestrating session may run at once; on a full cap the developer falls back to the handoff queue.",
+      "editable": true,
+      "default": 3,
+      "min": 1,
+      "max": 20,
+      "bump_on_change": "threshold_version"
+    },
+    {
+      "key": "slot_ttl_minutes",
+      "label": "Slot TTL (minutes)",
+      "type": "integer",
+      "description": "Minutes after which a held developer or tester concurrency slot is treated as stale and reclaimed.",
+      "editable": true,
+      "default": 45,
+      "min": 1,
+      "max": 1440,
+      "bump_on_change": "threshold_version"
+    },
+    {
+      "key": "marker_ttl_minutes",
+      "label": "Marker TTL (minutes)",
+      "type": "integer",
+      "description": "Minutes after which a pre-flight situation-marker frame counts as absent, so a session that died mid-phase cannot wedge later ones.",
+      "editable": true,
+      "default": 60,
+      "min": 1,
+      "max": 1440,
+      "bump_on_change": "threshold_version"
+    }
+  ]
+}

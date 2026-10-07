@@ -120,5 +120,15 @@
   "project/rapports/problems/E59_S03_T02-backdrop-dismiss-unreachable-mobile.md",
   "project/rapports/problems/E60_S01-real-backend-e2e-verification-outstanding.md",
   "project/rapports/problems/E61_S02-agent-context-source-of-truth-conflict.md",
+  "project/rapports/problems/E62_S01_T01-registry-comment-and-enforcement-gaps.md",
+  "project/rapports/problems/E62_S01_T02-bats-stderr-redirect-defeats-12-tests.md",
+  "project/rapports/problems/E62_S01_T04-doc-staleness-and-silent-registry-fail-open.md",
+  "project/rapports/problems/E62_S01_T05-residual-doc-staleness-in-adjacent-sections.md",
+  "project/rapports/problems/E62_S01_T06-twin-parity-gate-min-pairs-unsatisfiable.md",
+  "project/rapports/problems/E63_S01_T03-detect-unlinked-code-stale-resolver-path.md",
+  "project/rapports/problems/E65_S06_T01-research-doc-remarks.md",
+  "project/rapports/problems/E66_S02_T01-bash-rationale-overstates-script-uniformity.md",
+  "project/rapports/problems/E67_S04_T02-level5-enforcement-not-harness-verified.md",
+  "project/rapports/problems/E67_S07_T01-droplet-adapter-doc-drift.md",
   "project/rapports/problems/board-parser-invalid-utf8-encoding-handling.md"
 ]

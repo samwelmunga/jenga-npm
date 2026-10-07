@@ -14,7 +14,7 @@
 # Fixed by deriving PACKAGE_ROOT from BASH_SOURCE (the same pattern already
 # proven correct in scripts/jenga-permission-level-switch.sh), with a
 # defensive node_modules/@jenga-ai/agent/-relative fallback matching the
-# PKG_ROOT convention documented in docs/skill-authoring.md.
+# PKG_ROOT convention documented in project/documentation/skill-authoring.md.
 #
 # Fixture pattern follows tests/consumer-path-fallback.bats's own
 # mirror_as_npm_consumer helper (which -- unlike tests/init.bats's narrower

@@ -12,6 +12,9 @@ Scope: <resolved scope — see forms below>
 ⬇️  DEMOTED (were Done/Passed → now Pending)
    🔧 E##_S##_T## · <Task Title>  — no commits or artefacts found
 
+🔒 LADDER STATUS — UNVERIFIED, LEFT UNCHANGED (script-set status, implementation not confirmed — status and dates untouched)
+   🔧 E##_S##_T## · <Task Title>  — status <ladder status>; no commits, artefacts, branch or worktree found
+
 🔀 MERGED (worktree branch merged)
    🔧 E##_S##_T## · <Task Title>  — merged branch <branch-name>
 
@@ -59,6 +62,10 @@ Scope: <resolved scope — see forms below>
   own epics/stories/tasks only — not the whole board's.
 - Omit any section that has zero items (e.g. if nothing was demoted, skip the DEMOTED block entirely).
 - The MERGED section should include the branch name that was merged.
+- The LADDER STATUS — UNVERIFIED section is report-only: it lists a task in a script-set ladder status
+  (see `/reconcile` Section 0) that Phase 2 could not confirm and found no branch for. Unlike a `completed`
+  task in the same position it is **not** demoted — its status and dates are left exactly as they were. It is
+  never listed under DEMOTED.
 - The IN-FLIGHT — SKIPPED section is distinct from both PROMOTED and the ordinary "implementation
   not confirmed, no action" case (which is never reported at all): it means Phase 3 found a
   matching commit (implementation confirmed) but withheld promotion because an active

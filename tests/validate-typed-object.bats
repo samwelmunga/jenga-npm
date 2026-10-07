@@ -636,15 +636,15 @@ E62_S01" ]
 }
 
 @test "file_list accepts paths containing spaces and rejects blank lines after normalize" {
-  run_real file_list "docs/skill-authoring.md
+  run_real file_list "project/documentation/skill-authoring.md
 my dir/file name.md"
   assert_status "$EXIT_CONFORMING" "conforming"
 
-  run_real file_list "  docs/skill-authoring.md
+  run_real file_list "  project/documentation/skill-authoring.md
 
   my dir/file name.md  "
   assert_status "$EXIT_NORMALIZED" "normalized"
-  [ "$(field .value)" = "docs/skill-authoring.md
+  [ "$(field .value)" = "project/documentation/skill-authoring.md
 my dir/file name.md" ]
 }
 

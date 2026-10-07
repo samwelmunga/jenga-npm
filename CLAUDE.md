@@ -23,7 +23,7 @@
 > warning.** Its directory is deleted, and since Claude Code resolves skills by literal directory
 > name, the command simply stops resolving — no Jenga skill runs and nothing points the user at
 > `/j-<name>`. The earlier policy, which guaranteed the bare form would keep resolving indefinitely on
-> every routing surface, was reversed on 2026-09-09 and is retained in `docs/skill-authoring.md` only
+> every routing surface, was reversed on 2026-09-09 and is retained in `project/documentation/skill-authoring.md` only
 > as superseded history.
 >
 > **Three permanent exceptions** keep their bare directory names and are never renamed, deleted, or
@@ -33,7 +33,7 @@
 > bare slash forms, and they survive because those directories were always the canonical ones, not
 > because any alias was kept.
 >
-> Full contract in `docs/skill-authoring.md`'s "The Canonical Naming Contract" section; the mechanical
+> Full contract in `project/documentation/skill-authoring.md`'s "The Canonical Naming Contract" section; the mechanical
 > cutover (directory renames, frontmatter rewrites, reference updates) is owned by `E50_S11`–`E50_S18`.
 
 1. **`j.init`** — Scaffold the project: git init, directories, `workflow.json`, `PROJECT_SUMMARY.md` stub.
@@ -113,7 +113,7 @@ Invocation Convention note under Workflow Lifecycle above).
 > the script outright (deleted, not hardened) rather than inverting it. `scripts/apply-j-prefix.sh` was
 > kept, fixed to accept the settled `j-<name>` directory / `j.<name>` frontmatter pairing instead of
 > requiring exact string equality. Full contract, including both decisions and their reasoning, in
-> `docs/skill-authoring.md`'s "The Canonical Naming Contract" section (see its "Generation" subsection).
+> `project/documentation/skill-authoring.md`'s "The Canonical Naming Contract" section (see its "Generation" subsection).
 
 | Command | Description |
 |---|---|
@@ -132,6 +132,9 @@ Invocation Convention note under Workflow Lifecycle above).
 | `j.dashboard` | Launch the local project dashboard (API + UI) by delegating to `project/app`'s existing `dashboard:start`/`dashboard:open` npm scripts — `--port <n>` is forwarded unchanged. `--snapshot [--out <path>]` captures a point-in-time data snapshot and bundles the UI into a single self-contained HTML file (e.g. `jenga.html`), viewable via `file://` with no running server. `--data-url` is an additive delivery mode for `--snapshot`: it base64-encodes that self-contained file into a `data:text/html;base64,...` URI the user can open directly, for sessions with no shared filesystem (e.g. a remote/cloud session that cannot hand over a local path). |
 | `j.dashboard-share` | Snapshot the project dashboard and upload it to a configured cloud storage remote in one step, by sequencing `j.dashboard`'s snapshot script and a templated-path `rclone copyto` upload script — upload only, never creates a share link. |
 | `j.cloud-connect` | Guided cloud storage setup wizard — installs `rclone` if missing, presents a backend menu sourced live from rclone's own provider list, runs that backend's own config/auth flow (surfacing any auth URL directly), and independently verifies the resulting remote works. |
+| `j.connect` | Guided service setup — lists the service descriptors on disk, detects your platform, then installs the service's CLI (opt-in), authenticates, registers its MCP server where one exists, and independently verifies the result, skipping whatever is already done and never handling a secret value. |
+| `j.tools` | Guided wizard for the preferred-tools registry — choose the user or project layer, then add, edit, remove or suppress an entry (name, category, `required`/`recommended`, rationale, alternatives, version constraint, install hint linked to a real `j-connect` descriptor) with every input validated as it is given, or show the effective merged list. Writes go through `skills/j-tools/scripts/tools-entry.sh`, which validates before an atomic replace, preserves hand-edited entries, and never reports success on a failed validation. |
+| `j.conventions` | Guided wizard that records the project's conventions in `project/configs/conventions.json` (project layer only) across 9 categories: commit format, branching, naming, code comments, formatting and linting, testing, file layout, language and tooling, documentation placement. For each category it shows the standard the project already follows (detected, with evidence and confidence), 2-3 general-standard presets, skip and custom, validates every input as it is given, shows a review summary, then writes atomically and regenerates the managed advisory/`confirm` (never `block`) `conv-` pre-flight checklist items, self-validating both files before reporting success. EST naming stays mandatory for board commits; a recorded commit format applies to non-board commits only. Writes go through `skills/j-conventions/scripts/conventions-entry.sh`. |
 | `j.status` | Overview of epics, stories, and tasks with statuses, open rapports, and queue depth. |
 | `j.jenga-permission-level` | Report or switch the current session's 5-tier permission level (Locked/Guarded/Standard/Elevated/Unrestricted) without hand-editing settings.json. |
 | `j.commit` | Commit completed work using the EST naming convention (`epic(...)`, `story(...)`). |
@@ -142,6 +145,16 @@ Invocation Convention note under Workflow Lifecycle above).
 | `j.error` | Guided troubleshooting — gathers context about an error and investigates a fix. |
 | `j.gitignore` | Retroactively repair an already-scaffolded project's Jenga gitignore state — strips the stray heredoc `EOF` line left by pre-fix `/init` scaffolds, adds (or removes) the Jenga-owned path entries via a managed block, and untracks those paths from git and from `origin` while leaving every file on disk. `/init` cannot do this: it hard-stops on `already-scaffolded`, and its template fix is forward-only. |
 | `j.help` | List all available skills with descriptions. |
+
+---
+
+## `jenga config` — terminal command, not a skill
+
+`jenga config` (`lib/commands/config.js`, behind the `jenga` bin) lists and edits the settings in `project/configs/*.json`
+(interactively, or with `jenga config get|set <file-id>.<key>`). It is deterministic and agentless: no model call, **zero
+token cost**, so it never appears in the skills table above and is not invoked as `j.config`. A successful `set` also
+increments the file's version counter (`threshold_version`, `config_version`). Usage, exit codes and the editable versus
+read-only split are in `project/configs/README.md`.
 
 ---
 
@@ -164,13 +177,13 @@ examples:                        # optional
 
 | Field | Required | Purpose |
 |---|---|---|
-| `name` | ✅ | Canonical skill identifier — `j.` + the skill's bare name (e.g. `j.commit`). **Not** a mechanical derivation of the directory name: the canonical directory is `skills/j-<name>/`, so `skills/j-commit/SKILL.md` carries `name: j.commit`, never `j.j-commit` (see `docs/skill-authoring.md`'s "The Canonical Naming Contract"). |
+| `name` | ✅ | Canonical skill identifier — `j.` + the skill's bare name (e.g. `j.commit`). **Not** a mechanical derivation of the directory name: the canonical directory is `skills/j-<name>/`, so `skills/j-commit/SKILL.md` carries `name: j.commit`, never `j.j-commit` (see `project/documentation/skill-authoring.md`'s "The Canonical Naming Contract"). |
 | `description` | ✅ | Shown in `j.help` listings and the skill registry. |
 | `metadata.prefered_agent` | ❌ | Sub-agent to delegate to (`scrum-master`, `developer`, `tester`). |
 | `keywords` | ❌ | Short phrases (1–3 words) for Jenga Router keyword matching. |
 | `examples` | ❌ | Natural-language prompts for Jenga Router semantic matching. |
 
-See `docs/skill-authoring.md` for the full authoring guide.
+See `project/documentation/skill-authoring.md` for the full authoring guide.
 
 ### `prefered_agent`
 
@@ -197,6 +210,22 @@ When implementing or authoring a skill, **offload deterministic, repeatable step
 - Would be identical across every invocation (no dynamic reasoning required)
 
 **Keep in `SKILL.md` what requires agent judgment:** interpreting output, making decisions based on context, presenting results to the user, and handling edge cases that cannot be enumerated in advance.
+
+---
+
+## Documentation Placement — `docs/` versus `project/documentation/`
+
+> Rule (`E34_S06`): **`docs/` holds only content meant for the published GitHub Pages site.**
+> Maintainer-internal documentation — design notes, mirror and distribution rules, protocol and parity
+> docs, decision records, execution plans and summaries — lives under **`project/documentation/`**, the
+> `documentation` path in [`project/configs/workflow.json`](project/configs/workflow.json).
+>
+> One-line test: *would someone who only installed the package want to read this?* If not, it is internal.
+>
+> Skills and agents that create documentation resolve the destination from `workflow.json`'s
+> `paths.documentation`; they never default to `docs/`. The strategy brief is not an exception: it is an
+> ordinary `project/documentation/STRATEGY.md` file (resolved via `paths.strategy`). The per-file
+> classification is in `docs/README.md`'s "Contents by audience".
 
 ---
 
@@ -241,10 +270,22 @@ Hooks are configured in `settings.json` and fire automatically during a Claude C
 | `WorktreeCreate` | Developer creates a worktree | Runs `git worktree add` and echoes the worktree path. |
 | `WorktreeRemove` | Developer removes a worktree | Runs `git worktree remove --force` on the given path. |
 | `SessionEnd` | Any session ends | Runs `hooks/on_session_end.sh` asynchronously. |
+| `PreToolUse` | Every `Bash`, `Task` or `Agent` tool call | Runs `hooks/on_preflight_check.sh` — the pre-flight checklist backstop. Reads the situation marker; with no active lifecycle phase it is a silent no-op, and with one it refuses the phase's gated operation when a `block`-enforcement checklist item is unsatisfied. |
 
 ### `hooks/on_session_end.sh`
 
 Runs at the end of every Developer or Tester session: logs a session-end event to `events.json`, compares `rapports/problems/` against `.rapport_manifest.json` (skipping `*.IGNORE.md` files) and writes a `rapport_review` trigger if new rapports are found, then always appends a `status_review` trigger for the next Scrum Master session.
+
+### `hooks/on_preflight_check.sh`
+
+The enforcing layer of the pre-flight checklist feature (`E67_S04`). Fires on `PreToolUse` for `Bash`, `Task` and `Agent` calls, reads the situation marker (`scripts/checklist-marker.sh`) to learn which lifecycle phase is active, runs `scripts/checklist.sh check <phase>` with the run id from the marker frame, and **refuses the tool call** when a `block`-enforcement item is unsatisfied. It exists so that enforcement does not ultimately depend on an agent choosing to call the checker.
+
+- **No marker, no effect.** With no lifecycle phase active it exits 0 with no output and no subprocess — measured at 11.0 ms/call against a 9.9 ms bare-`bash` floor.
+- **It gates each phase's own irreversible operation, not every tool call** (`pre-commit` → `git commit`, `pre-task` → subagent dispatch and `git worktree add`, `pre-release`/`pre-publish` → `npm publish` / `gh release` / `git push` / `git tag`, `pre-mirror` → `git push` / `mirror.sh`, `pre-reconcile` → `git merge` / `git worktree remove`). Gating everything would wedge the session, because satisfying a failed item is itself a tool call.
+- **It holds at every permission level, including 5 (Unrestricted).** Its decision never consults permission state, and there is no environment variable that disables it.
+- **It is registered in six files, not one.** `scripts/jenga-permission-level-switch.sh` whole-file-overwrites `.claude/settings.json` and `.agents/settings.json` from `templates/permission-levels/level-<n>-<name>.json`, so a hook present only in the root `settings.json` is silently dropped by any `/jenga-permission-level` switch — the same bug `E15_S04_T01` fixed for the `WorktreeCreate` commit guard. The `PreToolUse` block is therefore byte-identical across the root `settings.json` and all five templates. **Change all six together.**
+
+Full contract: the script's own header comment, and section 9 of `project/documentation/preflight-checklists.md`.
 
 ---
 

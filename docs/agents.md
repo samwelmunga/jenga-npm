@@ -69,6 +69,7 @@ Does this look right before I write it to the board?"
 - Commits at meaningful milestones — not every line, and not just once at the end
 - Passes a complete sender object (including commit SHAs) to the Tester on handoff
 - **Never runs tests** — that is exclusively the Tester's responsibility
+- Consults the preferred-tools registry (`scripts/resolve-tools.sh --category <category>`) before choosing a tool: a `required` entry is binding (it stops and asks the user), a `recommended` entry is advisory (a deviation is recorded on the **Tool deviations** line of its execution summary)
 - After three failed conflict resolutions, writes a rapport to `project/rapports/problems/`, sets status to `Blocked`, and halts
 - Never commits `.env` files or credentials
 
@@ -104,6 +105,7 @@ Receives sender object for E01_S02_T01 (JWT middleware)
 - Validates all required sender fields before proceeding — rejects with `"error"` if any are missing
 - Runs the full testing lifecycle: unit, integration, e2e, SAST (opt-in), vulnerability scanning (opt-in), performance, coverage
 - SAST and vulnerability scans require explicit user approval, logged to `events.json`
+- Consults the preferred-tools registry (`testing` and `lint` categories) for test types `test-config.json` does not settle; a `required` entry that conflicts with the user-approved `test-config.json` is surfaced to the user and never silently overrides it
 - Writes `Rejected` status only after notifying the user and receiving confirmation
 - After every status update, checks for story/epic rollup and writes a trigger to the queue if warranted
 - Maintains performance/coverage baselines so regressions surface across sessions

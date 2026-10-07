@@ -103,7 +103,7 @@
  *
  * Implementation lives in `lib/postinstall-manifest.js` (full rationale + safety
  * invariants documented there) and `scripts/generate-legacy-shipped-paths.js` (legacy
- * path list generation); consumer-facing docs in `docs/distribution.md`.
+ * path list generation); consumer-facing docs in `project/documentation/distribution.md`.
  */
 
 import fs   from 'node:fs';

@@ -70,7 +70,7 @@ routing logic runs under both platforms.
   `lib/generate-copilot-hooks.js`. A consumer's version bakes in the absolute
   `node_modules/@jenga-ai/agent/hooks/*.sh` paths instead, since a consumer has no local `hooks/`
   copy at their own project root to resolve dynamically (`postinstall.js`'s mirror copy set is
-  `skills/` and `agents/` only — see `docs/distribution.md`).
+  `skills/` and `agents/` only — see `project/documentation/distribution.md`).
 
 No `skills/self-sync/scripts/run.js` mirroring is involved: unlike `.github/agents/*.md` (which
 mirrors real source content already living at `agents/*.md`), `.github/hooks/jenga.json` has no
@@ -166,12 +166,12 @@ no native equivalent and must be performed **manually** or wired into skill pre/
 
 ## See Also
 
-- [`lib/resolve-project-dir.sh`](../lib/resolve-project-dir.sh) — canonical env var resolver
-- [`lib/generate-copilot-hooks.js`](../lib/generate-copilot-hooks.js) — generates `.github/hooks/jenga.json` for `jenga init` / npm postinstall
-- [`scripts/install-worktree-commit-guard.sh`](../scripts/install-worktree-commit-guard.sh) — the real `WorktreeCreate` companion script (installs a branch-guard pre-commit hook)
-- [`scripts/worktree-remove-guard.sh`](../scripts/worktree-remove-guard.sh) — the real `WorktreeRemove` script (liveness check before `git worktree remove --force`)
-- [`.github/hooks/jenga.json`](../.github/hooks/jenga.json) — this repo's own native Copilot hook config
-- [`hooks/on_session_end.sh`](../hooks/on_session_end.sh) — shared session-end cleanup logic
-- [`hooks/copilot_session_end.sh`](../hooks/copilot_session_end.sh) — Copilot-side entry point
-- [`hooks/prompt_router.sh`](../hooks/prompt_router.sh) / [`hooks/prompt_router_helper.js`](../hooks/prompt_router_helper.js) — shared `UserPromptSubmit`/`userPromptSubmitted` routing logic
-- [`templates/copilot-instructions.md.tpl`](../templates/copilot-instructions.md.tpl) — Copilot instructions template
+- [`lib/resolve-project-dir.sh`](../../lib/resolve-project-dir.sh) — canonical env var resolver
+- [`lib/generate-copilot-hooks.js`](../../lib/generate-copilot-hooks.js) — generates `.github/hooks/jenga.json` for `jenga init` / npm postinstall
+- [`scripts/install-worktree-commit-guard.sh`](../../scripts/install-worktree-commit-guard.sh) — the real `WorktreeCreate` companion script (installs a branch-guard pre-commit hook)
+- [`scripts/worktree-remove-guard.sh`](../../scripts/worktree-remove-guard.sh) — the real `WorktreeRemove` script (liveness check before `git worktree remove --force`)
+- [`.github/hooks/jenga.json`](../../.github/hooks/jenga.json) — this repo's own native Copilot hook config
+- [`hooks/on_session_end.sh`](../../hooks/on_session_end.sh) — shared session-end cleanup logic
+- [`hooks/copilot_session_end.sh`](../../hooks/copilot_session_end.sh) — Copilot-side entry point
+- [`hooks/prompt_router.sh`](../../hooks/prompt_router.sh) / [`hooks/prompt_router_helper.js`](../../hooks/prompt_router_helper.js) — shared `UserPromptSubmit`/`userPromptSubmitted` routing logic
+- [`templates/copilot-instructions.md.tpl`](../../templates/copilot-instructions.md.tpl) — Copilot instructions template

@@ -1,0 +1,97 @@
+{
+  "_comment": "Declarative category-to-checklist-item table read by scripts/generate-convention-checklist.sh (E69_S03_T02). Which registry item each recorded convention produces, at which lifecycle phase and with what strength is data here, not script logic. Generic by design: this file ships downstream, so no value in it is specific to any one project. -- ENTRY FIELDS: item_id (conv-<category-id>, the only id the generator emits for the category), text_template, situations (base phases pre-commit and pre-task only), kind (machine or judgment), enforcement (advisory or confirm, never anything stronger), tick_scope, optional verify_template (machine entries only), optional requires (the values fields the entry needs; when one is absent the generator uses fallback), optional fallback (fields that replace the entry's own when requires is unmet), optional alternatives (variants with id, enabled, note, optional requires and replacement fields; the first ENABLED one whose requires are met replaces the entry's own fields; a disabled one is never used). -- PLACEHOLDERS: {summary} is the convention's one-line summary; {values.<field>} is one of its values fields, substituted verbatim and allowed in text_template only; {q:values.<field>} is the same value single-quote escaped for a shell, and is the ONLY form allowed in verify_template. A verify_template must run a user value as one quoted argument (for example bash -c {q:values.lint_command}), never splice it in raw. -- STRENGTH RULE (epic E69, Decision 4): judgment conventions are advisory, machine-verifiable ones are confirm. Nothing here may be stronger than confirm. -- Human guide: project/documentation/project-conventions.md, section Checklist generation.",
+  "map_version": 1,
+  "categories": {
+    "commit-format": {
+      "item_id": "conv-commit-format",
+      "text_template": "My commit message follows the project's commit convention: {summary}. This applies to non-board commits only; EST naming (task(E##_S##_T##):, story(...) and epic(...)) stays required for board commits.",
+      "situations": ["pre-commit"],
+      "kind": "judgment",
+      "enforcement": "advisory",
+      "tick_scope": "run",
+      "alternatives": [
+        {
+          "id": "message-regex-confirm",
+          "enabled": false,
+          "note": "DISABLED ALTERNATIVE, kept disabled by the E69_S05_T05 finding (project/documentation/project-conventions.md, Pre-commit timing finding (E69_S05_T05)): a verify command at pre-commit cannot see the commit message being written (.git/COMMIT_EDITMSG and git log -1 still show the previous commit, and the checker hands verify no message), so this regex check would test the wrong message. commit-format therefore stays judgment and advisory. Flipping enabled to true (data only) would switch this variant on for every project that recorded a message_regex, but the pattern would then be checked against the previous commit subject; enable it only if a pre-commit-like phase that can see the message ever exists.",
+          "requires": ["message_regex"],
+          "text_template": "My commit message matches the project's commit convention: {summary}. This applies to non-board commits only; EST naming (task(E##_S##_T##):, story(...) and epic(...)) stays required for board commits.",
+          "kind": "machine",
+          "verify_template": "git log -1 --format=%s | grep -Eq {q:values.message_regex}",
+          "enforcement": "confirm"
+        }
+      ]
+    },
+    "branching": {
+      "item_id": "conv-branching",
+      "text_template": "The branch I am working on follows the project's branching convention: {summary}.",
+      "situations": ["pre-task"],
+      "kind": "judgment",
+      "enforcement": "advisory",
+      "tick_scope": "run"
+    },
+    "naming": {
+      "item_id": "conv-naming",
+      "text_template": "New and renamed identifiers, files and types follow the project's naming convention: {summary}.",
+      "situations": ["pre-task", "pre-commit"],
+      "kind": "judgment",
+      "enforcement": "advisory",
+      "tick_scope": "run"
+    },
+    "code-comments": {
+      "item_id": "conv-code-comments",
+      "text_template": "Code comments and in-code documentation follow the project's convention: {summary}.",
+      "situations": ["pre-commit"],
+      "kind": "judgment",
+      "enforcement": "advisory",
+      "tick_scope": "run"
+    },
+    "formatting-linting": {
+      "item_id": "conv-formatting-linting",
+      "text_template": "The project's lint command passes on the working tree, per its formatting and linting convention: {summary}.",
+      "situations": ["pre-commit"],
+      "kind": "machine",
+      "verify_template": "bash -c {q:values.lint_command}",
+      "enforcement": "confirm",
+      "tick_scope": "run",
+      "requires": ["lint_command"],
+      "fallback": {
+        "text_template": "The code is formatted and linted per the project's convention: {summary}.",
+        "kind": "judgment",
+        "enforcement": "advisory"
+      }
+    },
+    "testing": {
+      "item_id": "conv-testing",
+      "text_template": "The change meets the project's testing expectations: {summary}.",
+      "situations": ["pre-commit"],
+      "kind": "judgment",
+      "enforcement": "advisory",
+      "tick_scope": "run"
+    },
+    "file-layout": {
+      "item_id": "conv-file-layout",
+      "text_template": "New files and directories are placed according to the project's layout convention: {summary}.",
+      "situations": ["pre-task"],
+      "kind": "judgment",
+      "enforcement": "advisory",
+      "tick_scope": "run"
+    },
+    "language-tooling": {
+      "item_id": "conv-language-tooling",
+      "text_template": "The change uses the project's chosen language and tooling: {summary}.",
+      "situations": ["pre-task"],
+      "kind": "judgment",
+      "enforcement": "advisory",
+      "tick_scope": "run"
+    },
+    "documentation-placement": {
+      "item_id": "conv-documentation-placement",
+      "text_template": "Documentation I add or change is placed where the project's convention says: {summary}.",
+      "situations": ["pre-commit"],
+      "kind": "judgment",
+      "enforcement": "advisory",
+      "tick_scope": "run"
+    }
+  }
+}

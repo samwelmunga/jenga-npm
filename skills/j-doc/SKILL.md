@@ -21,7 +21,7 @@ examples:
 
 # Doc — Documentation Synthesis and Regeneration
 
-`skills/j-doc/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-doc/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `docs/skill-authoring.md`'s "Invocation Convention").
+`skills/j-doc/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-doc/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `project/documentation/skill-authoring.md`'s "Invocation Convention").
 
 > ⚠️ **`scripts/generate-j-alias.sh` was retired by `E50_S14` and no longer exists — there is nothing to run.** This file was previously generated from a bare `skills/doc/SKILL.md` source; `E50_S15` deleted that directory. This file is now the sole canonical, hand-edited source for this skill — edit it directly.
 
@@ -85,6 +85,13 @@ If the shared collector from E24_S03 is not yet merged, construct a temporary co
 4. If the trimmed remainder starts with the exact prefix `update:`, remove that prefix and trim the remainder again.
 5. If nothing remains, set `target_path` to `default_target`.
 6. Otherwise, set `target_path` to the trimmed remainder.
+
+> **`docs/...` paths are the user's own files, not a framework default.** `/doc` never invents a destination
+> under `docs/`: with no argument it targets `README.md`, and with an argument it documents exactly the path
+> the user named (`docs/API.md` below is an example of a consumer's own file). If you need to choose a home
+> for new maintainer-internal documentation yourself, resolve it from the `documentation` path
+> (`paths.documentation`, default `project/documentation`) in `project/configs/workflow.json`. `docs/` is
+> reserved for content meant for a published site (see `CLAUDE.md`'s "Documentation Placement").
 
 Examples:
 - `/doc` → `target_path = README.md`

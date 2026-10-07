@@ -18,7 +18,7 @@
 # hand-maintained duplicate of a then-existing skills/init/scripts/ copy, with an
 # instruction to keep the two in lockstep. That instruction is void: E50_S15_T04
 # deleted every bare-name skills/<name>/ directory on 2026-09-19, making
-# skills/j-<name>/ the sole canonical form (see docs/skill-authoring.md's "The
+# skills/j-<name>/ the sole canonical form (see project/documentation/skill-authoring.md's "The
 # Canonical Naming Contract"), and scripts/generate-j-alias.sh — which had excluded
 # this pair from generation as hand-maintained — was itself retired by E50_S14_T01.
 # There is no second copy to mirror a change into, and none should be created.

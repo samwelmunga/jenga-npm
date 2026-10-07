@@ -4,7 +4,7 @@ How to verify that the `skills/j-<name>/` twins the public mirror ships carry th
 content as their `skills/<name>/` sources — and why a check run against the private
 repo alone cannot tell you that.
 
-Established by `E50_S19` (2026-09-10). Companion to `docs/skill-authoring.md`'s
+Established by `E50_S19` (2026-09-10). Companion to `project/documentation/skill-authoring.md`'s
 "The Canonical Naming Contract".
 
 > **Status: the gate this document was built around is retired (2026-09-20, `E42_S07_T01`).** The
@@ -244,7 +244,7 @@ read alongside the lists above as though it were. It is excluded by a standing p
 > **No public playbook may contain a publishing or mirroring step; public build chains terminate at
 > `j-commit`.**
 
-The rationale is in `docs/skill-authoring.md`'s "Public Playbooks Terminate at `j-commit`" section:
+The rationale is in `project/documentation/skill-authoring.md`'s "Public Playbooks Terminate at `j-commit`" section:
 most users would not want a playbook that publishes or pushes to a public destination on their
 behalf, so publishing stays an explicit, separately invoked act. Consequences for this document:
 

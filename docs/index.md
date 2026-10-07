@@ -30,6 +30,10 @@ tooling decision record.
   the [Skills Reference](skills.md), [Agents](agents.md), [Hooks](hooks.md),
   and [MCP Tools](mcp-tools.md) pages, plus the repo's directory structure
   and the inter-agent communication contract.
+- **[Pre-Flight Checklists](preflight-checklists.html)** — authoring your own
+  `project/configs/checklists.json`: item fields, the `block` / `confirm` /
+  `advisory` enforcement levels, the `checklist.sh` commands and their exit
+  codes.
 
 > Getting Started, Concepts, Skills, Agents, Hooks, MCP Tools, and Reference
 > are generated from `project/.wiki/*` by `scripts/build-pages-site.sh` — see

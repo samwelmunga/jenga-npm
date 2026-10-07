@@ -20,13 +20,13 @@ examples:
 there for collision safety: some host tools/harnesses (e.g. GH Copilot) ship their own
 built-in command literally named `/init`, which would shadow a bare `/init` alias, since
 Claude Code's native skill resolution is a literal-string, directory-name-based match —
-see `docs/skill-authoring.md`'s "Invocation Convention". Invoke it as `j.init` or
+see `project/documentation/skill-authoring.md`'s "Invocation Convention". Invoke it as `j.init` or
 `/j-init`.
 
 > **This file was previously described as a duplicate of `skills/init/`, with an
 > instruction to keep the two in lockstep. That instruction is void.** `E50_S15_T04`
 > deleted every bare-name `skills/<name>/` directory on 2026-09-19, making
-> `skills/j-<name>/` the sole canonical form (see `docs/skill-authoring.md`'s "The
+> `skills/j-<name>/` the sole canonical form (see `project/documentation/skill-authoring.md`'s "The
 > Canonical Naming Contract"), and `scripts/generate-j-alias.sh` — which had excluded this
 > hand-maintained pair from generation anyway — was retired by `E50_S14_T01`. There is no
 > second copy to mirror a change into, and none should be created. Edit this file directly.
@@ -188,7 +188,7 @@ This script handles all scaffolding in one step:
 8. Creates `project/data/baselines.json`
 9. Creates `project/logs/events.json`
 10. Creates `project/knowledge-graph/STUB_SCHEMA.md` from the shared template and `project/knowledge-graph/graph.json` seeded with empty `nodes`/`edges` arrays — consumed by `/uncharted`'s conversational elicitation flow
-11. Creates `docs/STRATEGY.md` — a strategic brief stub intended for investors, partners, and the product team
+11. Creates the strategy brief stub (`project/documentation/STRATEGY.md` by default; the path comes from `paths.strategy` in `workflow.json` via `scripts/strategy_path_resolver.sh`, the same resolver `/strategy` uses) — intended for investors, partners, and the product team. It is an ordinary `project/documentation/` file, so `/init` creates no `docs/` directory; under `project_files_visibility: ignored` it is ignored with the rest of `project/` (a project that wants it committed keeps `visible` or points `paths.strategy` elsewhere). A consumer project that already has a `docs/STRATEGY.md` is still found and updated in place by the resolver's legacy fallback; nothing is migrated automatically (E34_S07)
 12. Creates `CHANGELOG.md` from the shared template — a running log of notable changes, seeded with an `[Unreleased]` section
 13. Applies the chosen visibility mode via `scripts/apply-project-visibility.sh`, which records it as `project_files_visibility` in `jenga.config.json` and performs any `.gitignore` change
 14. Applies the chosen scaffold visibility mode via `scripts/apply-scaffold-visibility.sh`, which records it as `scaffold_visibility` in `jenga.config.json` and, when `ignored`, adds `.claude/` and `.agents/` to `.gitignore`
@@ -211,7 +211,15 @@ See `skills/j-distribute/CONFIG_SCHEMA.md` for the full `project_files_visibilit
 
 Inform the user that setup is complete, and state which visibility mode was applied
 for both `project_files_visibility` and `scaffold_visibility`, and where the working
-files and scaffold now live. Mention that `docs/STRATEGY.md` was created as
+files and scaffold now live. Mention that the strategy brief (`project/documentation/STRATEGY.md` unless `paths.strategy` says otherwise) was created as
 a strategic brief stub for investors, partners, and the product team — they can fill
 it in now or return to it later. Suggest running `/pi-plan` to define project goals
 and epics.
+
+As the very last line, after that next-step prompt, run
+`bash "$([ -f scripts/conventions-suggest.sh ] && echo scripts/conventions-suggest.sh || echo node_modules/@jenga-ai/agent/scripts/conventions-suggest.sh)"`
+and print its output, if any (a one-line tip to run `j.conventions`; it prints nothing when the project already
+has a `conventions.json`). This is a **non-blocking suggestion, not a question**: do not wait for an answer, do not
+offer a menu for it, and do not run `j.conventions` on the user's behalf. The script always exits 0 and its output
+or absence never changes this skill's flow or exit status. If it cannot be run or prints nothing, say nothing and
+finish.

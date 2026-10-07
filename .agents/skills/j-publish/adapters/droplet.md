@@ -198,3 +198,9 @@ unit files. Users embed runtime-specific commands directly in `build_cmd` and
 | Custom    | `./scripts/restart.sh`                              |
 
 Opinionated runtime templates are deferred to future adapter versions.
+
+## See also
+
+`j.connect digitalocean` sets up `doctl` and DigitalOcean's MCP server (a DigitalOcean API token); this adapter
+keeps its own SSH-key and GitHub-Actions-secret setup, and neither duplicates the other. See the "Relationship
+to `j.publish` droplet" section of `project/documentation/digitalocean-connect-research.md`.

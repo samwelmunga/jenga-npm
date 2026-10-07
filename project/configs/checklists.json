@@ -1,0 +1,91 @@
+{
+  "checklist_version": 1,
+  "situations": ["pre-publish", "pre-mirror"],
+  "items": [
+    {
+      "id": "board-frontmatter-valid",
+      "text": "Every staged scrum board file has valid frontmatter.",
+      "situations": ["pre-commit"],
+      "kind": "machine",
+      "verify": "files=$(git diff --cached --name-only -- 'project/board/*.md'); [ -z \"$files\" ] || bash scripts/validate-board.sh $files",
+      "enforcement": "block",
+      "tick_scope": "run"
+    },
+    {
+      "id": "checklist-registries-valid",
+      "text": "The shipped default and this project's checklist registry both pass the validator.",
+      "situations": ["pre-commit"],
+      "kind": "machine",
+      "verify": "bash scripts/validate-checklists.sh templates/checklists.json project/configs/checklists.json",
+      "enforcement": "block",
+      "tick_scope": "run"
+    },
+    {
+      "id": "allow-list-artifact-not-dirtied",
+      "text": "lib/skill-allow-list.json has no unstaged modifications, so a test run or postinstall has not silently rewritten the security-relevant allow-list.",
+      "situations": ["pre-commit"],
+      "kind": "machine",
+      "verify": "git diff --quiet -- lib/skill-allow-list.json",
+      "enforcement": "confirm",
+      "tick_scope": "run"
+    },
+    {
+      "id": "no-new-files-under-docs",
+      "text": "No new file is added under docs/. That directory is only for content meant for the published site; maintainer-internal documentation belongs under project/documentation/.",
+      "situations": ["pre-commit"],
+      "kind": "machine",
+      "verify": "! git diff --cached --name-only --diff-filter=A -- docs/ | grep -q .",
+      "enforcement": "confirm",
+      "tick_scope": "run"
+    },
+    {
+      "id": "canonical-source-rule-understood",
+      "text": "I understand that skills, agents, hooks and scripts are created and edited in the root directories, and that .claude/ and .agents/ are generated outputs that are never the primary location for a change.",
+      "situations": ["pre-task"],
+      "kind": "judgment",
+      "enforcement": "advisory",
+      "tick_scope": "persistent"
+    },
+    {
+      "id": "deterministic-steps-in-scripts",
+      "text": "Deterministic, repeatable steps in this change are implemented as scripts rather than as inline instructions in a SKILL.md.",
+      "situations": ["pre-task"],
+      "kind": "judgment",
+      "enforcement": "advisory",
+      "tick_scope": "run"
+    },
+    {
+      "id": "working-tree-clean-before-release",
+      "text": "The working tree is clean, so what is released is exactly what is committed.",
+      "situations": ["pre-release"],
+      "kind": "machine",
+      "verify": "test -z \"$(git status --porcelain)\"",
+      "enforcement": "confirm",
+      "tick_scope": "run"
+    },
+    {
+      "id": "tests-pass-before-release",
+      "text": "The project's test suite has been run and passes on the exact commit being released.",
+      "situations": ["pre-release"],
+      "kind": "judgment",
+      "enforcement": "confirm",
+      "tick_scope": "run"
+    },
+    {
+      "id": "release-published-from-public-repo",
+      "text": "This release is being published from the public repository, not from this private one; this repository's role is to mirror to it.",
+      "situations": ["pre-publish"],
+      "kind": "judgment",
+      "enforcement": "confirm",
+      "tick_scope": "run"
+    },
+    {
+      "id": "mirror-surface-reviewed",
+      "text": "If a new top-level directory or config file was added, .publicignore has been reviewed so nothing private is reachable through the paths the public mirror publishes.",
+      "situations": ["pre-mirror"],
+      "kind": "judgment",
+      "enforcement": "confirm",
+      "tick_scope": "run"
+    }
+  ]
+}

@@ -107,7 +107,7 @@ examples:                        # optional
 | `keywords` | ❌ | Short phrases (1–3 words) for Jenga Router keyword matching. |
 | `examples` | ❌ | Natural-language prompts for Jenga Router semantic matching. |
 
-See `docs/skill-authoring.md` for the full authoring guide.
+See `project/documentation/skill-authoring.md` for the full authoring guide.
 
 ### `prefered_agent`
 
@@ -134,6 +134,22 @@ When implementing or authoring a skill, **offload deterministic, repeatable step
 - Would be identical across every invocation (no dynamic reasoning required)
 
 **Keep in `SKILL.md` what requires agent judgment:** interpreting output, making decisions based on context, presenting results to the user, and handling edge cases that cannot be enumerated in advance.
+
+---
+
+## Documentation Placement — `docs/` versus `project/documentation/`
+
+> Rule (`E34_S06`): **`docs/` holds only content meant for the published GitHub Pages site.**
+> Maintainer-internal documentation — design notes, mirror and distribution rules, protocol and parity
+> docs, decision records, execution plans and summaries — lives under **`project/documentation/`**, the
+> `documentation` path in [`project/configs/workflow.json`](project/configs/workflow.json).
+>
+> One-line test: *would someone who only installed the package want to read this?* If not, it is internal.
+>
+> Skills and agents that create documentation resolve the destination from `workflow.json`'s
+> `paths.documentation`; they never default to `docs/`. The strategy brief is not an exception: it is an
+> ordinary `project/documentation/STRATEGY.md` file (resolved via `paths.strategy`). The per-file
+> classification is in `docs/README.md`'s "Contents by audience".
 
 ---
 
