@@ -702,5 +702,37 @@
     "dist_tag": "latest",
     "result": null,
     "reason": null
+  },
+  {
+    "id": "7b211076-def0-4762-b9bd-13b080c2a584",
+    "version": "v4.2.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-10-12T15:23:06Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "staged",
+    "git_tag": "v4.2.0",
+    "commit_sha": "5b6d4d56e0cd0a93bfcd91917da3227b557edce1",
+    "stage_id": "b438d6eb-0fda-41e0-b347-66bfc1db948e",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": null
+  },
+  {
+    "id": "54dce0eb-f450-483f-9787-a8c0ea00bdb0",
+    "version": "v4.2.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-10-12T15:35:08Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "stage_tested",
+    "git_tag": "v4.2.0",
+    "commit_sha": "5b6d4d56e0cd0a93bfcd91917da3227b557edce1",
+    "stage_id": "b438d6eb-0fda-41e0-b347-66bfc1db948e",
+    "dist_tag": null,
+    "result": "pass",
+    "reason": null
   }
 ]
