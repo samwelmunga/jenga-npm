@@ -35,8 +35,8 @@ metadata:
    - A new story inside a new Epic
 
 3. **Update project documentation** — Add the mission to the appropriate board files:
-   - **New story**: create a file in `project/board/stories/` using `../pi-plan/assets/story_template.md` as the structure.
-   - **New epic**: append a new Epic object to `project/PROJECT_SUMMARY.md` using the schema in `../pi-plan/assets/epic.json`.
+   - **New story**: create a file in `project/board/stories/` using `../j-pi-plan/assets/story_template.md` as the structure.
+   - **New epic**: append a new Epic object to `project/PROJECT_SUMMARY.md` using the schema in `../j-pi-plan/assets/epic.json`.
    - **Existing story**: append the new task or acceptance criterion to the matching file in `project/board/stories/`.
 
 4. **Ask the user: "now" or "later"?**

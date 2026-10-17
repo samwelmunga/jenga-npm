@@ -24,7 +24,11 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # scripts/ -> distribute/ -> skills/ -> <monorepo_root>
-MONOREPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+if MONOREPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null)"; then
+  :
+else
+  MONOREPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+fi
 PACKAGE_JSON="$MONOREPO_ROOT/package.json"
 
 # ---------------------------------------------------------------------------

@@ -291,7 +291,7 @@ value() {
 }
 
 @test "the scratch files that have editable keys round-trip byte-identically through JSON.stringify(obj, null, 2) + newline" {
-  for f in scope-thresholds playbook-config; do
+  for f in scope-thresholds playbook-config test-config; do
     run node --input-type=module -e '
       import { readFileSync } from "fs";
       const text = readFileSync(process.argv[1], "utf8");

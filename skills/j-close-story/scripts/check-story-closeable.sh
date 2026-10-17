@@ -4,7 +4,7 @@
 # Usage: bash check-story-closeable.sh <story-id>
 #
 # Exits 0 and prints "CLOSEABLE" to stdout when all tasks in the story's
-# `tasks:` frontmatter list have status Passed or Done.
+# `tasks:` frontmatter list have status Passed, Passed with remarks, or Done.
 # Exits 1 and prints a descriptive message to stderr for any other outcome.
 #
 # This script always re-reads task files from disk — never uses cached state.
@@ -176,7 +176,7 @@ for task_id in "${TASK_IDS[@]}"; do
 
   # 4d. Evaluate status
   case "$task_status" in
-    Passed|Done)
+    Passed|"Passed with remarks"|Done)
       # Task is in a terminal state — OK
       ;;
     "")

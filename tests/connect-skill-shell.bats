@@ -102,9 +102,9 @@ last_line() { printf '%s\n' "$output" | tail -n1; }
   grep -q -i 'no session-end' "$SKILL"
 }
 
-@test "j.connect is registered in CLAUDE.md, docs/skills.md and the generated allow-list" {
+@test "j.connect is registered in CLAUDE.md, site/reference/skills.md and the generated allow-list" {
   grep -q '^| `j\.connect` |' "$REPO_ROOT/CLAUDE.md"
-  grep -q '^#### `/j-connect`$' "$REPO_ROOT/docs/skills.md"
+  grep -q '^#### `/j-connect`$' "$REPO_ROOT/site/reference/skills.md"
   [ "$(jq -r '.skills | index("connect") != null' "$REPO_ROOT/lib/skill-allow-list.json")" = "true" ]
 }
 

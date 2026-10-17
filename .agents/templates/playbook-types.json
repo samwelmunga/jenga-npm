@@ -37,6 +37,15 @@
         "per_line": "^[0-9]+\\. [^[:space:]]+ — .+$"
       },
       "normalize": []
+    },
+    "error_table": {
+      "verify": {
+        "per_line": "^[^|]+ [|] [^|]+ [|] .+$"
+      },
+      "normalize": [
+        "trim",
+        "drop_empty"
+      ]
     }
   }
 }

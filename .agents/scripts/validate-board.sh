@@ -11,6 +11,7 @@ if [[ "$#" -lt 1 ]]; then
 fi
 
 python3 - "$@" <<'PY'
+import datetime
 import re
 import sys
 from pathlib import Path
@@ -38,6 +39,10 @@ STATUS_VALUES = {
 # only recognised (not enum-validated) here; their "required when crucial_level is set" rule is
 # an authoring discipline documented in the schema, not mechanically enforced by this script —
 # the same treatment given to scope_rationale's "required when execution_scope is set" rule.
+#
+# jenga_assigned / override_justification is the ONE pairing rule this script does enforce (see
+# validate_file's task branch). It is the exception because /do step 4.1 halts on the invalid
+# pairing, so an unenforced violation makes the task undispatchable rather than just untidy.
 CRUCIAL_LEVEL_VALUES = {
     "advisory",
     "gated",
@@ -89,6 +94,24 @@ CRUCIAL_KEYS = {
     "crucial_declined", "crucial_declined_note",
 }
 
+# E71_S03 external links. OPTIONAL, and valid on epics, stories AND tasks (unlike CRUCIAL_KEYS,
+# which is story/task-only, so it must not be reused here). external_refs is a block list of
+# mappings; external_refs_declined (true only) / external_refs_declined_note record that the user
+# skipped the link prompt. See "External Refs Fields" and "Declined External Refs Fields" in
+# templates/SCRUM_BOARD_SCHEMA.md. Absence of all three is always valid.
+EXTERNAL_REFS_KEYS = {
+    "external_refs", "external_refs_declined", "external_refs_declined_note",
+}
+
+# Documented values for external_refs entries. Adding a system means adding a row here and to the
+# tables in templates/SCRUM_BOARD_SCHEMA.md; it never means adding a frontmatter key.
+EXTERNAL_REF_KINDS = {
+    "jira": {"issue"},
+    "confluence": {"page"},
+    "bitbucket": {"repo", "pull-request"},
+}
+EXTERNAL_REF_ENTRY_KEYS = {"system", "kind", "key", "url", "linked_on"}
+
 ALLOWED_KEYS = {
     "epic": {
         "id", "title", "status", "date_created", "date_started", "date_completed",
@@ -98,19 +121,20 @@ ALLOWED_KEYS = {
         # (value: backfilled). Absence means the epic was authored normally, so every existing
         # epic that omits it stays valid. See templates/SCRUM_BOARD_SCHEMA.md.
         "provenance",
-        *DEPLOY_KEYS,
+        *DEPLOY_KEYS, *EXTERNAL_REFS_KEYS,
     },
     "story": {
         "id", "epic_id", "title", "status", "date_created", "date_started", "date_completed",
         "dates_previously_completed", "reopened_on", "reopened_reason", "tasks", "docs",
         "priority", "depends_on",
-        *CRUCIAL_KEYS, *DEPLOY_KEYS,
+        *CRUCIAL_KEYS, *DEPLOY_KEYS, *EXTERNAL_REFS_KEYS,
     },
     "task": {
         "id", "story_id", "epic_id", "title", "status", "date_created", "date_started", "date_completed",
         "dates_previously_completed", "reopened_on", "reopened_reason", "assigned_to", "docs",
         "depends_on",
         *EXECUTION_SCOPE_KEYS, *CLOSE_STORY_KEYS, *CRUCIAL_KEYS, *DEPLOY_KEYS,
+        *EXTERNAL_REFS_KEYS,
     },
 }
 
@@ -143,6 +167,122 @@ def classify_item(item_id: str) -> str:
             return item_type
     raise ValueError(f"unrecognised board item id format: {item_id}")
 
+def clean_scalar(value: str) -> str:
+    """Strip a trailing ' # comment' and surrounding quotes from a mapping-entry value.
+
+    Unlike split_comment(), a '#' only starts a comment when preceded by whitespace, so a URL
+    fragment (https://host/page#section) survives intact.
+    """
+    value = re.split(r"\s+#", value, maxsplit=1)[0].strip()
+    return value.strip('"').strip("'")
+
+def parse_mapping_block(lines: list[str], start: int, source: Path):
+    """Read a YAML block list of flat mappings beginning at lines[start].
+
+    Accepts the documented shape: `  - k: v` opens an entry, `    k: v` continues it. Returns
+    (entries, next_index). Stops at the first line that is neither, leaving it to the caller.
+    """
+    entries = []
+    j = start
+    while j < len(lines):
+        raw = lines[j]
+        if not raw.strip():
+            j += 1
+            continue
+        if raw.startswith("  - "):
+            entries.append({})
+            body = raw[4:]
+        elif raw.startswith("    ") and entries:
+            body = raw.strip()
+        else:
+            break
+        if ":" not in body:
+            raise ValueError(
+                f"{source}: external_refs entry {len(entries)} has a line that is not 'key: value': "
+                f"{raw.strip()} (entries must be mappings, one '- system: ...' block per link)"
+            )
+        entry_key, entry_value = body.split(":", 1)
+        entry_key = entry_key.strip()
+        if entry_key in entries[-1]:
+            raise ValueError(
+                f"{source}: external_refs entry {len(entries)} repeats key '{entry_key}'"
+            )
+        entries[-1][entry_key] = clean_scalar(entry_value.strip())
+        j += 1
+    return entries, j
+
+def validate_external_refs(source: Path, refs):
+    """Enforce the contract in templates/SCRUM_BOARD_SCHEMA.md's External Refs Fields."""
+    if not isinstance(refs, list):
+        raise ValueError(
+            f"{source}: external_refs must be a YAML list of mappings when present "
+            "(use 'external_refs: []' for none)"
+        )
+    for index, entry in enumerate(refs, start=1):
+        where = f"{source}: external_refs entry {index}"
+        if not isinstance(entry, dict):
+            raise ValueError(
+                f"{where} must be a block mapping ('- system: ...' with the other keys indented "
+                f"beneath it), got {entry!r}"
+            )
+        unknown = sorted(set(entry) - EXTERNAL_REF_ENTRY_KEYS)
+        if unknown:
+            raise ValueError(
+                f"{where} has unknown key(s): {', '.join(unknown)} "
+                f"(allowed: {', '.join(sorted(EXTERNAL_REF_ENTRY_KEYS))})"
+            )
+        system = entry.get("system", "")
+        if not system:
+            raise ValueError(f"{where} is missing required 'system' "
+                             f"(one of: {', '.join(sorted(EXTERNAL_REF_KINDS))})")
+        if system not in EXTERNAL_REF_KINDS:
+            raise ValueError(f"{where} has unknown system '{system}' "
+                             f"(one of: {', '.join(sorted(EXTERNAL_REF_KINDS))})")
+        kind = entry.get("kind", "")
+        if not kind:
+            raise ValueError(f"{where} is missing required 'kind' for system '{system}' "
+                             f"(one of: {', '.join(sorted(EXTERNAL_REF_KINDS[system]))})")
+        if kind not in EXTERNAL_REF_KINDS[system]:
+            raise ValueError(f"{where} has invalid kind '{kind}' for system '{system}' "
+                             f"(one of: {', '.join(sorted(EXTERNAL_REF_KINDS[system]))})")
+        has_key = bool(entry.get("key", ""))
+        has_url = bool(entry.get("url", ""))
+        if "key" in entry and not has_key:
+            raise ValueError(f"{where} has an empty 'key'")
+        if "url" in entry and not has_url:
+            raise ValueError(f"{where} has an empty 'url'")
+        if has_key and has_url:
+            raise ValueError(f"{where} has both 'key' and 'url'; exactly one is allowed")
+        if not has_key and not has_url:
+            raise ValueError(f"{where} has neither 'key' nor 'url'; exactly one is required")
+        linked_on = entry.get("linked_on", "")
+        if not linked_on:
+            raise ValueError(f"{where} is missing required 'linked_on' (YYYY-MM-DD)")
+        try:
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", linked_on):
+                raise ValueError
+            datetime.date.fromisoformat(linked_on)
+        except ValueError:
+            raise ValueError(f"{where} has linked_on '{linked_on}' which is not a real "
+                             "YYYY-MM-DD date") from None
+
+def validate_external_refs_declined(source: Path, data: dict):
+    """external_refs_declined accepts only 'true'; a blank note is rejected when it is present."""
+    if "external_refs_declined" not in data:
+        return
+    declined = data["external_refs_declined"]
+    if declined != "true":
+        raise ValueError(
+            f"{source}: external_refs_declined must be 'true' when present (got {declined!r}); "
+            "there is no false state, omit the field instead"
+        )
+    note = data.get("external_refs_declined_note", "")
+    if not isinstance(note, str) or not note.strip():
+        raise ValueError(
+            f"{source}: external_refs_declined: true requires a non-empty "
+            "external_refs_declined_note (templates/SCRUM_BOARD_SCHEMA.md)"
+        )
+
 def parse_frontmatter(lines: list[str], source: Path) -> dict:
     data = {}
     i = 0
@@ -159,6 +299,16 @@ def parse_frontmatter(lines: list[str], source: Path) -> dict:
         key, value = raw.split(":", 1)
         key = key.strip()
         value = split_comment(value.strip())
+
+        # external_refs is the one key whose block list holds MAPPINGS rather than plain strings
+        # (templates/SCRUM_BOARD_SCHEMA.md, External Refs Fields). Scoped to this key on purpose:
+        # the generic string-list branch below stays byte-for-byte what it was, so no existing
+        # key can change how it parses.
+        if key == "external_refs" and value == "":
+            data[key], i = parse_mapping_block(lines, i + 1, source)
+            if not data[key]:
+                data[key] = ""
+            continue
 
         if value == "":
             items = []
@@ -237,6 +387,13 @@ def assert_parses_as_yaml(lines: list[str], source: Path) -> None:
                 "reopen reasons must be a YAML list -- see "
                 "templates/SCRUM_BOARD_SCHEMA.md's Reopen Tracking Fields."
             )
+        except ValueError as exc:
+            # PyYAML resolves an unquoted 2026-02-30 to a date and raises a bare ValueError
+            # (not a YAMLError) with no file name. Surface it as a normal, attributable failure.
+            raise ValueError(
+                f"{source}: frontmatter contains a value YAML cannot load ({exc}). "
+                "Dates such as external_refs linked_on must be real YYYY-MM-DD dates."
+            )
 
     # Duplicate keys are legal-ish to some YAML loaders (last wins) but always a
     # board-authoring bug: one of the two values is being silently discarded.
@@ -281,6 +438,10 @@ def validate_file(source: Path):
     if docs is not None:
         validate_docs(source, docs)
 
+    if "external_refs" in data:
+        validate_external_refs(source, data["external_refs"])
+    validate_external_refs_declined(source, data)
+
     if item_type == "epic":
         if "stories" in data and data["stories"] != "" and not isinstance(data["stories"], list):
             raise ValueError(f"{source}: stories must be a YAML list when present")
@@ -292,6 +453,20 @@ def validate_file(source: Path):
     elif item_type == "task":
         if not data.get("epic_id") or not data.get("story_id"):
             raise ValueError(f"{source}: task files require both epic_id and story_id")
+        # jenga_assigned: false asserts a human overrode the machine-assigned scope, and
+        # templates/SCRUM_BOARD_SCHEMA.md makes override_justification required in that case.
+        # Enforced rather than left to authoring discipline because the empty pairing is not
+        # merely untidy: skills/j-do/SKILL.md's step 4.1 HALTS the dispatch on it, so the task
+        # cannot be worked at all. 35 task files accumulated the combination unnoticed before
+        # this check existed, 16 of them still Pending and therefore still undispatchable.
+        if str(data.get("jenga_assigned", "")).strip().lower() == "false" \
+                and not str(data.get("override_justification", "")).strip():
+            raise ValueError(
+                f"{source}: jenga_assigned: false requires a non-empty override_justification "
+                "(templates/SCRUM_BOARD_SCHEMA.md). /do step 4.1 halts dispatch on this pairing. "
+                "If the scope was machine-assigned, set jenga_assigned: true instead."
+            )
+
         assigned_to = data.get("assigned_to", "")
         if assigned_to and assigned_to not in ASSIGNEES:
             raise ValueError(f"{source}: assigned_to must be one of: developer, tester, scrum-master")

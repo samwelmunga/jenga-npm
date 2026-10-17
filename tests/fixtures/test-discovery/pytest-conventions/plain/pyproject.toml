@@ -1,0 +1,3 @@
+[project]
+name = "plain"
+# Inert fixture: no pytest table, so no suite.

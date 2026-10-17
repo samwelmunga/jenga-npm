@@ -65,6 +65,14 @@
  * `_queued` flag on anything, so it disappears harmlessly — no phantom cards.
  * With no `todo.md` present, no item carries `_queued` and this module's
  * output is identical to its pre-T04 behavior.
+ *
+ * Idea ("Spike") cards (E35_S04_T03): `flattenIdeaItems` maps the structured
+ * items from GET /v1/ideas into card-shaped objects tagged `_itemType: 'idea'`.
+ * `bucketIntoColumns` places them before any status logic (they have no
+ * `status`): `none` -> Backlog, `promoted` -> Done, `rejected` -> Rejected.
+ * They bypass the Pending exclusion, the stale-Deployed-to-Prod filter and
+ * `_queued` promotion, and sort after real items within their column
+ * (ideas.md line order preserved). Real-item output is unchanged by ideas.
  */
 
 export const KANBAN_COLUMNS = [
@@ -182,6 +190,24 @@ export function flattenBoardItems(epics) {
   return items
 }
 
+const IDEA_STATE_COLUMN = { none: 'backlog', promoted: 'done', rejected: 'rejected' }
+
+/**
+ * Maps idea items (GET /v1/ideas) to card-shaped objects. Tolerates null/undefined.
+ * @param {Object[]|null|undefined} ideas
+ * @returns {Object[]}
+ */
+export function flattenIdeaItems(ideas) {
+  return (ideas || []).map((item) => ({
+    _itemType: 'idea',
+    id: null,
+    title: item.text,
+    _ideaState: item.state,
+    _boardId: item.boardId,
+    _rapport: item.rapport,
+  }))
+}
+
 /**
  * Buckets a flat item list into the kanban columns above. Items with
  * `status: Pending` are excluded entirely (Active Sprint tab's own filter —
@@ -203,7 +229,17 @@ export function bucketIntoColumns(items) {
   const buckets = {}
   for (const col of KANBAN_COLUMNS) buckets[col.key] = []
 
+  const ideaBuckets = {}
+  for (const col of KANBAN_COLUMNS) ideaBuckets[col.key] = []
+
   for (const item of items || []) {
+    // E35_S04_T03 — idea cards have no status; place by state before any status rule.
+    if (item._itemType === 'idea') {
+      const ideaKey = IDEA_STATE_COLUMN[item._ideaState]
+      if (ideaKey) ideaBuckets[ideaKey].push(item)
+      continue
+    }
+
     // E06_S05_T04 — checked first so a queued Pending/Backlog item is promoted
     // rather than dropped by the Pending exclusion below.
     if (isPromotedToInProgress(item)) {
@@ -224,6 +260,9 @@ export function bucketIntoColumns(items) {
   buckets[IN_PROGRESS_KEY].sort(
     (a, b) => Number(Boolean(a._promotedFromStatus)) - Number(Boolean(b._promotedFromStatus))
   )
+
+  // Ideas follow real items within each column.
+  for (const col of KANBAN_COLUMNS) buckets[col.key].push(...ideaBuckets[col.key])
 
   return buckets
 }

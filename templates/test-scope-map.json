@@ -1,0 +1,12 @@
+{
+  "_comment": "Default changed-file to test-file mapping table. map_version is the format version. Each rule maps one source glob to one or more test globs. Rules are evaluated in order and ALL matching rules contribute: a changed file that matches several rules maps to the union of their test globs. The table is additive, never first-match-wins. This is a generic starting point; a project overrides it by pointing commit_scope_map_file at its own map, not by editing this shipped copy.",
+  "map_version": 1,
+  "rules": [
+    { "source": "src/**/*.js", "tests": ["test/**/*.test.js", "tests/**/*.test.js"] },
+    { "source": "lib/**/*.js", "tests": ["test/**/*.test.js"] },
+    { "source": "src/**/*.py", "tests": ["tests/test_*.py", "tests/**/*_test.py"] },
+    { "source": "**/*.go", "tests": ["**/*_test.go"] },
+    { "source": "src/**/*.rs", "tests": ["tests/*.rs"] },
+    { "source": "**/*.sh", "tests": ["tests/**/*.bats"] }
+  ]
+}

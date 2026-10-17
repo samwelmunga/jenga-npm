@@ -45,7 +45,9 @@ their own, never something this skill chains automatically.
    ```
 
    Forward `--out <path>` only if the user explicitly requested a specific local output path;
-   otherwise let it default. Relay the script's own stdout/stderr as-is if it fails — do not
+   otherwise let it default. `snapshot.sh` installs dependencies and rebuilds the dashboard UI
+   itself when that is necessary (dev checkout, `dist/` missing or stale), so no separate
+   install-and-build step is needed here. Relay the script's own stdout/stderr as-is if it fails — do not
    reinterpret its error output. On success, read the local snapshot file's path from its documented
    `Snapshot dashboard written to: <path>` line (the exact line `snapshot.sh` emits on completion) —
    do not guess or re-derive the path any other way. If this step fails (non-zero exit), stop here;

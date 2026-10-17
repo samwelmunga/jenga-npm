@@ -409,18 +409,57 @@ For each in-scope story that has one or more tasks listed in `todo.md`:
 
 Loop through `todo.md` and execute all eligible items, running independent ones in parallel. Use the threshold values loaded in Phase 0 (`inline_max_files`, `inline_max_lines`, `story_max_files`, `bundle_lock_ttl_minutes`) when applying execution-scope logic to each task. **Skip any task that was bundled in Phase 3.5** — those tasks will be handled by the `/do` story-bundle call already issued.
 
+**Break entry check** (`E44_S02`). A **hard** break set before this run started must stop it before the first wave; the check in step 5 only fires after a wave completes. Once, before the first pass of step 1, and without consuming anything:
+
+```bash
+bash "$([ -f skills/j-break/scripts/check-break.sh ] && echo skills/j-break/scripts/check-break.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/check-break.sh)" --peek
+```
+
+A `mode=hard` record (exit `10`) → collect nothing, dispatch nothing, and print the break exit message from the Exit condition section with "nothing was started". Exit `0`, a `mode=soft` record, or any other exit → continue. A **soft** break armed before the run is deliberately left in place and is honoured by the check in step 5 after the first wave. Like the rest of Phase 4 this prompts for nothing.
+
 1. **Collect eligible items** — from `todo.md`, find all items whose board file has `status: Pending` and no unresolved dependencies, **excluding tasks already dispatched as part of a story bundle in Phase 3.5**. If Phase 0.75 produced a scoped set, also exclude any item not a member of that set — execution never runs outside the confirmed/resolved scope. Under `/jenga *`, no such exclusion applies. A dependency is resolved if the blocking item's status is at least `In Progress` or `Passed`. **Also exclude every item in this run's deferred set** (built in step 5b; empty on the first wave) — a unit `/do` deferred at its pre-flight gate is back to `Pending`, so without this exclusion it would be re-collected and re-dispatched every wave. A deferred `item_id` may be a task id or, for a Story-Bundle, a story id: for a story id, exclude the story itself **and every task belonging to that story** (its member tasks must not be re-collected individually either). This exclusion is **run-scoped**: it applies on every wave of this run, not only the next one, and is never cleared mid-run.
 2. **Group by parallelism** — items with no shared dependencies and no overlapping output files can run concurrently. Items that depend on each other must be sequenced.
-3. **Invoke `/do` in parallel** — launch each independent item as a **background sub-agent** simultaneously. Do not wait for one to finish before starting another if they are independent. Pass this run's shared `orchestrator_session_id` (generated once in Phase 0.9, unchanged across every wave) into each sub-agent's sender object as its `session_id` field, per `assets/sender_template.json`'s existing shape and `skills/j-do/SKILL.md`'s caller-supplied-session-id case (`### 4.4`/`### 5`, `E32_S16_T02`) — this is what lets `E32_S15`'s per-session developer/tester concurrency cap actually contend across every sub-agent dispatched within (and across) this run's waves, instead of each one minting its own private session id and its own private, uncontended counter file.
+3. **Invoke `/do` in parallel** — launch each independent item as a **background sub-agent** simultaneously. Do not wait for one to finish before starting another if they are independent. Pass this run's shared `orchestrator_session_id` (generated once in Phase 0.9, unchanged across every wave) into each sub-agent's sender object as its `session_id` field, per `skills/j-do/assets/sender_template.json`'s existing shape and `skills/j-do/SKILL.md`'s caller-supplied-session-id case (`### 4.4`/`### 5`, `E32_S16_T02`) — this is what lets `E32_S15`'s per-session developer/tester concurrency cap actually contend across every sub-agent dispatched within (and across) this run's waves, instead of each one minting its own private session id and its own private, uncontended counter file.
 4. **Mark In Progress** — update `status: In Progress` in each launched item's board file (YAML front-matter) immediately after launch.
 5. **Wait, drain, and loop** — once all active background agents in the wave have completed:
    a. **Drain the scrum triggers queue** — invoke the `## Drain Scrum Triggers Queue` procedure from `agents/scrum-master.md` against `project/queue/scrum_triggers.jsonl`. `/jenga`'s orchestrating agent is the scrum-master, and this is the same session-start procedure applied mid-run: process any `rapport_review`, `status_review`, and `story_rollup` triggers written by the tester sub-sessions that just completed, then clear the file. This ensures rollups become visible on the board (story/epic status updates) before the next wave is collected, instead of sitting unprocessed until some future scrum-master session start.
+   a.1. **Task-completion cleanup** (`E37_S05_T02`) — Phase 4 dispatches its background agents directly and never passes through `/do`'s own step 7, so nothing else removes a finished task's entry from `project/todo.md`. For each task dispatched in this wave by step 3, read its board file; if its `status` is terminal (`Passed`, `Passed with remarks` or `Failed`), run the **Task-Completion Cleanup Procedure** (`skills/j-do/SKILL.md` `### 7.1`, `E37_S05_T01`) with that task's title exactly as its entry appears in `todo.md`, from this orchestrating checkout, immediately — the tester has already written the status by the time the wave completes, so do not defer this to a later wave or session. Rules:
+      - **Only terminal statuses.** A task still `Pending` (for example a pre-flight deferral recorded in (b)), `In Progress`, `Blocked` or `Rejected` keeps its `todo.md` entry.
+      - **Tasks bundled in Phase 3.5 are out of scope** here — they were not dispatched by step 3 (the bundle path is wired separately by `E37_S05_T03`).
+      - **"Already removed" is benign.** `todo_manager.sh remove` exits non-zero when no line matches, and a wave sub-agent that ran `/do` end to end may already have run its own step 7. Treat that no-match as success and still run the procedure's `teardown` step. Any other non-zero exit is surfaced to the user as a warning; it does not stop the run.
+      - This reuses `scripts/todo_manager.sh` through the shared procedure only — no new queue file, lock or script — and leaves `/do`'s own standalone loop unchanged.
    b. **Record pre-flight deferrals** — before the loop-back in step c below, run `skills/jenga/scripts/list-preflight-deferred.sh <orchestrator_session_id>` with this run's shared `orchestrator_session_id` and add every id it prints to the **run-scoped deferred set** (a set, so re-adding is harmless; start the run with it empty). The script lists the `item_id` of each `preflight_deferred` event `/do` step 4.1.2 appended for this session — a unit whose pre-flight checklist needs a user decision that a background sub-agent cannot give. Do not retry such a unit and do not count waves: a deferral needs a human, and re-dispatching cannot resolve it, so step 1 simply stops collecting it for the rest of the run. Run this on **every** wave, immediately after (a) and before (c), not only the first, so a deferral that appears in a later wave is excluded from the wave after it. A non-zero exit from the script is a genuine error (for example a malformed `events.json`): surface its stderr message to the user and stop the run rather than looping on an unknown set.
-   c. **Return to step 1** of this phase — the final sub-step of the wave, reached only after step b above has recorded this wave's deferrals — to pick up any newly unblocked items — including items unblocked by the rollups just processed in (a). This loop-back reuses the SAME `orchestrator_session_id` generated once in Phase 0.9 for every subsequent wave's `/do` dispatches — it is never regenerated here or anywhere else in this phase.
+   b.1. **Break check** (`E44_S02`) — the wave's agents have all completed, the queue drain in (a) has recorded its rollups, and this wave's deferrals are recorded, so the board reflects reality at the moment of any stop. **Order is explicit: drain (a), then clean up `todo.md` (a.1), then record deferrals (b), then check (b.1), then loop (c).** Run:
+
+      ```bash
+      bash "$([ -f skills/j-break/scripts/check-break.sh ] && echo skills/j-break/scripts/check-break.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/check-break.sh)"
+      ```
+
+      - **Exit `0`** — no break. Continue to (c), unchanged.
+      - **Exit `10`** — a break was requested. The record is on stdout as `mode=<soft|hard> with_status=<true|false> requested_at=<ts> requested_by=<who>`; a `soft` break was consumed by that call, a `hard` break remains. **Do not collect the next batch and do not return to step 1.** Print the break exit message from the Exit condition section and stop.
+      - **Any other exit** — the checker failed, which is not a stop request. Print its stderr as a warning and continue to (c).
+
+      **The hands-free contract holds.** `/jenga` takes no user input by design; a break halts and reports. It does not prompt, offer options or wait for a decision. Never read the flag file here — branch on the exit code and use the record the script prints.
+
+   c. **Return to step 1** of this phase — the final sub-step of the wave, reached only after steps b and b.1 above have recorded this wave's deferrals and found no break — to pick up any newly unblocked items — including items unblocked by the rollups just processed in (a). This loop-back reuses the SAME `orchestrator_session_id` generated once in Phase 0.9 for every subsequent wave's `/do` dispatches — it is never regenerated here or anywhere else in this phase.
 
 ### Exit condition
 
-When no eligible candidates remain in Phase 4, exit and output:
+There are two distinct exits. Do not confuse them: the first means the board is exhausted, the second means work remains.
+
+**Break exit (`E44_S02`)** — entered from Phase 4's entry check or step 5's b.1 when a break was requested. It must **not** claim completion. Print:
+
+```
+⏹ Jenga stopped at a requested break (<soft|hard>). Work remains.
+   Completed in the last wave: <ids, or "none — nothing was started">
+   Eligible, not started:      <ids, or "none">
+   Resume: re-run /jenga            (soft break — already cleared)
+           /break clear, then /jenga  (hard break — still in place)
+```
+
+"Completed in the last wave" is the items that finished in the wave that just ended; "Eligible, not started" is what step 1 would have collected next. When the record says `with_status=true`, append the scoped rapport by running `bash "$([ -f skills/j-break/scripts/render-execution-status.sh ] && echo skills/j-break/scripts/render-execution-status.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/render-execution-status.sh)"` and printing its output verbatim; if it fails, say it is unavailable and why — never improvise one from the board. If the run-scoped deferred set is non-empty, append the same `⏸ Deferred at the pre-flight gate` block shown below. This exit prompts for nothing.
+
+**Completion exit** — when no eligible candidates remain in Phase 4, exit and output:
 
 ```
 ✅ Jenga complete. All eligible tasks have been started.

@@ -1,0 +1,5 @@
+{"runnable":[
+ {"n":1,"id":"fx:first","name":"first","type":"unit","ecosystem":"fixture","command":"echo first >> \"$RUN_MARK\"","also":[]},
+ {"n":2,"id":"fx:second","name":"second","type":"sast","ecosystem":"fixture","command":"echo second >> \"$RUN_MARK\"; exit 3","also":[]},
+ {"n":3,"id":"fx:third","name":"third","type":"unit","ecosystem":"fixture","command":"echo third >> \"$RUN_MARK\"","also":[]}
+],"not_runnable":[],"warnings":[]}

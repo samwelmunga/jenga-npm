@@ -1,0 +1,20 @@
+{
+  "id": "deep-dive-to-committed",
+  "name": "Deep Dive to Committed",
+  "description": "Takes an idea through a structured deep-dive investigation, board capture, implementation, and a commit -- the rigor-first counterpart to idea-to-committed, stopping at the commit rather than at a release.",
+  "keywords": [
+    "deep dive to commit",
+    "investigate then commit",
+    "analyze plan build commit",
+    "scrutinize and build",
+    "thorough analysis to commit"
+  ],
+  "examples": [
+    "deep dive on this idea, put it on the board, build it, and commit it",
+    "investigate this proposal thoroughly, then implement it and commit the work",
+    "stress-test this feature first, then break it down, build it, and commit",
+    "I want a thorough analysis of this before building it -- take it all the way to a commit",
+    "think this through properly, capture it on the board, implement it, and commit"
+  ],
+  "steps": ["j-deep-dive", "j-todo", "j-do", "j-commit"]
+}

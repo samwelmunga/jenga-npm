@@ -159,7 +159,8 @@ UI_DIR="$APP_DIR/ui"
 
 [ -f "$API_DIR/scripts/capture-snapshot.js" ] || die "capture script not found at $API_DIR/scripts/capture-snapshot.js"
 # The built UI, not its sources: bundling no longer needs vite (see Step 2).
-[ -f "$UI_DIR/dist/index.html" ] || die "dashboard UI has not been built — no $UI_DIR/dist/index.html. In this monorepo run: npm run ui:build --prefix project/app. In a consumer install this means the package shipped without project/app/ui/dist (a packaging regression)."
+# A dev checkout (has UI sources) may legitimately lack dist/ -- step 2a installs and builds it.
+[ -f "$UI_DIR/dist/index.html" ] || [ -d "$UI_DIR/src" ] || die "dashboard UI has not been built — no $UI_DIR/dist/index.html. In this monorepo run: npm run ui:build --prefix project/app. In a consumer install this means the package shipped without project/app/ui/dist (a packaging regression)."
 
 # -----------------------------------------------------------------------------
 # Scratch workspace — always cleaned up, success or failure.
@@ -193,9 +194,9 @@ fi
 #       or a dev checkout), refresh dist/ first so a snapshot never silently
 #       ships a stale build. Skipped entirely in a consumer install, which has
 #       only the prebuilt dist/ the package shipped — and needs nothing more.
-#       If sources are present but node_modules/vite isn't (so the rebuild
-#       above can't run), a dev checkout still refuses to bundle a dist/ that
-#       looks older than its own sources — see the staleness check below.
+#       If sources are present but node_modules/vite isn't, and dist/ is
+#       missing or older than its sources, `npm install` + `npm run build`
+#       run first (see below); a fresh dist/ is used as-is.
 #   2b. Inline that dist/ into one self-contained HTML file with the captured
 #       JSON embedded, via the dependency-free build-snapshot-html.cjs.
 #
@@ -210,16 +211,22 @@ if [ -f "$UI_DIR/package.json" ] && [ -d "$UI_DIR/node_modules/vite" ]; then
   (cd "$UI_DIR" && npm run build)
   [ -f "$UI_DIR/dist/index.html" ] || die "UI rebuild reported success but produced no $UI_DIR/dist/index.html"
 elif [ -d "$UI_DIR/src" ]; then
-  # This is a dev checkout (it has UI sources, unlike a consumer install which
-  # only ships prebuilt dist/ + scripts/), but node_modules/vite isn't present
-  # right now to rebuild with -- e.g. `npm install` hasn't been (re-)run for
-  # this package. The rebuild above was skipped, so dist/ may already be
-  # stale relative to src/. A stale snapshot must never ship silently (this is
-  # exactly how a fixed bug re-appeared in a previously-generated jenga.html):
-  # fail loudly instead of trusting an on-disk dist/ of unknown age.
-  STALE_SRC="$(find "$UI_DIR/src" -type f -newer "$UI_DIR/dist/index.html" -print -quit 2>/dev/null)"
-  if [ -n "$STALE_SRC" ]; then
-    die "$UI_DIR/dist is older than UI sources (e.g. $STALE_SRC) and node_modules/vite is not installed here to rebuild it -- refusing to bundle a possibly-stale snapshot. Run 'npm install' in $UI_DIR (or otherwise rebuild dist/), then retry."
+  # Dev checkout (UI sources present, unlike a consumer install) without an
+  # installed vite. A missing or source-stale dist/ must never ship silently
+  # (this is how a fixed bug re-appeared in a previously-generated jenga.html),
+  # so install dependencies and build -- only when actually necessary.
+  NEEDS_BUILD=0
+  if [ ! -f "$UI_DIR/dist/index.html" ]; then
+    NEEDS_BUILD=1
+  elif [ -n "$(find "$UI_DIR/src" -type f -newer "$UI_DIR/dist/index.html" -print -quit 2>/dev/null)" ]; then
+    NEEDS_BUILD=1
+  fi
+  if [ "$NEEDS_BUILD" -eq 1 ]; then
+    [ -f "$UI_DIR/package.json" ] || die "$UI_DIR/dist is missing or older than the UI sources, and there is no $UI_DIR/package.json to install and build from."
+    echo "Dashboard UI build is missing or stale; installing dependencies and rebuilding..." >&2
+    (cd "$UI_DIR" && npm install --no-audit --no-fund) || die "npm install failed in $UI_DIR (see output above)"
+    (cd "$UI_DIR" && npm run build) || die "npm run build failed in $UI_DIR (see output above)"
+    [ -f "$UI_DIR/dist/index.html" ] || die "UI rebuild reported success but produced no $UI_DIR/dist/index.html"
   fi
 fi
 

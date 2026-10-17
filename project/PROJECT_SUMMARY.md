@@ -12,6 +12,7 @@ Jenga AI is a meta-framework for agentic software development. It provides a sui
 - `templates/` — Schema files and agent scaffolding templates
 - `agents/` — Agent definition files consumed by the CLI
 - `hooks/` — Git hooks and session lifecycle hooks
+- `docs/` — **Published GitHub Pages content only.** Maintainer-internal documentation lives in `project/documentation/` (`paths.documentation` in `project/configs/workflow.json`). E34_S06 (2026-10-02, `Passed with remarks`) moved 10 internal docs there (`skill-authoring`, `distribution`, `public-mirror-content-parity`, `hook-parity`, `JENGA_PROTOCOL`, `api-contract`, `service-descriptor`, `mcp-registration-decision`, `digitalocean-connect-research`, `supabase-connect-research`). There is no longer any exception: E34_S06 had kept the strategy brief at `docs/STRATEGY.md`, but E34_S07 (2026-10-04, merged `c4dbcae9`) reversed that. The strategy brief now lives at `project/documentation/STRATEGY.md` (`paths.strategy` in `project/configs/workflow.json`), resolved via `scripts/strategy_path_resolver.sh` / `scripts/resolve-root.sh`, so it is gitignored with the other Jenga files under `project_files_visibility: ignored` and tracked under `visible`. `/init` no longer creates `docs/`. A legacy fallback to an existing `docs/STRATEGY.md` is retained in the resolver for projects that already have one; there is no auto-migration.
 - `jobs/` — ML training job scaffolds (used by `/train` skill)
 - `skills/uncharted/scripts/resolve-segment-target.sh` — canonical "does this path have board provenance?" check, with a single-path and a batch (`--paths-from -`) interface. Treat this as **shared tooling**: `/reconcile` (E40_S05_T02) is contracted to reuse it rather than write a second linkage implementation, and future skills should do the same instead of re-deriving board linkage. Known duplication: `run-engine.sh` keeps a private substring-based version for the understanding document's Board Linkage row and the two can disagree on the same target; `resolve-segment-target.sh` is authoritative. Collapsing them is an open follow-up in `project/rapports/problems/E40_S02_T01-segment-remarks.md`. The E40_S02 closure walkthrough (2026-08-26) pinned down one concrete instance: for a target **outside** the repository, `run-engine.sh` renders Board Linkage as `unlinked` while `resolve-segment-target.sh` correctly returns `not_checked` with reason "target is outside this repository". Those are not the same claim — `unlinked` asserts a *verified absence* of board references that was never actually checked. `skills/uncharted/SKILL.md` already names Step 1 authoritative where the two disagree, so the guardrail holds, but the generated row is wrong as written and `segment` mode has no documented handling for the `not_checked` case at all. Filed 2026-08-27 as `E40_S02_T04` under the reopened `E40_S02` story (`status: In Progress`), pending implementation.
 - `/publish` skill — Configures and orchestrates release workflows; `publish.json` at project root stores target configs; `skills/publish/scripts/` contains `validate_config.sh`, `setup_wizard.sh`, `check_target_config.sh`; `skills/publish/assets/` contains the secrets guide used during setup.
@@ -19,7 +20,7 @@ Jenga AI is a meta-framework for agentic software development. It provides a sui
 ## Distribution
 Jenga AI supports two distribution paths:
 
-**Public (npm):** Jenga AI is distributed as a public npm package (`@jenga-ai/agent`) via npmjs.com. Consumer projects install it with `npm install @jenga-ai/agent`; a postinstall hook copies only `skills/` and `agents/`, mirrored into both `.claude/` and `.agents/` under the consumer project root. `hooks/`, `scripts/`, and `templates/` deliberately stay inside `node_modules/@jenga-ai/agent/` and are sourced from there at runtime (narrowed in the E26 fix, commit `619198b`, well before this note — see the in-file comment in `scripts/postinstall.js`). Publishing is handled entirely through the `/publish` skill's `npm` target type (added in E26). The version source is `package.json`; `latest` and `beta` dist-tags are supported, and the npm pipeline honours a `--dry-run` flag. **Upgrade cleanup (E26_S08_T01):** `postinstall.js` now writes a provenance manifest (`.jenga-postinstall-manifest.json`) into each mirror root recording the relative paths that run mirrored, and on the next run deletes only paths a prior manifest lists that the current run did not rewrite — so a release that renames or removes a skill no longer leaves the old copies loading forever. `lib/mirror.js`'s blanket `reconcileDeletes` flag stays `false` at the consumer call site by design; the manifest diff is a separate, narrower mechanism. Consumer-authored files are never deletable because they were never manifest-recorded, and no prior manifest means no delete pass at all. `docs/distribution.md` is the reference for the whole consumer install path. **Pre-manifest orphan cleanup (E26_S08_T02/T03, closed 2026-09-07):** T01's manifest diff was forward-looking only — orphans that predated a consumer's first manifest never entered any manifest and so were never deletion candidates, leaving the original defect unresolved for anyone already installed on 2.0.0 or 3.0.0. T03 closes this by seeding the first manifest from a shipped list of known-shipped legacy paths intersected with what's actually on disk, so pre-manifest orphans become reconcilable on the very next upgrade. T02 ships an interactive `jenga doctor` / `jenga clean` CLI command as the manual, confirmation-gated stopgap for consumers already broken today, and also covers ordinary mirror drift beyond this one migration. Both tasks were independently re-verified by the tester (real pty rehearsal for T02; real published `@jenga-ai/agent@3.0.0` tarball fixture rehearsal for T03). With T01–T03 all `Passed`, story `E26_S08` and epic `E26` are both rolled up to `Passed`.
+**Public (npm):** Jenga AI is distributed as a public npm package (`@jenga-ai/agent`) via npmjs.com. Consumer projects install it with `npm install @jenga-ai/agent`; a postinstall hook copies only `skills/` and `agents/`, mirrored into both `.claude/` and `.agents/` under the consumer project root. `hooks/`, `scripts/`, and `templates/` deliberately stay inside `node_modules/@jenga-ai/agent/` and are sourced from there at runtime (narrowed in the E26 fix, commit `619198b`, well before this note — see the in-file comment in `scripts/postinstall.js`). Publishing is handled entirely through the `/publish` skill's `npm` target type (added in E26). The version source is `package.json`; `latest` and `beta` dist-tags are supported, and the npm pipeline honours a `--dry-run` flag. **Upgrade cleanup (E26_S08_T01):** `postinstall.js` now writes a provenance manifest (`.jenga-postinstall-manifest.json`) into each mirror root recording the relative paths that run mirrored, and on the next run deletes only paths a prior manifest lists that the current run did not rewrite — so a release that renames or removes a skill no longer leaves the old copies loading forever. `lib/mirror.js`'s blanket `reconcileDeletes` flag stays `false` at the consumer call site by design; the manifest diff is a separate, narrower mechanism. Consumer-authored files are never deletable because they were never manifest-recorded, and no prior manifest means no delete pass at all. `project/documentation/distribution.md` is the reference for the whole consumer install path. **Pre-manifest orphan cleanup (E26_S08_T02/T03, closed 2026-09-07):** T01's manifest diff was forward-looking only — orphans that predated a consumer's first manifest never entered any manifest and so were never deletion candidates, leaving the original defect unresolved for anyone already installed on 2.0.0 or 3.0.0. T03 closes this by seeding the first manifest from a shipped list of known-shipped legacy paths intersected with what's actually on disk, so pre-manifest orphans become reconcilable on the very next upgrade. T02 ships an interactive `jenga doctor` / `jenga clean` CLI command as the manual, confirmation-gated stopgap for consumers already broken today, and also covers ordinary mirror drift beyond this one migration. Both tasks were independently re-verified by the tester (real pty rehearsal for T02; real published `@jenga-ai/agent@3.0.0` tarball fixture rehearsal for T03). With T01–T03 all `Passed`, story `E26_S08` and epic `E26` are both rolled up to `Passed`.
 
 **Private (filesystem):** For projects that consume the private monorepo directly, the `/distribute` skill handles local filesystem distribution (restored in E31). The monorepo root holds `distribute.config.json` — a structured JSON registry of consuming project paths with `name`, `path`, and `active` fields, replacing the retired `.jenga_paths` plain-text file. Each consuming project holds a `jenga.config.json` tracking `version`, `last_distributed`, `source: "private"`, `target_dir`, and (E31_S05) `project_files_visibility` (enum: `visible`/`ignored` — `hidden` was implemented then withdrawn as functionally broken; see E31_S05's Scope Correction) — controls whether the consumer's own `project/` working tree stays visible and tracked, or is git-ignored. This field covers only the `project/` working tree, **not** the distributed `.claude`/`.agents` framework scaffold — there is currently no config option that keeps that scaffold out of a consumer's git history, tracked as new scope under E31_S07 (filed 2026-09-15 from a problem rapport). Unlike the other fields, `project_files_visibility` is written by `/init` (`skills/init/scripts/apply-project-visibility.sh`), not by `/distribute`. Known gap: `distribute-changes.sh` rebuilds `jenga.config.json` from a fixed six-field `jq -n` expression and currently drops this field on the next distribution run — tracked as a follow-up under E34/E31_S06. The skill owns the full version lifecycle: release type selection (`major`/`minor`/`patch`/`amend`), dry-run preview, `npm version` bump, file copy to `.agents/` and `.claude/` in each target (respecting per-project `.jenga_ignore`), atomic `jenga.config.json` update, and a git commit of the version bump. `/distribute` is independent of `/self-sync` and `/mirror-public`.
 
@@ -40,24 +41,25 @@ Jenga AI supports two distribution paths:
 - **E14** — Config & Skill Metadata
 - **E15** — Multi-Project Router & Attach *(Reopened 2026-09-01 — In Progress, E15_S04 added: jenga attach was found clobbering the WorktreeCreate commit-guard hook)*
 - **E16** — Multi-Platform Agent Config Parity *(Reopened 2026-09-07 — In Progress. E16_S05 (Copilot Sub-Agent Delegation Parity) rolled up to `Passed` 2026-09-07: T01 confirmed Copilot CLI has a native `--agent`/`/agent` agent loader (`.github/agents/` and `.claude/agents/` are live discovery paths, `.agents/agents/` is not); T02 wired a new `.github/agents/` mirror into `skills/self-sync/scripts/run.js` and documented `prefered_agent` routing in `templates/copilot-instructions.md.tpl`. Epic stays `In Progress`, gated on E16_S04: `/reconcile` found E26 silently reverted E16_S04's `.agents/settings.json` dual-write; new task E16_S04_T04 (fix stale docs, record the decision) is still `Pending`, T01–T03 keep their original `Passed` status)*
-- **E17** — Workflow Quality Enforcement *(Reopened 2026-09-09, fourth time — In Progress. E17_S08 added: `agents/tester.md` step 6d — authored by this epic's own `E17_S01` — forces `status: Failed` on any story with an unverifiable DoD item, but the tester runs **per task**, so mid-story the DoD items gated on later tasks are necessarily unverifiable. The rule is unsatisfiable for every multi-task story. Two tester runs in the 2026-09-09 `E50_S10` session hit it and both declined to follow their own contract, leaving the story `Pending` instead — correct judgment, but it means 6d is enforced by agent discretion rather than by its text. S08 must narrow *when* 6d applies without weakening *what* it does, or the fix re-opens this epic's own `S03`/`S04` false-completion failure mode)*
+- **E17** — Workflow Quality Enforcement *(Reopened 2026-09-09, fourth time — rolled up to `Passed with remarks` 2026-10-05, fifth completion. E17_S08 added: `agents/tester.md` step 6d — authored by this epic's own `E17_S01` — forces `status: Failed` on any story with an unverifiable DoD item, but the tester runs **per task**, so mid-story the DoD items gated on later tasks are necessarily unverifiable. The rule is unsatisfiable for every multi-task story. Two tester runs in the 2026-09-09 `E50_S10` session hit it and both declined to follow their own contract, leaving the story `Pending` instead — correct judgment, but it means 6d is enforced by agent discretion rather than by its text. S08 must narrow *when* 6d applies without weakening *what* it does, or the fix re-opens this epic's own `S03`/`S04` false-completion failure mode)*
+  - `E17_S10` added 2026-10-03 (P1): `/j-reconcile`'s completed-status list omits the five script-set ladder statuses that sit after `Passed` (`Merged`, `Publicized`, `Privatized`, `Deployed to Stage`, `Deployed to Prod`), so Phase 3 "promotes" a `Merged` ticket back to `Passed` and overwrites its `date_completed`. `/j-commit` runs a reconcile on every commit, so this bites after any `/j-self-sync`; 14 of E67's 21 tasks and 12 of E66's 15 currently carry `Merged`. `E17_S09` (guard Phase 3 promotion against an in-flight pipeline) and `E17_S10` are both `Passed with remarks` (S10 completed 2026-10-05); `E17_S08` then landed 2026-10-05 (`Passed`, `3bf524af`), so every E17 story is terminal-success and the epic rolled up to `Passed with remarks`.
 - **E18** — README & Documentation Overhaul
 - **E19** — Train Skill Enhancement *(Rejected 2026-09-10 — superseded by E57; never started, premise reversed)*
 - **E20** — Knowledge Graph *(S09 — Mechanical Board-to-Graph Populator — rolled up to `Passed` 2026-09-12: T01 defined the `board` source-provenance value in `STUB_SCHEMA.md`, T02 built `scripts/populate-knowledge-graph.js` (a rapport-flagged node-pruning gap was addressed in the same task and re-verified, upgrading it from `Passed with remarks` to `Passed`), T03 added test coverage (16 tests, full suite 195/195). This is the populator side that E08_S05 consumes. 2026-09-18: a `/j-deep-dive` on E08_S05's graph-sourcing approach added `E20_S10` (active scope — architecture-map provenance gating, interim UX, mixed-provenance edges, entity resolution, staleness revalidation) plus `E20_S11`-`E20_S13` as gated/provisional backlog, see below. Epic remains `Pending` overall — S01–S08 are still `Pending`/undecomposed)*
 - **E21** — Clarify Skill *(Passed with remarks)*
-- **E22** — Publish Skill *(Passed)*
+- **E22** — Publish Skill *(In Progress — reopened 2026-10-05 to add `E22_S10`: `skills/j-publish/adapters/droplet.md` documents a `gh workflow run` trigger phase that `droplet_pipeline.sh` does not implement, although `E22_S07`'s acceptance criteria require it, so a droplet `deploy` can report success without deploying; the task decides between implementing the phase and amending the contract. Found as doc drift by `E67_S07_T01`)*
 - **E23** — Human–Agent Handoff Protocol
 - **E24** — `/doc` Document Synthesis Skill *(Passed)*
 - **E25** — Board Index Substrate
 - **E26** — NPM-Compatible Distribution *(Passed)*
 - **E27** — Repo Self-Sync — Restore Root → .claude/.agents Mirror Automation
-- **E28** — Public Mirror — One-Way Private → Public Repo Sync
+- **E28** — Public Mirror — One-Way Private → Public Repo Sync *(`E28_S18` added 2026-10-03: three `tests/mirror-test-subject-invariant.bats` failures that six E67 task summaries had cited as "known baseline failures" — now diagnosed by `E28_S18_T01` (see `project/documentation/mirror-test-subject-invariant-diagnosis.md`) as a true positive: the gate correctly refuses the push because `tests/checklist-gating.bats` ships to the mirror while asserting blocklisted `skills/j-mirror-public/SKILL.md` exists; only cases 5/6/7, the three asserting status 0, go red; the baseline-failure framing is retired, fix filed as `E28_S18_T03`, loop early-exit as `E28_S18_T04`; plus `mirror.sh` pushing a `pre-force-*` rescue tag to the public remote under `--force --dry-run`)*
 - **E29** — npm Trusted Publishers CI Adapter *(Reopened 2026-09-12 — In Progress: E29_S05 Passed with remarks, verified against a real public-repo CI run; E29_S06 added from the tester's rapport to fix npm_ci_pipeline.sh's trigger phase always defaulting to a live `mode: publish`, still Pending)*
 - **E30** — Strategy Brief Convention
 - **E31** — Restore /distribute Skill — Private Filesystem Distribution *(In Progress — E31_S07 added 2026-09-15 from a problem rapport: decide+implement scope for excluding the distributed `.claude`/`.agents` scaffold from consumer `/init` commits, plus a trivial `.gitignore_template` stray-`EOF`-line cleanup; T01/T02 shipped that fix to `skills/init/` only and rolled the story up `Passed`, then the story was reopened the same day for `E31_S07_T03` once it was found that `skills/j-init/` — the copy that actually ships to public/npm consumers — never received it)*
 - **E32** — Adaptive Execution Scope for /jenga + /do *(Passed)*
-- **E33** — `/jenga-permission-level` — 5-Tier Permission System *(Passed with remarks)*
-- **E34** — Working-File Path Centralisation — Single Source of Truth for `project/` Paths *(Pending)*
+- **E33** — `/jenga-permission-level` — 5-Tier Permission System *(Passed with remarks; `E33_S09` added 2026-10-03 — `.jenga-permission-level.json` went 5 → 2 with no `permission_level_reset` event, because that log is **optional** in `agents/scrum-master.md` step 4c. The transition direction is the designed one; its unauditability is the defect)*
+- **E34** — Working-File Path Centralisation — Single Source of Truth for `project/` Paths *(Pending — broken down 2026-09-29 into 5 stories: E34_S01 resolution bootstrap & shared resolver mechanism, E34_S02 `board_resolver.sh` migration + removal of its silent-default failure mode, E34_S03 `on_session_end.sh` + remaining `scripts/`/`hooks/` migration, E34_S04 skill/agent prose convention (scoped to `agents/*.md`, with `skills/*.md`'s 306 references explicitly deferred to a follow-up per the story), E34_S05 end-to-end relocated-tree lifecycle verification closing out F1/F2 of `E31_S05_T01-hidden-mode-path-resolution-gaps.md`. E34_S06 (maintainer-internal docs moved out of the public `docs/` site dir into `project/documentation/`, with `scripts/strategy_path_resolver.sh` and the documented placement rule) added and shipped `Passed with remarks` 2026-10-02 (6 tasks); E34_S07 (strategy brief moved from `docs/STRATEGY.md` into `project/documentation/STRATEGY.md`, `paths.strategy` default changed, `/init` creates no `docs/`, legacy `docs/STRATEGY.md` resolver fallback retained with no auto-migration, ignored-vs-visible behaviour covered by `tests/strategy-visibility.bats`) added after S06 and shipped 2026-10-04 (7 tasks all `Passed with remarks`, merged `c4dbcae9`; story rolled up to `Passed with remarks`, committed `6947113d`); S02-S05 remain Pending with no tasks decomposed yet, so the epic does not roll up. **E34_S01 shipped `Passed with remarks` 2026-10-03** (6 tasks, merged e99e0b8b + 7b3f2449): shared resolver `scripts/resolve-root.sh` (layered resolution: `JENGA_PROJECT_ROOT` override, upward search for `project/`/`.project/` registry, `./project/` default; `get`/`list` for all 18 `workflow.json` `paths` keys, `--strict`), contract documented in `templates/SCRUM_BOARD_SCHEMA.md`, `scripts/strategy_path_resolver.sh` migrated onto it, covered by `tests/resolve-root.bats`; `board_resolver.sh` and `hooks/on_session_end.sh` deliberately untouched until S02/S03)*
 - **E35** — Idea Capture Pipeline — `/idea` Skill & `/spinoff` Integration *(Pending)*
 - **E36** — Standing CHANGELOG.md — Persistent Release Notes Across `/init` and `/publish` *(Pending)*
 - **E37** — Inter-Agent Completion Signaling & Worktree Lifecycle Safety *(Pending)*
@@ -67,16 +69,216 @@ Jenga AI supports two distribution paths:
 - **E41** — Launch & Discoverability (npm + GitHub Go-to-Market) *(Pending)*
 - **E42** — Maintenance — Framework Hygiene & Schema Drift *(In Progress — reopened 2026-09-15 for E42_S06, a stray-`EOF`-line gitignore-template cleanup in `skillify`'s `init-new` scaffold, found while investigating E31_S07's `skills/j-init/` gap)*
 - **E43** — Shell Test Harness — Make the Declared bats Suite Real *(Pending)*
-- **E44** — Execution Control — /break, Stop-the-Line & Scoped Run Status *(Pending)*
+- **E44** — Execution Control — /break, Stop-the-Line, Scoped Run Status & Agent Check-In *(Passed with remarks — rolled up 2026-10-13; `S01`-`S11` terminal, `S04` Rejected; `/break` and `j.check-in` both exist; live drill run 2026-10-13 in a scratch repo confirmed soft/hard break, resume and entry refusal on the `/do` bundle path, and fixed 3 defects; the one remaining remark is that it used no developer subagent and not the real board, and `/dooo`/`/jenga` were not live-exercised; see below)*
 - **E45** — Interactive Scope Selection for /jenga *(Pending)*
 - **E47** — Distributable Project Dashboard *(In Progress — reopened 2026-09-14 for `E47_S05` (Dashboard snapshot cloud sharing), see below; `E47_S01`-`E47_S04` keep their prior `Passed`/`Passed with remarks` status)*
 - **E48** — Agent Dashboard — Live AI Item Review *(Pending — unblocked when E47's productization DoD was satisfied 2026-09-12; E47's subsequent `E47_S04` reopen/re-close for a remote-delivery addendum doesn't touch that DoD, so the unblock still holds)*
 - **E50** — Skill Namespace Prefix & Anti-Masquerading Allow-List *(In Progress — reopened 2026-09-09 to hard-break the bare `/<name>` form, see below)*
-- **E53** — Jenga Natural-Language Dispatcher & Playbooks *(Passed with remarks — Playbooks v2 shipped 2026-09-09, epic rolled up 2026-09-10, see below)*
+- **E53** — Jenga Natural-Language Dispatcher & Playbooks *(Reopened — In Progress. Playbooks v2 shipped 2026-09-09 and the epic first rolled up 2026-09-10, see below; E53_S13 (`/route` retirement) shipped `Passed with remarks` 2026-09-27; E53_S14 is Pending, so no re-rollup yet)*
 - **E57** — Train Skill Deprecation & Package Extraction *(Pending — supersedes E19, see below)*
 - **E58** — Dashboard Markdown Library *(Pending — filed via `/brainstorm` 2026-09-13, see below)*
 - **E59** — Dashboard Mobile Responsive Rollout *(Pending — filed via `/brainstorm` 2026-09-13, see below)*
 - **E60** — Cloud Storage Connectivity *(Pending — filed via `/brainstorm` 2026-09-14, see below)*
+- **E64** — Skill Catalog Smoke Testing & Critical-Error Reporting *(Passed with remarks — filed via `/j-todo` 2026-09-26, rolled up 2026-10-14; one story `E64_S01` Passed with remarks. `/j-smoke-test` (`skills/j-smoke-test/`) structurally smoke-tests every skill and renders critical findings as a `Feature | Error | Consequences` table from `templates/CRITICAL_ERROR_TABLE_TEMPLATE.md`; the row shape is the registered `error_table` type in `templates/playbook-types.json`. Remark: it reports 5 genuine critical defects in four existing skills, so the task-level "zero critical on the real catalog" criterion is unmet as written; remediation is epic `E74`)*
+- **E65** — Service Connect (MCP and CLI setup) *(Pending — filed via `/brainstorm` 2026-10-01, see below)*
+- **E66** — Preferred Tools Registry *(Done — filed via `/j-brainstorm` and completed 2026-10-03; all four stories closed: `E66_S01` Passed, `E66_S02` Passed with remarks, `E66_S03` Passed, `E66_S04` Passed, see `project/board/epics/E66_preferred-tools-registry.md`)*
+- **E67** — Project-Scoped Pre-Flight Checklists *(Passed with remarks — filed via `/j-brainstorm` 2026-10-03; completed 2026-10-15. `S01` Passed, `S02`/`S04`/`S05`/`S07`/`S08` Passed with remarks, `S03` Merged, `S06` Passed; `E67_S08` (hook fail-open hardening and live `Task`/`Agent` matcher verification) was the last to close, see below)*
+- **E69** — Project Conventions Wizard *(Passed with remarks — filed via `/j-brainstorm` 2026-10-06, rolled up 2026-10-07; six stories `E69_S01`-`E69_S06`: `S01`-`S04` Passed, `S05`/`S06` Passed with remarks. Remarks: full `npm test` and `tests/mirror-test-subject-invariant.bats` not run to completion by user decision (targeted suites green); `commit-format` stays advisory because `pre-commit` cannot see the commit message; see below)*
+- **E71** — Atlassian Connect and Work-Item Linking *(Pending — filed via `/j-brainstorm` 2026-10-06, nine stories `E71_S01`-`E71_S09`, see below)*
+- **E72** — j.test Runner Skill and Commit-Time Test Gate *(Passed with remarks 2026-10-14 — filed via `/j-todo` 2026-10-07, five stories `E72_S01`-`E72_S05`, see below)*
+- **E74** — Skill Catalog Defect Remediation *(Pending — filed 2026-10-14 as the follow-up to `E64_S01`; one story `E74_S01`, tasks `T01`-`T06`, see below)*
+
+## Project-Scoped Pre-Flight Checklists (E67)
+Filed 2026-10-03 via the `idea-to-committed` playbook (`/j-idea` → `/j-brainstorm` → `/j-todo`), from the
+situation-bound checklist idea in `project/ideas.md`. Standing project policy — prioritised
+investigations, considerations and required actions — has no home today: per-item Acceptance Criteria and
+Definition of Done are authored per board item and die with it. E67 adds a registry at
+`project/configs/checklists.json` where each item declares **which lifecycle phases it applies to**
+(`pre-commit`, `pre-task`, `pre-release`, `pre-reconcile`), so the set gating `/j-commit` differs from the
+set gating `/j-do`, which differs again from the release path.
+
+Settled in brainstorm: triggers are lifecycle phases, not skill names (phases survive renames — E50
+renamed 40 skill directories); every item carries `kind: machine | judgment` so a tick records a
+verification rather than an agent's self-assertion; `enforcement` is per item (`block` / `confirm` /
+`advisory`); and `tick_scope` is per item (`run` / `persistent`). Enforcement lands in two phases —
+`scripts/checklist.sh` wired into the gating skills' script chains first (`E67_S03`), then a
+hook-enforced layer with a `project/queue/` situation marker that can genuinely block (`E67_S04`).
+
+Eight stories (the seven below plus `E67_S08`, described after the delivery notes): `E67_S01` schema, validator and a generic `templates/checklists.json` default kept distinct
+from this project's instance (`project/configs/` is not in `.publicignore`, so the instance ships
+downstream like `test-config.json` does); `E67_S02` the `list`/`check`/`tick` checker; `E67_S03` wiring
+into `/j-commit`, `/j-do`, `/j-reconcile`, `/j-publish` and `/j-mirror-public`; `E67_S04` the hook layer; `E67_S05` agent-suggested items — developer and tester can propose a new item
+either as a precaution or to stop an issue recurring, via a `checklist_suggestion` rapport modelled on E39's
+`crucial_escalation`, with the Scrum Master as sole writer and user confirmation required (added the same day,
+after the original four-story breakdown). Two further stories were added at the 2026-10-03 story-rollup review: `E67_S06` user-facing documentation, because the whole epic's documentation was deliberately maintainer-internal and the feature is therefore invisible to consumers (`grep -i checklist` returns zero hits in `README.md`, in `docs/`, and in `project/.wiki/`); and `E67_S07`, which collects the non-blocking residue of four `Passed with remarks` rapports (stale doc references, a `/jenga` Phase 4 sub-step ordering defect, and two weak test assertions).
+
+**Delivered 2026-10-03 (S01, S02, S03, S05):** the registry, validator and generic default; `scripts/checklist.sh`
+(`list`, `check`, `tick`, plus `suggest`, `pending`, `rejected`, `resolve`) with run-scoped and persistent tick state
+and a distinct exit code for a `block` failure (10) versus a `confirm` that needs a decision (11); the gate wired into
+`/j-commit`, `/j-do`, `/j-reconcile`, `/j-publish` and `/j-mirror-public` by prose in each skill; and the suggestion flow
+(developer and tester file a `checklist_suggestion` rapport, the Scrum Master reviews it and is the only writer of
+`project/configs/checklists.json`, after user confirmation). Decisions made while building: the two release skills fire the
+shared `pre-release` phase and then their own extension phase (`pre-publish` / `pre-mirror`) rather than sharing one, because
+an item can name phases but not skills; registry selection is whole-file with no merging, so a project instance must carry
+the generic release items itself; a reconcile run by `/j-commit` does not fire `pre-reconcile` (it would warn on every
+commit); and a unit deferred at the `pre-task` gate when `/j-do` has no live user is never re-dispatched in the same
+`/jenga` run (`E67_S03_T06`, a defect found while verifying the wiring). **The wiring is prose honoured by the agent
+running the skill; it is not mechanically enforced until `E67_S04` (hook layer).**
+
+**Delivered 2026-10-04/05 (S04, S06, S07):** `E67_S04` shipped the hook layer: `scripts/checklist-marker.sh` (a per-session situation marker with a push/clear stack, a 60-minute TTL and an explicit `refresh --token`) and `hooks/on_preflight_check.sh`, registered on `PreToolUse` with the matcher `Bash|Task|Agent`, which reads the marker, runs `checklist.sh check <phase>` and refuses a phase's own irreversible operation when a `block` item fails; with no marker it is a silent, subprocess-free no-op. The level-5 criterion was verified live on 2026-10-05, **for the Bash `git commit` path only**, by the orchestrator in a persistent-cwd main session (a Tester subagent cannot reproduce it because its Bash cwd resets between calls), so the claim "the wiring is prose honoured by the agent" above no longer holds for that path. `E67_S06` put the feature in front of consumers (`README.md`, the published page `docs/preflight-checklists.md`, `project/.wiki/preflight-checklists.md`). `E67_S07` cleaned the residue of four `Passed with remarks` rapports (stale `/j-do` reference, `/jenga` Phase 4 step ordering, two weak test assertions) and those rapports are now closed.
+
+**Known limits of the hook, tracked as `E67_S08` (filed 2026-10-05, Pending):** a `cd` inside the gated command is not seen (the hook locates the marker from the cwd before the command runs), a nonexistent harness cwd fails open, and the `Task`/`Agent` matcher path has never been exercised live. The planned hardening (parse a leading `cd`/`git -C`, fall back to `CLAUDE_PROJECT_DIR`) is best-effort: `bash -c`, subshells, `pushd` and variable-built paths cannot be closed by parsing and are to be documented as accepted limits rather than claimed as covered.
+
+**Not yet evidenced at rollup (2026-10-03):** two `E67_S03` boxes were deliberately left unticked. Its "existing bats suites still passing" criterion cannot be evidenced while `tests/mirror-test-subject-invariant.bats` carries three failures on a suite covering one of the five wired skills (tracked as `E28_S18`; now diagnosed, and partly self-inflicted: the culprit is `tests/checklist-gating.bats`, added by `E67_S03_T05` in commit `fe53ce95` on 2026-10-03, which passes 17/17 privately but fails 4 of 17 in a mirror-shaped tree because it asserts blocklisted `skills/j-mirror-public/SKILL.md` exists; the mechanism predates E67, since an earlier culprit, skill-allow-list-bijection, cleared after a `/j-self-sync`; the criterion becomes evidenceable once `E28_S18_T03` lands); and its `E61` instruction-mirroring criterion cannot be evidenced because `CLAUDE.md`, `AGENTS.md` and `WARP.md` carry no checklist content at all, even though `E67_S03` and `E67_S05` both declare `docs: ["CLAUDE.md"]` — a provenance claim no commit in the epic fulfilled (`E67_S06_T02` resolves it either way).
+
+**Explicitly out of scope:** absorbing E39's `gated` tier. E39 shipped `Passed with remarks` 2026-08-27
+and its risky-action list is marked fixed-and-verbatim across `agents/developer.md` and
+`agents/tester.md`; making it resolve from this registry would reopen a contract documented in five
+places, and is recorded as a candidate for a future E39 reopening rather than a dependency in either
+direction. A `j.checklist` authoring wizard is also deferred and deliberately not filed.
+
+## Project Conventions Wizard (E69)
+Filed 2026-10-06 via `/j-brainstorm`. A project has conventions of its own (naming, commit format, code
+commenting) but Jenga has nowhere to record them: agents infer style from the codebase and the E67
+checklist registry is hand-authored. E69 adds `j.conventions`, a step-by-step, install-wizard-style flow
+(modelled on `skills/j-tools/`) that detects the standards a project already follows, offers 2-3 general-standard
+presets per category, and records the answers in `project/configs/conventions.json`. An idempotent generator
+then writes `conv-` provenance-tagged items (`provenance.source: "convention"`) into
+`project/configs/checklists.json`, advisory or confirm strength only, never `block`; the E67 checker and hook
+are untouched. Nine coarse v1 categories: commit format, branching, naming, code comments, formatting/linting,
+testing expectations, file/directory layout, language/tooling, documentation placement. EST commit naming stays
+mandatory for board commits (`/reconcile` relies on it); a project commit-format convention applies to non-board
+commits only. Six stories: `S01` schema/validator/descriptor/presets, `S02` detection script, `S03` checklist
+generator, `S04` the wizard skill, `S05` agent consumption (digest, `agents/developer.md` precedence rule,
+`j-commit`, init/onboard offer), `S06` documentation and mirror resync. Out of scope: a user layer, a general
+`j.checklist` authoring wizard, and five deferred categories (error handling/logging, dependency policy,
+security hygiene, review/PR rules, release/versioning). See `project/board/epics/E69_project-conventions-wizard.md`.
+
+## Atlassian Connect and Work-Item Linking (E71)
+Filed 2026-10-06 via `/j-brainstorm`. Teams using Jira, Confluence and Bitbucket cannot tie a board item to its
+counterpart there. E71 lets a project connect to Atlassian through `j.connect` and **manually link** board items
+(epics, stories, tasks) to Jira cards, Confluence sources and Bitbucket repos/PRs, with a link prompt that
+appears only when Atlassian is configured. A **sibling of E65, not part of it**: E71 adds Atlassian descriptors
+on top of E65's descriptor format, runner and `register-mcp.sh` (`E71_S01` depends on `E65_S01`/`E65_S02`), and
+has no structural overlap with E69. Decisions: Cloud first (Data Center is the follow-up `E71_S07`, with
+`deployment: cloud|datacenter` in the marker from day one so the linking layer is deployment-agnostic); both
+transports (remote MCP with browser OAuth, and `acli` with an API token referenced by env-var NAMES only);
+no fixed source of truth, manual linking only; a single optional `external_refs` list on board items rather
+than per-system fields. Stories: `S01` the `atlassian-cloud.json` and `atlassian-cli.json` descriptors
+(unverifiable vendor facts ship labelled "not verified against a real account", as Figma did); `S02`
+`scripts/atlassian-configured.sh` plus the `project/configs/atlassian.json` marker, the offline-safe gate with
+marker-drift detection; `S03` the `external_refs` schema field and `external_refs_declined` skip marker
+(absent-safe across validator, dashboard, `j.status`, rollup, mirror; the story carries a pending
+`crucial_level: advisory` proposal awaiting user confirmation); `S04` the offline link script (Jira key,
+Confluence page URL, Bitbucket repo/PR URL shape checks, written under `with-lock.sh`); `S05` an optional
+`/reconcile` Phase 5.5 link prompt; `S06` the same prompt in `j.todo` (`j.btw` left out of v1); `S07` Data
+Center descriptor (deferred, P5); `S08` docs, mirror resync and real-account verification (needs a user with an
+Atlassian account); `S09` (added 2026-10-06 after the `E71_S02_T03` rapport, P1, gates `S05`/`S06`) makes the
+`j.connect` flow itself write the configured marker, via a generic optional `post_verify` descriptor field
+(a framework script named by bare file name, static args and declared user inputs such as the site URL) run by
+`run-descriptor.sh` after a passing `verify`, so no service name or marker logic enters `SKILL.md`; the marker
+stays secret-free, idempotent and is never written when verification fails. **Non-goals:** two-way sync and Jira import. Developer and tester agents may read links but
+never write them; scrum-master owns writes. All items `Pending`. See
+`project/board/epics/E71_atlassian-connect-and-work-item-linking.md`.
+
+## j.test Runner Skill and Commit-Time Test Gate (E72)
+
+Filed via `/j-todo` (2026-10-07). Jenga has no user-facing way to run a project's tests. This repo
+has `npm test` (109 bats files) and the tester agent runs tests as part of the board lifecycle, but a
+user who wants to run the suite — or one suite out of many — has no generic skill. Consuming projects
+are worse off: Jenga ships into Node, Python, Go and shell projects alike and offers nothing for any
+of them.
+
+E72 delivers **`j.test`**: a skill that discovers every runnable test suite in a project, presents
+them as a **numbered list** the user can select from, and runs the selection. **The full suite is the
+default** — selection is the opt-in. It also closes the loop at commit time. `j.commit` gains a
+**three-option prompt**: (1) run tests covering the committed scope only, (2) run the full `j.test`,
+(3) skip tests.
+
+**Decisions settled at filing (2026-10-07):**
+
+1. **Generic, multi-ecosystem discovery.** A detector script reads what is on disk — npm scripts,
+   bats, pytest, go test, cargo test, shellcheck — treating `project/configs/test-config.json` as
+   an authoritative overlay. A detector that only understood this repo's bats stack would be useless
+   in the projects Jenga ships to.
+2. **`j.commit` always asks, but remembers a default.** The three options are shown every commit
+   unless the project has recorded a default in `test-config.json`. The default is overridable per
+   invocation.
+3. **Scoped tests resolve by path heuristic mapping.** Changed files map to test files via
+   convention (e.g. `src/foo.js` → `test/foo.test.js`, `skills/j-x/` → `tests/*j-x*.bats`) plus a
+   configurable mapping table, as a deterministic script.
+4. **`j.test` does not replace the tester agent.** It is a user-invoked convenience runner. The
+   tester remains the sole owner of the board testing lifecycle and status writes. The developer
+   agent never runs tests — `j.commit`'s prompt is answered by a human, not by an agent.
+5. **Scripts Over Inline Logic** — discovery, catalog rendering, scope mapping, execution and result
+   summarisation are scripts under `skills/j-test/scripts/`. `SKILL.md` holds only conversation and
+   selection logic.
+
+Five stories: `S01` discovery script and `test-config.json` descriptor updates; `S02` `j.test` skill
+(full suite, numbered list, default all); `S03` scope-mapping script for commit-time scoped runs; `S04`
+`j.commit` test-gate prompt and three-option flow; `S05` documentation, mirror sync, end-to-end
+validation. **Completed 2026-10-14, `Passed with remarks`:** all five stories are terminal and merged. `j.test` and the
+`j.commit` three-option test gate (with a recorded-default override and a tested failure contract) now exist, documented in
+`project/documentation/test-runner.md`. Verified by targeted suites per story plus Tiers 1 and 2 of the whole-epic manifest
+(611 ok / 212 ok, 2 skips from upstream Copilot CLI drift); the full `npm test` was **not run**, accepted-unverified by user
+decision, 2026-10-14. Follow-ups are listed in the epic's Rollup Remarks. See `project/board/epics/E72_test-runner-skill-and-commit-test-gate.md`.
+
+## Agent Check-In — j.check-in Liveness Instrument (E44 reopening, 2026-10-07)
+Filed via `/j-brainstorm` on 2026-10-07; `E44` reopened and expanded from four stories to seven. `j.check-in`
+answers an axis nothing on the board owned: **is the item the board calls `In Progress` actually alive right
+now, at the OS and harness level?** `j.status` reports declared board state, `j.reconcile` repairs
+board-versus-git divergence, and `E44_S03` (`/break status`) reports current run scope while its own DoD
+forbids the evidence liveness needs ("never reads a `.md` file outside `project/board/` and
+`project/todo.md`"). Motivating case, which narrowed the scope: an operator who has just fanned out several
+agents via `j.dooo` and wants to know which are alive, which have gone silent, and which finished but left
+live processes behind.
+
+**Three stories.** `E44_S05` the read-only collector `skills/j-check-in/scripts/collect-liveness.sh` (reads
+`ListAgents` output on stdin — a bash script cannot call a harness tool; emits one JSON object; exits `0`
+always, a deliberate divergence from `scripts/check-worktree-liveness.sh`'s exit-1-on-found; performs zero
+writes; plus the `j.do` change naming each background subagent after its board id so the agent-to-item join
+is free). `E44_S06` the `j.check-in` skill — two-tier report, numbered option lists only for findings whose
+`actionable` field is `true`, delegation of every repair to its owner, allow-list and mirror resync.
+`E44_S07` automatic invocation: **no new trigger mechanism** — `skills/j-do/SKILL.md` section 4.1.2 already
+fires the `pre-task` pre-flight phase exactly once per unit, so this adds one registry item
+(`checkin-run-before-dispatch`, `machine`/`confirm`/`persistent`, `checklist_version` 1→2) plus a small
+`checkin-gate.sh`, and modifies **no hook wiring** — the root `settings.json` and all five
+`templates/permission-levels/level-*.json` files are untouched.
+
+**Key finding, valuable independently of the feature:** `/break` halts **dispatchers at task boundaries** and
+never reaches inside a running agent. Every `E44_S02` checkpoint sits at a task boundary by design, so a
+wedged agent mid-task has no boundary to halt at and `TaskStop` is the only intervention that reaches it —
+`/break` and `TaskStop` act on different subjects. `E44`'s Purpose section now records this as a Correction;
+the epic's original prose did not make it explicit. Consequence: `j.check-in` first shipped a **two-rung** ladder
+(observe → re-observe → confirmed `TaskStop`); `E44_S10` has since added the `/break` rung
+(`skills/j-break/` now exists, `E44_S01`/`S02` `Passed`), with `TaskStop` still the only rung that reaches a wedged agent.
+
+**Containment is the design.** `j.check-in`'s entire write surface is append-only `events.json` entries plus
+`TaskStop` after explicit confirmation. Triggers, rapports and `status_review` delegate to the scrum-master;
+stale worktrees and board demote/promote to `j.reconcile`; worktree removal nowhere through this skill
+(`scripts/worktree-remove-guard.sh` and the `WorktreeRemove` hook own it and already hard-block on exactly
+the condition it detects); other sessions' slot files report-only, since both slot scripts' headers state
+they never touch another session's counter file. A scrum-master subagent is spawned **only** when a finding
+is actionable, so a clean session costs one sub-two-second script run and no agent invocation.
+
+**Honest-by-design blind spots.** Collection is not delegable: from inside a delegated scrum-master subagent,
+`ListAgents` returned only that subagent plus seven unrelated interactive peer sessions — the parent's
+sibling developer/tester subagents were invisible. So the skill carries no `metadata.prefered_agent` and the
+host session must collect. The collector's `visibility` object is mandatory in every output and the report
+always states what it could not see; `check-worktree-liveness.sh` exit `4` degrades `cross_session` to
+`"none"` rather than reading as "clear". The automatic path is deliberately weaker (no `ListAgents`) and says
+so.
+
+**Follow-ups since filed:** `E44_S08` bundle resume, `E44_S09` per-session execution ledger for `/break status`,
+`E44_S10` the `/break` rung of the ladder, `E44_S11` independent tester verification — all terminal. The epic
+rolled up `Passed with remarks` on 2026-10-13; the remaining remark is that no real `/jenga` run has been
+interrupted by a real `/break` (live drill in progress).
+
+**Still deferred, deliberately not filed as board items** (recorded in the epic's own "Deferred Follow-On Work"
+section): moving the hardcoded 20/45-minute thresholds into `scope-thresholds.json` as
+`checkin_idle_warn_minutes`/`checkin_idle_stall_minutes` (`threshold_version` 4→5 plus `jenga config`
+descriptors). The 45-minute stall value must not be lowered: session `tester-E69_S06-bundle` logged nothing
+between `22:58:05Z` and `23:20:17Z`, 22 minutes of silence from a perfectly healthy tester. See `project/board/epics/E44_execution-control.md`.
 
 ## Train Skill Deprecation & Package Extraction (E57) — supersedes E19
 Captured via `/btw` on 2026-09-10 by direct user instruction: `/train` is disabled and deprecated in
@@ -140,7 +342,7 @@ Level heuristic), but the `gated`-tier proposal surfaced during breakdown was ne
 in-session, so no `crucial_level` was written to any of the three tasks.
 
 **Two reusable packaging gotchas found during `E47_S01`, documented in full in
-`docs/distribution.md`'s "Dashboard packaging decision" section:** (1) an explicit `files` entry
+`project/documentation/distribution.md`'s "Dashboard packaging decision" section:** (1) an explicit `files` entry
 for a path does **not** override a nested `.gitignore` in that same directory, even when the repo
 root has its own `.npmignore` — npm prefers a directory's own `.npmignore` over its `.gitignore`
 when both exist, so the fix was an empty (comment-only) per-directory `.npmignore`
@@ -422,8 +624,10 @@ public-facing distribution) even though `E53_S07` is substantively the highest-r
 batch — its risk is instead controlled narratively, via the hard safety-review gate written into
 its own first Acceptance Criterion.
 
+**`/route` retired (E53_S13, 2026-09-27, `Passed with remarks`).** `skills/j-route/` is deleted outright (hard break, no shim). `/jenga`'s Skill Matching & Invocation Contract is now the sole owner of the matching logic, which ends the hand-synced jenga/route duplication caveat from the 2026-09-26 `j.error` resolution (earlier references in this summary to `/route`'s matching are historical). `/route`'s board+docs enrichment survives as the opt-in `--enrich` flag on `/jenga`'s natural-language branch, implemented by `skills/jenga/scripts/enrich-nl-prompt.sh`. Two non-blocking, pre-existing/environmental findings are recorded in `project/rapports/problems/E53_S13-preexisting-validate-board-and-mirror-dryrun-remarks.md`.
+
 ## Skill Namespace Prefix & Anti-Masquerading Allow-List (E50)
-The canonical skill-namespace separator changed from `j:` (colon, E50_S01) to `j.` (dot, E50_S07_T01): every `skills/*/SKILL.md` frontmatter now reads `name: j.<name>` (twins: `j.j-<name>`). Reason: GitHub Copilot CLI validates the frontmatter `name` *value* and rejects any character outside `[A-Za-z0-9]`, hyphen, underscore, dot, space — the colon made all 82 skills fail to load there, a total Copilot outage. **Both of the two claims this paragraph originally closed with were reversed by the 2026-09-09 reopening of E50 and are no longer true.** (1) Directory names are *not* unchanged: the canonical directory is now `skills/j-<name>/`, and the 40 bare directories are deleted by `E50_S15`. (2) The bare `/<name>` form is *not* a permanent, never-deprecated alias: it **hard-breaks** — no redirect, no alias, no deprecation shim. The canonical frontmatter value stays `name: j.<name>` on the surviving twin (**not** `j.j-<name>`), and the surviving invocation forms are `j.<name>` and `/j-<name>`. **The authoritative contract is `docs/skill-authoring.md` → "The Canonical Naming Contract"** — read it there rather than trusting any restatement here or in `CLAUDE.md`, both of which have now drifted once. `E50_S11`–`E50_S18` implement against that contract; `E50_S18` owns proving this summary and the shipped behaviour agree at cutover. (Corrected 2026-09-09 by scrum-master from a developer proposal queued during `E50_S10_T01`; the developer correctly refused to edit this scrum-master-owned file directly.)
+The canonical skill-namespace separator changed from `j:` (colon, E50_S01) to `j.` (dot, E50_S07_T01): every `skills/*/SKILL.md` frontmatter now reads `name: j.<name>` (twins: `j.j-<name>`). Reason: GitHub Copilot CLI validates the frontmatter `name` *value* and rejects any character outside `[A-Za-z0-9]`, hyphen, underscore, dot, space — the colon made all 82 skills fail to load there, a total Copilot outage. **Both of the two claims this paragraph originally closed with were reversed by the 2026-09-09 reopening of E50 and are no longer true.** (1) Directory names are *not* unchanged: the canonical directory is now `skills/j-<name>/`, and the 40 bare directories are deleted by `E50_S15`. (2) The bare `/<name>` form is *not* a permanent, never-deprecated alias: it **hard-breaks** — no redirect, no alias, no deprecation shim. The canonical frontmatter value stays `name: j.<name>` on the surviving twin (**not** `j.j-<name>`), and the surviving invocation forms are `j.<name>` and `/j-<name>`. **The authoritative contract is `project/documentation/skill-authoring.md` → "The Canonical Naming Contract"** — read it there rather than trusting any restatement here or in `CLAUDE.md`, both of which have now drifted once. `E50_S11`–`E50_S18` implement against that contract; `E50_S18` owns proving this summary and the shipped behaviour agree at cutover. (Corrected 2026-09-09 by scrum-master from a developer proposal queued during `E50_S10_T01`; the developer correctly refused to edit this scrum-master-owned file directly.)
 
 **Coupling to sweep on any future separator change.** The `j` prefix separator is consumed by at least four normalizers, not just the two generator scripts: `scripts/apply-j-prefix.sh`, `scripts/generate-j-alias.sh`, `lib/generate-skill-allow-list.js` (E50_S02 anti-masquerading allow-list), and `mcp/router/skill-index.js` — plus `tests/generate-j-alias.bats`, which asserts the emitted value. `lib/generate-skill-allow-list.js` silently populated the security allow-list with prefixed identifiers when its `/^j:/i` regex stopped matching the new `j.` form; fixed to `/^j[.:]/i` (accepts both separators — the policy choice for that file).
 
@@ -468,6 +672,8 @@ Two incidents (a `.session_handoff.json` clobbering race and an orphaned ad-hoc 
 **Gated-tier chat confirmation vs. the harness's own deny rules are two separate mechanisms** (surfaced by the developer during `E29_S05`, 2026-09-12): a user's explicit chat confirmation for a `crucial_level: gated` action (per `agents/developer.md`) does not itself unblock a hard `Bash(git push *)` deny rule at session level 2 (Guarded) — that requires a second, distinct user action (`/jenga-permission-level [3-5]`) before the command can actually run. `E29_S05_T02` needed a real `git push` to the public `jenga-npm` repo and hit exactly this: the user confirmed the gated action in chat, but the push still didn't execute until the session was separately elevated. Future gated tasks involving `git push` (or any other harness-denied command) against a Guarded-or-lower session should expect this two-step pattern and flag it early rather than assuming chat confirmation alone suffices.
 
 ## Testing & Tooling
+- **Test-surface constraints (measured 2026-10-05).** (1) `mirror.sh`'s `check_test_subject_invariant` runs the entire shipping bats suite serially once per real-push case; at 83 shipping files one pass costs 549s on an idle machine, and `tests/` grew from 43 to 92 `.bats` files between 2026-09-26 and 2026-10-05, so the cost grows with every test file added anywhere. (2) `bats -j` does not work on this machine: bats 1.14.0 delegates `-j` to GNU parallel, which is not installed, so `bats -j 4 <file>` runs zero tests (it exits 1, failing closed). `npm test` is a single serial `bats tests/*.bats`; no sharding or parallel-bats guidance exists in `agents/tester.md`, `scripts/`, or `project/configs/`.
+- **Tooling hazard — `j.self-sync` bundled side effects (found in E53_S13_T02, 2026-09-27).** `node skills/j-self-sync/scripts/run.js`, even for a narrow resync, also runs the bundled `mark-merged.sh`/`mark-deployed.sh` subsystems. These write board-file `status` fields (it flipped several unrelated tasks/stories to `Merged`) and `project/data/deploy-reconcile-marker.json`, and make live `git ls-remote`/fetch calls against the public mirror. Developer-agent sessions must never write board status, so check `git status` for unexpected board-status writes before committing after running it.
 `project/configs/test-config.json` declares **bats** as both the unit and the integration tool, and states that e2e is covered by "bats integration tests". No bats harness exists: there are zero `.bats` files in the repo and `bats` is not installed. In practice every shell script under `skills/`, `scripts/`, and `hooks/` is covered by manual verification plus **shellcheck** (the one declared tool that is real, wired as the `sast` entry). Confirmed by the tester while verifying E40_S01_T03 and re-confirmed on 2026-08-26. The declared stack therefore overstates actual coverage. Two ways to close it — stand up a bats suite (starting with `skills/uncharted/scripts/*.sh`, which are the newest and most script-dense) or amend `test-config.json` to state that unit/integration coverage is manual. Not yet filed as a board item; the choice between the two is a call for the maintainer.
 
 `project/data/rapport_manifest.json` (the committed seed `hooks/on_session_end.sh` diffs new rapports against) was found stale during the E39_S04_T04 walkthrough on 2026-08-27: two real, pre-existing rapports (`project/rapports/problems/E37_S02-tester-still-writes-legacy-handoff-path.md`, `project/rapports/problems/E37_S02_T01-claude-settings-json-not-synced.md`) were absent from it on `main`, so `on_session_end.sh` would re-flag both as new `rapport_review` items even though they already exist. Root cause: the manifest is only rewritten by the hook when *new* files are found, not on every rapport commit, so a rapport committed without a subsequent `on_session_end.sh` run in that session/worktree before merge silently drifts the baseline. Not yet fixed — run `bash scripts/generate-rapport-manifest.sh` on `main` to resync when picked up. Not filed as a board item.
@@ -533,7 +739,7 @@ The other three needed new epic homes:
 "Documentation" view — are genuinely net-new: no parser or route in `project/app/api` today exposes
 full content for `project/rapports/*` (only a 300-char-truncated summary via `/v1/history`),
 `project/documentation/{summaries,plans}`, `project/ideas.md`, `project/PROJECT_SUMMARY.md`,
-`README.md`, `docs/STRATEGY.md`, or `project/documentation/examples/*`. Both requests share the same
+`README.md`, `project/documentation/STRATEGY.md` (moved there from `docs/STRATEGY.md` by E34_S07, legacy fallback retained), or `project/documentation/examples/*`. Both requests share the same
 shape ("browse categorized markdown artifacts, click to see full content") but were confirmed during
 brainstorm to be conceptually distinct — Rapports is process/history artifacts (110+ files under
 `problems/` alone), Documentation is curated reference material — and ship as **two separate tabs**
@@ -607,6 +813,36 @@ radius understood: the entire `forward_from` surface in the repo today is **one 
 (`j-reconcile` → `j-todo` in `board-hygiene.json`).
 
 
+## Service Connect — MCP and CLI Setup (E65)
+Filed via `/j-brainstorm` (2026-10-01), second step of the `idea-to-committed` playbook. A `j.connect` skill
+that guides users through setting up third-party MCP and CLI services in their project: detect, install
+the CLI, authenticate, register the MCP server, and independently verify. **Architecture decision:** ONE
+generic skill plus per-service data descriptors executed by shared scripts, modeled on `j.cloud-connect`
+(`E60_S01`) — adding a service is a data-only change, not a new skill. Stories: `E65_S01` descriptor
+schema, shared runner scripts, and the MCP settings-location decision (`.claude/settings.json` vs
+`.mcp.json`, reconciled with `E16_S04_T04`/`E26`'s reverted `.agents/settings.json` dual-write; gates all
+others); `E65_S02` the `j.connect` skill shell; `E65_S03` GitHub auth (`gh auth`) as the shared
+prerequisite hub; `E65_S04` Supabase and `E65_S05` DigitalOcean (priority services); `E65_S06` Figma and
+Expo (DEFERRED, P5; check for an already-connected Figma MCP before duplicating). Cross-cutting
+constraints: no stale hardcoded install commands (link official docs, verify by running the tool);
+secrets as env-var names only, never values, with a pre-write `.gitignore` check; deterministic steps in
+scripts; undeterminable platform falls back to official instructions. **Out of scope:** App Store Connect
+and Play Console, handed off to `j.publish` (`mobile-ios` target) — no story created for them. All items
+`Pending`.
+
+## Skill Catalog Defect Remediation (E74)
+
+Filed 2026-10-14 as the follow-up to `E64` (which closed `Passed with remarks`). `E64`'s smoke test found 5 genuine
+critical defects in four existing skills; `E64` did not edit them, so `/j-smoke-test` exits 1 on this repository and
+`tests/smoke-test-skills.bats` tolerates them through a `KNOWN_DEFECTS` list. `E74_S01` fixes them and makes the
+harness a green gate: `E74_S01_T01` `j-deep-dive` (`prefered_agent: scrum-master`, real description), `T02` `j-btw`
+(`../j-pi-plan/assets/...`), `T03` `jenga` (`skills/j-do/assets/sender_template.json`), `T04` `j-mirror-public`
+(retired `generate-j-alias.sh` prose; the `rewrite_orphaned_twin_names` section is live and stays), `T05` replace
+`KNOWN_DEFECTS` with a zero-critical assertion (depends on `T01`-`T04`), `T06` a decision task on whether
+prose-only dangling references should rate below critical. `T01`-`T04` and `T06` are `inline`, `T05` is `task`.
+A sixth critical finding, `skills/train/`, exists only as an untracked pre-E50 leftover in the main working tree
+(no `SKILL.md`, nothing tracked): not a repo defect, local cleanup only, no task. All items `Pending`.
+
 ## Conventions
 - Board items use `E##_S##_T##` naming convention
 - Story format requires `## Acceptance Criteria` and `## Definition of Done` with `- [ ]` checkboxes
@@ -615,6 +851,6 @@ radius understood: the entire `forward_from` surface in the repo today is **one 
 
 ### Known Gaps
 - Root `AGENT.md`/`AGENTS.md` still carry a stale, older `/jenga` description ("Gather project description and goals from the user; define initial epics in PROJECT_SUMMARY.md") that predates `/jenga` becoming the board orchestrator — `CLAUDE.md` carried the same stale text until E45_S03_T02 corrected it there (scope: `CLAUDE.md`, `README.md` only; `AGENT.md`/`AGENTS.md` deliberately left untouched since they don't make the "zero-prompt" claim that task was fixing). Same drift pattern already flagged under Launch & Discoverability (E41) as a proven failure mode. Follow-up: sync `AGENT.md`/`AGENTS.md`'s `/jenga` row to match `CLAUDE.md`'s corrected three-mode description. Not yet filed as a board item.
-- `project/.wiki/documentation.md` and `project/documentation/documentation.md` each still carry ~41 bare `/skill-name` invocation references, now stale relative to the `j:<name>` canonical form adopted in E50_S01 across `CLAUDE.md`, `README.md`, and `docs/skill-authoring.md` (flagged by a doc-sync report scoped to E50_S01_T05, which deliberately left these two files untouched since its task frontmatter pinned scope to the three files above). Same drift-pattern class as the `AGENT.md`/`AGENTS.md` gap above. Follow-up: a small task to bring both wiki-doc copies' invocation forms in line with the `j:` convention — note E38_S01's still-pending consolidation of the two files onto one canonical copy should probably land first or alongside, to avoid fixing the same drift twice. Not yet filed as a board item.
+- `project/.wiki/documentation.md` and `project/documentation/documentation.md` each still carry ~41 bare `/skill-name` invocation references, now stale relative to the `j:<name>` canonical form adopted in E50_S01 across `CLAUDE.md`, `README.md`, and `project/documentation/skill-authoring.md` (flagged by a doc-sync report scoped to E50_S01_T05, which deliberately left these two files untouched since its task frontmatter pinned scope to the three files above). Same drift-pattern class as the `AGENT.md`/`AGENTS.md` gap above. Follow-up: a small task to bring both wiki-doc copies' invocation forms in line with the `j:` convention — note E38_S01's still-pending consolidation of the two files onto one canonical copy should probably land first or alongside, to avoid fixing the same drift twice. Not yet filed as a board item.
 - `scripts/validate-story-format.sh` (added E17_S01, 2026-06-06) hard-requires every story to carry a `## Definition of Done` section, but at least 17 pre-existing stories authored before that date lack one entirely (e.g. `E03_S01`-`S03`, `E15_S01`-`S03`, `E16_S01`, `E16_S02`, `E16_S03`, `E23_S01`-`S05`, `E29_S03`, `E29_S04`, `E33_S06`, `E53_S02`). Surfaced by the tester on `E16_S03` (`project/rapports/problems/E16_S03-story-format-invalid.md`, 2026-09-07), since the tester workflow now runs this validator as a mandatory gate before any `Passed` status — `E16_S03` retrofitted its own DoD inline to clear the gate, but the other ~16 stories remain unretrofitted and will hit the same blocker whenever they're next touched. Follow-up: a Maintenance task to retrofit `## Definition of Done` sections onto the remaining pre-existing stories. Not yet filed as a board item.
 - `/reconcile` can promote a task/story to `Passed`/`Done` based on a light-scope commit alone while a light-scope-failure fallback to the full worktree+developer+tester pipeline is already in flight for that exact task ID (observed on `E40_S01_T05`, 2026-09-23: main HEAD `5730a453` marked the task `Passed` and the story `Done` from commit `0c16ead0` alone, before the fallback pipeline's tester found — and the developer fixed — a real classification bug in `aa57d899`; the fix briefly existed only on a detached-HEAD worktree with no branch pointer, one `git worktree remove` away from being lost entirely). Follow-up: scrum-master's next `/reconcile` pass should check whether a task ID has an in-flight fallback-pipeline dispatch (e.g. a recent `implementation_assignment`/fallback trigger without a matching completed handoff) before promoting it to a terminal status from light-scope evidence alone. Full incident, reproduction, and resolution: `project/rapports/problems/E40_S01_T05-premature-main-reconcile-vs-worktree-fix.md` (merged into main at `69b59c78`). Not yet filed as a board item.

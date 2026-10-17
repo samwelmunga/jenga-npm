@@ -1,7 +1,9 @@
 # Jenga AI
-### The AI framework for serious projects.
+### The AI-driven development framework for large, long-lived codebases.
 
-Jenga AI is an agentic software engineering framework for AI-assisted development: it splits work across three role-bounded agents — a Scrum Master that plans, a Developer that implements in an isolated git worktree, and a Tester that runs your test suite and owns the board status. Work survives session boundaries as Epics, Stories, and Tasks on a Markdown board your agent reads at the start of every session.
+Jenga AI is an agentic software engineering framework for AI-driven development at scale — on new projects and on large existing applications alike. It targets the case AI coding tools handle worst: a codebase far too big to fit in one context window, spread across many modules and often more than one repository, worked on over weeks rather than a single session.
+
+It splits work across three role-bounded agents — a Scrum Master that plans, a Developer that implements in an isolated git worktree, and a Tester that runs your test suite and owns the board status. Work survives session boundaries as Epics, Stories, and Tasks on a Markdown board your agent reads at the start of every session, so understanding of a large system accumulates instead of resetting. Existing code with no board history is onboarded explicitly, through investigation rather than guesswork (`j.uncharted`), and the same workflow propagates across every repository you run it in (`j.distribute`).
 
 [![npm version](https://img.shields.io/npm/v/@jenga-ai/agent.svg)](https://www.npmjs.com/package/@jenga-ai/agent)
 [![license](https://img.shields.io/npm/l/@jenga-ai/agent.svg)](LICENSE)
@@ -37,19 +39,12 @@ Start here, then go deeper as you need it:
 |---|---|
 | [Intro Guide](project/.wiki/intro-guide.md) | Start here. The philosophy, how to think about the system, and a first-15-minutes walkthrough for a new project or an existing codebase. Also on the [docs site](https://samwelmunga.github.io/jenga-npm/getting-started.html). |
 
-**Core concepts** — the three pillars, in the order they build on each other:
-
-| Concept | What it covers |
-|---|---|
-| [Role Separation](project/.wiki/concepts/role-separation.md) | Why Jenga AI uses three distinct agents instead of one. |
-| [Board Hierarchy](project/.wiki/concepts/board-hierarchy.md) | Why work is structured as Epics → Stories → Tasks, and how to use that hierarchy well. |
-| [Session Continuity](project/.wiki/concepts/session-continuity.md) | Why AI sessions losing context is the core problem — and how Jenga AI solves it structurally. |
-
 **How-to guides** — day-to-day working patterns:
 
 | Guide | What it covers |
 |---|---|
 | [Your First Feature](project/.wiki/concepts/first-feature.md) | Building a feature end-to-end, from idea to verified, committed code. |
+| [Starting From an Existing Project](project/.wiki/intro-guide.md#starting-from-an-existing-project) | Onboarding a large codebase that has no board history — investigation first, then planning. |
 | [Capturing Mid-Flow Ideas](project/.wiki/concepts/mid-flow-capture.md) | Handling a new thought, tangent, or feature idea without derailing your current work. |
 | [Working Across Sessions](project/.wiki/concepts/multi-session-work.md) | Picking up a project after a break — without losing momentum or context. |
 | [Parallel Tasks](project/.wiki/concepts/parallel-tasks.md) | Running multiple tasks simultaneously with `j.dooo`, or automating board-wide parallel execution with `j.jenga`. |
@@ -90,20 +85,7 @@ j.init → j.pi-plan → j.todo → j.do
 
 ---
 
-## What You Get
-
-- **Three specialised agents** — Scrum Master, Developer, Tester — each with a distinct role and no self-graded work
-- **A persistent, Kanban-style scrum board** — Epics, Stories, and Tasks tracked as Markdown files with structured frontmatter, surviving every session boundary
-- **A coordinated skill pipeline — one agentic workflow, not a command list** — planning skills (`j.pi-plan`, `j.todo`) hand off to execution skills (`j.do`, `j.dooo`), which hand off to review skills (`j.status`, `j.reconcile`), each stage reading and writing the same board state
-- **An event-driven trigger queue** — async handoffs between agents with a full audit trail in `project/logs/events.json`
-- **Isolated git worktrees per task** — the Developer never works directly on your main branch
-- **Works with any AI coding agent or AI-native IDE** — Claude Code, GitHub Copilot, and Codex CLI are all supported today
-
 > 📖 **Full reference:** [Docs site](https://samwelmunga.github.io/jenga-npm/reference.html) · **Intro Guide:** [Docs site](https://samwelmunga.github.io/jenga-npm/getting-started.html) — mirrored at [project/.wiki/documentation.md](project/.wiki/documentation.md) / [intro-guide.md](project/.wiki/intro-guide.md)
-
-### "Isn't this just an LLM grading another LLM?"
-
-The Tester doesn't read your code and form an opinion about it. It executes the test suite you configure in `project/configs/test-config.json` and reports pass or fail — in this repo, `bats` for unit and integration, `shellcheck` for SAST. What Jenga guarantees structurally is that the agent that wrote the code is not the agent that decides it's done, and doesn't get to write its own status onto the board. What comes out of that gate depends on what you wire into it — the same as any CI pipeline.
 
 ## Platform Support
 
@@ -162,12 +144,7 @@ Run `j.status` at any time to see where the project stands.
 
 📖 **New to Jenga AI?** The [Intro Guide](https://samwelmunga.github.io/jenga-npm/getting-started.html) walks through the philosophy, the three pillars (role separation, board hierarchy, session continuity), and a full first-15-minutes walkthrough for both a new project and an existing codebase — mirrored at [project/.wiki/intro-guide.md](project/.wiki/intro-guide.md).
 
-**CLI maintenance commands.** The `jenga` binary installed alongside the package (`jenga --help`)
-also ships a couple of maintenance commands, distinct from the in-agent `j.<name>` skills above:
-
-| Command | Description |
-|---|---|
-| `jenga doctor` (alias: `jenga clean`) | Scans `.agents/` and `.claude/` for orphaned package-owned files left behind by an upgrade (or any other mirror drift), previews them, and deletes only on explicit confirmation. Never deletes unattended — add `--dry-run` to preview only. See `project/documentation/distribution.md` for the ownership heuristic and its false-positive posture. |
+**CLI commands.** The `jenga` binary installed alongside the package also ships a set of deterministic, agentless commands — see [The `jenga` CLI](#the-jenga-cli).
 
 ---
 
@@ -194,15 +171,21 @@ Skills live in `.agents/skills/<name>/SKILL.md`. Invoke with `j.<name>` in your 
 > structurally: every skill ships under the collision-safe `/j-<name>` directory name, so there's no
 > bare `/<name>` directory for a host tool's own command to collide with in the first place.
 > `/j-<name>` isn't a fallback to reach for when something misbehaves — it's simply how the skill is
-> named. Two permanent exceptions ship bare-only, with no `/j-<name>` form: `/jenga` and
-> `/jenga-permission-level` — deliberately excluded, since neither is the kind of skill a host tool's
-> own built-in command is likely to name-collide with.
+> named. Three permanent exceptions ship bare-only, with no `/j-<name>` form: `/jenga`,
+> `/jenga-permission-level`, and `/jenga-config` — deliberately excluded, since none is the kind of
+> skill a host tool's own built-in command is likely to name-collide with.
 
 | Command | Description |
 |---|---|
 | `j.init` | Scaffold project directories, `workflow.json`, `PROJECT_SUMMARY.md`, initial git commit |
 | `j.todo` | Add missions to `project/todo.md` linked to epics and stories |
 | `j.do` | Execute tasks from the scrum board, drives the Developer agent through the full loop |
+| `j.break` | Halt execution after the current task completes and before the next one starts; `hard` persists until cleared, `status` adds a progress rapport for the current run |
+| `j.test` | Discover the project's test suites, pick which to run (blank runs all), and get a pass/fail summary; exit code 0 when all passed, 1 otherwise |
+| `j.smoke-test` | Smoke-test every skill in the catalog (frontmatter, name versus directory, preferred agent, referenced scripts and assets) and get a pass/fail summary with critical findings called out |
+| `j.commit` | Commit finished work with the EST naming convention, after asking whether to run tests first (scoped to the change, the full suite, or skip, with a remembered default) |
+| `j.conventions` | Record the project's conventions (commit format, branching, naming, testing, file layout, docs placement) so every agent follows them — detects what the project already does and offers presets |
+| `j.check-in` | Report which dispatched agents are actually alive, silent, or finished-but-leaking processes |
 | `j.status` | Print a full scrum board overview — epics, stories, tasks, rapports, queue depth |
 
 ### `/jenga` — one command, several behaviors
@@ -216,7 +199,7 @@ Skills live in `.agents/skills/<name>/SKILL.md`. Invoke with `j.<name>` in your 
 | `/jenga *` | Fully automated — decomposes, queues, and executes everything eligible, no prompts |
 | `/jenga <free text>` | Natural-language dispatch — matches a single skill directly, or proposes a multi-skill [playbook](#playbooks) when the request spans more than one |
 
-It's one of the two permanent bare-only exceptions noted above — there's no `/j-jenga` form.
+It's one of the three permanent bare-only exceptions noted above — there's no `/j-jenga` form.
 
 > 📖 **Full skill list** (planning, review, committing & maintenance commands): [Docs site](https://samwelmunga.github.io/jenga-npm/skills.html) — mirrored at [project/.wiki/documentation.md#skills](project/.wiki/documentation.md#skills)
 
@@ -242,79 +225,42 @@ Calling `j.playbook` with no id prints a table of every available playbook (id, 
 
 Nothing executes until you confirm the chain, and any step can be unchecked first. `understand-then-commit` prepends `j.uncharted` investigation for unfamiliar code before running that same pipeline — useful when the change touches code you don't fully understand yet. No built-in playbook publishes or mirrors on your behalf: build chains terminate at `j.commit`, and publishing stays an explicit, separately invoked act.
 
-When a step forwards its result into the next one, that value has a declared **output type** (a plain string, a list of board IDs, a list of files) so the chain can be validated before it runs. See [Getting Started](https://samwelmunga.github.io/jenga-npm/getting-started.html#how-playbooks-know-what-a-skill-produces) for how that works.
+When a step forwards its result into the next one, that value has a declared **output type** (a plain string, a list of board IDs, a list of files) so the chain can be validated before it runs. 
+
+See [Getting Started](https://samwelmunga.github.io/jenga-npm/getting-started.html#chaining-workflows-with-playbooks) for more on how playbooks work.
 
 Want your own recurring chain? `j.playbook-new` walks you through authoring one — id, name, description, keywords, examples, and an ordered list of skills — writes it to `project/.playbooks/<id>.json` alongside the built-in ones, and self-validates the result before reporting success.
 
 ---
 
-## Pre-Flight Checklists
+## The `jenga` CLI
 
-A **pre-flight checklist** is a standing list of checks that must hold before a gated action goes ahead: no `.env` file staged before a commit, a clean working tree before a release, "I have re-read the acceptance criteria" before a task starts. Each item says which lifecycle **phase** it applies to and how strictly it is enforced (`block`, `confirm` or `advisory`). The four base phases are:
+Not every step needs a model. The `jenga` binary installed with the package (`jenga --help`) runs the deterministic work as plain code — no agent, no reasoning, **zero token cost**:
 
-| Phase | Fires when |
+| Command | What it does |
 |---|---|
-| `pre-commit` | Work is about to be committed (`j.commit`) |
-| `pre-task` | A board task is about to start executing (`j.do`) |
-| `pre-release` | A release is about to be published or mirrored (`j.publish`, `j.mirror-public`) |
-| `pre-reconcile` | The board is about to be reconciled against the implementation (`j.reconcile`) |
+| `jenga init` | Setup wizard — creates `jenga.cli.json` and registers the prompt-router hook. |
+| `jenga attach` | Write the MCP config for this project so new sessions route through Jenga. |
+| `jenga status` | Show router status and the active skill session. |
+| `jenga config` | List and edit `project/configs/*.json` — interactively, or `jenga config get\|set <file-id>.<key> [value]`. A successful `set` bumps that file's version counter. |
+| `jenga dashboard start\|open` | Start the dashboard API (`--port <n>`, default 3001 or `JENGA_API_PORT`; `--serve-app` also serves the built UI), or health-check it and open it in your browser. |
+| `jenga doctor` (alias: `jenga clean`) | Scan `.agents/` and `.claude/` for orphaned package-owned files left behind by an upgrade, preview them, and delete only on confirmation. `--dry-run` previews only. |
 
-**Defaults and your own checklist.** Jenga ships a small generic default at `templates/checklists.json` (`node_modules/@jenga-ai/agent/templates/checklists.json` in a consumer install). It applies as-is until you author your own `project/configs/checklists.json`. Once that file exists it **replaces the shipped default wholesale**: the two are never merged, so copy any shipped items you want to keep into your own file. A project instance with `"items": []` is a deliberate "nothing applies here". When there is no registry at all, or the registry has no item for a phase, the checker prints nothing and exits `0`: a silent no-op, with no warning and no prompt.
+Same principle that pushes skill logic into scripts rather than prompts: editing a config key is a fixed sequence with one correct answer. `jenga config set` validates and writes through code, so a settings change can't be left half-applied — which is why it's a command, not a `j.<name>` skill.
 
-**Three layers.** (1) The gating skills call `scripts/checklist.sh` themselves and honour the answer. That layer is instructions the running agent follows, not enforcement. (2) A skill records the active phase in a situation marker (`scripts/checklist-marker.sh`). (3) A `PreToolUse` hook (`hooks/on_preflight_check.sh`) reads that marker and refuses the active phase's own irreversible command (for example `git commit` during `pre-commit`) while a `block` item fails; a failing `confirm` item makes it ask instead. With no marker the hook does nothing. What the hook's tests demonstrate is its behaviour in a sandbox; in a live session it rests on Claude Code honouring the hook's exit code `2`.
-
-Agents can also *suggest* new items when they spot a risk. A suggestion is only a rapport: the Scrum Master reviews it and nothing reaches `project/configs/checklists.json` without your confirmation.
-
-> 📖 **Authoring reference** (item fields, enforcement levels, exit codes): [Docs site](https://samwelmunga.github.io/jenga-npm/preflight-checklists.html) — mirrored at [project/.wiki/preflight-checklists.md](project/.wiki/preflight-checklists.md)
+> 📖 **Settings reference:** `project/configs/README.md` · **`jenga doctor`'s ownership heuristic:** `project/documentation/distribution.md`
 
 ---
 
-## Example
+## Pre-Flight Checklists
 
-### A Real Session, On This Repo
+A **pre-flight checklist** is a standing list of checks that must hold before a gated action goes ahead: no `.env` file staged before a commit, a clean working tree before a release. Each item names the lifecycle **phase** it guards — `pre-commit` (`j.commit`), `pre-task` (`j.do`), `pre-release` (`j.publish`, `j.mirror-public`), `pre-reconcile` (`j.reconcile`) — and how strictly it is enforced: `block`, `confirm`, or `advisory`.
 
-Not a demo — this is what actually produced the section you're reading.
+Jenga ships a small generic default at `templates/checklists.json`. Authoring your own `project/configs/checklists.json` **replaces it wholesale** — the two are never merged, so copy over any shipped item you want to keep. With no registry, or no item for the active phase, the checker exits `0` silently.
 
-The conversation starts with a request to align this README's language and content with a positioning plan drafted for this epic (E41):
+Enforcement doesn't rest on an agent cooperating: a `PreToolUse` hook (`hooks/on_preflight_check.sh`) refuses the active phase's own irreversible command — `git commit` during `pre-commit` — while a `block` item fails, and asks when a `confirm` item fails. Agents can *suggest* items, but a suggestion is only a rapport: nothing reaches your checklist without your confirmation.
 
-```
-j.improve E41: I want to make some adjustments to the README in both
-language as well as content to better match [the E41 positioning plan]
-[...]
-```
-
-That plan already existed, so the copy gets edited directly — no need to re-run a fresh analysis pass just to re-derive it. A few edits later, ten more issues surface, one with an `j.brainstorm` request attached:
-
-```
-Then do a j.todo on this, as there are more places that should be
-edited based on that scrutiny rapport:
-* Remove warning banner about Copilot conflict
-[...]
-* Fewer, better and more relatable examples, we should
-  j.brainstorm this so I can send examples from real world usecases
-[...]
-* Should we really display the entire Skill list here?
-[...]
-```
-
-`j.todo` classifies the ten items into two stories: nine mechanical README fixes (`E41_S10`), and the Examples section you're reading right now (`E41_S11`) — carved out and held back specifically because of that `j.brainstorm` request, since a real example had to come from the user, not be invented.
-
-Once `E41_S10` is on the board, it's picked to run first. The Scrum Master reads the story and decomposes it into seven tasks, executed through `j.do`. Five are small, single-file text fixes deemed `--trivial` — they run inline, smoke-tested and committed directly, no worktree needed. Two need an editorial call — one of them being which skills are "foundational" enough to stay inline — those escalate to a real git worktree with a Developer and a Tester. The Tester independently re-verifies the diff, catches one file the Developer missed, fixes it, and queues the story for rollup. The Scrum Master processes that queue next: `E41_S10` → `Passed`. Epic `E41` stays `In Progress` — three other stories are still open.
-
-Then, circling back to the deferred request:
-
-```
-Jenga AI: [...] Remaining open thread from this session: E41_S11
-(Examples rework) is on the board but not started — it's gated on
-a j.brainstorm session where you supply real-world use cases. Want
-to do that now, or leave it queued?
-
-You: do it now
-```
-
-`j.brainstorm` opens for the gated story — the session you're reading right now, working out what this example should even say.
-
-Nobody hand-wrote this task breakdown. The board did it, the routing rules decided what needed a real worktree versus what could run inline, and the Tester — not the agent that made the edits — decided when each piece was actually done. The board entries are real: `E41_S10` and `E41_S11`.
+> 📖 **Authoring reference:** [Docs site](https://samwelmunga.github.io/jenga-npm/preflight-checklists.html) — mirrored at [project/.wiki/preflight-checklists.md](project/.wiki/preflight-checklists.md)
 
 ---
 
@@ -322,13 +268,16 @@ Nobody hand-wrote this task breakdown. The board did it, the routing rules decid
 
 **Use it when:**
 - You're building a non-trivial project across multiple sessions and need persistent engineering context instead of re-explaining it every time
+- You're doing AI-driven development on a **large existing application** — a codebase too big for one context window, where an agent needs a durable map of what exists before it can safely change it (`j.uncharted` onboards it; see [Starting From an Existing Project](project/.wiki/intro-guide.md#starting-from-an-existing-project))
+- Your system **spans multiple repositories** and you want one board, one set of agent roles, and one workflow across all of them rather than per-repo improvisation
 - You want an agentic development workflow with separate planning, coding, testing, and review agents — not one model self-grading its own work
 - You need traceability — who did what, when, on which task
 - You're working across more than one AI coding agent or AI-native IDE and want one workflow, not a separate setup per tool
-- You want to reuse and propagate the same agentic workflow across multiple projects (`j.distribute`)
+- You want to reuse and propagate the same agentic workflow across multiple projects and repositories (`j.distribute`)
 
 **You might not need it when:**
 - You're doing a quick one-off script or single-session experiment
+- The whole codebase fits comfortably in one context window and the work is done in one sitting
 - Your project has no meaningful test surface
 
 📖 **Full reference:** [Docs site](https://samwelmunga.github.io/jenga-npm/reference.html) — mirrored at [project/.wiki/documentation.md](project/.wiki/documentation.md)

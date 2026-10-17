@@ -128,6 +128,43 @@
   cursor: help;
 }
 
+/* E35_S04_T04 — Spike (idea) cards from project/ideas.md. Colours are literals here;
+   E47_S07_T04 converts them to tokens. */
+.kanban-card-spike {
+  color: #0f766e;
+  background: #ccfbf1;
+  border: 1px solid #99f6e4;
+  border-radius: 9999px;
+  padding: 0.05rem 0.4rem;
+  font-weight: 600;
+}
+
+.kanban-card-idea-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.kanban-card-board-id {
+  font-size: 0.7rem;
+  color: #374151;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 9999px;
+  padding: 0.05rem 0.4rem;
+  white-space: nowrap;
+}
+
+.kanban-card-board-id-link {
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  cursor: pointer;
+}
+
 /* E59_S03_T01 — Mobile (<= 480px, matches tokens.css --breakpoint-mobile):
    fixed 220px columns + bare `overflow-x: auto` gave no touch-scroll
    affordance and no signal that more columns existed off-screen. Below the

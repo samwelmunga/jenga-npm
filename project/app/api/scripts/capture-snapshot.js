@@ -51,7 +51,8 @@
  *     "health":        <full API envelope from GET /v1/health,        i.e. { data, meta, error }>,
  *     "documentation": <full API envelope from GET /v1/documentation, i.e. { data, meta, error }>,
  *     "rapports":      <full API envelope from GET /v1/rapports,      i.e. { data, meta, error }>,
- *     "todoWarnings":  <full API envelope from GET /v1/todo-warnings, i.e. { data, meta, error }>
+ *     "todoWarnings":  <full API envelope from GET /v1/todo-warnings, i.e. { data, meta, error }>,
+ *     "ideas":         <full API envelope from GET /v1/ideas,         i.e. { data, meta, error }>
  *   }
  * }
  * Each `routes.<name>` value is the *full* envelope exactly as the route returned it (see
@@ -96,7 +97,7 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 
-const ROUTES = ['/v1/board', '/v1/history', '/v1/architecture', '/v1/health', '/v1/documentation', '/v1/rapports', '/v1/todo-warnings'];
+const ROUTES = ['/v1/board', '/v1/history', '/v1/architecture', '/v1/health', '/v1/documentation', '/v1/rapports', '/v1/todo-warnings', '/v1/ideas'];
 const ROUTE_KEYS = {
   '/v1/board': 'board',
   '/v1/history': 'history',
@@ -105,6 +106,7 @@ const ROUTE_KEYS = {
   '/v1/documentation': 'documentation',
   '/v1/rapports': 'rapports',
   '/v1/todo-warnings': 'todoWarnings',
+  '/v1/ideas': 'ideas',
 };
 
 function printUsage() {

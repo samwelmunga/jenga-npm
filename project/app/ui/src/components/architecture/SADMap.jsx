@@ -313,7 +313,19 @@ export default function SADMap({ nodes, edges, coverage }) {
         </div>
       )
     }
-    return <p className="sad-empty">No architecture map data available.</p>
+    return (
+      <div className="sad-empty-state">
+        <p className="sad-empty">No architecture map data yet.</p>
+        <p className="sad-empty-detail">
+          This graph is only populated by <code>/uncharted onboard</code> (the default,
+          conversational mode) or <code>/uncharted segment --mode investigate</code> — both require
+          confirming each node interactively. <code>/uncharted segment --mode delivery</code> (the
+          deterministic, unattended pipeline) never writes here by design — it only produces
+          epic/story/task proposals. If you've run <code>--mode delivery</code> and expected a graph,
+          this empty state is expected, not a bug.
+        </p>
+      </div>
+    )
   }
 
   const toggleTypeCollapse = type => {

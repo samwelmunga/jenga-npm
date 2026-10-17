@@ -1,0 +1,5 @@
+{"runnable":[
+ {"n":1,"id":"fx:glob-pipe","name":"glob and pipe","type":"unit","ecosystem":"fixture","command":"cat *.dat | tr a-z A-Z >> \"$RUN_MARK\"","also":[]},
+ {"n":2,"id":"fx:stdin","name":"stdin probe","type":"unit","ecosystem":"fixture","command":"if [ -t 0 ]; then echo tty >> \"$RUN_MARK\"; else printf 'stdin-bytes=%s\\n' \"$(cat | wc -c | tr -d ' ')\" >> \"$RUN_MARK\"; fi","also":[]},
+ {"n":3,"id":"fx:pwd","name":"cwd probe","type":"unit","ecosystem":"fixture","command":"pwd -P >> \"$RUN_MARK\"","also":[]}
+],"not_runnable":[],"warnings":[]}

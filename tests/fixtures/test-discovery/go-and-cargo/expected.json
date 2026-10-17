@@ -1,0 +1,47 @@
+{
+  "suites": [
+    {
+      "command": "cargo test --test api",
+      "ecosystem": "cargo",
+      "id": "cargo:integration:api",
+      "name": "cargo test --test api",
+      "paths": [
+        "tests/api.rs"
+      ],
+      "type": "integration"
+    },
+    {
+      "command": "cargo test --lib",
+      "ecosystem": "cargo",
+      "id": "cargo:unit",
+      "name": "cargo test --lib",
+      "paths": [
+        "src/**/*.rs"
+      ],
+      "type": "unit"
+    },
+    {
+      "command": "go test ./...",
+      "ecosystem": "go",
+      "id": "go:.",
+      "name": "go test .",
+      "paths": [
+        "**/*_test.go"
+      ],
+      "type": "unit"
+    },
+    {
+      "command": "go test ./pkg/alpha/...",
+      "ecosystem": "go",
+      "id": "go:pkg/alpha",
+      "name": "go test pkg/alpha",
+      "paths": [
+        "pkg/alpha/*_test.go"
+      ],
+      "type": "unit"
+    }
+  ],
+  "warnings": [
+    "test-config.json not found; reporting detected suites only"
+  ]
+}

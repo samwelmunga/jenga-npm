@@ -1,8 +1,8 @@
 ---
 name: j.deep-dive
-description: ">."
+description: "Investigate an idea, issue or proposal in depth: information gathering, brainstorming, optional scrutiny and solution assessment, ending in a saved document."
 metadata:
-  prefered_agent: scrum_master
+  prefered_agent: scrum-master
 keywords:
   - "deep dive"
   - "investigate"

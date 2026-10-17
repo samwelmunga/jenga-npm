@@ -1,0 +1,62 @@
+{
+  "suites": [
+    {
+      "command": "pytest Upper",
+      "ecosystem": "pytest",
+      "id": "pytest:Upper",
+      "name": "pytest Upper",
+      "paths": [
+        "Upper/**/*_test.py",
+        "Upper/**/test_*.py"
+      ],
+      "type": "unit"
+    },
+    {
+      "command": "pytest markers",
+      "ecosystem": "pytest",
+      "id": "pytest:markers",
+      "name": "pytest markers",
+      "paths": [
+        "markers/**/*_test.py",
+        "markers/**/test_*.py"
+      ],
+      "type": "unit"
+    },
+    {
+      "command": "pytest pkg",
+      "ecosystem": "pytest",
+      "id": "pytest:pkg",
+      "name": "pytest pkg",
+      "paths": [
+        "pkg/**/*_test.py",
+        "pkg/**/test_*.py"
+      ],
+      "type": "unit"
+    },
+    {
+      "command": "pytest tests",
+      "ecosystem": "pytest",
+      "id": "pytest:tests",
+      "name": "pytest tests",
+      "paths": [
+        "tests/**/*_test.py",
+        "tests/**/test_*.py"
+      ],
+      "type": "unit"
+    },
+    {
+      "command": "pytest tools",
+      "ecosystem": "pytest",
+      "id": "pytest:tools",
+      "name": "pytest tools",
+      "paths": [
+        "tools/**/*_test.py",
+        "tools/**/test_*.py"
+      ],
+      "type": "unit"
+    }
+  ],
+  "warnings": [
+    "test-config.json not found; reporting detected suites only"
+  ]
+}

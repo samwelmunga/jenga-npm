@@ -26,12 +26,13 @@
 > every routing surface, was reversed on 2026-09-09 and is retained in `project/documentation/skill-authoring.md` only
 > as superseded history.
 >
-> **Three permanent exceptions** keep their bare directory names and are never renamed, deleted, or
-> twinned: `skills/jenga/` and `skills/jenga-permission-level/` (deliberately excluded from twin
-> generation by `E50_S06`) and `skills/index/` (not a skill — no `SKILL.md`, not part of routing).
-> Consequently `/jenga` and `/jenga-permission-level` do keep working — they are the only surviving
-> bare slash forms, and they survive because those directories were always the canonical ones, not
-> because any alias was kept.
+> **Four permanent exceptions** keep their bare directory names and are never renamed, deleted, or
+> twinned: `skills/jenga/`, `skills/jenga-permission-level/` and `skills/jenga-config/` (main skills,
+> deliberately excluded from twin generation; `E50_S06` for the first two, `E68_S04` for the third)
+> and `skills/index/` (not a skill — no `SKILL.md`, not part of routing).
+> Consequently `/jenga`, `/jenga-permission-level` and `/jenga-config` do keep working — they are the
+> only surviving bare slash forms, and they survive because those directories were always the
+> canonical ones, not because any alias was kept.
 >
 > Full contract in `project/documentation/skill-authoring.md`'s "The Canonical Naming Contract" section; the mechanical
 > cutover (directory renames, frontmatter rewrites, reference updates) is owned by `E50_S11`–`E50_S18`.
@@ -89,7 +90,7 @@ Invocation Convention note under Workflow Lifecycle above).
 > ✅ **Cutover landed.** The bare-name directories have been deleted and the `j.j-<name>` →
 > `j.<name>` frontmatter rewrite has landed, both in the single `E50_S15_T04` commit. This block and
 > the Invocation Convention note above now describe the actual current directory listing — only
-> `skills/j-<name>/` directories (plus the three permanent exceptions) remain under `skills/`.
+> `skills/j-<name>/` directories (plus the four permanent exceptions) remain under `skills/`.
 > Provenance: `E50_S15_T04` (deletion + rewrite), verified end-to-end by `E50_S15_T05` (full test
 > suite, allow-list/mirror resync, doc cleanup).
 
@@ -104,8 +105,8 @@ Invocation Convention note under Workflow Lifecycle above).
 > shadow a bare `/<name>` form. Note the directory name (`j-<name>`) and the frontmatter `name:`
 > (`j.<name>`) are deliberately different — see the Skill Frontmatter table below.
 >
-> `skills/jenga/`, `skills/jenga-permission-level/`, and `skills/index/` are the three permanent
-> exceptions that keep their bare directory names (see the Invocation Convention note above).
+> `skills/jenga/`, `skills/jenga-permission-level/`, `skills/jenga-config/`, and `skills/index/` are the
+> four permanent exceptions that keep their bare directory names (see the Invocation Convention note above).
 > `skills/init/` is **not** an exception — `skills/j-init/` is simply already at its canonical name.
 >
 > `scripts/generate-j-alias.sh`'s bare-name-source → `j-<name>`-twin generation relationship no longer
@@ -129,19 +130,23 @@ Invocation Convention note under Workflow Lifecycle above).
 | `j.publish` | Configure, validate, and orchestrate scaffolded release workflows (`setup`, `deploy`, `stage`, `history`, `release-notes`) across `mobile-ios`, `npm`, `npm-ci`, and `droplet` targets. `stage` (`npm`/`npm-ci` only) rehearses and smoke-tests a release before it goes live. |
 | `j.uncharted` | Entry point for code with no board provenance — four modes: `segment` (a file or directory), `import` (an external source), `onboard` (a whole pre-existing codebase), `refresh` (incremental re-scan of an already-onboarded codebase since its last baseline, skipping unchanged subsystems). |
 | `j.do` | Execute tasks from the scrum board. Resolves each entry to full board context and drives the Developer agent. |
+| `j.test` | Discover the project's test suites, list them numbered, run the ones you pick (blank means all) in order, and print a pass/fail summary; exit code 0 when all passed, 1 otherwise. Never writes board status. See [project/documentation/test-runner.md](project/documentation/test-runner.md). |
+| `j.smoke-test` | Structural smoke test of every skill in the catalog: frontmatter parses, `name` matches the directory, `metadata.prefered_agent` resolves, referenced scripts and assets exist and scripts pass `bash -n`. Classifies findings as critical or minor, prints a pass/fail summary, and exits 1 when any critical finding exists. Structural only (it does not replace `tests/*.bats`) and read-only. |
 | `j.dashboard` | Launch the local project dashboard (API + UI) by delegating to `project/app`'s existing `dashboard:start`/`dashboard:open` npm scripts — `--port <n>` is forwarded unchanged. `--snapshot [--out <path>]` captures a point-in-time data snapshot and bundles the UI into a single self-contained HTML file (e.g. `jenga.html`), viewable via `file://` with no running server. `--data-url` is an additive delivery mode for `--snapshot`: it base64-encodes that self-contained file into a `data:text/html;base64,...` URI the user can open directly, for sessions with no shared filesystem (e.g. a remote/cloud session that cannot hand over a local path). |
 | `j.dashboard-share` | Snapshot the project dashboard and upload it to a configured cloud storage remote in one step, by sequencing `j.dashboard`'s snapshot script and a templated-path `rclone copyto` upload script — upload only, never creates a share link. |
 | `j.cloud-connect` | Guided cloud storage setup wizard — installs `rclone` if missing, presents a backend menu sourced live from rclone's own provider list, runs that backend's own config/auth flow (surfacing any auth URL directly), and independently verifies the resulting remote works. |
 | `j.connect` | Guided service setup — lists the service descriptors on disk, detects your platform, then installs the service's CLI (opt-in), authenticates, registers its MCP server where one exists, and independently verifies the result, skipping whatever is already done and never handling a secret value. |
 | `j.tools` | Guided wizard for the preferred-tools registry — choose the user or project layer, then add, edit, remove or suppress an entry (name, category, `required`/`recommended`, rationale, alternatives, version constraint, install hint linked to a real `j-connect` descriptor) with every input validated as it is given, or show the effective merged list. Writes go through `skills/j-tools/scripts/tools-entry.sh`, which validates before an atomic replace, preserves hand-edited entries, and never reports success on a failed validation. |
 | `j.conventions` | Guided wizard that records the project's conventions in `project/configs/conventions.json` (project layer only) across 9 categories: commit format, branching, naming, code comments, formatting and linting, testing, file layout, language and tooling, documentation placement. For each category it shows the standard the project already follows (detected, with evidence and confidence), 2-3 general-standard presets, skip and custom, validates every input as it is given, shows a review summary, then writes atomically and regenerates the managed advisory/`confirm` (never `block`) `conv-` pre-flight checklist items, self-validating both files before reporting success. EST naming stays mandatory for board commits; a recorded commit format applies to non-board commits only. Writes go through `skills/j-conventions/scripts/conventions-entry.sh`. |
+| `j.check-in` | Report whether the agents this session dispatched are actually alive right now — which are running, which have gone silent past the stall threshold, and which finished but left live processes behind — then hand anything actionable to the skill or agent that owns it. Answers the axis `j.status` (declared board state) and `j.reconcile` (board-versus-git) do not: is the item the board calls `In Progress` alive at the OS and harness level? Read-only apart from one appended `checkin` event and a twice-confirmed `TaskStop`; collection runs in the host session and is never delegated, because a delegated subagent cannot see its siblings. |
 | `j.status` | Overview of epics, stories, and tasks with statuses, open rapports, and queue depth. |
 | `j.jenga-permission-level` | Report or switch the current session's 5-tier permission level (Locked/Guarded/Standard/Elevated/Unrestricted) without hand-editing settings.json. |
-| `j.commit` | Commit completed work using the EST naming convention (`epic(...)`, `story(...)`). |
-| `j.lgtm` | Approve current work, commit, and continue. Chains `j.commit` + `j.continue`. |
-| `j.dev-done` | Commit current work and sync the `.claude/`/`.agents/` mirrors. Chains `j.commit` + `j.self-sync`. |
+| `j.commit` | Commit completed work using the EST naming convention (`epic(...)`, `story(...)`). Has a test gate before the commit: scoped, full or skip, with a remembered default (`--tests` overrides it) and a documented failure choice (fix first, commit anyway, abort); skipped, never self-certified, for non-interactive callers. See `project/documentation/test-runner.md`. |
+| `j.lgtm` | Approve current work, commit, and continue. Chains `j.commit` + `j.continue`; forwards `--tests` to `j.commit`'s test gate and stops, without continuing, when the gate halts or nothing was committed. |
+| `j.dev-done` | Commit current work and sync the `.claude/`/`.agents/` mirrors. Chains `j.commit` + `j.self-sync`; forwards `--tests` to `j.commit`'s test gate and skips the sync when the gate halts (the follow-up `chore(self-sync)` commit is not gated). |
 | `j.continue` | Pick up the next incomplete item across `PROJECT_SUMMARY.md`, epics, and stories. |
 | `j.proceed` | Resume execution from where it left off. |
+| `j.break` | Stop an orchestration at the next safe task boundary: the current task finishes and records its status, then execution halts before the next one starts — nothing is aborted mid-flight. Soft by default (one-shot); `hard` persists until `j.break clear`; append `status` for a progress rapport on the current scope of execution. |
 | `j.error` | Guided troubleshooting — gathers context about an error and investigates a fix. |
 | `j.gitignore` | Retroactively repair an already-scaffolded project's Jenga gitignore state — strips the stray heredoc `EOF` line left by pre-fix `/init` scaffolds, adds (or removes) the Jenga-owned path entries via a managed block, and untracks those paths from git and from `origin` while leaving every file on disk. `/init` cannot do this: it hard-stops on `already-scaffolded`, and its template fix is forward-only. |
 | `j.help` | List all available skills with descriptions. |
@@ -213,9 +218,11 @@ When implementing or authoring a skill, **offload deterministic, repeatable step
 
 ---
 
-## Documentation Placement — `docs/` versus `project/documentation/`
+## Documentation Placement — `docs/` versus `project/documentation/` versus `site/`
 
-> Rule (`E34_S06`): **`docs/` holds only content meant for the published GitHub Pages site.**
+> Rule (`E34_S06`, revised by `E70_S02`): **`docs/` belongs to the project; Jenga scaffolds it but never
+> puts Jenga content in it; Jenga's internal documents live in `project/documentation/`, the published
+> site source lives in `site/`.**
 > Maintainer-internal documentation — design notes, mirror and distribution rules, protocol and parity
 > docs, decision records, execution plans and summaries — lives under **`project/documentation/`**, the
 > `documentation` path in [`project/configs/workflow.json`](project/configs/workflow.json).
@@ -224,8 +231,8 @@ When implementing or authoring a skill, **offload deterministic, repeatable step
 >
 > Skills and agents that create documentation resolve the destination from `workflow.json`'s
 > `paths.documentation`; they never default to `docs/`. The strategy brief is not an exception: it is an
-> ordinary `project/documentation/STRATEGY.md` file (resolved via `paths.strategy`). The per-file
-> classification is in `docs/README.md`'s "Contents by audience".
+> ordinary `project/documentation/STRATEGY.md` file (resolved via `paths.strategy`). The site's decision
+> record is `project/documentation/site-decisions.md`.
 
 ---
 

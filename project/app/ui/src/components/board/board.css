@@ -196,6 +196,59 @@
   cursor: pointer;
 }
 
+/* E06_S04_T01 — collapse/expand disclosure toggle for epic and story headers.
+   Separate from the title (which opens the E06_S07 overlay). Chevron is drawn
+   with borders so no icon font/asset is needed; it rotates when expanded. */
+.collapse-toggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.collapse-toggle::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  border-right: 2px solid #6b7280;
+  border-bottom: 2px solid #6b7280;
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+
+.collapse-toggle[aria-expanded='true']::before {
+  transform: rotate(45deg);
+}
+
+.collapse-toggle:hover {
+  background: #f3f4f6;
+}
+
+.collapse-toggle:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+/* Leaf item (no children): keep the header aligned but show no affordance. */
+.collapse-toggle.is-empty {
+  cursor: default;
+  pointer-events: none;
+}
+
+.collapse-toggle.is-empty::before {
+  display: none;
+}
+
+/* Collapsed cards have no list below the header, so drop its bottom gap. */
+.epic-header:not(.is-expanded),
+.story-header:not(.is-expanded) {
+  margin-bottom: 0;
+}
+
 /* ── Mobile (<= 480px, matches tokens.css --breakpoint-mobile) ───────────────── */
 @media (max-width: 480px) {
   .epic-header,
@@ -206,7 +259,8 @@
 
   .epic-title,
   .story-title {
-    flex-basis: 100%;
+    flex: 1 1 calc(100% - 2.5rem);
+    min-width: 0;
   }
 
   .task-card {

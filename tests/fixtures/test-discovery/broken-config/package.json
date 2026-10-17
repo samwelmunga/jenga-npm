@@ -1,0 +1,6 @@
+{
+  "name": "fixture-broken-config",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": { "test": "echo inert fixture" }
+}

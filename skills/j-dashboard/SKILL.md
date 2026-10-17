@@ -95,7 +95,11 @@ agent is running remotely (e.g. a cloud/remote session) and cannot hand the user
      `<script id="jenga-dashboard-data">` tag. It has **zero dependencies**, so it behaves
      identically here and in a consumer install — which only ever receives the prebuilt `dist/`.
      Where the UI sources and `node_modules` are present, `dist/` is rebuilt first so a snapshot is
-     never taken from a stale build. (This replaced a `vite build --mode snapshot` step that could
+     never taken from a stale build. In a dev checkout where `dist/` is missing or older than the UI
+     sources and `node_modules/vite` is not installed, the script runs `npm install` and
+     `npm run build` in `project/app/ui` itself first, so no manual install-and-rebuild step is
+     needed; a fresh `dist/` skips both. Consumer installs, which ship only the prebuilt `dist/`,
+     never trigger either. (This replaced a `vite build --mode snapshot` step that could
      only ever run inside this monorepo; the tarball ships no vite and no UI sources, so
      `--snapshot` previously failed on 100% of consumer installs.)
    - Copies the result to the final output path (default `jenga.html` in the invoking directory,

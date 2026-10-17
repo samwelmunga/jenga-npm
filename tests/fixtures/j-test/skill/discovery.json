@@ -1,0 +1,7 @@
+{"suites":[
+ {"id":"fx:alpha","name":"alpha","type":"unit","ecosystem":"fixture","command":"echo alpha >> \"$RUN_MARK\""},
+ {"id":"fx:bravo","name":"bravo","type":"integration","ecosystem":"fixture","command":"echo bravo >> \"$RUN_MARK\"; exit 1"},
+ {"id":"fx:charlie","name":"charlie","type":"sast","ecosystem":"fixture","command":"echo charlie >> \"$RUN_MARK\""},
+ {"id":"fx:alpha-again","name":"alpha again","type":"unit","ecosystem":"fixture","command":"echo alpha >> \"$RUN_MARK\""},
+ {"id":"config:delta:perf","name":"delta (perf)","type":"performance","ecosystem":"config","command":""}
+],"warnings":[]}

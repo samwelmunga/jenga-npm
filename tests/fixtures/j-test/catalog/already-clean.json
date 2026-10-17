@@ -1,0 +1,1 @@
+{"suites":[{"id":"go:.","name":"go test ./...","type":"unit","ecosystem":"go","command":"go test ./..."},{"id":"pytest:tests","name":"pytest tests","type":"unit","ecosystem":"pytest","command":"pytest tests"}],"warnings":[]}

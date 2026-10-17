@@ -25,7 +25,7 @@ examples:
 
 `/close-story <story-id>` performs the final closure steps for a story:
 
-1. Verifies all tasks in the story are in a terminal state (Passed or Done).
+1. Verifies all tasks in the story are in a terminal state (Passed, Passed with remarks, or Done).
 2. Extracts actual `git diff --stat` metrics for each task from the commit history.
 3. Writes `actual_files_changed`, `actual_lines_delta`, and `scope_divergence_flag` to each task's frontmatter.
 4. Runs a static `.publicignore` blocklist check (E51_S03_T03) against each task's and the story's

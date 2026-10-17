@@ -52,10 +52,12 @@
  */
 
 import assert from 'node:assert/strict'
-import { flattenBoardItems, bucketIntoColumns, isStaleDeployedProd } from './kanbanColumns.js'
+import { flattenBoardItems, flattenIdeaItems, bucketIntoColumns, isStaleDeployedProd } from './kanbanColumns.js'
 
-// Fixed "today" so this script's assertions never depend on wall-clock time.
-const TODAY = new Date('2026-09-12T12:00:00Z')
+// "Today" is the real clock: bucketIntoColumns() takes no `now` argument and always evaluates
+// staleness against the real current date, so a hard-coded date here made the fixtures'
+// "fresh" items go stale as time passed (found by E35_S04_T03: failed on 2026-10-16).
+const TODAY = new Date()
 
 function daysAgoISO(days) {
   const d = new Date(TODAY.getTime() - days * 24 * 60 * 60 * 1000)
@@ -412,3 +414,50 @@ assert.ok(
 
 console.log('no-todo.md equivalence checks (Active Sprint renders exactly as pre-T04): PASS')
 console.log('\nAll E06_S05_T04 checks passed.')
+
+// ============================================================================
+// E35_S04_T03 — idea ("Spike") cards bucketed alongside real board items
+// ============================================================================
+
+const ideaFixture = [
+  { text: 'untagged idea', state: 'none', boardId: null, rapport: null },
+  { text: 'promoted idea', state: 'promoted', boardId: 'E37_S01', rapport: null },
+  { text: 'rejected idea', state: 'rejected', boardId: null, rapport: 'project/rapports/analysis/x.md' },
+  { text: 'second untagged idea', state: 'none', boardId: null, rapport: null },
+]
+
+const ideaCards = flattenIdeaItems(ideaFixture)
+assert.deepEqual(ideaCards[1], {
+  _itemType: 'idea', id: null, title: 'promoted idea', _ideaState: 'promoted', _boardId: 'E37_S01', _rapport: null,
+}, 'idea card shape must match the T03 contract')
+assert.deepEqual(flattenIdeaItems(undefined), [], 'flattenIdeaItems(undefined) must return []')
+assert.deepEqual(flattenIdeaItems(null), [], 'flattenIdeaItems(null) must return []')
+
+const realFlat = flattenBoardItems(buildT04FixtureEpics())
+const withIdeas = bucketIntoColumns([...ideaCards, ...realFlat])
+const withoutIdeas = bucketIntoColumns(realFlat)
+
+assert.deepEqual(withIdeas['backlog'].filter((i) => i._itemType === 'idea').map((i) => i.title), ['untagged idea', 'second untagged idea'], 'none ideas land in backlog, line order preserved')
+assert.deepEqual(withIdeas['done'].filter((i) => i._itemType === 'idea').map((i) => i.title), ['promoted idea'], 'promoted idea lands in done')
+assert.deepEqual(withIdeas['rejected'].filter((i) => i._itemType === 'idea').map((i) => i.title), ['rejected idea'], 'rejected idea lands in rejected')
+assert.equal(withIdeas['done'].find((i) => i._itemType === 'idea')._boardId, 'E37_S01', '_boardId carried through')
+assert.equal(withIdeas['rejected'].find((i) => i._itemType === 'idea')._rapport, 'project/rapports/analysis/x.md', '_rapport carried through')
+for (const key of ['pending', 'in-progress']) {
+  assert.ok(withIdeas[key].every((i) => i._itemType !== 'idea'), `ideas must never appear in ${key}`)
+}
+for (const key of Object.keys(withIdeas)) {
+  assert.deepEqual(withIdeas[key].filter((i) => i._itemType !== 'idea'), withoutIdeas[key], `real items in ${key} must be identical with and without ideas`)
+  const types = withIdeas[key].map((i) => i._itemType === 'idea')
+  assert.deepEqual(types, [...types].sort((a, b) => Number(a) - Number(b)), `ideas must sort after real items in ${key}`)
+}
+// Same with the todo.md promotion rule active.
+const queuedFlat = flattenBoardItems(applyQueuedFlags(buildT04FixtureEpics(), fixtureRefs))
+const qWith = bucketIntoColumns([...ideaCards, ...queuedFlat])
+const qWithout = bucketIntoColumns(queuedFlat)
+for (const key of Object.keys(qWith)) {
+  assert.deepEqual(qWith[key].filter((i) => i._itemType !== 'idea'), qWithout[key], `queued-promotion output in ${key} unchanged by ideas`)
+}
+assert.deepEqual(bucketIntoColumns(undefined)['backlog'], [], 'bucketIntoColumns(undefined) still safe')
+
+console.log('idea card checks (none/promoted/rejected placement, passthrough, never pending/in-progress, real items unchanged, ordering, undefined input): PASS')
+console.log('\nAll E35_S04_T03 checks passed.')

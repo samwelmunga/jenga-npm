@@ -183,7 +183,7 @@ This script handles all scaffolding in one step:
 3. Creates the full directory structure under `project/`
 4. Creates `project/PROJECT_SUMMARY.md` with placeholder content
 5. Creates `project/configs/workflow.json` with shared constants
-6. Creates `project/configs/test-config.json` stub
+6. Creates `project/configs/test-config.json` stub (empty `tools`; run the tester agent to configure test tools)
 7. Creates `project/configs/scope-thresholds.json` with default execution-scope thresholds (consumed by `/jenga` and `/do`, which halt if it's missing)
 8. Creates `project/data/baselines.json`
 9. Creates `project/logs/events.json`

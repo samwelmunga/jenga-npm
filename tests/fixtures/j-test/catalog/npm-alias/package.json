@@ -1,0 +1,7 @@
+{
+  "name": "catalog-fixture-npm-alias",
+  "private": true,
+  "scripts": {
+    "test": "bats tests/*.bats"
+  }
+}

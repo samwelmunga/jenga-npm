@@ -1,0 +1,47 @@
+{
+  "suites": [
+    {
+      "command": "npm test",
+      "ecosystem": "npm",
+      "id": "npm:test",
+      "name": "npm test",
+      "paths": [],
+      "type": "unit"
+    },
+    {
+      "command": "npm run test-integration",
+      "ecosystem": "npm",
+      "id": "npm:test-integration",
+      "name": "npm run test-integration",
+      "paths": [],
+      "type": "integration"
+    },
+    {
+      "command": "npm run test:e2e",
+      "ecosystem": "npm",
+      "id": "npm:test:e2e",
+      "name": "npm run test:e2e",
+      "paths": [],
+      "type": "e2e"
+    },
+    {
+      "command": "npm run test:smoke",
+      "ecosystem": "npm",
+      "id": "npm:test:smoke",
+      "name": "npm run test:smoke",
+      "paths": [],
+      "type": "unknown"
+    },
+    {
+      "command": "npm run test:unit",
+      "ecosystem": "npm",
+      "id": "npm:test:unit",
+      "name": "npm run test:unit",
+      "paths": [],
+      "type": "unit"
+    }
+  ],
+  "warnings": [
+    "test-config.json not found; reporting detected suites only"
+  ]
+}

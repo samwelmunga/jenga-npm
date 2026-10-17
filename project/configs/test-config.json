@@ -35,5 +35,7 @@
       "type": "coverage",
       "comment": "Not currently tracked; revisit once bats suite has meaningful breadth"
     }
-  ]
+  ],
+  "commit_prompt_default": "",
+  "commit_scope_map_file": "templates/test-scope-map.json"
 }

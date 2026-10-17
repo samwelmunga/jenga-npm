@@ -916,3 +916,210 @@ stub_checker() {
       || { echo "registration lost or changed in .agents/settings.json after switching to level $n" >&2; return 1; }
   done
 }
+
+# -----------------------------------------------------------------------------
+# E67_S08_T02: the hook's marker lookup survives a cd in the command and a missing cwd, and its Task/Agent dispatch
+# path is pinned. Behaviour under test: the hook header "WHERE THE MARKER IS LOOKED FOR" and section 9 of
+# preflight-checklists.md ("Where the marker is looked for", "Accepted limits of the lookup").
+#
+# Setup differs from the tests above in one way that matters: those run with JENGA_PROJECT_ROOT pinned (which makes the
+# resolver, and so the hook, ignore the cwd entirely). These must NOT be pinned - the point is a cwd that does not lead
+# to the marker's tree - so they unset JENGA_PROJECT_ROOT and CLAUDE_PROJECT_DIR for the hook run and let each test opt
+# back in to exactly the anchor it is exercising. The marker itself is still written into $PROJ through the pinned
+# setup environment (enter), so the project's real tree is never touched.
+# -----------------------------------------------------------------------------
+
+# cwd_tree: make the standard layout for the cd tests - a Jenga tree with a subdirectory, and a directory outside any
+# Jenga tree to stand in as the harness cwd - and enter a failing pre-commit block item for this session.
+cwd_tree() {
+  mkdir -p "$PROJ/sub" "$T/outside"
+  failing_item_registry block cwd-gate
+  enter pre-commit run-cwd >/dev/null
+}
+
+# run_hook_from <cwd> <extra-env-or-"-"> <tool> [command]: run the hook from <cwd> with the pinning variables unset,
+# adding the one extra NAME=value assignment given as $2 (pass "-" for none).
+run_hook_from() {
+  local cwd="$1" extra="$2" p
+  p="$(payload "$3" "${4:-}")"
+  if [ "$extra" = "-" ]; then extra="UNUSED_BY_THESE_TESTS=1"; fi
+  run --separate-stderr env -u JENGA_PROJECT_ROOT -u CLAUDE_PROJECT_DIR "$extra" \
+    bash -c 'cd "$1" && exec bash "$2"' _ "$cwd" "$HOOK" <<<"$p"
+}
+
+# run_hook_missing_cwd <extra-env-or-"-"> <tool> [command]: as run_hook_from, but the working directory is created,
+# entered and REMOVED before the hook starts, which is how a harness cwd that no longer exists looks to the script.
+# (With the cwd gone, bash itself prints a "shell-init ... getcwd" warning on stderr before the script runs; that is
+# the shell's, not the hook's, so the silent-allow assertions below check stdout and the hook's own markers instead.)
+run_hook_missing_cwd() {
+  local extra="$1" p
+  p="$(payload "$2" "${3:-}")"
+  if [ "$extra" = "-" ]; then extra="UNUSED_BY_THESE_TESTS=1"; fi
+  run --separate-stderr env -u JENGA_PROJECT_ROOT -u CLAUDE_PROJECT_DIR "$extra" \
+    bash -c 'mkdir "$1" && cd "$1" && rmdir "$1" && exec bash "$2"' _ "$T/gone" "$HOOK" <<<"$p"
+}
+
+# assert_hook_silent_allow: exit 0, nothing on stdout, and nothing the hook itself said on stderr (a deny reason, or
+# one of its own warnings).
+assert_hook_silent_allow() {
+  [ "$status" -eq 0 ] || { echo "hook exited $status, expected 0. stdout: $output stderr: $stderr" >&2; return 1; }
+  [ -z "$output" ] || { echo "expected no stdout, got: $output" >&2; return 1; }
+  assert_not_contains "$stderr" "Blocked by"
+  assert_not_contains "$stderr" "on_preflight_check:"
+}
+
+@test "hook cwd: 'cd <dir in the jenga tree> && git commit' from a cwd outside any tree is refused" {
+  cwd_tree
+
+  # Control: the same commit WITHOUT the cd, from the same outside cwd, is a silent allow - the hook cannot see the
+  # tree from there. So the refusal below is the leading-cd handling and nothing else.
+  run_hook_from "$T/outside" - Bash 'git commit -m x'
+  assert_hook_silent_allow
+
+  run_hook_from "$T/outside" - Bash "cd $PROJ/sub && git commit -m x"
+  assert_denied cwd-gate pre-commit
+
+  # A chained and relative form resolves against the earlier cd, and a quoted path is read as one word.
+  run_hook_from "$T" - Bash 'cd proj; cd sub; cd ..; git commit -m x'
+  assert_denied cwd-gate pre-commit
+  run_hook_from "$T/outside" - Bash "cd \"$PROJ/sub\" && git commit -m x"
+  assert_denied cwd-gate pre-commit
+
+  # A cd that does not lead to a Jenga tree changes nothing.
+  run_hook_from "$T/outside" - Bash "cd $T/outside && git commit -m x"
+  assert_hook_silent_allow
+  run_hook_from "$T/outside" - Bash "cd $T/does-not-exist && git commit -m x"
+  assert_hook_silent_allow
+}
+
+@test "hook cwd: 'git -C <dir in the jenga tree> commit' from a cwd outside any tree is refused" {
+  cwd_tree
+
+  run_hook_from "$T/outside" - Bash 'git commit -m x'
+  assert_hook_silent_allow
+
+  run_hook_from "$T/outside" - Bash "git -C $PROJ commit -m x"
+  assert_denied cwd-gate pre-commit
+
+  # Relative to the cwd, and with an option between git and -C.
+  run_hook_from "$T" - Bash 'git -C proj/sub commit -m x'
+  assert_denied cwd-gate pre-commit
+  run_hook_from "$T/outside" - Bash "git -c user.name=x -C $PROJ commit -m x"
+  assert_denied cwd-gate pre-commit
+
+  # A -C that does not lead to a Jenga tree changes nothing.
+  run_hook_from "$T/outside" - Bash "git -C $T/outside commit -m x"
+  assert_hook_silent_allow
+}
+
+@test "hook cwd: a nonexistent cwd with CLAUDE_PROJECT_DIR naming a tree that holds a marker still refuses" {
+  cwd_tree
+
+  run_hook_missing_cwd "CLAUDE_PROJECT_DIR=$PROJ" Bash 'git commit -m x'
+  assert_denied cwd-gate pre-commit
+
+  # Control: the cwd really was missing, and the marker was found through CLAUDE_PROJECT_DIR alone - without it the
+  # same call is the silent allow of the next test.
+  run_hook_missing_cwd - Bash 'git commit -m x'
+  assert_hook_silent_allow
+}
+
+@test "hook cwd: a nonexistent cwd with no usable CLAUDE_PROJECT_DIR is a silent allow (exit 0)" {
+  cwd_tree
+
+  # A marker DOES exist for this session in $PROJ, so this is the fail-open itself and not the trivial no-marker case.
+  [ -d "$MARKER_DIR" ]
+  run_hook_missing_cwd - Bash 'git commit -m x'
+  assert_hook_silent_allow
+
+  # CLAUDE_PROJECT_DIR pointing at a directory that does not exist, and at one that is not a Jenga tree: both unusable.
+  run_hook_missing_cwd "CLAUDE_PROJECT_DIR=$T/no-such-dir" Bash 'git commit -m x'
+  assert_hook_silent_allow
+  run_hook_missing_cwd "CLAUDE_PROJECT_DIR=$T/outside" Bash 'git commit -m x'
+  assert_hook_silent_allow
+}
+
+@test "hook dispatch: a Task payload under a failing pre-task block item is refused, and allowed under no marker" {
+  write_registry "$(SIT='["pre-task"]' item task-gate machine block run false)"
+  task_payload='{"tool_name":"Task","tool_input":{"description":"implement","prompt":"do it","subagent_type":"developer"}}'
+
+  # No marker: the same payload is a silent allow with nothing written.
+  run --separate-stderr bash "$HOOK" <<<"$task_payload"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ -z "$stderr" ]
+
+  enter pre-task run-task >/dev/null
+  run --separate-stderr bash "$HOOK" <<<"$task_payload"
+  assert_denied task-gate pre-task
+
+  # Clearing the marker lets it through again, so the refusal was the phase and the item.
+  bash "$MARKER" clear --all
+  run --separate-stderr bash "$HOOK" <<<"$task_payload"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ -z "$stderr" ]
+}
+
+@test "hook dispatch: an Agent payload under a failing pre-task block item is refused, and allowed under no marker" {
+  write_registry "$(SIT='["pre-task"]' item task-gate machine block run false)"
+  agent_payload='{"tool_name":"Agent","tool_input":{"description":"implement","prompt":"do it","subagent_type":"developer"}}'
+
+  run --separate-stderr bash "$HOOK" <<<"$agent_payload"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ -z "$stderr" ]
+
+  enter pre-task run-agent >/dev/null
+  run --separate-stderr bash "$HOOK" <<<"$agent_payload"
+  assert_denied task-gate pre-task
+
+  bash "$MARKER" clear --all
+  run --separate-stderr bash "$HOOK" <<<"$agent_payload"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ -z "$stderr" ]
+}
+
+# --- ACCEPTED LIMITS -----------------------------------------------------------------------------------------------
+# The three tests below assert that a gated commit is ALLOWED. They do not describe desirable behaviour: they pin the
+# residual bypass shapes the hook header and preflight-checklists.md section 9 name as ACCEPTED LIMITS of a best-effort
+# lookup (it parses a plain leading cd / git -C; it is not evasion-proof). They are NOT a guarantee that these shapes
+# stay allowed - if one of them starts failing because the hook got stricter, that is the hook improving, and the
+# right move is to move the shape out of this block and into a refusal test, consciously, with the documentation. Each
+# carries a control showing the tree and marker are live: the plain "cd <tree> && git commit" from the same cwd is
+# refused, so the allow is the limit and not a missing marker.
+
+@test "hook cwd (accepted limit): bash -c '...cd... && git commit' is NOT seen and is allowed" {
+  cwd_tree
+  run_hook_from "$T/outside" - Bash "cd $PROJ/sub && git commit -m x"
+  assert_denied cwd-gate pre-commit
+
+  run_hook_from "$T/outside" - Bash "bash -c 'cd $PROJ/sub && git commit -m x'"
+  assert_hook_silent_allow
+  run_hook_from "$T/outside" - Bash "sh -c \"cd $PROJ/sub && git commit -m x\""
+  assert_hook_silent_allow
+}
+
+@test "hook cwd (accepted limit): a subshell that computes its target is NOT seen and is allowed" {
+  cwd_tree
+  run_hook_from "$T/outside" - Bash "cd $PROJ/sub && git commit -m x"
+  assert_denied cwd-gate pre-commit
+
+  # The target is built inside the subshell from a variable, so there is no literal directory to resolve.
+  run_hook_from "$T/outside" - Bash "( D=$PROJ; cd \"\$D/sub\" && git commit -m x )"
+  assert_hook_silent_allow
+  run_hook_from "$T/outside" - Bash "( cd \"\$(dirname $PROJ/sub)\" && git commit -m x )"
+  assert_hook_silent_allow
+}
+
+@test "hook cwd (accepted limit): pushd and a variable-built cd are NOT seen and are allowed" {
+  cwd_tree
+  run_hook_from "$T/outside" - Bash "cd $PROJ/sub && git commit -m x"
+  assert_denied cwd-gate pre-commit
+
+  run_hook_from "$T/outside" - Bash "pushd $PROJ/sub && git commit -m x"
+  assert_hook_silent_allow
+  run_hook_from "$T/outside" - Bash "D=$PROJ/sub; cd \"\$D\" && git commit -m x"
+  assert_hook_silent_allow
+}

@@ -1,0 +1,6 @@
+{"runnable":[
+ {"n":1,"id":"fx:one","name":"one","type":"unit","ecosystem":"fixture","command":"echo one >> \"$RUN_MARK\"","also":[{"id":"fx:folded","name":"folded","type":"unit"}],"paths":["tests/*.bats"],"note":"unknown key"},
+ {"n":2,"id":"fx:semgrep","name":"semgrep (sast)","type":"sast","ecosystem":"fixture","command":"echo semgrep >> \"$RUN_MARK\"","also":[]}
+],"not_runnable":[
+ {"id":"config:cfg:unit","name":"cfg (unit)","type":"unit","ecosystem":"config","reason":"no command declared","command":"touch \"$RUN_MARK.not-runnable\""}
+],"warnings":["detected tool not listed in test-config.json: npm"],"version":2}

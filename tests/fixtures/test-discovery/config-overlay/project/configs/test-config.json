@@ -1,0 +1,10 @@
+{
+  "tools": [
+    { "tool_name": "npm", "type": "unit" },
+    { "tool_name": "npm", "type": "integration" },
+    { "tool_name": "pytest", "type": "integration" },
+    { "tool_name": "playwright", "type": "e2e" },
+    { "tool_name": "-", "type": "sast" },
+    { "tool_name": 5, "type": "coverage" }
+  ]
+}

@@ -64,6 +64,25 @@ Extract the following named values for use throughout this skill:
 
 These values must be read fresh on each invocation. Never use hardcoded fallbacks.
 
+#### Break entry check (`E44_S02`)
+
+A **hard** break (`/break hard`) must stop a run that starts *after* it was set; the checkpoints in step 8 and in
+the bundle loop only fire between tasks, so they would let a freshly started run do one task first. Check once,
+here, without consuming anything:
+
+```bash
+bash "$([ -f skills/j-break/scripts/check-break.sh ] && echo skills/j-break/scripts/check-break.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/check-break.sh)" --peek
+```
+
+- Exit `0`, or a `mode=soft` record: continue. A **soft** break armed before the run starts is deliberately left
+  in place; it is honoured at the first task boundary (step 8), which is what "stop after the next task" means.
+- A `mode=hard` record (exit `10`): halt **before** dispatching anything, using the halt report in step 8, with
+  "finished task" given as "none — nothing was started".
+- Any other exit code is the checker itself failing, not a stop request: print its stderr as a warning and
+  continue.
+
+Do not read the flag file yourself. Branch on the exit code and use the record the script prints.
+
 ### 1. Check for `project/todo.md`
 Run `bash "$([ -f scripts/todo_manager.sh ] && echo scripts/todo_manager.sh || echo node_modules/@jenga-ai/agent/scripts/todo_manager.sh)" exists`. If it exits non-zero, inform the user there are no queued tasks and exit.
 
@@ -118,7 +137,7 @@ c. **Write the lock atomically**:
 
 After acquiring the epic lock and before writing the bundle manifest, scan all other active bundle manifests to detect file-level overlap with the current bundle:
 
-1. **Glob other bundle manifests**: list all files matching `project/queue/bundle-*.json`. Exclude the current bundle's own file (`project/queue/bundle-<E##_S##>.json` — it does not exist yet at this point, so no special filter is needed; simply exclude any path whose basename equals `bundle-<E##_S##>.json`).
+1. **Glob other bundle manifests**: list all files matching `project/queue/bundle-*.json`. Exclude the current bundle's own file (`project/queue/bundle-<E##_S##>.json` — it does not exist yet on a fresh bundle and already exists on a resume (step 2 decides which); either way, simply exclude any path whose basename equals `bundle-<E##_S##>.json`).
 
 2. **If no other manifests exist**: skip steps 3–6 entirely — this step completes silently.
 
@@ -152,13 +171,34 @@ After acquiring the epic lock and before writing the bundle manifest, scan all o
 
 > **This check is non-blocking.** Regardless of whether conflicts are found, execution always continues to step 2. The conflict data is recorded for later review only.
 
-2. **Invoke rollback anchor**: write a bundle manifest at `project/queue/bundle-<E##_S##>.json` before the first task executes. See "### Bundle Manifest and Rollback Anchor" below for the full procedure.
+2. **Decide fresh versus resume, then invoke the rollback anchor** (`E44_S08`). Before anything is written, run the read-only helper:
+
+   ```bash
+   bash "$([ -f skills/j-do/scripts/bundle-resume.sh ] && echo skills/j-do/scripts/bundle-resume.sh || echo node_modules/@jenga-ai/agent/skills/j-do/scripts/bundle-resume.sh)" <E##_S##>
+   ```
+
+   It prints one JSON object `{mode, story_id, anchor_sha, run, skipped, notes}`. Branch on its exit code and `mode`:
+
+   - **Exit `3`** (manifest refused: unparseable, wrong story, bad `anchor_sha`, or `anchor_sha` not an ancestor of HEAD): nothing was changed. Report the stderr cause verbatim and ask the operator:
+     1. Discard the stale manifest and start fresh (`rm -f project/queue/bundle-<E##_S##>.json`, then re-run this step)
+     2. Abort
+     3. Other (describe below)
+   - **Exit `4`**: a story or task file is missing. Report it and stop.
+   - **`mode: fresh` with an `all_terminal` note**: every task is already `Passed`/`Merged` and there is no manifest to resume, so running would redo finished work. Do not start the bundle; report that the story has nothing left to run and stop.
+   - **`mode: fresh`**: no manifest exists. Follow the existing path unchanged: capture `anchor_sha`, write the manifest as described in "### Bundle Manifest and Rollback Anchor" below, and iterate the whole `tasks:` list.
+   - **`mode: resume`**: a manifest survived a halt (the failure and success paths both delete it), and its `anchor_sha` is still an ancestor of HEAD. **Do not run `git rev-parse HEAD`, do not capture a new `anchor_sha` and do not write the manifest from scratch**: the original `anchor_sha` and `task_changed_files` are the rollback anchor and the record of what completed. Append the current UTC timestamp to a `resumed_at` array in the existing manifest using the atomic tmp-rename pattern of step c.1, leaving every other key as it is. The pre-task gate, epic lock, cross-bundle conflict check and developer slot acquisition (step 3) run exactly as for a fresh bundle, since a halt released both. Step 4 iterates **only** the helper's `run` list; `skipped` tasks are already `Passed`. Board status is authoritative, never the manifest. Show the operator `skipped`, `run` and any `notes` before starting.
+   - **Empty `run`** (resume only): every task is already done and the halt landed after the last one. Spawn no developer for task work: skip step 4 and go straight to step 5 (post-bundle verification) and step 6 (cleanup, which deletes the manifest).
 
 3. **Acquire a developer concurrency slot, then spawn one developer subagent** in one shared worktree named `bundle-<E##_S##>`. This is the only developer subagent for the entire story bundle — do not spawn additional subagents per task, and correspondingly this bundle acquires **exactly one** developer slot for its entire lifetime, never one per task inside it.
 
    a. **Acquire.** Follow `### 4.4. Developer Concurrency Slot Enforcement` below, with `<id>` = this bundle's story id (`<E##_S##>`).
    b. **On a full cap (`capacity_blocked` outcome)**: do not spawn the shared subagent. Undo the bundle setup already performed above so no orphaned state survives this aborted attempt: delete the bundle manifest (`rm -f project/queue/bundle-<E##_S##>.json`) and release the epic lock (`rm -f project/queue/epic-lock-<E##>.json`) — the same two cleanup actions the failure path below performs, since from the epic lock's perspective an aborted-before-it-started bundle is indistinguishable from a failed one. None of the bundle's tasks have had their status touched yet (the per-task `status: In Progress` write in step 4a below hasn't run), so there is nothing to revert to `Pending` — they are still whatever they were before this bundle attempt (normally `Pending` already). Stop here; `/jenga` Phase 4's normal Pending-rescan picks the story back up on a later wave once a slot frees up.
-   c. **On success**: proceed to spawn the shared subagent as before. Release this slot exactly once, when the entire bundle concludes — step 6 (success) or step 4d (failure) below — never per individual task inside the bundle.
+   c. **On success**: invoke the developer Agent tool with:
+      - `subagent_type: "developer"`
+      - `name: "<E##_S##>"` ← **Load-bearing identifier:** this name is consumed by `j.check-in`'s liveness probe to join running agents to board items via `ListAgents` output. For bundle execution, use the story ID. Must stay stable — this is not cosmetic.
+      - Sender object and context payload (full task/story files, parent epic summary, pre-flight reminders)
+      
+      Release this slot exactly once, when the entire bundle concludes — step 6 (success) or step 4d (failure) below — never per individual task inside the bundle.
 
 4. **Execute tasks sequentially** in `tasks:` list order, within the same shared developer subagent context:
 
@@ -180,8 +220,18 @@ After acquiring the epic lock and before writing the bundle manifest, scan all o
       4. Delete the lock file immediately after the write completes.
       > The lock must be released before proceeding to task N+1. Never hold a lock across task execution.
 
+      **Record it in the execution ledger** (`E44_S09`), immediately after the `Passed` write and before c.1, c.2 and the c.3 break checkpoint, so a halt can never precede its own record:
+
+      ```bash
+      bash "$([ -f skills/j-break/scripts/record-execution.sh ] && echo skills/j-break/scripts/record-execution.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/record-execution.sh)" <task_id> Passed --source do-bundle
+      ```
+
+      > This call is best-effort and never blocks or fails a task: `record-execution.sh` warns on stderr and exits `0` on any ledger problem, and only a usage error is non-zero. It appends one line to the gitignored `project/queue/execution-ledger.jsonl`, which `/break status` reads to tell "ran this session" from "done earlier". Proceed regardless of its outcome.
+
+      **Remove the task from `project/todo.md`** — immediately after the ledger record, run step 1 (`remove`) of the **Task-Completion Cleanup Procedure** (`### 7.1` below) with this task's `title:` frontmatter value as `<task title>`. Run only the `remove` half here: `teardown` runs exactly once for the whole bundle, never per task (see step 6 and step 4d). `remove` exits non-zero when no queued entry matches, which is expected when the task was never queued individually; warn and proceed, since a cleanup miss never blocks or fails a task or the bundle. This is a single idempotent `todo.md` edit, so it does not disturb the c, c.1, c.2, c.3 ordering below.
+
    c.1. **Post-task file extraction** — immediately after the status write in step c and before proceeding to the next task, record the files changed by this task into the bundle manifest:
-      1. Run `git diff --name-only HEAD~1` to obtain the list of files changed by the just-completed task. Capture each line as a relative file path. If the command returns empty output (the task made no commits), treat the result as an empty array `[]` — this is not an error.
+      1. Run `git diff --name-only HEAD~1 HEAD` to obtain the list of files changed by the just-completed task. Capture each line as a relative file path. If the command returns empty output (the task made no commits), treat the result as an empty array `[]` — this is not an error.
       2. Read the bundle manifest at `project/queue/bundle-<E##_S##>.json`.
       3. Add or update the key `task_changed_files` in the manifest object. Set `task_changed_files[<task_id>]` to the captured file list (an array of strings, or `[]` if no files changed). If `task_changed_files` does not yet exist in the manifest, create it as an empty object first.
       4. Write the updated manifest atomically:
@@ -230,19 +280,37 @@ After acquiring the epic lock and before writing the bundle manifest, scan all o
 
       > **This step is non-blocking.** A conflict report does NOT affect the task's `Passed` status or halt bundle execution. It is informational only — a human can review `project/queue/conflict-<task_id>.md` after the bundle completes.
 
+   c.3. **Break checkpoint** (`E44_S02`) — after step c.2, never between c and c.1 and never between c.1 and c.2: a break must not be able to leave the manifest without this task's file list, or without the conflict report c.2 would have written. Run:
+
+      ```bash
+      bash "$([ -f skills/j-break/scripts/check-break.sh ] && echo skills/j-break/scripts/check-break.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/check-break.sh)"
+      ```
+
+      - Exit `0`: proceed to the next task, unchanged.
+      - Exit `10`: **halt the bundle here.** The task that just finished is already `Passed` and recorded in the manifest, so nothing is cut off mid-task. Do **not** run the failure path (no reset, no partial patch) and do **not** run the success path (no manifest deletion). Instead:
+        1. **Keep the bundle manifest** at `project/queue/bundle-<E##_S##>.json` exactly as it stands. Its `anchor_sha` and `task_changed_files` are the rollback anchor and the record of what completed.
+        2. **Release the developer concurrency slot** from step 3 and **release the epic lock** (`rm -f project/queue/epic-lock-<E##>.json`). Both cleanup contracts apply on every exit path, and a halted bundle holds neither.
+        3. Leave the shared `bundle-<E##_S##>` worktree and its commits untouched.
+        4. Report using the halt report in step 8 — including its scoped rapport when the record says `with_status=true` — and state explicitly: which tasks **completed** (those now `Passed`), which were **not started** (the rest of the `tasks:` list), that the manifest and rollback anchor are **intact**, and that the epic lock and slot have been released.
+      - Any other exit: the checker failed, not a stop request. Warn with its stderr and proceed.
+
+      > **Resume.** Entering `/do <E##_S##>` again resumes the halted bundle (step 2): the helper finds the surviving manifest, keeps its original `anchor_sha`, skips tasks already `Passed` on the board and runs only the rest. If the operator prefers, the **not-started** tasks can still be dispatched individually with `/do <E##_S##_T##>`.
+
    d. **After task failure** — write `status: Failed` to the task's frontmatter using the file-locking protocol:
       1. Check for an existing lock file at `project/board/tasks/<task_id>_*.md.lock`. If it exists and is less than 60 seconds old, wait 10 seconds and retry once. If still locked, log a warning and skip this status write.
       2. Create the lock file: write the current ISO 8601 timestamp into `project/board/tasks/<task_id>_*.md.lock`.
       3. Update the task frontmatter field `status: Failed`.
       4. Delete the lock file immediately after the write completes.
-      Then invoke the rollback anchor cleanup procedure (see "### Bundle Manifest and Rollback Anchor" — failure path). After the rollback anchor completes, **release the developer concurrency slot** acquired in step 3 above: `"$([ -f scripts/release-concurrency-slot.sh ] && echo scripts/release-concurrency-slot.sh || echo node_modules/@jenga-ai/agent/scripts/release-concurrency-slot.sh)" developer <E##_S##> <orchestrator_session_id>` (per `### 4.4` step 2 below). Then **release the epic lock**: run `rm -f project/queue/epic-lock-<E##>.json`. Mark the bundle as failed and **halt** — do not execute any remaining tasks in the sequence.
+      Then record it (best-effort, see step c): `bash "$([ -f skills/j-break/scripts/record-execution.sh ] && echo skills/j-break/scripts/record-execution.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/record-execution.sh)" <task_id> Failed --source do-bundle`.
+      Then run step 1 (`remove`) of the **Task-Completion Cleanup Procedure** (`### 7.1` below) for this task's `title:`, exactly as in step c (non-blocking if no entry matches).
+      Then invoke the rollback anchor cleanup procedure (see "### Bundle Manifest and Rollback Anchor" — failure path). After the rollback anchor completes, **release the developer concurrency slot** acquired in step 3 above: `"$([ -f scripts/release-concurrency-slot.sh ] && echo scripts/release-concurrency-slot.sh || echo node_modules/@jenga-ai/agent/scripts/release-concurrency-slot.sh)" developer <E##_S##> <orchestrator_session_id>` (per `### 4.4` step 2 below). Then **release the epic lock**: run `rm -f project/queue/epic-lock-<E##>.json`. Then run step 2 (`teardown`) of the **Task-Completion Cleanup Procedure** (`### 7.1` below) once, to delete `project/todo.md` if it is now effectively empty. Mark the bundle as failed and **halt** — do not execute any remaining tasks in the sequence.
 
 5. **Post-bundle verification** (runs only if all tasks completed without failure):
    - Inspect each task in the bundle for `needs_docs: true` in its frontmatter.
    - **If any task has `needs_docs: true`**: invoke the tester agent once for the full story. Pass the story ID, the list of all task IDs in the bundle, and the shared worktree path. The tester is responsible for updating individual task statuses.
-   - **If all tasks have `needs_docs: false`**: the developer agent self-verifies — reviews each task's implementation against its acceptance criteria without invoking the tester. After self-verification passes, write `status: Passed` and `date_completed: <YYYY-MM-DD>` (today's date) to each task file using the file-locking protocol (steps c.1–c.4 above). No tester invocation occurs.
+   - **If all tasks have `needs_docs: false`**: the developer agent self-verifies — reviews each task's implementation against its acceptance criteria without invoking the tester. After self-verification passes, write `status: Passed` and `date_completed: <YYYY-MM-DD>` (today's date) to each task file using the file-locking protocol (steps c.1–c.4 above), and record each one (best-effort, see step c): `bash "$([ -f skills/j-break/scripts/record-execution.sh ] && echo skills/j-break/scripts/record-execution.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/record-execution.sh)" <task_id> Passed --source do-bundle`. No tester invocation occurs.
 
-6. **Cleanup**: on successful bundle completion, invoke the rollback anchor success path (see "### Bundle Manifest and Rollback Anchor" — success path) to delete the bundle manifest. Then **release the developer concurrency slot** acquired in step 3 above: `"$([ -f scripts/release-concurrency-slot.sh ] && echo scripts/release-concurrency-slot.sh || echo node_modules/@jenga-ai/agent/scripts/release-concurrency-slot.sh)" developer <E##_S##> <orchestrator_session_id>` (per `### 4.4` step 2 below). Then **release the epic lock**: run `rm -f project/queue/epic-lock-<E##>.json`.
+6. **Cleanup**: on successful bundle completion, invoke the rollback anchor success path (see "### Bundle Manifest and Rollback Anchor" — success path) to delete the bundle manifest. Then **release the developer concurrency slot** acquired in step 3 above: `"$([ -f scripts/release-concurrency-slot.sh ] && echo scripts/release-concurrency-slot.sh || echo node_modules/@jenga-ai/agent/scripts/release-concurrency-slot.sh)" developer <E##_S##> <orchestrator_session_id>` (per `### 4.4` step 2 below). Then **release the epic lock**: run `rm -f project/queue/epic-lock-<E##>.json`. Finally run step 2 (`teardown`) of the **Task-Completion Cleanup Procedure** (`### 7.1` below) once, to delete `project/todo.md` if it is now effectively empty. Each task's entry was already removed in step 4c, so no `remove` runs here; the post-bundle `Passed` rewrite in step 5 re-writes a status whose entry is already gone and does not call `remove` again.
 
 ### Bundle Manifest and Rollback Anchor
 
@@ -475,7 +543,7 @@ After resolving the task context (step 4), passing override validation (step 4.1
 5. **If the smoke test exits non-zero**:
    - **If this is a `--trivial`-forced run** (marker set in step 4.1.5 — and `crucial_level` is not `locked`, which never falls back, per 4.1.5's precedence note): do NOT write `status: Failed`. `--trivial` always forces `inline` with no softer "lightest safe tier" to fall back to first, so a smoke-harness failure here goes straight to the shared `#### Fallback to Full Task-Scope Pipeline` procedure below (origin: `trivial`). Do not proceed with the remaining inline steps below — the Fallback procedure takes over from here.
    - **Otherwise** (an organically-assigned `inline` task, `--trivial` not involved): behavior is unchanged from before —
-     - Write `status: Failed` to the task's frontmatter.
+     - Write `status: Failed` to the task's frontmatter, then record it (best-effort, see step 7): `bash "$([ -f skills/j-break/scripts/record-execution.sh ] && echo skills/j-break/scripts/record-execution.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/record-execution.sh)" <task_id> Failed --source do`.
      - Emit:
        ```
        INLINE TASK FAILED [<task_id>]: smoke test returned non-zero exit code. Task marked Failed. Halting.
@@ -513,7 +581,13 @@ After resolving the task context (step 4), passing override validation (step 4.1
    4. Update the task frontmatter fields `status: In Progress` and `date_started: <YYYY-MM-DD>` (today's date).
    5. Delete the lock file immediately after the write completes.
 
-2. **Acquire a developer concurrency slot, then spawn a developer subagent.** Acquire first, per `### 4.4. Developer Concurrency Slot Enforcement` below (`<id>` = this task's id). On a full cap (`capacity_blocked` outcome), do not spawn anything — `### 4.4` already reverts this task's status to `Pending`, logs the `capacity_blocked` event, and tracks the consecutive-block count; stop here and let `/jenga` Phase 4 retry this task on a later wave once a slot frees up. On a successful acquire, spawn the subagent (Agent tool, `subagent_type: "developer"`) with the same sender object and context payload as step 5 would use, but with an explicit instruction added to the dispatch prompt: **do not create a worktree** — implement directly against the current checkout (the session's existing working tree), not an isolated `.claude/worktrees/<slug>` copy. This is the one concrete difference from the step-5 `task` path: everything else about how the subagent implements the task (reading the task file, following acceptance criteria, following repo conventions) is unchanged.
+2. **Acquire a developer concurrency slot, then spawn a developer subagent.** Acquire first, per `### 4.4. Developer Concurrency Slot Enforcement` below (`<id>` = this task's id). On a full cap (`capacity_blocked` outcome), do not spawn anything — `### 4.4` already reverts this task's status to `Pending`, logs the `capacity_blocked` event, and tracks the consecutive-block count; stop here and let `/jenga` Phase 4 retry this task on a later wave once a slot frees up. On a successful acquire, spawn the subagent using the Agent tool with:
+   - `subagent_type: "developer"`
+   - `name: "<task_id>"` ← **Load-bearing identifier:** this name is consumed by `j.check-in`'s liveness probe to join running agents to board items via `ListAgents` output. Must stay stable — this is not cosmetic.
+   - Sender object and context payload from `### 5`
+   - Explicit instruction added to the dispatch prompt: **do not create a worktree** — implement directly against the current checkout (the session's existing working tree), not an isolated `.claude/worktrees/<slug>` copy
+   
+   This is the one concrete difference from the step-5 `task` path: everything else about how the subagent implements the task (reading the task file, following acceptance criteria, following repo conventions) is unchanged.
 
 3. **After the developer subagent reports implementation complete**, first **release the developer concurrency slot** acquired in step 2: `"$([ -f scripts/release-concurrency-slot.sh ] && echo scripts/release-concurrency-slot.sh || echo node_modules/@jenga-ai/agent/scripts/release-concurrency-slot.sh)" developer <task_id> <orchestrator_session_id>` (per `### 4.4` step 2) — this subagent's session has ended, so the slot is released now regardless of what it reports, before the smoke test result is even known. Then run the smoke test harness using the same invocation convention as `### 4.2. Inline Execution Path`:
    - Run `bash "$([ -f scripts/smoke-harness.sh ] && echo scripts/smoke-harness.sh || echo node_modules/@jenga-ai/agent/scripts/smoke-harness.sh)" <changed_file>...`, passing the paths the subagent changed. With no arguments the harness infers them from `git diff --name-only HEAD`. It exits `0` on pass and `1` on failure.
@@ -625,7 +699,12 @@ The pre-task gate (`### 4.1.2`) has already fired for this unit, before this sec
 
 **Acquire a developer concurrency slot first.** Follow `### 4.4. Developer Concurrency Slot Enforcement` above with `<id>` = this task's id, before doing anything else in this section. On a full cap (`capacity_blocked` outcome), do not invoke the developer agent at all — `### 4.4` already reverts the task's status to `Pending`, logs the `capacity_blocked` event, and tracks the consecutive-block count for this task; simply stop here and let `/jenga` Phase 4 retry this task on a later wave once a slot frees up. This is a distinct outcome from the ordinary `/do` failure→skip→`Pending` path below — see `### 4.4`'s "capacity_blocked vs. the existing failure→skip→Pending path" note.
 
-On a successful acquire, pass the following to the developer agent:
+On a successful acquire, invoke the developer Agent tool with the following parameters:
+
+**Agent invocation**: Use `Agent` tool with:
+- `subagent_type: "developer"`
+- `name: "<task_id>"` ← **Load-bearing identifier:** this name is consumed by `j.check-in`'s liveness probe to join running agents to board items via `ListAgents` output. It must match the task ID format (`E##_S##_T##`) and stay stable. This is not cosmetic — do not change the naming convention without coordinating with `j.check-in` implementation.
+- Full context and sender object (see below)
 
 **Sender object**: Copy `assets/sender_template.json` and populate all known fields — `session_id` per `### 4.4`'s standalone-vs-caller-supplied cases immediately above (generate one if this is a standalone invocation, case (a); reuse the caller-supplied value verbatim if one was already passed into the dispatch context, case (b) — never regenerate in that case), plus `task_id`, `story_id`, `epic_id`, and the current ISO 8601 UTC date.
 
@@ -643,6 +722,14 @@ The developer agent will:
 
 **Release the slot on every exit path.** Once the developer agent's session ends — whether it returns having implemented and been verified by the tester, fails outright, or errors — release the slot immediately: `"$([ -f scripts/release-concurrency-slot.sh ] && echo scripts/release-concurrency-slot.sh || echo node_modules/@jenga-ai/agent/scripts/release-concurrency-slot.sh)" developer <task_id> <orchestrator_session_id>` (per `### 4.4` step 2). This applies uniformly to the success path above, `/jenga`'s existing "`/do` failure (background agent)" skip-to-`Pending` path (`skills/jenga/SKILL.md`'s Edge Cases), and any other error/exception that aborts this section early.
 
+**Record a tester-written `Failed` (`E44_S09`).** Step 7 only runs on success, so a task the tester marks `Failed` would otherwise never reach the execution ledger. As soon as the developer agent returns, read the task's status from its frontmatter; if it is `Failed`, run, best-effort, before following the failure path above:
+
+```bash
+bash "$([ -f skills/j-break/scripts/record-execution.sh ] && echo skills/j-break/scripts/record-execution.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/record-execution.sh)" <task_id> Failed --source do
+```
+
+It never blocks or fails the task (see step 7). Any other status is left to step 7.
+
 ### 5.1. Intent-vs-Diff Check (needs_docs: false only)
 
 After the developer agent returns (or after inline execution completes), run the following check if the task has `needs_docs: false` in its frontmatter. If `needs_docs: true`, skip this check entirely — the full documentation lifecycle handles divergence detection for those tasks.
@@ -651,7 +738,7 @@ After the developer agent returns (or after inline execution completes), run the
 
 1. Read `needs_docs` from the task's frontmatter. If `needs_docs: true` (or absent and defaulting to `true`), skip to step 6.
 
-2. Run `git diff --name-only HEAD~1` to retrieve the list of changed file names (relative paths, one per line).
+2. Run `git diff --name-only HEAD~1 HEAD` to retrieve the list of changed file names (relative paths, one per line).
 
 3. Read the prompt template from `skills/j-do/assets/intent-vs-diff-prompt.md`. Extract the prompt block (the content between the triple backticks under `## Prompt`).
 
@@ -687,11 +774,60 @@ If either file is missing, ask the developer to produce it before continuing.
 Additionally, if the completed work introduces user-facing changes, update `README.md` and `WARP.md` accordingly.
 
 ### 7. After successful completion
+- **Record the terminal status in the execution ledger** (`E44_S09`). Whether `/do` wrote the status itself (`inline` and `light` self-verification) or the tester wrote it and `/do` observed it, read the task's final status from its frontmatter and, if it is `Passed`, `Passed with remarks`, `Failed` or `Merged`, run:
+  ```bash
+  bash "$([ -f skills/j-break/scripts/record-execution.sh ] && echo skills/j-break/scripts/record-execution.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/record-execution.sh)" <task_id> <status> --source do
+  ```
+  This call is best-effort and never blocks or fails a task: `record-execution.sh` warns on stderr and exits `0` on any ledger problem. It feeds `/break status`'s "ran this session" marker.
 - Check for any `_INSTRUCTIONS.md` files in `project/instructions/` whose ID matches the completed task. If found, present them to the user and explain that these actions must be completed before the feature will work correctly.
 - Invoke the `/commit` skill to commit the work (if not already committed by the developer)
-- Run `bash "$([ -f scripts/todo_manager.sh ] && echo scripts/todo_manager.sh || echo node_modules/@jenga-ai/agent/scripts/todo_manager.sh)" remove '<task title>'` to remove the completed task from `project/todo.md`
-- Run `bash "$([ -f scripts/todo_manager.sh ] && echo scripts/todo_manager.sh || echo node_modules/@jenga-ai/agent/scripts/todo_manager.sh)" teardown` to delete `project/todo.md` if it is now effectively empty
+- Run the **Task-Completion Cleanup Procedure** (`### 7.1` below) with this task's title, to remove the completed task from `project/todo.md` and delete the file if it is now effectively empty
 
-### 8. Loop
-Go back to step 1.
+### 7.1. Task-Completion Cleanup Procedure (Shared Procedure)
+
+This is a self-contained, reusable procedure: it removes a finished task's entry from `project/todo.md` and tears the file down if nothing is left. It is named and documented here, rather than only as an inline bullet of `/do`'s own loop, so that any skill that dispatches tasks outside `/do`'s step 1-8 loop can run it by name (`Task-Completion Cleanup Procedure`, `skills/j-do/SKILL.md` `### 7.1`) instead of re-deriving or duplicating the two commands. Callers: `/do` step 7 (above) today; `/do`'s story-bundle path (`### 1.5` step 4c and 4d call `remove` per task; step 4d and step 6 call `teardown` once per bundle, wired by `E37_S05_T03`); `/jenga` Phase 4's direct dispatch and `/dooo` are wired to it by `E37_S05_T02` and `E37_S05_T04`.
+
+**When to run.** Immediately after a task reaches a terminal status (`Passed`, `Passed with remarks` or `Failed`), in the same session that observed that status. Do not defer it to a later pass or session.
+
+**Input.** `<task title>` is the entry's title exactly as it appears in `project/todo.md` (the same string `/do` step 2 listed and step 4 resolved), not the task id.
+
+1. **Remove the entry.** Run:
+   ```bash
+   bash "$([ -f scripts/todo_manager.sh ] && echo scripts/todo_manager.sh || echo node_modules/@jenga-ai/agent/scripts/todo_manager.sh)" remove '<task title>'
+   ```
+2. **Tear down if empty.** Run:
+   ```bash
+   bash "$([ -f scripts/todo_manager.sh ] && echo scripts/todo_manager.sh || echo node_modules/@jenga-ai/agent/scripts/todo_manager.sh)" teardown
+   ```
+   This deletes `project/todo.md` only if it is now effectively empty; otherwise it leaves the file in place.
+
+**Constraints.** `scripts/todo_manager.sh` is the sole underlying mechanism. This procedure introduces no new queue file, lock primitive or script, and adds no behavior of its own: the two invocations and their arguments are exactly those step 7 previously carried inline.
+
+**Why a named section, not a new script.** The two calls are already a deterministic, two-line sequence over an existing script, so wrapping them in a new script would add a file without removing any agent judgment. What was missing was a stable, citable handle; a heading in the file that already owns the logic gives other skills that handle at zero extra mechanism (the same approach `### 4.4` takes for concurrency-slot enforcement).
+
+### 8. Break checkpoint, then loop
+
+Runs only after step 7 has fully completed: the task's status is written, the work is committed and the `todo.md` entry is removed. Before going back to step 1, check whether a break was requested (`/break`, `E44`):
+
+```bash
+bash "$([ -f skills/j-break/scripts/check-break.sh ] && echo skills/j-break/scripts/check-break.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/check-break.sh)"
+```
+
+- **Exit `0`** — no break. Go back to step 1, unchanged. This is the overwhelmingly common case and costs one file-existence test.
+- **Exit `10`** — a break was requested. **Do not return to step 1.** The record is on stdout as `mode=<soft|hard> with_status=<true|false> requested_at=<ts> requested_by=<who>`. A `soft` break was consumed by that call; a `hard` break is still in place. Halt and print the **halt report**.
+- **Any other exit** — the checker itself failed, which is not a stop request. Print its stderr as a warning and go back to step 1.
+
+Never read the flag file here. Branch on the exit code and use the record the script prints.
+
+**Halt report.** State plainly that this is a requested stop and not a failure:
+
+1. **Finished:** the task that just completed and its status (or "none — nothing was started" when halting from the entry check).
+2. **Remaining:** the items still in `project/todo.md`; for a halted story bundle, the not-started tasks (the helper's `run` list) instead, since a bundle uses no `todo.md` entries.
+3. **Mode:** soft or hard.
+4. **Resume:** `/proceed` for a soft break; for a hard break, `/break clear` first, then `/proceed`. For a halted **story bundle** (the halt came from step 1.5 c.3), offer first `resume the bundle (/do <E##_S##>)` (after `/break clear` when the break is hard), and individual task dispatch with `/do <E##_S##_T##>` as the alternative. List **completed** (`skipped`), **not started** (`run`) and the intact `anchor_sha` by running `bash "$([ -f skills/j-do/scripts/bundle-resume.sh ] && echo skills/j-do/scripts/bundle-resume.sh || echo node_modules/@jenga-ai/agent/skills/j-do/scripts/bundle-resume.sh)" <E##_S##>` and reading its JSON, never from memory.
+5. **Scoped rapport:** only when the record says `with_status=true`. Run `bash "$([ -f skills/j-break/scripts/render-execution-status.sh ] && echo skills/j-break/scripts/render-execution-status.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/render-execution-status.sh)"` and print its output verbatim. If it fails, say the rapport is unavailable and why. Never improvise a rapport from the board.
+
+Nothing is aborted mid-flight: the current task has already run to completion by the time this checkpoint is reached.
+
+When there is no break, go back to step 1.
 

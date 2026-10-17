@@ -1,7 +1,7 @@
 {
   "descriptor_version": 1,
   "file": "test-config.json",
-  "description": "The tester's tool stack. Listed read-only: its only key is a nested tool list that changes only through the tester's user-approval flow, so nothing is editable here.",
+  "description": "The tester's tool stack plus the commit-time test options. The tool list is read-only here and changes only through the tester's user-approval flow; the two commit_* keys are plain strings you can set.",
   "keys": [
     {
       "key": "tools",
@@ -10,6 +10,24 @@
       "description": "One entry per test type (unit, integration, e2e, sast, vulnerability, performance, coverage); changed only with the user's approval.",
       "editable": false,
       "pointer": "agents/tester.md (Tool Stack Management: tools are added only with user approval)"
+    },
+    {
+      "key": "commit_prompt_default",
+      "label": "Commit test prompt default",
+      "type": "string",
+      "description": "The answer j.commit's test prompt assumes without asking: skip, scoped or full; empty means no recorded default, so it always prompts.",
+      "editable": true,
+      "default": "",
+      "allowed": ["", "skip", "scoped", "full"]
+    },
+    {
+      "key": "commit_scope_map_file",
+      "label": "Commit test scope map file",
+      "type": "string",
+      "description": "Relative path to the .json file mapping changed paths to the tests a scoped commit-time run executes; no leading slash and no .. segment.",
+      "editable": true,
+      "default": "templates/test-scope-map.json",
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(^|/)\\.\\.(/|$))[^\\\\\\n]+\\.json$"
     }
   ]
 }

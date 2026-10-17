@@ -71,12 +71,15 @@ Skills are stored in `skills/<name>/SKILL.md`. Invoke them with `/<name>` in a C
 | `/redo` | Rework a previous implementation by commit SHA or Epic/Story number. Includes scope assessment, plan, and doc updates. |
 | `/uncharted` | Entry point for code with no board provenance — three modes: `segment` (a file or directory), `import` (an external source), `onboard` (a whole pre-existing codebase). |
 | `/do` | Execute tasks from the scrum board. Resolves each entry to full board context and drives the Developer agent. |
+| `/j-test` | Discover the project's test suites, list them numbered, run the ones you pick (blank means all) in order, and print a pass/fail summary; exit code 0 when all passed, 1 otherwise. Never writes board status. |
+| `/j-smoke-test` | Structural smoke test of every skill in the catalog: frontmatter, name versus directory, preferred agent, referenced scripts and assets. Classifies findings as critical or minor, prints a pass/fail summary, and exits 1 when any critical finding exists. Read-only. |
 | `/status` | Overview of epics, stories, and tasks with statuses, open rapports, and queue depth. |
 | `/jenga-permission-level` | Report or switch the current session's 5-tier permission level (Locked/Guarded/Standard/Elevated/Unrestricted) without hand-editing settings.json. |
 | `/commit` | Commit completed work using the EST naming convention (`epic(...)`, `story(...)`). |
 | `/lgtm` | Approve current work, commit, and continue. Chains `/commit` + `/continue`. |
 | `/continue` | Pick up the next incomplete item across `PROJECT_SUMMARY.md`, epics, and stories. |
 | `/proceed` | Resume execution from where it left off. |
+| `/j-break` | Stop an orchestration at the next safe task boundary: the current task finishes and records its status, then execution halts before the next one starts — nothing is aborted mid-flight. Soft by default (one-shot); `hard` persists until `/j-break clear`; append `status` for a progress rapport on the current scope of execution. |
 | `/error` | Guided troubleshooting — gathers context about an error and investigates a fix. |
 | `/help` | List all available skills with descriptions. |
 
@@ -137,9 +140,11 @@ When implementing or authoring a skill, **offload deterministic, repeatable step
 
 ---
 
-## Documentation Placement — `docs/` versus `project/documentation/`
+## Documentation Placement — `docs/` versus `project/documentation/` versus `site/`
 
-> Rule (`E34_S06`): **`docs/` holds only content meant for the published GitHub Pages site.**
+> Rule (`E34_S06`, revised by `E70_S02`): **`docs/` belongs to the project; Jenga scaffolds it but never
+> puts Jenga content in it; Jenga's internal documents live in `project/documentation/`, the published
+> site source lives in `site/`.**
 > Maintainer-internal documentation — design notes, mirror and distribution rules, protocol and parity
 > docs, decision records, execution plans and summaries — lives under **`project/documentation/`**, the
 > `documentation` path in [`project/configs/workflow.json`](project/configs/workflow.json).
@@ -148,8 +153,8 @@ When implementing or authoring a skill, **offload deterministic, repeatable step
 >
 > Skills and agents that create documentation resolve the destination from `workflow.json`'s
 > `paths.documentation`; they never default to `docs/`. The strategy brief is not an exception: it is an
-> ordinary `project/documentation/STRATEGY.md` file (resolved via `paths.strategy`). The per-file
-> classification is in `docs/README.md`'s "Contents by audience".
+> ordinary `project/documentation/STRATEGY.md` file (resolved via `paths.strategy`). The site's decision
+> record is `project/documentation/site-decisions.md`.
 
 ---
 

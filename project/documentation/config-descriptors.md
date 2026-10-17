@@ -118,6 +118,53 @@ It pairs with a version-counter entry in the same descriptor:
 A read-only key is listed with its value summarised (for example `38 items`, never dumped) and the pointer, as
 `Checklist items: 38 items [read-only; see scripts/validate-checklists.sh]`.
 
+## Worked example: `test-config.json`, an editable file with no counter
+
+`test-config.json` is the tester's tool stack. Its `tools` array is changed only through the tester's
+user-approval flow (`agents/tester.md`, Tool Stack Management), so `tools` stays `editable: false` with that
+pointer. Since `E72_S01_T04` the file also carries the two settings `j.commit`'s commit-time test prompt reads
+(`E72_S04`), both editable strings:
+
+| Key | Type | Default | Legal values |
+|-----|------|---------|--------------|
+| `commit_prompt_default` | string | `""` | `""`, `skip`, `scoped`, `full` (enforced by `allowed`) |
+| `commit_scope_map_file` | string | `templates/test-scope-map.json` | a relative path ending in `.json` (enforced by `pattern`) |
+
+- **`commit_prompt_default`**: the answer the prompt assumes without asking. The empty string is a legal value and
+  means **no recorded default: always prompt**, so `""` is in `allowed` on purpose. Setting it to `skip`, `scoped`
+  or `full` records a default; setting it back to `""` clears it.
+- **`commit_scope_map_file`**: the JSON file that maps changed paths to the tests a scoped run executes. The
+  default points at the generic table `E72_S01_T05` ships; the descriptor does not require that file to exist. The
+  `pattern` rejects an absolute path (a leading `/` or a drive prefix such as `C:`), any `..` path segment, a
+  backslash, a newline, and anything that does not end in `.json`. A `..` inside a name (`my..map.json`) is not a
+  segment and is accepted.
+
+```bash
+jenga config get test-config.commit_prompt_default            # prints an empty line when no default is recorded
+jenga config set test-config.commit_prompt_default scoped     # test-config.commit_prompt_default = "scoped"
+jenga config set test-config.commit_scope_map_file ../x.json  # exit 4: fails the pattern
+jenga config set test-config.tools '[]'                       # exit 5: read-only, see agents/tester.md
+```
+
+Two decisions are worth knowing before copying this shape:
+
+- **Two flat keys, not one nested `commit_options` object.** The story first asked for a `commit_options` key with
+  `prompt_default` and `scope_map_file` subkeys. That cannot be expressed: `editable: true` is legal only for scalar
+  types, so an `object` key can only ever be read-only, and the schema has no vocabulary for nested subkeys. The
+  decision (settled with the user on 2026-10-13) was to use two flat string keys under today's schema rather than
+  extend the schema, which would have been an `E68` change touching the validator, the `get|set` path and all three
+  E68 suites. This is also the shape the `E72` epic names.
+- **No `bump_on_change`.** `test-config.json` has no version counter, and none was added. A counter would put a new
+  key into a user-approved file, require the `j.init` template to ship it, and make `jenga config set` fail with
+  exit `6` (version counter missing) on every existing project whose `test-config.json` predates it. Nothing reads a
+  `test-config` version: the commit-time prompt reads the two values when it runs. This is the first editable file
+  in the repo without a counter, so the "an editable key names a counter" habit from the other two files does not apply.
+
+A `test-config.json` written before these keys existed (including the one `j.init` scaffolds today) simply lacks
+them: `jenga config get` on a missing key exits `3` with a message saying it is not set, and `jenga config set`
+creates the key. `scripts/validate-config-descriptors.sh` run against such a file reports the keys as absent, which is
+the intended prompt to add them.
+
 ## Exit codes
 
 `jenga config get` and `set`, the interactive flow and the helper scripts all use one table, so a script can rely

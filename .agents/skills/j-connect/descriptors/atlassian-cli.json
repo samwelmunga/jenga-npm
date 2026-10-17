@@ -1,0 +1,54 @@
+{
+  "id": "atlassian-cli",
+  "name": "Atlassian CLI (acli) with API-token authentication",
+  "docs": [
+    "https://developer.atlassian.com/cloud/acli/guides/introduction/",
+    "https://developer.atlassian.com/cloud/acli/guides/how-to-get-started/",
+    "https://developer.atlassian.com/cloud/acli/reference/commands/"
+  ],
+  "secrets": {
+    "env_vars": [
+      "ATLASSIAN_API_TOKEN",
+      "ATLASSIAN_SITE",
+      "ATLASSIAN_EMAIL"
+    ]
+  },
+  "detect": {
+    "command": [
+      "acli",
+      "--version"
+    ]
+  },
+  "install": {
+    "docs_url": "https://developer.atlassian.com/cloud/acli/guides/install-acli/",
+    "hint": "Atlassian documents a separate install page per platform (macOS, Linux, Windows); follow the one for yours from the docs page. Nothing is automated here: the documented macOS Homebrew route needs a tap added before the install, which j.connect cannot express, and Atlassian states that each acli version is supported for only 6 months after release, so keep it current. Coverage: the official reference lists the command groups jira, admin, rovodev and feedback only. Jira is covered. Confluence and Bitbucket are NOT covered by this transport: use the atlassian-cloud descriptor (remote MCP server) for them where it supports them. Not verified against a real account: the Linux and Windows install steps, which of Jira, Confluence and Bitbucket the Atlassian Cloud MCP server serves, and whether the commands below exit non-zero when you are not signed in. Atlassian Government Cloud is not supported by acli."
+  },
+  "auth": {
+    "type": "browser",
+    "docs_url": "https://developer.atlassian.com/cloud/acli/guides/how-to-get-started/",
+    "instructions": "Create an Atlassian API token in your Atlassian account yourself. Put the token, your Atlassian site (for example yoursite.atlassian.net) and your account email in the environment variables ATLASSIAN_API_TOKEN, ATLASSIAN_SITE and ATLASSIAN_EMAIL yourself, in your own shell or secret store; the variable names are a j.connect convention, acli reads no environment variables for sign-in. Then run `acli jira auth login` yourself in a terminal, passing the site and email as its --site and --email flags and piping the token to its --token flag on standard input, as the docs page shows, and tell me when you are done. Do not paste the token into this chat or into a project file; j.connect never handles it. A successful check means acli can reach Jira with the stored login. Not verified against a real account: the exact flags and whether the check fails when signed out.",
+    "check": {
+      "command": [
+        "acli",
+        "jira",
+        "project",
+        "list",
+        "--limit",
+        "1"
+      ]
+    }
+  },
+  "register_mcp": {
+    "supported": false
+  },
+  "verify": {
+    "command": [
+      "acli",
+      "jira",
+      "project",
+      "list",
+      "--limit",
+      "1"
+    ]
+  }
+}

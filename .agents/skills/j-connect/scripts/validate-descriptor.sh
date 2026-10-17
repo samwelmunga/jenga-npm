@@ -16,7 +16,8 @@
 #   - secrets are env-var NAMES only: no literal-secret-shaped strings, no
 #     secret-named keys holding values, env-var names must look like names.
 #   - cross-references: auth.env_var and register_mcp.env must be listed in
-#     secrets.env_vars.
+#     secrets.env_vars. register_mcp.env applies to stdio entries only: an http
+#     entry with a non-empty env is rejected (E65_S08_T02).
 #
 # Usage:   validate-descriptor.sh <descriptor-file>
 # Exit:    0 valid; 1 invalid (messages on stderr, one `ERROR:` per problem);
@@ -115,6 +116,7 @@ ERRORS="$(jq -r '
           else "register_mcp.type: must be stdio or http" end),
          (if ($d.register_mcp | has("args")) and (($d.register_mcp.args | type) != "array" or ($d.register_mcp.args | all(.[]; type == "string") | not)) then "register_mcp.args: must be an array of strings" else empty end),
          (if ($d.register_mcp | has("env")) and (($d.register_mcp.env | type) != "array" or ($d.register_mcp.env | all(.[]; envname) | not)) then "register_mcp.env: must be an array of env-var NAMES (e.g. FOO_TOKEN), never values" else empty end),
+         (if ($d.register_mcp.type // "stdio") == "http" and (($d.register_mcp.env // []) | if type == "array" then length > 0 else false end) then "register_mcp.env: http entries carry no env (env applies to stdio entries only); remove it, or use type stdio" else empty end),
          (((($d.register_mcp.env // []) | if type == "array" then .[] else empty end) as $e
             | select(($e | envname) and ((($d.secrets.env_vars // []) | index($e)) == null))
             | "register_mcp.env: " + $e + " must also be listed in secrets.env_vars"))

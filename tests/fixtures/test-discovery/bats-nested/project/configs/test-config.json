@@ -1,0 +1,7 @@
+{
+  "tools": [
+    { "tool_name": "bats", "type": "unit" },
+    { "tool_name": "bats", "type": "integration" },
+    { "tool_name": "-", "type": "e2e" }
+  ]
+}

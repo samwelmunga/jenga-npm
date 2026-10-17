@@ -321,19 +321,20 @@ for `E50_S16` retiring or neutralising that function. It is also the deeper poin
 reversal — the private repo and the public mirror now agree on which directory form exists, instead
 of the mirror silently transforming one into the other.
 
-#### Permanent exceptions — three directories keep their bare names
+#### Permanent exceptions — four directories keep their bare names
 
-These three are **permanent, deliberate exceptions**. They keep their current bare directory names
+These four are **permanent, deliberate exceptions**. They keep their current bare directory names
 and are **not deleted, not renamed, and not twinned**:
 
 | Directory | Reason |
 |---|---|
 | `skills/jenga/` | Root orchestrator command, deliberately excluded from twin generation by `E50_S06` (already `Merged`). Its invocation surface must stay exactly `/jenga` / `j.jenga` — never a doubled `j-jenga`. |
 | `skills/jenga-permission-level/` | Same reason and same `E50_S06` exclusion. Its surface must stay exactly `/jenga-permission-level` / `j.jenga-permission-level`. |
+| `skills/jenga-config/` | A main skill of the same kind (`E68_S04`): the thin chat front end for `jenga config`, never twinned. Its surface must stay exactly `/jenga-config` / `j.jenga-config`. |
 | `skills/index/` | Not a skill at all — it has no `SKILL.md` and is not part of routing, so it has nothing to rename and no invocation form to preserve. |
 
-Note the consequence for the first two: because they were never twinned, bare `/jenga` and
-`/jenga-permission-level` **keep working**. They are the only bare slash forms that survive, and they
+Note the consequence for the first three: because they were never twinned, bare `/jenga`,
+`/jenga-permission-level` and `/jenga-config` **keep working**. They are the only bare slash forms that survive, and they
 survive because these directories were always the canonical ones — not because any alias was kept.
 
 `skills/init/` / `skills/j-init/` were also historically listed as an exclusion, but only because the
@@ -358,7 +359,7 @@ rather than merely guarding it. Its two hardcoded special cases (former L97-100'
 no-op, and former L110-113's `jenga`/`jenga-permission-level` hard error) are **moot** now that the
 whole script is gone — there is no longer a second hand-maintained exception list to reconcile with
 this document's "Permanent exceptions" table above; that table is the sole remaining source of truth
-for the three exceptions. `tests/generate-j-alias.bats` was deleted alongside it — there is no
+for the four exceptions. `tests/generate-j-alias.bats` was deleted alongside it — there is no
 surviving script for the file to test — and the twin-divergence audit's own bats suite had its
 generator-invoking fixture setup (its `setup()` used to `run_generator()` against a sandboxed copy of
 the real script) replaced with a hand-written fixture encoding the same divergence shape the generator
@@ -562,7 +563,7 @@ position.
 
 **Guidelines:**
 - The declared type value(s) should be one of the entries in the canonical type vocabulary,
-  `templates/playbook-types.json` (`text`, `id_list`, `file_list`, `ranked_list` as of this writing) —
+  `templates/playbook-types.json` (`text`, `id_list`, `file_list`, `ranked_list`, `error_table` as of this writing) —
   see "Playbook Type Registry Governance" below before adding a new type.
 - Only declare `output_types` if this skill genuinely produces output another playbook step could
   meaningfully consume. A skill with no declared `output_types` simply cannot be a playbook
@@ -1236,7 +1237,7 @@ authored by the wizard; hand-edit the written file directly for those. A project
 ### Playbook Type Registry Governance
 
 The canonical playbook type vocabulary lives in `templates/playbook-types.json` (currently `text`,
-`id_list`, `file_list`, `ranked_list`). It is **owned by the Scrum Master**, mirroring the same ownership pattern
+`id_list`, `file_list`, `ranked_list`, `error_table`). It is **owned by the Scrum Master**, mirroring the same ownership pattern
 already established for `PROJECT_SUMMARY.md`. Registry additions or changes route through the
 normal board-item (task) process — never an ungoverned direct edit to that file. If a skill you're
 authoring needs a type the registry doesn't yet have, raise it as a task rather than adding the
@@ -1312,6 +1313,48 @@ UI framing a consumer adds on top, never something the type itself describes.
   alternatives were considered and rejected: `RankedList` breaks the registry's snake_case
   convention, and `SimpleRanking` reads more like a scoring-algorithm name and obscures that the
   value is a *list* of ranked entries.
+
+
+#### The `error_table` type (`E64_S01_T02`)
+
+`error_table` represents the rows of a three-column **Feature | Error | Consequences** table: one line per
+critical finding, the shape `skills/j-smoke-test/scripts/render-error-table.sh` produces from
+`smoke-test-skills.sh`'s findings. For example:
+
+```
+j-deep-dive: agent delegation | metadata.prefered_agent is "scrum_master" but agents/scrum_master.md does not exist | Delegating execution to the preferred agent fails when the skill runs; it cannot hand off to its agent.
+```
+
+Each line is three non-empty fields separated by a literal ` | ` (a pipe padded by single spaces), with no
+leading or trailing pipe. Because a row has no outer pipes it is also a valid Markdown table row, so the same
+lines render as a human-readable table under the header and separator that
+`templates/CRITICAL_ERROR_TABLE_TEMPLATE.md` supplies (`Feature | Error | Consequences` / `--- | --- | ---`).
+The header, separator and heading are **not** part of the type: they are presentation a consumer adds on top,
+exactly as `/dooo`'s "Done" option is for `ranked_list`.
+
+- **`verify`** — `{"per_line": "^[^|]+ [|] [^|]+ [|] .+$"}`. Every line must have a non-empty first field with
+  no pipe, a ` | ` separator, a non-empty second field with no pipe, a second ` | ` separator, and a non-empty
+  remainder. A line with fewer than three fields, an empty field, or no spaced pipes fails. The pipe is written
+  `[|]` rather than `\|` so the POSIX ERE means the same thing in every `grep -E`, since a backslash before a
+  pipe is a literal in some implementations and alternation in others.
+- **`normalize`** — `["trim", "drop_empty"]`, the same pair `file_list` uses. A stray blank line or surrounding
+  whitespace is mechanical noise a consumer should not fail on; nothing semantic is repaired. This uses only
+  the existing closed vocabulary.
+- **No new rule kind or transform.** The type is composed from the existing `per_line` rule and `trim` /
+  `drop_empty`, so `scripts/validate-typed-object.sh` needed no change, which is the data-only extension
+  contract this document describes under "Playbook Type Registry Governance".
+- **Producer-side guarantee** — `render-error-table.sh` flattens each field to one line, replaces any `|` inside
+  a field with `¦` (U+00A6) and turns an empty field into `unspecified`, so every row it emits conforms.
+- **Naming** — `error_table` (snake_case, matching `text`/`id_list`/`file_list`/`ranked_list`). It names the
+  *shape* (a table of errors), not the producer, so another check can reuse it. `critical_error_table` was
+  rejected because "critical" is a severity decision made by the producer's own bar, not part of the row's
+  shape; `smoke_test_report` was rejected because it ties a generic row shape to one skill. The epic's own
+  suggestion, `error_table`, is what was chosen.
+- **`output_types`** — no skill declares `error_table` yet. `/j-smoke-test` emits the table only when a
+  critical finding exists, which is decided by the run itself; the `when` predicates available to
+  `output_types` (`argument_empty` / `argument_nonempty`, or a classifier script that sees the invocation
+  argument) cannot express that, and a blanket declaration would overclaim under `E53_S11`'s honesty-over-
+  breadth policy. The rows are available now through `render-error-table.sh --rows-only`.
 
 ---
 

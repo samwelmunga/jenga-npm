@@ -146,3 +146,92 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" == *"Usage:"* ]] || false
 }
+
+# ---- E65_S08_T01: re-registration keeps hand-edited entries ------------------
+
+@test "hand-edited http URL (?read_only=true) is unchanged and .mcp.json is byte-identical" {
+  printf '{\n  "mcpServers": {\n    "supabase": {"type": "http", "url": "https://mcp.supabase.com/mcp?read_only=true"}\n  }\n}\n' > "$TARGET"
+  cp "$TARGET" "$BATS_TEST_TMPDIR/before"
+  run bash "$REG" --name supabase --type http --url https://mcp.supabase.com/mcp --project-root "$PROJ"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .status <<<"$output")" = "unchanged" ]
+  cmp "$TARGET" "$BATS_TEST_TMPDIR/before"
+}
+
+@test "http entry with a different host or path is updated, a hand-added headers key survives, others are preserved" {
+  cat > "$TARGET" <<'JSONEOF'
+{
+  "hooks": {"SessionEnd": []},
+  "mcpServers": {
+    "remote": {"type": "http", "url": "https://old.example.invalid/mcp", "headers": {"X-Custom": "${MY_HEADER_VALUE}"}},
+    "other": {"type": "stdio", "command": "keep-me", "args": ["a"]}
+  }
+}
+JSONEOF
+  run bash "$REG" --name remote --type http --url https://new.example.invalid/mcp --project-root "$PROJ"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .status <<<"$output")" = "updated" ]
+  [ "$(jq -r '.mcpServers.remote.url' "$TARGET")" = "https://new.example.invalid/mcp" ]
+  [ "$(jq -c '.mcpServers.remote.headers' "$TARGET")" = '{"X-Custom":"${MY_HEADER_VALUE}"}' ]
+  [ "$(jq -c '.mcpServers.other' "$TARGET")" = '{"type":"stdio","command":"keep-me","args":["a"]}' ]
+  [ "$(jq -c '.hooks' "$TARGET")" = '{"SessionEnd":[]}' ]
+  [ "$(jq -c '.mcpServers | keys_unsorted' "$TARGET")" = '["remote","other"]' ]
+}
+
+@test "changing an entry's type drops the old transport's keys instead of leaving a hybrid" {
+  printf '{"mcpServers":{"svc":{"type":"stdio","command":"old","args":["x"],"note":"mine"}}}\n' > "$TARGET"
+  run bash "$REG" --name svc --type http --url https://example.invalid/mcp --project-root "$PROJ"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .status <<<"$output")" = "updated" ]
+  [ "$(jq -cS '.mcpServers.svc' "$TARGET")" = '{"note":"mine","type":"http","url":"https://example.invalid/mcp"}' ]
+}
+
+@test "stdio entry with a hand-added env key and the same command/args is unchanged; a different command is updated" {
+  printf '{"mcpServers":{"svc":{"type":"stdio","command":"fakecli","args":["mcp","serve"],"env":{"SVC_TOKEN":"${SVC_TOKEN}","EXTRA":"${EXTRA}"}}}}\n' > "$TARGET"
+  cp "$TARGET" "$BATS_TEST_TMPDIR/before"
+  run register svc --env-name SVC_TOKEN
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .status <<<"$output")" = "unchanged" ]
+  cmp "$TARGET" "$BATS_TEST_TMPDIR/before"
+
+  run bash "$REG" --name svc --command other-cmd --arg mcp --arg serve --env-name SVC_TOKEN --project-root "$PROJ"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .status <<<"$output")" = "updated" ]
+  [ "$(jq -r '.mcpServers.svc.command' "$TARGET")" = "other-cmd" ]
+  # the user's extra env entry survives the merge
+  [ "$(jq -r '.mcpServers.svc.env.EXTRA' "$TARGET")" = '${EXTRA}' ]
+}
+
+@test "a stdio entry missing a descriptor env name is not satisfied and gains it" {
+  printf '{"mcpServers":{"svc":{"type":"stdio","command":"fakecli","args":["mcp","serve"]}}}\n' > "$TARGET"
+  run register svc --env-name SVC_TOKEN
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .status <<<"$output")" = "updated" ]
+  [ "$(jq -r '.mcpServers.svc.env.SVC_TOKEN' "$TARGET")" = '${SVC_TOKEN}' ]
+}
+
+@test "a secret-shaped value in a hand-added key never reaches stdout or stderr, for unchanged or updated" {
+  local secret="$SENTINEL"
+  printf '{"mcpServers":{"r":{"type":"http","url":"https://example.invalid/mcp?read_only=true","headers":{"Authorization":"Bearer %s"}}}}\n' "$secret" > "$TARGET"
+  run bash -c 'bash "$1" --name r --type http --url https://example.invalid/mcp --project-root "$2" 2>&1' _ "$REG" "$PROJ"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .status <<<"$output")" = "unchanged" ]
+  [[ "$output" != *"$secret"* ]] || false
+  run bash -c 'bash "$1" --name r --type http --url https://elsewhere.invalid/mcp --project-root "$2" 2>&1' _ "$REG" "$PROJ"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .status <<<"$output")" = "updated" ]
+  [[ "$output" != *"$secret"* ]] || false
+}
+
+# ---- E65_S08_T02: --env-name with --type http is a loud usage error ----------
+
+@test "--env-name combined with --type http exits 2, writes no file and never echoes a supplied value" {
+  run bash "$REG" --name remote --type http --url https://example.invalid/mcp --env-name FOO_TOKEN --project-root "$PROJ"
+  [ "$status" -eq 2 ]
+  [ ! -e "$TARGET" ]
+  [[ "$output" == *"--env-name"* ]] || false
+  run bash "$REG" --name remote --type http --url https://example.invalid/mcp --env-name "FOO_TOKEN=$SENTINEL" --project-root "$PROJ"
+  [ "$status" -eq 2 ]
+  [ ! -e "$TARGET" ]
+  [[ "$output" != *"$SENTINEL"* ]] || false
+}

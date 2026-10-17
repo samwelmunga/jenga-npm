@@ -98,3 +98,26 @@ project/queue/checklist-ticks/*
 # project/queue/.
 project/queue/checklist-markers/*
 !project/queue/checklist-markers/.gitkeep
+
+# Per-session execution ledger (project/queue/execution-ledger.jsonl,
+# skills/j-break/scripts/record-execution.sh — E44_S09) is append-only,
+# queue-like transient state: one line per terminal task status a /do, /dooo
+# or /jenga session wrote, keyed by session key, read by `/break status` to
+# tell "ran this session" from "done earlier". It is meaningful only to the
+# machine and sessions that wrote it, so it must never become a durable git
+# artifact. Already blocklisted for the public mirror via project/queue/
+# (.publicignore). Rotation is a deferred follow-up.
+project/queue/execution-ledger.jsonl
+
+# Transient per-session queue files (project/queue/) — concurrency slot
+# holders, conflict notes, bundle and epic-lock state, and the session handoff
+# scratch file. Each is written for one live session or dispatch and removed
+# or superseded when it ends; none is a durable record, so none may be
+# committed. The durable trigger logs (scrum_triggers.jsonl,
+# tester_triggers.jsonl, project_summary_updates.jsonl) and the .gitkeep
+# placeholders are deliberately NOT listed here.
+project/queue/.session_handoff.json
+project/queue/bundle-*.json
+project/queue/concurrency-slots-*.json
+project/queue/conflict-*.md
+project/queue/epic-lock-*.json

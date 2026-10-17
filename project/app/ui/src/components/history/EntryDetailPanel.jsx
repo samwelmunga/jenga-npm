@@ -118,6 +118,22 @@ export default function EntryDetailPanel({ entry, onClose }) {
           </>
         )}
 
+        {entry.type === 'idea' && (
+          <>
+            <h3 className="panel-title">Spike</h3>
+            <dl className="panel-meta">
+              <dt>State</dt>
+              <dd>{entry.state === 'none' ? 'untagged' : entry.state || '—'}</dd>
+              <dt>Linked board ID</dt>
+              <dd>{entry.boardId ? <code>{entry.boardId}</code> : '—'}</dd>
+              <dt>Source rapport</dt>
+              <dd>{entry.rapport || '—'}</dd>
+            </dl>
+            <h4>Idea</h4>
+            <p className="panel-subject">{entry.text}</p>
+          </>
+        )}
+
         {entry.type === 'library_entry' && (
           <>
             <h3 className="panel-title">{entry.category || 'Entry'}</h3>

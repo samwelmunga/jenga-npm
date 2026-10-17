@@ -5,6 +5,13 @@
 # register-mcp.sh, driven by a throwaway fixture descriptor (a fake "fakeservice"
 # with a stub CLI on a fixture PATH) in a temp git project. The fixture lives
 # under tests/fixtures/ only; nothing here is a shipped service descriptor.
+#
+# This file is the one test that OBSERVES the guardrail ordering directly: setup()
+# interposes on ensure-secret-safe.sh and step "2. CLI installed, not authenticated"
+# asserts .env did not yet exist when the guard ran. (run-descriptor.bats covers the
+# outcomes, gitignore applied and a refused guard leaving .env untouched, but does not
+# observe the order.) Do not remove or weaken this without a replacement; see
+# project/documentation/e65-s08-decisions.md, AC4.
 
 bats_require_minimum_version 1.5.0
 load helpers/assertions

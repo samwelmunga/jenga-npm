@@ -172,6 +172,8 @@ Write clear, descriptive commit messages. Your commit messages serve as a guide 
 
 Use the `j.commit` skill to commit.
 
+- Call it as a non-interactive caller (`--caller noninteractive`). The commit's test gate then skips with a logged note and never prompts; you still never run tests, the tester does.
+
 ### Crucial Tier: `advisory`
 
 **Trigger.** The task you are implementing — or its parent story — carries `crucial_level: advisory` in frontmatter, per `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s "Crucial Flag Fields (Story, Task)" section.

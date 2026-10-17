@@ -1,0 +1,31 @@
+{
+  "id": "atlassian-cloud",
+  "name": "Atlassian Cloud remote MCP server (Jira, Confluence, Bitbucket Cloud)",
+  "docs": [
+    "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/getting-started-with-the-atlassian-remote-mcp-server/",
+    "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/supported-tools/",
+    "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/authentication-and-authorization/",
+    "https://github.com/atlassian/atlassian-mcp-server"
+  ],
+  "detect": {
+    "command": ["claude", "--version"]
+  },
+  "install": {
+    "docs_url": "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/getting-started-with-the-atlassian-remote-mcp-server/",
+    "hint": "Atlassian's MCP server is remote, so there is no Atlassian CLI to install here; the only tool needed is Claude Code itself, which is what detection checks (exit status only), so that registration can run on a machine where the server is not yet registered. Whether the atlassian server is configured is judged by the verify step, which looks for a Claude Code MCP server named exactly atlassian and so cannot see an Atlassian server added under another name; if you already have one connected that way, nothing more is needed. If Claude Code is missing, install it from Anthropic's official instructions first. This descriptor covers Atlassian Cloud only: Jira and Confluence, plus Bitbucket Cloud (Atlassian documents the Bitbucket tools as available only when your Bitbucket workspace is linked to an Atlassian organization). Bitbucket Data Center / Server, and Jira and Confluence Data Center / Server, are not covered by this descriptor. Atlassian also documents an optional API-token mode for the remote server, enabled by an organization admin; this descriptor does not use it (the API-token path for the acli command-line tool is the separate atlassian-cli descriptor). The endpoint registered by this descriptor is the one Atlassian's docs list as current when this file was written; Atlassian lists the older /v1 endpoints as legacy, so re-check the docs page if registration or sign-in stops working. Not verified against a real account: that the registered endpoint accepts your sign-in, that the OAuth consent screen completes for your site (an organization admin may have to allowlist the redirect domain under Atlassian Administration, Rovo, Rovo MCP server, Domain settings), that Jira, Confluence and Bitbucket tools all appear for your site and workspace, that the entry j.connect writes to .mcp.json is picked up after you approve the project server in Claude Code, and that claude mcp get reports a project-scoped server before it is approved."
+  },
+  "auth": {
+    "type": "none",
+    "docs_url": "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/authentication-and-authorization/",
+    "instructions": "Atlassian's remote MCP server signs you in with OAuth 2.1 inside Claude Code: open /mcp, choose the atlassian server and approve access on the Atlassian page it opens, picking the Atlassian site you want to connect. If the consent page is blocked, ask your Atlassian organization admin to allowlist the redirect domain (see the Atlassian docs linked here). j.connect never does this for you and never handles a token. A successful check only means the server is configured in Claude Code, not that you have approved it."
+  },
+  "register_mcp": {
+    "supported": true,
+    "name": "atlassian",
+    "type": "http",
+    "url": "https://mcp.atlassian.com/v2/mcp"
+  },
+  "verify": {
+    "command": ["claude", "mcp", "get", "atlassian"]
+  }
+}

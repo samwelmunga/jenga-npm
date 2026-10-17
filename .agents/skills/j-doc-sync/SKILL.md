@@ -71,7 +71,7 @@ If `update_targets` is **empty**, resolve targets from `assets/doc_targets.md`:
 - If no entry matches an existing file, skip it and note it as missing.
 
 If neither source has targets (no arguments and no doc_targets), scan the project for documentation files:
-- Look for `*.md`, `docs/` (a published-site directory, if the project has one), the `documentation` path from `project/configs/workflow.json` (default `project/documentation/`), `documentation/`, `README*`, `CHANGELOG*`, `CONTRIBUTING*`.
+- Look for `*.md`, `docs/` (the project's own documentation directory, if it has one — not a default target, and not Jenga's published site, whose source is `site/`), the `documentation` path from `project/configs/workflow.json` (default `project/documentation/`), `documentation/`, `README*`, `CHANGELOG*`, `CONTRIBUTING*`.
 - Ask the user: *"I found the following documentation files. Which should I update?"* — present the list and let them select.
 
 ### 3. Resolve analysis sources
@@ -190,8 +190,9 @@ If minification could not reach the target, note: `⚠️ docs/API.md reduced to
 If this run updated `project/.wiki/documentation.md`, `project/.wiki/intro-guide.md`, or any
 `project/.wiki/concepts/*.md` file, also re-run `bash "$([ -f scripts/build-pages-site.sh ] && echo scripts/build-pages-site.sh || echo node_modules/@jenga-ai/agent/scripts/build-pages-site.sh)"` afterward. That
 script deterministically regenerates the GitHub Pages documentation site's wiki-derived pages
-(`docs/getting-started.md`, `docs/concepts.md`, `docs/skills.md`, `docs/agents.md`,
-`docs/hooks.md`, `docs/mcp-tools.md`, `docs/reference.md`) from the wiki content this step just
+(`site/guides/getting-started.md`, `site/guides/concepts.md`, `site/reference/skills.md`,
+`site/reference/agents.md`, `site/reference/hooks.md`, `site/reference/mcp-tools.md`,
+`site/reference/reference.md`) from the wiki content this step just
 updated — without re-running it, the Pages site silently drifts from the wiki the same way
 `README.md` and the wiki itself have drifted from each other before. Mention this in the
 summary output (e.g. `🔄 Re-ran build-pages-site.sh to refresh the Pages site`).

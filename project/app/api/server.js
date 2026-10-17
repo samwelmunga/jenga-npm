@@ -40,6 +40,7 @@ const boardRouter         = require('./routes/board');
 const historyRouter       = require('./routes/history');
 const architectureRouter  = require('./routes/architecture');
 const rapportsRouter      = require('./routes/rapports');
+const ideasRouter         = require('./routes/ideas');
 const documentationRouter = require('./routes/documentation');
 const todoWarningsRouter  = require('./routes/todo-warnings');
 
@@ -59,6 +60,7 @@ app.use('/v1/board',         boardRouter);
 app.use('/v1/history',       historyRouter);
 app.use('/v1/architecture',  architectureRouter);
 app.use('/v1/rapports',      rapportsRouter);
+app.use('/v1/ideas',         ideasRouter);
 app.use('/v1/documentation', documentationRouter);
 app.use('/v1/todo-warnings', todoWarningsRouter);
 

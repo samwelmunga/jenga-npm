@@ -94,13 +94,15 @@ fi
 #
 # Files are considered config/documentation if they match one of:
 #   - Extension: .json .yaml .yml .md .txt .toml .ini .cfg
-#   - Path prefix: docs/ project/ templates/
+#   - Path prefix: docs/ project/ templates/ site/
+#     (docs/ stays: this script ships to consumer projects, where docs/ is the
+#     consumer's own documentation directory. site/ is the Jenga site source.)
 #   - Shell scripts in scripts/: scripts/*.sh (structural scaffolding, not logic)
 # All other files are treated as logic/source files requiring a real test.
 # ---------------------------------------------------------------------------
 CONFIG_DOC_PATTERN='\.(json|yaml|yml|md|txt|toml|ini|cfg)$'
 STRUCTURAL_SCRIPT_PATTERN='^scripts/[^/]+\.sh$'
-STRUCTURAL_PATH_PATTERN='^(docs|project|templates)/'
+STRUCTURAL_PATH_PATTERN='^(docs|project|templates|site)/'
 
 NON_CONFIG_FILES=()
 for f in "${CHANGED_FILES[@]}"; do

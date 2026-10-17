@@ -302,16 +302,17 @@ This section explains the concept once. For which specific skills declare an out
 | You want to… | Use |
 |---|---|
 | Plan a feature before building it | `j.brainstorm` or `j.deep-dive` |
+| Bring an existing codebase onto the board | `j.uncharted` |
 | Add work to the board | `j.todo` or `j.btw` |
 | Start implementing | `j.do` or `j.dooo` |
 | Check progress | `j.status` or `j.continue` |
 | Rework something | `j.redo` |
 | Sync documentation with code | `j.doc-sync` |
 | Clean up a messy board | `j.reconcile` |
-| Propagate workflow changes | `j.distribute` |
-| Bring an existing codebase onto the board | `j.uncharted` |
 | Run a pre-defined multi-skill chain | `/jenga` (plain language) or `j.playbook <id>` |
 
 **When something breaks:** `j.error` — guided troubleshooting that gathers context, diagnoses the issue, and creates a fix task.
+
+**When you don't need a model at all:** the `jenga` CLI handles deterministic maintenance straight from the terminal — `jenga config` to read and change settings in `project/configs/*.json`, `jenga doctor` to clear orphaned mirror files after an upgrade, `jenga dashboard start` to launch the project dashboard. No agent, no token cost. Run `jenga --help` for the full list.
 
 **When you're not sure which skill to use:** `/jenga` — describe what you want to do in plain language, and it will find the right skill (add `--enrich` before your text to also pull in matching board context and docs).

@@ -33,6 +33,30 @@ After `/do` hands back control, mark the story/task that was just started as **I
 
 ### 2. Return to the board — identify parallelisable tasks
 
+**Break check first** (`E44_S02`). This is the boundary where `/dooo` decides to widen the fan-out, so it is where a requested stop takes effect: after the previous `/do` has handed control back, and **before** the board is scanned for the next set of tasks.
+
+```bash
+bash "$([ -f skills/j-break/scripts/check-break.sh ] && echo skills/j-break/scripts/check-break.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/check-break.sh)"
+```
+
+- **Exit `0`** — no break. Continue with the scan below, unchanged.
+- **Exit `10`** — a break was requested. The record is on stdout as `mode=<soft|hard> with_status=<true|false> requested_at=<ts> requested_by=<who>`. A `soft` break was consumed by that call; a `hard` break remains. **Dispatch nothing, skip the scan, and skip step 3's choice prompt entirely** — offering a numbered list and then refusing to act on the pick would be worse than not asking. Print the halt report below and end the loop (step 5).
+- **Any other exit** — the checker itself failed, which is not a stop request. Print its stderr as a warning and continue with the scan.
+
+Never read the flag file here; branch on the exit code and use the record the script prints.
+
+**Halt report.**
+
+1. **Stopped:** state that a break was requested and that **no new sub-agent was dispatched**.
+2. **Still running:** a break stops *dispatch*, not execution. **Sub-agents already in flight are not cancelled** and will keep running to completion, writing their own statuses afterwards. List them, so their later status writes are not a surprise: the items this `/dooo` session marked `In Progress` in step 1 whose board status has not yet reached a terminal value. (`ListAgents` gives authoritative liveness, but only from the host session; it is not available to a delegated agent, so do not depend on it.)
+3. **Mode:** soft or hard.
+4. **Resume:** `/dooo` again for a soft break; for a hard break, `/break clear` first, then `/dooo`.
+5. **Scoped rapport:** only when the record says `with_status=true`. Run `bash "$([ -f skills/j-break/scripts/render-execution-status.sh ] && echo skills/j-break/scripts/render-execution-status.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/render-execution-status.sh)"` and print its output verbatim. If it fails, say the rapport is unavailable and why. Never improvise one from the board.
+
+The very first `/do` of a session is covered by `/do`'s own entry check, so a standing hard break also stops a `/dooo` that has not dispatched anything yet.
+
+**Otherwise (no break):**
+
 Run `scripts/render-ranked-list.sh` from the project root. It scans `project/board/stories/` and `project/board/tasks/` against `project/todo.md` and prints the eligible items as a ranked, 1-indexed `<id> — <title>` list (stories first, then tasks) — this is the same eligibility scan and rendering `/dooo` has always used (status `Pending`, no unresolved dependencies, directly listed in `project/todo.md` or — for tasks — parent story listed), now implemented once in a shared script rather than described here as inline prose (`E63_S01_T01`; see `scripts/render-ranked-list.sh`'s own header for the full rule and its env-var overrides). A sibling command, `/todo --ranked-list`, calls the same script for a non-interactive view of this same list.
 
 ### 3. Present choices to the user
@@ -57,4 +81,5 @@ If there are **no eligible tasks** (all remaining todos are blocked or already r
 ### 5. Loop termination
 The loop ends when:
 - The user selects "Done", OR
-- There are no more eligible parallel tasks to offer
+- There are no more eligible parallel tasks to offer, OR
+- **A break was requested** (`/break`) — detected by the check at the top of step 2. This is a requested stop, not a completion: work may remain, and in-flight sub-agents keep running (see the halt report in step 2).

@@ -22,9 +22,11 @@
 # set/get session to prove it. The real binary (node bin/jenga.js config ...) runs every case: no model, no network,
 # no stubbed service.
 #
-# The shipped descriptors declare only integer editable keys and no `allowed`/`pattern` rule. So the string, boolean,
-# `allowed` and `pattern` branches run against a FIXTURE descriptor set (a scratch copy of the shipped descriptors
-# plus extra keys, selected with JENGA_CONFIG_DESCRIPTORS_DIR), never against the shipped files.
+# The shipped descriptors declare integer editable keys with no `allowed`/`pattern` rule, plus (E72_S01_T04) two
+# editable string keys on test-config that carry `allowed` and `pattern` and no version counter. The boolean branch
+# and the integer `allowed` branch, and the counter bump on a string key, run against a FIXTURE descriptor set (a
+# scratch copy of the shipped descriptors plus extra keys, selected with JENGA_CONFIG_DESCRIPTORS_DIR). The
+# data-driven integer matrices below skip the string keys; test-config's string keys have their own cases.
 
 bats_require_minimum_version 1.5.0
 load helpers/assertions
@@ -136,15 +138,19 @@ make_fixture_descriptors() {
   [ "$(ls "$CFG" | wc -l | tr -d ' ')" -eq 5 ]
 }
 
-@test "the editable keys are exactly the integer settings of scope-thresholds and playbook-config; checklists, workflow and test-config have none" {
+@test "the editable keys are the integer settings of scope-thresholds and playbook-config plus test-config's two commit_* strings; checklists and workflow have none" {
   run editable_keys "$DESCRIPTORS"
   [ "$status" -eq 0 ]
-  [ "$(echo "$output" | cut -d' ' -f1 | sort -u | tr '\n' ' ')" = "playbook-config scope-thresholds " ]
-  for f in checklists workflow test-config; do
+  [ "$(echo "$output" | cut -d' ' -f1 | sort -u | tr '\n' ' ')" = "playbook-config scope-thresholds test-config " ]
+  [ "$(echo "$output" | grep '^test-config ' | cut -d' ' -f2 | sort | tr '\n' ' ')" = "commit_prompt_default commit_scope_map_file " ]
+  for f in checklists workflow; do
     [ "$(jq '[.keys[] | select(.editable)] | length' "$DESCRIPTORS/$f.json")" -eq 0 ]
     # and no bump rule is declared anywhere in a file with no editable key (checklist_version is pinned to 1)
     [ "$(jq '[.keys[] | select(.bump_on_change != null)] | length' "$DESCRIPTORS/$f.json")" -eq 0 ]
   done
+  # test-config has editable keys but no version counter, so no bump rule (E72_S01_T04): tools is its only read-only key
+  [ "$(jq '[.keys[] | select(.bump_on_change != null)] | length' "$DESCRIPTORS/test-config.json")" -eq 0 ]
+  [ "$(jq -r '[.keys[] | select(.editable | not) | .key] | join(",")' "$DESCRIPTORS/test-config.json")" = "tools" ]
 }
 
 # ================================================================================================================
@@ -173,6 +179,8 @@ make_fixture_descriptors() {
 @test "set on every editable key writes the value, bumps its counter by exactly 1, and changes nothing else" {
   local f key counter before new
   while read -r f key; do
+    # the string keys of test-config carry no version counter; they have their own cases further down
+    [ "$(dkey "$DESCRIPTORS" "$f" "$key" '.type')" = "integer" ] || continue
     snap
     counter=$(dkey "$DESCRIPTORS" "$f" "$key" '.bump_on_change // empty')
     [ -n "$counter" ]
@@ -222,7 +230,8 @@ make_fixture_descriptors() {
   while read -r f key; do
     jc set "$f.$key" "$(cfgval "$f" "$key")"
     [ "$status" -eq 0 ]
-    assert_contains "$output" "$f.$key = $(cfgval "$f" "$key") (unchanged)"
+    # the confirmation shows the JSON form of the value, so a string is quoted
+    assert_contains "$output" "$f.$key = $(jq -c --arg k "$key" '.[$k]' "$CFG/$f.json") (unchanged)"
   done < <(editable_keys "$DESCRIPTORS")
   all_unchanged
 }
@@ -378,7 +387,7 @@ make_fixture_descriptors() {
   all_unchanged
 }
 
-@test "checklists, workflow and test-config: get works on every key, set exits 5 on every key, and no version counter changes in any file" {
+@test "checklists, workflow and test-config: get works on every key, set exits 5 on every read-only key (test-config's commit_* strings are editable), and no version counter changes in any file" {
   local f key
   snap
   for f in checklists workflow test-config; do
@@ -386,14 +395,104 @@ make_fixture_descriptors() {
       jc get "$f.$key"
       [ "$status" -eq 0 ]
       [ "$output" = "$(cfgval "$f" "$key")" ]
-      jc set "$f.$key" 7
-      [ "$status" -eq 5 ]
+      if [ "$(dkey "$DESCRIPTORS" "$f" "$key" '.editable')" = "false" ]; then
+        jc set "$f.$key" 7
+        [ "$status" -eq 5 ]
+      fi
     done
   done
   all_unchanged
   [ "$(cfgval checklists checklist_version)" = "1" ]
   [ "$(cfgval scope-thresholds threshold_version)" = "$(jq -r '.threshold_version' "$BATS_TEST_TMPDIR/snap/scope-thresholds.json")" ]
   [ "$(cfgval playbook-config config_version)" = "$(jq -r '.config_version' "$BATS_TEST_TMPDIR/snap/playbook-config.json")" ]
+}
+
+# ================================================================================================================
+# test-config.json's editable commit options (E72_S01_T04): two string keys, no version counter
+# ================================================================================================================
+
+@test "test-config commit options: get reads the defaults, set writes without bumping anything, tools stays untouched" {
+  jc get test-config.commit_prompt_default
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+  jc get test-config.commit_scope_map_file
+  [ "$status" -eq 0 ]
+  [ "$output" = "templates/test-scope-map.json" ]
+  snap
+  jc set test-config.commit_prompt_default scoped
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+  # no counter, so the confirmation carries no bump suffix
+  [ "$output" = 'test-config.commit_prompt_default = "scoped"' ]
+  jc get test-config.commit_prompt_default
+  [ "$output" = "scoped" ]
+  # only that key moved: tools and the other string key are as they were, and no counter appeared
+  jq -e --argjson was "$(cat "$BATS_TEST_TMPDIR/snap/test-config.json")" \
+    'del(.commit_prompt_default) == ($was | del(.commit_prompt_default))' "$CFG/test-config.json" >/dev/null
+  [ "$(jq -r 'keys | join(",")' "$CFG/test-config.json")" = "commit_prompt_default,commit_scope_map_file,tools" ]
+  local other
+  for other in $CONFIG_FILES; do
+    if [ "$other" != "test-config" ]; then unchanged "$other"; fi
+  done
+  # the empty string is a legal value (always prompt) and is stored as a string, not removed
+  jc set test-config.commit_prompt_default ""
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.commit_prompt_default | type' "$CFG/test-config.json")" = "string" ]
+  [ "$(jq -r '.commit_prompt_default' "$CFG/test-config.json")" = "" ]
+  for v in skip scoped full; do
+    jc set test-config.commit_prompt_default "$v"
+    [ "$status" -eq 0 ]
+    [ "$(cfgval test-config commit_prompt_default)" = "$v" ]
+  done
+}
+
+@test "test-config commit options: values outside allowed and paths that are absolute, climb with .., or are not .json exit 4 and change nothing" {
+  local v
+  snap
+  for v in Skip FULL "scoped " none yes 1; do
+    jc set test-config.commit_prompt_default "$v"
+    [ "$status" -eq 4 ]
+    assert_contains "$stderr" "commit_prompt_default"
+    [ -z "$output" ]
+    all_unchanged
+  done
+  for v in "/etc/scope-map.json" "../scope-map.json" "a/../b.json" ".." "C:/map.json" 'a\b.json' "scope-map.txt" "scope-map.json.bak" "" ".json"; do
+    jc set test-config.commit_scope_map_file "$v"
+    [ "$status" -eq 4 ]
+    assert_contains "$stderr" "commit_scope_map_file"
+    [ -z "$output" ]
+    all_unchanged
+  done
+  # a legal relative path is accepted, including one that merely contains two dots inside a name
+  jc set test-config.commit_scope_map_file "config/my..map.json"
+  [ "$status" -eq 0 ]
+  [ "$(cfgval test-config commit_scope_map_file)" = "config/my..map.json" ]
+}
+
+@test "test-config commit options: tools is still read-only, exit 5 naming the tester's approval flow, whatever the value" {
+  snap
+  for v in '[]' 1 "" '{"a":1}'; do
+    jc set test-config.tools "$v"
+    [ "$status" -eq 5 ]
+    assert_contains "$stderr" "read-only"
+    assert_contains "$stderr" "agents/tester.md"
+    [ -z "$output" ]
+    all_unchanged
+  done
+}
+
+@test "test-config commit options: a config file written before these keys existed still works, get exits 3 and set creates the key" {
+  jq 'del(.commit_prompt_default, .commit_scope_map_file)' "$CFG/test-config.json" > "$CFG/test-config.json.new"
+  mv "$CFG/test-config.json.new" "$CFG/test-config.json"
+  jc get test-config.commit_prompt_default
+  [ "$status" -eq 3 ]
+  assert_contains "$stderr" "not set in"
+  jc get test-config.tools
+  [ "$status" -eq 0 ]
+  jc set test-config.commit_prompt_default full
+  [ "$status" -eq 0 ]
+  [ "$(cfgval test-config commit_prompt_default)" = "full" ]
+  [ "$(jq '.tools | length' "$CFG/test-config.json")" -eq "$(jq '.tools | length' "$REPO_ROOT/project/configs/test-config.json")" ]
 }
 
 @test "the version counters themselves are read-only: a user cannot set threshold_version or config_version, so a bump never stacks on a hand-set value" {

@@ -609,6 +609,111 @@ block in the context payload (and shown directly on the inline path, which has n
 and defer it again until a user acts. Closing that is a change to `/jenga` and `/j-dooo`, which this task does
 not make.
 
+### Automatic `j.check-in` at the `pre-task` gate (`E44_S07`)
+
+One registry item, `checkin-run-before-dispatch`, makes a check-in happen once per session before
+non-trivial subagent work is dispatched. **No new trigger mechanism exists for it** — it joins the two
+`pre-task` items already in the registry and rides the firing point `/j-do` section 4.1.2 already has.
+
+```json
+{
+  "id": "checkin-run-before-dispatch",
+  "text": "A pre-dispatch check-in has been run in this session and its findings surfaced, ...",
+  "situations": ["pre-task"],
+  "kind": "machine",
+  "verify": "bash skills/j-check-in/scripts/checkin-gate.sh",
+  "enforcement": "confirm",
+  "tick_scope": "run"
+}
+```
+
+**No hook wiring is touched by this feature, and you should not open the six files that carry it.** The
+`PreToolUse` block that CLAUDE.md requires to stay byte-identical across the root `settings.json` and all
+five `templates/permission-levels/level-*.json` files registers `hooks/on_preflight_check.sh`
+*generically*: the hook reads the situation marker and runs `checklist.sh check <phase>` for whatever
+phase it finds. Adding a registry item changes no wiring. Recorded here so no future maintainer goes
+looking.
+
+#### `enforcement` must never be `block`
+
+`confirm` is not a cautious default here; `block` is an **unrecoverable wedge**, and the reason is written
+into the item's own `text` so it travels with the data:
+
+> satisfying it requires running a check-in, which is itself a tool call, so `block` would refuse the very
+> dispatch that would satisfy it.
+
+`advisory` fails in the other direction — it cannot make the check-in happen at all. So `confirm` is the
+only enforcement that works, and the never-`block` rule is asserted mechanically by a case in
+`tests/checkin-gate.bats`.
+
+#### Why `verify` is a second script, not the collector
+
+`skills/j-check-in/scripts/collect-liveness.sh` **exits 0 always**, by contract: its signal is the emitted
+JSON and its exit code is reserved for internal failure. A `verify` command's exit status *is* the gate
+signal. Those two contracts are irreconcilable, so the gate is a separate script,
+`skills/j-check-in/scripts/checkin-gate.sh`, which answers one cheap question — *has a check-in already
+run in this session?* — and nothing else. The collector is never invoked by `verify` and never runs inside
+a verify timeout.
+
+The gate resolves "this session" through `scripts/checklist-marker.sh session-key`, the same resolver the
+situation marker uses, so the gate and the marker cannot disagree about what one session is. It matches a
+`checkin` event's `session_key` first and its `session_id` as a fallback, because the collector derives its
+own `session_id` from a different probe order and the two legitimately differ. Every non-resolution path
+(no session key, no logs directory, unreadable events file) exits non-zero: under `confirm` that costs one
+prompt, whereas exiting 0 would silently skip the check-in the item exists to force.
+
+#### Cadence is `tick_scope`, not a config key
+
+No key is added to `project/configs/scope-thresholds.json` and `threshold_version` is not bumped.
+
+| Want | Set | Why it behaves that way |
+|---|---|---|
+| **once per session** (the default) | `tick_scope: run` | `/j-do` mints a new `RUN_ID` per unit, so a run tick never carries to the next unit and `verify` re-runs — but the gate is *itself* session-scoped, so it passes for the rest of the session and fails again in a new one. The session scoping comes from the gate; the per-unit re-evaluation comes from `run`. |
+| **effectively per dispatch** | `tick_scope: run` plus a session-independent gate | Only reachable by changing what the gate asks, not by changing `tick_scope`. |
+| **off** | remove or suppress the item | — |
+
+> **`persistent` is the wrong scope for this item, despite being the obvious-looking choice.** Section 7
+> states it plainly: a persistent tick "survives the end of the run **and across sessions**". It lives in
+> one project-root-scoped `persistent.json` which the pruner never touches (only `run-*.json` is pruned).
+> So a persistent tick here would fire the gate once, be ticked, and go silent **for the life of the
+> repository** — not once per session. `E44_S07`'s own acceptance criteria asked for `persistent` on the
+> stated belief that it meant once-per-session; that belief was wrong, and the item ships as `run`. The
+> secondary benefit is blast radius: with `run`, a user who answers "proceed anyway" silences the gate for
+> one unit instead of forever.
+
+#### Gotcha: a `tick_scope` change is not retroactive
+
+`scripts/checklist.sh` binds a tick to a **definition hash** over the item's `kind`, `text` and `verify`.
+Changing `tick_scope` changes none of those, so existing ticks stay valid and a cadence change takes effect
+**on the next new tick**, not retroactively. Editing `text` or `verify` *does* invalidate every existing
+tick for that item. If you change cadence and want it to apply now, clear the tick explicitly:
+`scripts/checklist.sh tick --clear checkin-run-before-dispatch`.
+
+#### Recursion: the nested dispatch asks, it does not refuse
+
+Satisfying this item means running a check-in, and an *actionable* finding makes `j.check-in` dispatch a
+scrum-master subagent — a nested dispatch made while the `pre-task` frame is still open and the item is
+still unticked. This is an examined outcome, not an unexamined non-issue:
+
+- `hooks/on_preflight_check.sh`'s decision table maps `check` exit **10 to REFUSE** and exit **11 to ask**.
+- Our item is `confirm`, so an unsatisfied check yields exit **11**, and the nested dispatch is **asked
+  about, never refused**. There is no wedge.
+- The user-visible consequence is genuinely odd and worth expecting: *you are asked about a checklist item
+  while already in the act of satisfying it.* Answer and proceed.
+- A harness that does not implement "ask" degrades to **allow**, which is the safe direction here.
+
+Under `block` that same nested dispatch *would* be refused — refusing the very dispatch that satisfies the
+item. That is why the never-`block` rule above is a guard against an unrecoverable wedge rather than a
+style preference.
+
+#### The automatic path is deliberately weaker, and says so
+
+The automatic path runs the collector with `--no-agents`, because a hook-adjacent context has no
+`ListAgents`. The rendered report must therefore state that **the harness agent list was unavailable**, in
+the same terms `skills/j-check-in/assets/output_format.md` specifies for that variant. The automatic layer
+is a weaker instrument than a manual `j.check-in`, and being honest about the blind spot is the whole
+reason `visibility` is mandatory in the collector's output.
+
 ### Situation marker (`E67_S04_T01`)
 
 The channel through which the hook-enforced layer learns which situation is active. Defined by
@@ -1036,13 +1141,16 @@ out whether a marker exists.** Its first stage is pure bash with zero subprocess
 `$(…)`:
 
 1. stdin is drained with the `read` **builtin**, never `cat`.
-2. The marker directory is located without `resolve-root.sh`: `JENGA_CHECKLIST_MARKER_DIR` if set, else an
-   upward walk from `$PWD` for `project/configs/workflow.json` then `.project/configs/workflow.json` —
+2. The candidate marker directories are located without `resolve-root.sh`: `JENGA_CHECKLIST_MARKER_DIR` if
+   set, else an upward walk for `project/configs/workflow.json` then `.project/configs/workflow.json` —
    the resolver's own step 2, which is already pure bash inside the resolver — honouring
-   `JENGA_PROJECT_ROOT` first exactly as the resolver does.
+   `JENGA_PROJECT_ROOT` first exactly as the resolver does. Since `E67_S08_T01` the walk starts from
+   `$PWD`, from the directory a `cd` / `git -C` in the command names, and from `CLAUDE_PROJECT_DIR`; see
+   "Where the marker is looked for" below. Pulling the command out of the raw payload for that is pure bash
+   too (parameter expansion; no `jq`).
 3. `paths.queue` is read out of that `workflow.json` with the `read` builtin and bash string slicing. No
    `jq`.
-4. If `<queue>/checklist-markers` does not exist, or exists and holds no `marker-*.json` (a glob, not a
+4. If no candidate's `<queue>/checklist-markers` exists and holds a `marker-*.json` (a glob, not a
    digest lookup — same reasoning as `read`'s own fast reject), the hook exits `0` silently. The directory
    is created by the first marker `write`, so "no marker file" is exactly the ordinary session's case.
 
@@ -1079,12 +1187,90 @@ no `workflow.json` anywhere above it 8.3 ms. Invoked through the registered `set
 command hook and is not removable by editing the script. The absolute figures drift with machine load
 between runs (compare the table above); the **delta over a bare start** is the stable number.
 
-**Known limit, inherited from the root resolver.** Stage 1 keys off `$PWD` and `JENGA_PROJECT_ROOT`, the
-same inputs `checklist-marker.sh` uses, so the hook and the gating skill agree whenever they share a
-working directory — which they do within a session, including inside a worktree. Adding
-`CLAUDE_PROJECT_DIR` as a *fourth* anchor would not help: the authoritative `read` that follows still
-resolves from `$PWD`, so a directory the marker script would never write to could only produce a false
-"maybe" and then an allow. Set `JENGA_PROJECT_ROOT` to pin both ends to one root.
+**Re-measured after `E67_S08_T01`** (the added candidate probing and command parsing; same machine and
+method — payload on stdin, bare `bash -c true` as the floor — `n` = 300 per figure, five interleaved
+rounds, mean of the five). The previous hook was run from `git show 3a55b376:hooks/on_preflight_check.sh`
+in the same loops, so the comparison is not against the older table's machine state:
+
+| Case (no marker present) | Bare `bash -c true` | Previous hook | New hook |
+|---|---|---|---|
+| Repo cwd, `CLAUDE_PROJECT_DIR` set, `git status` | 9.97 ms | 11.14 ms (+1.2) | 11.67 ms (+1.7) |
+| Repo cwd, `CLAUDE_PROJECT_DIR` set, `cd /tmp && git commit -m x` (the parsing path) | 9.97 ms | 11.28 ms (+1.3) | 11.79 ms (+1.8) |
+
+So the hook is now roughly **0.5 ms/call slower than it was**, about **+1.7 to +1.8 ms over a bare `bash`
+start** against the **+1.0 to +1.3 ms** recorded above (and the **~0.6 ms** the tester recorded at
+`E67_S04_T02`'s verdict). Run-to-run noise on this machine is about ±1 ms per figure (the five rounds of one case differed by up to
+1.2 ms, and one earlier `n` = 100 round recorded 21.0 ms for the *previous* hook), so
+read the delta over the floor and not any one number. The extra half millisecond is most plausibly the second
+upward walk (from `CLAUDE_PROJECT_DIR`) plus the payload glob; that attribution is inferred from the code,
+not separately measured. A command that mentions neither `cd` nor `-C` skips the parsing entirely.
+
+**It is still subprocess-free, and that is checked rather than asserted.** Running the hook under
+`PS4='+PID=$BASHPID ' bash -x` on a payload that exercises the whole parsing path (a `cd` and a `git -C`
+target, `CLAUDE_PROJECT_DIR` set) and on a `Task` payload produced trace lines from exactly **one** pid in
+both cases — a `$(…)` command substitution or a fork would show a second one. Every added step is a builtin
+or a parameter expansion.
+
+#### Where the marker is looked for (`E67_S08_T01`)
+
+`E67_S04`'s live level-5 check found two ways the original single lookup — walk up from `$PWD` as it stood
+*before* the command runs — failed open: a `cd` inside the gated command (`cd "$S" && git commit` from a cwd
+outside any Jenga tree was allowed; a separate `cd "$S"` call and then `git commit` was blocked), and a
+`$PWD` that does not exist (the walk finds no registry and reads as "no marker"). The lookup is now the
+**union** of up to three kinds of tree, in this order, de-duplicated by the registry anchor they resolve to:
+
+1. **The cwd** — the upward walk from `$PWD`, exactly as before.
+2. **The `cd` / `git -C` targets of the gated command** — `cd <dir>` at a command start (start of the
+   command, or after `&&`, `||`, `;`, `|`, `(`, `{`), and `-C <dir>` on a `git` word, resolved lexically
+   against the cwd and against each earlier `cd` in the same command; quoted paths with spaces are
+   re-joined; `~` expands from `HOME`. Only parsed when the command matches the loose union of gated
+   operations, so an ordinary command pays one glob.
+3. **`CLAUDE_PROJECT_DIR`** — the harness's project directory, which does not depend on the cwd existing.
+
+A tree counts only if its marker directory holds a marker file. The authoritative per-session read then tries
+the candidates in that order and the first that returns a frame for **this** session wins. Trees found through
+(2) or (3) are **pinned**: both `checklist-marker.sh read` and `checklist.sh check` run with
+`JENGA_PROJECT_ROOT` set to that tree. The pinning is the load-bearing part. Both scripts otherwise resolve
+from `$PWD`, which is exactly what is wrong in these cases; finding the marker directory in pure bash and then
+asking a `$PWD`-anchored read about it would find nothing. (This section previously said adding
+`CLAUDE_PROJECT_DIR` as a further anchor "would not help" for that reason. That was true while the read was
+unpinned, and is not now.) With `JENGA_PROJECT_ROOT` or `JENGA_CHECKLIST_MARKER_DIR` set, each names one tree
+outright, so nothing else is probed.
+
+**Rejected alternatives**, recorded so they are not re-litigated:
+
+| Alternative | Why not |
+|---|---|
+| `CLAUDE_PROJECT_DIR` first, or only | Sidesteps the cwd, but the marker is written where the gating skill's resolver finds a registry, which for a developer in a `.claude/worktrees/<task>` worktree is the *worktree's own tree*, not the session's project dir. It would miss every marker written there. |
+| The cwd, then fall back only when it yields nothing | A cwd tree holding only *another* session's marker (concurrent sessions in one tree) is a "maybe", so the fallback never ran and the real marker was shadowed. Probing the union and letting the per-session read decide has no such hole. |
+| A real shell parse (a subprocess) | Ends the subprocess-free fast path, and still cannot be evasion-proof. |
+
+#### Accepted limits of the lookup (what `E67_S08_T01` does not close)
+
+The hardening closes two **common** shapes. It is a best-effort backstop and **is not evasion-proof**; do not
+describe it as if it were. Each of these still fails open, deliberately, and `tests/checklist-hook.bats`
+asserts that the first few are *allowed* so that a future tightening is a conscious change rather than a
+silent one:
+
+- **`bash -c '…'`, `sh -c '…'`, `eval`**: the `cd` sits inside one quoted word, which is not parsed.
+- **A subshell or command substitution whose target is computed inside it.** (A parenthesised
+  `( cd <literal dir> && git commit )` happens to be seen, because `(` counts as a command start; that is
+  incidental, not a guarantee.)
+- **`pushd`** (and `popd`, `cd -`): not recognised as a directory change.
+- **A path built from a variable, `$(…)`, a glob or a brace expansion**, or written with a backslash escape or
+  an unquoted space: rejected as unresolvable rather than guessed at.
+- **A script, alias or function that changes directory itself** (`make`, `./deploy.sh`).
+- **`git --git-dir` / `--work-tree`, and git aliases that commit.**
+- **A `cd` or `-C` beyond the first 4000 characters of the command.**
+- **A missing cwd with no usable fallback.** When `$PWD` does not exist, the hook still walks its ancestors
+  and still probes `CLAUDE_PROJECT_DIR`; but if neither leads to a Jenga tree with a marker there is nothing
+  left to probe and the hook is a silent allow, with exit `0`. (With the cwd gone, the harness's own shell
+  also prints a `getcwd` warning before the hook starts; that is not the hook.)
+
+These sit beside the fail-open cases above (a setup error in the checker, a missing `jq`, an unlocatable
+script, a session key that does not match) and share their rationale: the hook is a backstop against a
+failed policy **item** in the ordinary case, not a sandbox. None of them applies unless a gating skill
+wrote a marker at all.
 
 #### Why it holds at permission level 5 (Unrestricted)
 

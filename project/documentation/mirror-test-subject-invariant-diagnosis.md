@@ -23,6 +23,14 @@ unrelated shipping test happens to be red at the time**. The runtime is structur
 whole shipping `.bats` suite serially, once per real-push case, and the suite has grown from 43 to 92
 files in nine days.
 
+**And the mechanical reason this went undiagnosed for nine days across six tasks:** the failing case
+asserts on `$status` alone, while `run` swallows the one line that names the culprit
+(`test-subject-invariant: FAIL tests/checklist-gating.bats — not ok 8 ...`) into `$output`, where it is
+never printed. Nine minutes of runtime that ends by withholding the only pointer to the real fault, and
+pointing at itself instead. Six consecutive tasks chose the "known baseline failure" label over
+investigating, and on this evidence that was the rational response to what the suite actually told them.
+See section 3 and **E28_S18_T05**.
+
 ---
 
 ## 1. What the three cases actually assert
@@ -100,6 +108,26 @@ worth knowing when reading its output.
 
 `tests/checklist-gating.bats` was added on 2026-10-03 by `E67_S03_T05` (commit `fe53ce95`).
 
+### The project has already ruled on this exact class
+
+This classification does not need deriving from first principles — there is settled precedent in the
+repo. `.publicignore` already blocklists `tests/train-cli-root-climb.bats` for the identical reason, and
+its comment (lines 289–291) says so outright:
+
+> Same reasoning as the four entries directly above. Caught by `check_test_subject_invariant` (E28_S16)
+> on the 2026-09-28 run, before it ever reached the mirror — which is precisely what that gate exists to
+> do.
+
+So a shipping test that fails in the mirror because its subject is blocklisted has previously been
+treated as *the gate working correctly*, and the resolution was to blocklist the test alongside its
+subject — which is option 2 of the two offered in `E28_S18_T03`. Three of the four entries that comment
+refers to are the other `tests/mirror-*.bats` files, handled the same way.
+
+Citation added during verification at the suggestion of the `test-E28_S18_T01-verify` tester session
+(not the re-verification session that later confirmed it — the two are distinct, an artifact of a
+duplicate tester dispatch recorded in this task's remarks). It is a better-grounded argument than
+re-deriving the conclusion, and it predates this task by a week.
+
 ---
 
 ## 3. Classification per case
@@ -123,6 +151,28 @@ source. That mis-attribution is exactly what produced the "known baseline failur
 summaries: the file was blamed for a defect that was never in it. This is a test-design weakness, not
 the cause of the current failures, and deliberately **not** fixed here (see section 7 for the
 recommendation).
+
+### Why nobody diagnosed it for nine days: the cases emit no attribution
+
+This is the single most actionable finding in this document. When case 5 fails, its entire output is:
+
+```
+not ok 1 real push proceeds normally when the shipping suite is clean
+# (in test file tests/mirror-test-subject-invariant.bats, line 170)
+#   `[ "$status" -eq 0 ]' failed
+```
+
+That is all. `mirror.sh` *does* print the culprit —
+`test-subject-invariant: FAIL tests/checklist-gating.bats — not ok 8 ...` — but the case captures it into
+`$output` via `run` and then asserts on `$status` alone, so the diagnostic line is never printed. The
+reader is told only that a status was not zero, after a nine-minute wait, with no indication that the
+real problem is in a completely different file.
+
+So the three cases were the only visible symptom of a defect they do not contain, while actively
+withholding the one line that names it. That combination — expensive, unattributed, and pointing away
+from the actual fault — is a sufficient explanation for why six consecutive tasks chose to label them
+"known baseline failures" rather than investigate. A one-line `echo "$output" >&3` on failure would have
+collapsed this diagnosis to about thirty seconds of work.
 
 ---
 
@@ -170,9 +220,43 @@ caused the then-current instance.
 - **Ordering:** ruled out. The predicate is evaluated independently inside each case, against a freshly
   materialised temp tree built by `rsync` from the ship set. No case's outcome can influence another's.
   The isolation-vs-suite-order comparison in section 5 is the empirical check, and it agrees.
-- **Leaked fixture:** ruled out. `.publicignore` is snapshotted in `setup()` and restored in
-  `teardown()` byte-for-byte regardless of outcome, and each case gets a brand-new bare remote and its
-  own scratch worktree under `$BATS_TEST_TMPDIR`.
+- **Leaked fixture:** ruled out **as the cause of these three failures**, but *not* ruled out as a real
+  hazard — see the correction immediately below. `.publicignore` is snapshotted in `setup()` and
+  restored in `teardown()`, and each case gets a brand-new bare remote and its own scratch worktree
+  under `$BATS_TEST_TMPDIR`. On any normal pass or fail, restoration is byte-for-byte and nothing
+  survives the run.
+
+### Correction, observed twice in this session: the fixture DOES leak when the run is interrupted
+
+My initial claim that `.publicignore` is restored "regardless of outcome" was too strong, and I was
+wrong about it. `teardown()` runs on pass and on fail — but **not** when the process is killed. This
+session's full-file run was terminated externally twice, and each time it left the working tree with:
+
+```
+-tests/mirror-permission-level-invariant.bats
+```
+
+i.e. `strand_permission_level_test()`'s deliberate mutation still in place, silently **un-blocklisting a
+private test file** from the public mirror's ship set. I detected it only because `git diff main --stat`
+showed an unexpected `.publicignore | 1 -` while I was verifying something else, and it had already
+corrupted one in-flight measurement run before I noticed (that run was discarded and redone against a
+restored fixture).
+
+Why this matters more than a normal fixture leak:
+
+- `.publicignore` is **load-bearing for what ships to the public repo.** A silent mutation of it is a
+  content-parity hazard, not untidiness.
+- **Interruption is the expected case, not the edge case.** This file takes ~64 minutes. Anyone running
+  it will plausibly `Ctrl-C` it, and I hit this twice in a single session without trying to.
+- It is **durable and invisible**: it survives in the working tree with no warning, and a subsequent
+  `git add -A` would commit it.
+- The one mitigating factor: on the next real push the gate itself would catch the now-stranded test
+  and refuse — the invariant protects against its own test file's leak. But `--dry-run` and
+  `--inventory` would report a wrong ship set in the meantime, with no indication why.
+
+Filed as **E28_S18_T06**. Note this is a defect in the **test file's fixture handling**, not in
+`mirror.sh`, and it is *not* the cause of the three named failures — those reproduce from a pristine
+`.publicignore`, as section 2's direct gate run (done before any interruption occurred) shows.
 - **Timing / machine load:** ruled out as a *cause of failure*. Load changes how long the run takes, not
   whether an unrelated test file is red. It is entirely a runtime story (section 6), not a pass/fail one.
 
@@ -180,10 +264,74 @@ caused the then-current instance.
 
 ## 5. Isolation versus suite order
 
-Each named case was run alone via `bats -f "<name>"`, then the whole file was run in suite order, on an
-otherwise idle machine.
+Each named case was run alone via `bats -f "<name>"`, then the whole file was run in suite order, then
+the three named cases were run together in one invocation. All on an otherwise idle machine, all against
+a pristine `.publicignore`.
 
-<!-- MEASUREMENT_TABLE -->
+| # | Case | Isolation | Full file, suite order | Grouped 3-case run |
+|---|---|---|---|---|
+| 1 | real push is refused when a shipping test's subject is blocklisted | — | **pass** | — |
+| 2 | refusal names the offending stranded test file | — | **pass** | — |
+| 3 | refusal leaves the bare remote with zero refs | — | **pass** | — |
+| 4 | refusal leaves no committed marker in the scratch worktree | — | **pass** | — |
+| **5** | **real push proceeds normally when the shipping suite is clean** | **FAIL** (540 s) | **FAIL** | **FAIL** |
+| **6** | **a clean push actually lands a commit on the bare remote** | **FAIL** (542 s) | **FAIL** | **FAIL** |
+| **7** | **a deliberately blocklisted test file causes no failure, only its ship-list absence** | **FAIL** (548 s) | not reached | **FAIL** |
+
+Wall clock: the three isolation runs took **540 s / 542 s / 548 s**; the grouped run took **1634 s** for
+three cases (**544.7 s** per case). Every one of these is a single gate pass, and all six measurements
+agree with the independently-taken 549 s figure from section 6 to within 1.6%.
+
+**Verdict: isolation and suite order agree on every case measured, without exception.** No case changes
+outcome based on how it is invoked. This is the empirical test of the mechanism in section 4, and it
+comes out exactly as that mechanism predicts: the predicate is "is any shipping test red right now",
+which no amount of ordering, grouping or isolation can influence. Had any of the three passed in
+isolation while failing in suite order (or vice versa), the mechanism would have been refuted and would
+have had to be rewritten around ordering or leaked state instead. It was not.
+
+**Is the grouped run an adequate substitute for case 7's full-file cell? Yes — stated explicitly so no
+reader has to wonder whether it was simply skipped.**
+
+The only hypothesis that cell could test is *"does case 7 behave differently when it runs alongside
+other cases than when it runs alone?"* The grouped run answers exactly that question: case 7 ran
+**third**, in the same `bats` process, after two other gate-running cases, sharing all file-level state
+with them — and failed identically to its isolated run. What the grouped run does not reproduce is
+running after cases 1–4 specifically, i.e. after four cases that each mutate `.publicignore` via
+`strand_permission_level_test()` and restore it in `teardown()`.
+
+Three reasons that residual gap cannot change the conclusion:
+
+1. **Cross-case influence is architecturally impossible here.** `setup()` creates a brand-new bare
+   remote and a fresh scratch worktree under `$BATS_TEST_TMPDIR` for every single case, and the gate
+   materialises a fresh temp tree per invocation. There is no shared mutable state between cases except
+   `.publicignore`, which is snapshotted and restored per case.
+2. **That one shared file was directly verified clean.** After the grouped run completed normally,
+   `git diff main -- .publicignore` was empty in both the worktree and the primary checkout, with the
+   blocklist line intact at line 272 — so the restore path cases 1–4 depend on demonstrably works.
+3. **Mode has no demonstrated effect on anything.** Cases 5 and 6 were measured in all three modes and
+   produced the same result in all three. Case 7 was measured in two and produced the same result in
+   both.
+
+**What would actually close it**, for the record: a full-file run that reaches case 7. That needs either
+E28_S18_T04's early exit (which would cut the run to minutes) or a budget above ~64 minutes. The
+observed non-completion rate for the full file is **2 of 2 attempts**, so this is not a cheap datum to
+obtain and it would test a hypothesis already refuted twice over. I judged it not worth a third hour;
+a reader who disagrees now knows precisely what is missing and what it would cost.
+
+**Caveat on the "not reached" cell.** The full-file run was terminated externally **twice** by the
+harness manager, at ~55–60 minutes each time, before reaching case 7. The first attempt yielded cases
+1–3, the second cases 1–6; bats writes TAP incrementally, so completed cases survived both kills. Case
+7's suite-order cell is therefore filled from the grouped run, where it ran third in a multi-case
+invocation rather than alone — not literally full-file order. Given that cases 5 and 6 produce the same
+result in all three modes, and that case 7 fails in both the modes it was measured in, the gap is not
+material to the conclusion; it is flagged rather than papered over. It is also, independently, a
+data point about this file: **a test file that cannot be run to completion inside a one-hour budget is
+not a usable regression suite**, which is the substance of E28_S18_T04.
+
+Note also that these runs are the reason the fixture leak in section 4 was discovered — two
+interrupted runs, two leaked `.publicignore` mutations. After the grouped run completed *normally*,
+`git diff main -- .publicignore` was empty, confirming `teardown()` restores correctly on a clean
+pass/fail and that the leak is specific to interruption.
 
 ---
 
@@ -221,6 +369,23 @@ minute growth is fully explained by the growth in the repo's test count, with no
 at all.** It will keep growing with every `.bats` file added anywhere in the repo, whether or not that
 file has anything to do with the mirror.
 
+### The >22-minute observation: reproduced, and comfortably exceeded
+
+Six independent single-pass measurements (549 s direct, 540/542/548 s isolation, 1634 s for three
+grouped cases = 544.7 s each) agree to within 1.6%. Taking 545 s as the per-pass cost:
+
+| Quantity | Value |
+|---|---|
+| Gate passes per full run of the file | 7 |
+| Predicted full-file wall clock | **7 x 545 s = 3815 s ≈ 64 min** |
+| Observed | full-file run terminated externally **twice**, at ~55–60 min, having reached cases 1–3 and 1–6 respectively |
+
+So the ">22 minutes" is not merely reproduced — it is exceeded by roughly 3x, and the file did not
+complete at all within the one-hour budget available to it on either attempt. Two independent runs
+failing to finish is itself the strongest available statement of the problem: **this file is currently
+not runnable to completion in a normal working session.** That is what makes the "known baseline
+failures" habit so predictable — the cheapest way to learn the suite's verdict was to not run it.
+
 ### Secondary finding: the loop has no early exit
 
 Once any shipping file has failed, the push is already going to be refused, but the loop continues
@@ -253,12 +418,20 @@ $ echo $?
 1
 ```
 
-It executes **zero** tests. It does at least exit **1**, so it fails closed and the gate would refuse
-rather than falsely clear — consistent with the script's stated philosophy, and the one piece of good
-news here. But a naive `-j` adoption would make the gate refuse every push with a confusing error, and
-it would add a new hard dependency (GNU parallel) to a pre-push gate. Any parallelism work must handle
-that explicitly rather than assume `-j` is available. An early exit (E28_S18_T04) is the cheaper and
-safer win, and needs no new dependency.
+It executes **zero** tests. It does at least exit **1**, so it **fails closed**: the gate keys on bats'
+real exit status, so a `-j` that ran nothing would make the gate *refuse* the push rather than falsely
+clear it. A naive `-j` adoption is therefore loud — a confusing universal refusal, plus a new hard
+dependency (GNU parallel) in a pre-push gate.
+
+The real hazard is one step further on. The failure presents as `Executed 0 instead of expected 17
+tests` next to a non-zero exit, so the tempting cleanup is to treat that warning as benign and make the
+invocation tolerant of it. **That converts a loud refusal into a silent zero-test pass** — the gate
+reporting `OK` having verified nothing — which is exactly the false-clear mode the function's header
+comment already warns about from the `tail -40` incident. `bats -j` is thus a correctness trap only if
+someone "fixes" its exit code, but that fix is the natural next move for anyone who hits it. If `-j` is
+ever adopted, assert a non-zero executed-test count and never suppress a non-zero bats exit.
+
+An early exit (E28_S18_T04) is the cheaper and safer win, and needs no new dependency.
 
 ---
 
@@ -308,12 +481,13 @@ reachable from this test file.
    `mirror.sh`. This is the whole fix for the red suite.
 2. **E28_S18_T04** — give the nested loop an early exit, and refresh the stale "6 of 39 .bats files"
    header comment. Do not reach for `bats -j` without resolving the GNU-parallel dependency.
-3. **Consider making cases 5–7 hermetic** (not filed; needs a design decision). As written they depend
-   on all 83 shipping files being green, so unrelated breakage is mis-attributed to this file forever.
-   Options worth weighing: assert against a small fixed fixture ship set rather than the live one, or
-   have the case detect "a shipping test unrelated to this suite is red" and report *that* distinctly
-   from "the gate false-positived". Either would have pointed the six E67 tasks at
-   `tests/checklist-gating.bats` on day one instead of teaching them to ignore a red file.
+3. **E28_S18_T05 — make the real-push cases emit attribution on failure.** The highest-leverage of the
+   three filed items: today a failure prints only `[ "$status" -eq 0 ]' failed` after nine minutes,
+   while the line naming the culprit sits unprinted in `$output`. This is why the diagnosis took nine
+   days instead of thirty seconds. The same item carries the *secondary*, judgment-call question of
+   whether to make cases 5–7 hermetic (they currently depend on all 83 shipping files being green, so
+   unrelated breakage is mis-attributed to this file forever) — flagged there rather than decided
+   here, because the options trade away coverage.
 4. **Stop citing these as "known baseline failures".** They were a correct signal the whole time. The
    gate found a real stranded test; the only thing missing was attribution.
 

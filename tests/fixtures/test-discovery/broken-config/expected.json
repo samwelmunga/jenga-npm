@@ -1,0 +1,15 @@
+{
+  "suites": [
+    {
+      "command": "npm test",
+      "ecosystem": "npm",
+      "id": "npm:test",
+      "name": "npm test",
+      "paths": [],
+      "type": "unit"
+    }
+  ],
+  "warnings": [
+    "test-config.json is not valid JSON; ignoring overlay"
+  ]
+}

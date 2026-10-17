@@ -1,0 +1,65 @@
+# GitHub Pages site build and deploy (E70_S03_T01).
+#
+# Builds the Jekyll site from site/ and deploys it with the official Pages
+# actions. This replaces branch-based Pages (serving /docs on main). The
+# public repository's Pages source must be switched to "GitHub Actions" by
+# hand before this workflow takes effect; see project/documentation/site-decisions.md,
+# "Manual cutover".
+#
+# Known gap: a push made with the default GITHUB_TOKEN (for example the
+# mirror-staging-gate promote-main job) does not trigger the push trigger
+# below, so a gated promotion needs a manual workflow_dispatch.
+
+name: "Pages"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Build with Jekyll
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./site
+          destination: ./_site
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./_site
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

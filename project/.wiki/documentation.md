@@ -152,7 +152,7 @@ Receives sender from Developer for E01_S02_T01
 
 ## Skills
 
-Skills live in `skills/j-<name>/SKILL.md` — the root-canonical location; `.agents/skills/` and `.claude/skills/` are generated mirrors, never the source of truth. Invoke a skill as `/j-<name>` (the directory-resolved slash form) or `j.<name>` (the frontmatter form) in any Claude Code session. Three permanent exceptions keep their bare names: `/jenga`, `/jenga-permission-level`, and `/index` (the latter has no `SKILL.md` and isn't part of routing). Each skill's SKILL.md defines its behaviour, and optionally its `prefered_agent` (the sub-agent it delegates to).
+Skills live in `skills/j-<name>/SKILL.md` — the root-canonical location; `.agents/skills/` and `.claude/skills/` are generated mirrors, never the source of truth. Invoke a skill as `/j-<name>` (the directory-resolved slash form) or `j.<name>` (the frontmatter form) in any Claude Code session. Four permanent exceptions keep their bare names: `/jenga`, `/jenga-permission-level`, `/jenga-config`, and `/index` (the last has no `SKILL.md` and isn't part of routing). Each skill's SKILL.md defines its behaviour, and optionally its `prefered_agent` (the sub-agent it delegates to).
 
 ---
 
@@ -656,6 +656,26 @@ You: "Oh, we should also think about caching strategy"
 
 ---
 
+#### `/j-break`
+
+**Description:** Stop an orchestration at the next safe task boundary — the task currently running finishes and records its status, then execution halts before the next one starts.
+
+**Output type:** `any`
+
+**Invokes:** none
+
+**When to use:** When a `/jenga`, `/j-do` or `/j-dooo` run should pause without killing the turn mid-flight. Nothing is aborted in-flight, so no task is left half-committed with no board status.
+
+**Modes:**
+| Invocation | Behaviour |
+|---|---|
+| `/j-break` | Soft break — one-shot. Halts after the current task, then clears itself. |
+| `/j-break hard` | Persists until explicitly cleared; every subsequent task boundary halts. |
+| `/j-break clear` | Clears a hard break. |
+| `/j-break status` | Adds a progress rapport for the current scope of execution. |
+
+---
+
 ### Status & Review
 
 ---
@@ -684,6 +704,22 @@ E01 — Auth System (In Progress)
 Open rapports: 1 (E01_S02_T01 — bcrypt config)
 Queue depth: 2 triggers pending
 ```
+
+---
+
+#### `/j-check-in`
+
+**Description:** Report whether the agents this session dispatched are actually alive right now — which are running, which have gone silent past the stall threshold, and which finished but left live processes behind — then hand anything actionable to the skill or agent that owns it.
+
+**Output type:** `text`
+
+**Invokes:** none (offers the owning skill for anything actionable)
+
+**When to use:** After fanning out work with `/j-do` or `/j-dooo`, or when an agent seems stuck. It answers the axis the other review skills do not: `/j-status` reports *declared board state* and `/j-reconcile` reports *board-versus-git*; `/j-check-in` reports whether the item the board calls `In Progress` is alive at the OS and harness level.
+
+**Notes:**
+- Collection runs in the host session and is never delegated — a delegated subagent cannot see its siblings.
+- Read-only apart from one appended `checkin` event, and a `TaskStop` that is confirmed twice before it fires.
 
 ---
 
@@ -844,6 +880,38 @@ Queue depth: 2 triggers pending
 
 ---
 
+#### `/j-test`
+
+**Description:** Discover the project's test suites, show them as a numbered list, run the ones you pick (blank means all) in order, and print a pass/fail summary.
+
+**Output type:** `any`
+
+**Invokes:** none
+
+**When to use:** Any time you want to run tests directly, outside the Tester agent's board-status lifecycle. `/j-commit`'s test gate uses this same runner.
+
+**Exit code:** `0` when every selected suite passed, `1` otherwise.
+
+**Notes:** It never writes board status — that remains the Tester agent's exclusive responsibility. See [`project/documentation/test-runner.md`](https://github.com/samwelmunga/jenga-npm/blob/main/project/documentation/test-runner.md).
+
+---
+
+#### `/j-smoke-test`
+
+**Description:** Structural smoke test of every skill in the catalog — frontmatter parses, `name` matches the directory, `metadata.prefered_agent` resolves, and referenced scripts and assets exist with scripts passing `bash -n`.
+
+**Output type:** `any`
+
+**Invokes:** none
+
+**When to use:** After authoring or restructuring skills, and before a release or mirror, to catch a skill that no longer loads.
+
+**What it reports:** Findings classified as **critical** or **minor**, plus a pass/fail summary. Exits `1` when any critical finding exists.
+
+**Notes:** Structural and read-only — it does not replace `tests/*.bats`, and it does not execute skill logic.
+
+---
+
 #### `/j-commit`
 
 **Description:** Commit implemented epic, story, or task work using the EST naming convention. Also handles user-action prerequisites and new-epic boundaries.
@@ -915,7 +983,7 @@ Passing a path argument (e.g. `/j-distribute /path/to/project`) adds a new entry
 **What it does:**
 - Validates each target's `active` flag and on-disk `path` before including it in the run
 - Runs a dry-run preview per target and waits for `y` confirmation before touching anything
-- Copies files via `scripts/distribute-changes.sh`, never inline
+- Copies files via `skills/j-distribute/scripts/distribute-changes.sh`, never inline
 - Commits the version bump via `scripts/commit-version-bump.sh` (skipped for `amend`)
 - Never invokes `/j-self-sync` or `/j-mirror-public` — those are separate distribution surfaces with separate triggers
 
@@ -1276,6 +1344,27 @@ Name: shellcheck   Category: lint   Enforcement: 1. required
 
 ---
 
+#### `/j-conventions`
+
+**Description:** Guided wizard that records the project's conventions in `project/configs/conventions.json` across 9 categories: commit format, branching, naming, code comments, formatting and linting, testing, file layout, language and tooling, and documentation placement.
+
+**Output type:** `any`
+
+**Invokes:** none
+
+**When to use:** Early in a project, or whenever the agents should follow a house style they keep getting wrong. Recording a convention once beats correcting it every session.
+
+**How it works:**
+- For each category it shows the standard the project **already follows** — detected, with evidence and a confidence level — plus 2–3 general-standard presets, skip, and custom.
+- Every input is validated as it is given, then a review summary is shown before anything is written.
+- Writes atomically, then regenerates the managed `conv-` pre-flight checklist items (always `advisory` or `confirm`, never `block`), and self-validates both files before reporting success.
+
+**Scope limit:** EST naming stays **mandatory** for board commits. A recorded commit format applies to non-board commits only.
+
+**Notes:** Project layer only — there is no user layer. Writes go through `skills/j-conventions/scripts/conventions-entry.sh`, which validates before an atomic replace and never reports success on a failed validation.
+
+---
+
 #### `/j-convert`
 
 **Description:** Convert JSON, JSONL, YAML, or YML dataset files to CSV format. Pass-through for files already in CSV. Flattens nested structures using dot-notation.
@@ -1379,6 +1468,48 @@ Name: shellcheck   Category: lint   Enforcement: 1. required
 
 ---
 
+#### `/jenga-permission-level`
+
+**Description:** Report or switch the current session's 5-tier permission level (Locked / Guarded / Standard / Elevated / Unrestricted) without hand-editing `settings.json`.
+
+**Output type:** `any`
+
+**Invokes:** none
+
+**When to use:** When the session is prompting for permission more or less often than the work warrants — tighten it before an unattended run, loosen it for a trusted local sweep.
+
+**How it works:** Applies `templates/permission-levels/level-<n>-<name>.json` by whole-file-overwriting `.claude/settings.json` and `.agents/settings.json`. Because that overwrite replaces the whole file, any hook that must survive a level switch has to exist in every template — see [`hooks/on_preflight_check.sh`](https://samwelmunga.github.io/jenga-npm/hooks.html) in the Hooks reference.
+
+**Notes:** One of the four permanent bare-name skills — there is no `/j-jenga-permission-level` form. The pre-flight checklist hook holds at every level, including level 5.
+
+---
+
+#### `/jenga-config`
+
+**Description:** List, read and change Jenga's project settings in `project/configs/*.json` through the deterministic `jenga config` command.
+
+**Output type:** `any`
+
+**Invokes:** none
+
+**When to use:** When a threshold or default needs changing and you want the edit validated and written by code rather than reasoned about by a model.
+
+**How it works:** A thin wrapper — it collects the file, key and value in chat, then runs one script. The edit itself is validated and written by `jenga config` (`lib/commands/config.js`), with no model reasoning. A successful `set` also increments that file's version counter (`threshold_version`, `config_version`).
+
+**The underlying command is agentless and free.** `jenga config` runs from the terminal with no model call and zero token cost:
+
+```bash
+jenga config                                        # interactive list + edit
+jenga config get scope-thresholds.inline_max_files
+jenga config set scope-thresholds.inline_max_files 4
+```
+
+Usage, exit codes, and the editable-versus-read-only split are in [`project/configs/README.md`](https://github.com/samwelmunga/jenga-npm/blob/main/project/configs/README.md).
+
+**Notes:** One of the four permanent bare-name skills — there is no `/j-jenga-config` form.
+
+---
+
 #### `/j-clearify`
 
 **Description:** Clarifies ambiguous, dense, or under-specified prompts and conversation on request — inspects an attached prompt or falls back to the current conversation and surfaces plain-language clarifications with examples.
@@ -1467,6 +1598,18 @@ Each entry below lists a playbook's `id`, display `name`, `description`, `keywor
 
 ---
 
+#### `deep-dive-to-committed`
+
+**Name:** Deep Dive to Committed
+
+**Description:** Takes an idea through a structured deep-dive investigation, board capture, implementation, and a commit — the rigor-first counterpart to `idea-to-committed`, stopping at the commit rather than at a release.
+
+**Keywords:** deep dive to commit, investigate then commit, analyze plan build commit, scrutinize and build, thorough analysis to commit
+
+**Steps:** `j-deep-dive` → `j-todo` → `j-do` → `j-commit`
+
+---
+
 #### `understand-then-commit`
 
 **Name:** Understand Then Build
@@ -1499,6 +1642,8 @@ Authored per-project via `/j-playbook-new`; merged into the same load-time catal
 
 MCP (Model Context Protocol) tools extend Claude Code with additional capabilities. They are configured in `settings.json`.
 
+> Where a project registers an MCP *server* for Claude Code (`.mcp.json` vs `.claude/settings.json`) is recorded in [mcp-registration-decision.md](https://github.com/samwelmunga/jenga-npm/blob/main/project/documentation/mcp-registration-decision.md).
+
 ---
 
 ### `mcp/help`
@@ -1523,6 +1668,14 @@ node index.js skills/   # list with custom path
 
 ---
 
+### `mcp/training_runner`
+
+**Purpose:** MCP server that validates and runs ML training jobs, executing a job's `start.sh` through the two-phase validate → train pipeline.
+
+**Use case:** Backs `/j-train`'s `run` mode — see that skill's entry above.
+
+---
+
 ## Hooks
 
 Hooks are configured in `settings.json` and fire automatically at specific points in a Claude Code session.
@@ -1532,6 +1685,7 @@ Hooks are configured in `settings.json` and fire automatically at specific point
 | `WorktreeCreate` | Developer creates a worktree | `git worktree add` + echo path |
 | `WorktreeRemove` | Developer removes a worktree | `git worktree remove --force` |
 | `SessionEnd` | Any session ends | `hooks/on_session_end.sh` (async) |
+| `PreToolUse` | Every `Bash`, `Task` or `Agent` tool call | `hooks/on_preflight_check.sh` — pre-flight checklist backstop |
 
 ---
 
@@ -1549,66 +1703,79 @@ This ensures the Scrum Master always has an up-to-date view of the project when 
 
 ---
 
-### `hooks/distribute-changes.sh`
+### `hooks/on_preflight_check.sh`
 
-Distributes workflow files to all consumer projects registered in `.jenga_paths`.
+The enforcing layer of the [pre-flight checklist](https://samwelmunga.github.io/jenga-npm/preflight-checklists.html) feature (mirrored at [project/.wiki/preflight-checklists.md](https://github.com/samwelmunga/jenga-npm/blob/main/project/.wiki/preflight-checklists.md)). Fires on `PreToolUse` for `Bash`, `Task` and `Agent` calls, reads the situation marker written by `scripts/checklist-marker.sh` to learn which lifecycle phase is active, runs `scripts/checklist.sh check <phase>`, and **refuses the tool call** when a `block`-enforcement item is unsatisfied (a failing `confirm` item makes it ask instead). It exists so enforcement does not ultimately depend on an agent choosing to call the checker.
 
-```bash
-.agents/hooks/distribute-changes.sh --dry-run   # preview without writing
-.agents/hooks/distribute-changes.sh             # apply
-.agents/hooks/distribute-changes.sh --force     # skip version check
-```
+- **No marker, no effect.** With no lifecycle phase active it exits `0` with no output and no subprocess.
+- **It gates each phase's own irreversible operation, not every tool call** — `pre-commit` → `git commit`, `pre-task` → subagent dispatch and `git worktree add`, `pre-release`/`pre-publish` → `npm publish` / `gh release` / `git push` / `git tag`, `pre-mirror` → `git push` / `mirror.sh`, `pre-reconcile` → `git merge` / `git worktree remove`. Gating everything would wedge the session, because satisfying a failed item is itself a tool call.
+- **It holds at every permission level, including level 5 (Unrestricted).** Its decision never consults permission state, and no environment variable disables it.
+- **It is registered in six files, not one.** Switching permission level whole-file-overwrites `.claude/settings.json` and `.agents/settings.json` from `templates/permission-levels/level-<n>-<name>.json`, so the `PreToolUse` block is byte-identical across the root `settings.json` and all five templates. Change all six together.
 
 ---
 
 ## Directory Structure
 
-Per `CLAUDE.md`'s Source of Truth rule, `skills/`, `agents/`, `hooks/`, `scripts/`, and `templates/` at the **repo root** are canonical — this is where every feature is created and edited. `.agents/` and `.claude/` are generated build outputs (populated by `j:self-sync` in this monorepo, or by the npm package's `postinstall` hook in a consumer project) and are never hand-edited.
+Per `CLAUDE.md`'s Source of Truth rule, `skills/`, `agents/`, `hooks/`, `scripts/`, and `templates/` at the **repo root** are canonical — this is where every feature is created and edited. `.agents/` and `.claude/` are generated build outputs (populated by `j.self-sync` in this monorepo, or by the npm package's `postinstall` hook in a consumer project) and are never hand-edited.
 
 ```
-skills/                    ← Canonical skill source — invoke with j:<name> (see CLAUDE.md)
-├── brainstorm/
-├── btw/
-├── clearify/               (alias: wtf)
-├── close-story/
-├── commit/
-├── continue/
-├── convert/
-├── deep-dive/
-├── dev-done/
-├── distribute/
-├── do/
-├── doc/
-├── doc-sync/
-├── dooo/
-├── error/
-├── evaluate/
-├── examplify/
-├── help/
-├── idea/
-├── improve/
-├── init/
-├── j-init/                 (Copilot-collision-safe alias of init)
-├── jbp/
-├── jenga/
-├── jenga-permission-level/
-├── lgtm/
-├── mirror-public/
-├── pi-plan/
-├── proceed/
-├── publish/
-├── reconcile/
-├── reconcile-origin/
-├── redo/
-├── self-sync/
-├── skillify/
-├── spinoff/
-├── status/
-├── strategy/
-├── todo/
-├── train/
-├── uncharted/
-└── wtf/                    (alias: clearify)
+skills/                    ← Canonical skill source — invoke as j.<name> or /j-<name> (see CLAUDE.md)
+├── index/                     (not a skill — no SKILL.md, not part of routing)
+├── j-brainstorm/
+├── j-break/
+├── j-btw/
+├── j-check-in/
+├── j-clearify/                (alias: j-wtf)
+├── j-close-story/
+├── j-cloud-connect/
+├── j-commit/
+├── j-connect/
+├── j-continue/
+├── j-conventions/
+├── j-convert/
+├── j-dashboard/
+├── j-dashboard-share/
+├── j-deep-dive/
+├── j-dev-done/
+├── j-distribute/
+├── j-do/
+├── j-doc/
+├── j-doc-sync/
+├── j-dooo/
+├── j-error/
+├── j-evaluate/
+├── j-examplify/
+├── j-gitignore/
+├── j-help/
+├── j-idea/
+├── j-improve/
+├── j-init/
+├── j-jbp/
+├── j-lgtm/
+├── j-mirror-public/
+├── j-pi-plan/
+├── j-playbook/
+├── j-playbook-new/
+├── j-proceed/
+├── j-publish/
+├── j-reconcile/
+├── j-reconcile-origin/
+├── j-redo/
+├── j-self-sync/
+├── j-skillify/
+├── j-smoke-test/
+├── j-spinoff/
+├── j-status/
+├── j-strategy/
+├── j-test/
+├── j-todo/
+├── j-tools/
+├── j-train/
+├── j-uncharted/
+├── j-wtf/                     (alias of j-clearify)
+├── jenga/                     (permanent bare name — main skill)
+├── jenga-config/              (permanent bare name — main skill)
+└── jenga-permission-level/    (permanent bare name — main skill)
 
 agents/
 ├── ai_engineer.md
@@ -1620,6 +1787,7 @@ agents/
 
 hooks/
 ├── on_session_end.sh        ← SessionEnd hook (see above)
+├── on_preflight_check.sh    ← PreToolUse pre-flight checklist hook (see above)
 ├── copilot_session_end.sh   ← Copilot-equivalent session-end handling
 ├── prompt_router.sh
 ├── prompt_router_helper.js
@@ -1633,6 +1801,16 @@ scripts/                   ← Shell/JS tooling backing skills, CI, and board op
 ├── postinstall.js           ← npm install hook — mirrors skills/ + agents/ into .claude/ + .agents/
 └── ...                      ← see the directory for the full list (board ops, CI, permission tooling)
 
+bin/
+└── jenga.js                 ← The `jenga` CLI entry point (`jenga --help`)
+
+lib/                       ← Code behind the CLI and the install/mirror pipeline
+├── commands/                ← One module per `jenga` sub-command: init, attach, status,
+│                              config, dashboard, doctor (alias: clean), start
+├── config-schema.js         ← Schema `jenga config` validates every `set` against
+├── mirror.js                ← Mirrors root-canonical dirs into .claude/ + .agents/
+└── skill-allow-list.json    ← Generated allow-list of invocable skill identifiers
+
 templates/
 ├── SCRUM_BOARD_SCHEMA.md
 ├── PROBLEM_RAPPORT_TEMPLATE.md
@@ -1645,15 +1823,15 @@ templates/
 ├── SKILL_TEMPLATE.md
 ├── agent-context.md.tpl
 ├── copilot-instructions.md.tpl
-└── permission-levels/       ← level-1-locked.json … level-5-unrestricted.json (see j:jenga-permission-level)
+└── permission-levels/       ← level-1-locked.json … level-5-unrestricted.json (see j.jenga-permission-level)
 
 .agents/ and .claude/      ← Generated mirrors — never hand-edited.
-                              In this monorepo: refreshed by j:self-sync.
+                              In this monorepo: refreshed by j.self-sync.
                               In a consumer project: `npm install @jenga-ai/agent` copies only
                               skills/ and agents/ here; hooks/, scripts/, and templates/ are
                               sourced live from node_modules/@jenga-ai/agent/ at runtime.
 
-project/                   ← Created by j:init inside your software project
+project/                   ← Created by j.init inside your software project
 ├── board/
 │   ├── epics/             ← E##_<slug>.md
 │   ├── stories/           ← E##_S##_<slug>.md
@@ -1666,7 +1844,7 @@ project/                   ← Created by j:init inside your software project
 ├── documentation/
 │   ├── plans/             ← Pre-execution plans by Developer
 │   └── summaries/         ← Post-execution summaries by Developer
-├── ideas.md                ← Lightweight idea log (j:idea)
+├── ideas.md                ← Lightweight idea log (j.idea)
 ├── instructions/          ← User-action-prerequisite instructions (Developer-written)
 ├── queue/
 │   ├── scrum_triggers.jsonl
@@ -1682,8 +1860,10 @@ project/                   ← Created by j:init inside your software project
 │   └── events.json        ← Append-only inter-agent event log
 └── PROJECT_SUMMARY.md     ← Project source of truth (owned by Scrum Master)
 
-CHANGELOG.md                ← Created by j:init at the project's repo root; maintained by j:publish
+CHANGELOG.md                ← Created by j.init at the project's repo root; maintained by j.publish
 ```
+
+**Not everything runs through an agent.** `bin/jenga.js` and `lib/commands/` implement the `jenga` CLI — `jenga config`, `jenga doctor`, `jenga dashboard`, `jenga init`, `jenga attach`, `jenga status`. These are deterministic terminal commands with no model call and no token cost; see the [`/jenga-config`](https://samwelmunga.github.io/jenga-npm/skills.html) skill entry for the one that is also exposed in-session, and `project/configs/README.md` for the settings they edit.
 
 ---
 

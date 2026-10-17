@@ -1,0 +1,5 @@
+{"runnable":[
+ {"n":1,"id":"fx:alpha","name":"alpha","type":"unit","ecosystem":"fixture","command":"echo alpha >> \"$RUN_MARK\"","also":[]},
+ {"n":2,"id":"fx:beta","name":"beta","type":"integration","ecosystem":"fixture","command":"echo beta >> \"$RUN_MARK\"","also":[]},
+ {"n":3,"id":"fx:gamma","name":"gamma","type":"sast","ecosystem":"fixture","command":"echo gamma >> \"$RUN_MARK\"","also":[]}
+],"not_runnable":[],"warnings":[]}

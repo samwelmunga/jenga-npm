@@ -290,6 +290,16 @@ tests/mirror-staging-branch-push.bats
 # entries directly above. Caught by check_test_subject_invariant (E28_S16) on the 2026-09-28 run,
 # before it ever reached the mirror -- which is precisely what that gate exists to do.
 tests/train-cli-root-climb.bats
+# tests/checklist-gating.bats: its wiring checks read skills/j-mirror-public/SKILL.md (the fully-private
+# mirror skill, blocklisted above in both naming forms), and the gated-skill list and the release-skill
+# ordering check both name j-mirror-public. In the mirror that SKILL.md does not exist, so test 8 fails
+# with "skills/j-mirror-public/SKILL.md does not exist" and the file fails the test-subject invariant.
+# Same reasoning as the entries above: the test ships only alongside its private subject, so it is
+# blocklisted rather than made to skip.
+tests/checklist-gating.bats
+# tests/mark-publicized.bats: copies skills/j-mirror-public/scripts/mark-publicized.sh in setup(), and
+# skills/j-mirror-public is never shipped, so every case in the file fails there. Follows its private subject.
+tests/mark-publicized.bats
 
 # --- Private-tooling playbooks and their tests (E50_S13, user decision 2026-09-10) ---
 # brainstorm-to-mirror terminates in `mirror-public`, a deliberately private skill blocklisted
@@ -316,6 +326,21 @@ tests/load-playbooks-stepobject.bats
 # applies to this entry. It is left in place only because E50_S20_T02 owns both of these test
 # entries and their visible-skip conversion; unblocking it is that task's call, not this one's.
 tests/load-playbooks-composition.bats
+
+# --- E76 Per-Task Token Accounting is private tooling (user decision, 2026-10-16) ---
+# Every E76-owned file is blocklisted so it never reaches the public mirror. The tests and fixtures
+# follow their subject out per the "a test may never outlive its subject" rule at the top of this file.
+# Caveat: E76 also edits files that DO ship (skills/j-close-story/SKILL.md, the looping skills,
+# templates/SCRUM_BOARD_SCHEMA.md, the dashboard under project/app). Those edits cannot be hidden by a
+# path blocklist, so E76 epic decision 6 requires them to treat a missing task-usage.sh as a silent
+# no-op and the dashboard to render no budget view without usage data (E76_S02_T05, E76_S03_T01/T05/T07).
+# New E76 bats files must be named tests/task-usage-*.bats so the glob below blocks them.
+scripts/task-usage.sh
+.claude/scripts/task-usage.sh
+.agents/scripts/task-usage.sh
+project/documentation/task-usage.md
+tests/task-usage*.bats
+tests/fixtures/task-usage/
 
 # --- Scratch worktree used by /mirror-public itself ---
 .mirror-worktrees/

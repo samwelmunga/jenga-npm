@@ -6,9 +6,10 @@ This directory holds version-controlled configuration files consumed by Jenga AI
 
 ## Changing settings: `jenga config`
 
-`jenga config` is the supported way to change the settings in this directory. It is a plain terminal command, not a
-skill: it runs no model and costs no tokens. It lists the five config files below, shows each key with its current
-value, and edits the scalar (integer, string, boolean) settings with type and range validation.
+`jenga config` is the supported way to change the settings in this directory. It is a plain terminal command: it runs
+no model and costs no tokens. It lists the five config files below, shows each key with its current value, and edits the
+scalar (integer, string, boolean) settings with type and range validation. From a chat session, use `/jenga-config`
+instead (see "Changing settings from a chat session: `/jenga-config`" below); it runs this same command.
 
 ```bash
 jenga config                                        # interactive: pick a file, pick a key, enter a value
@@ -19,11 +20,45 @@ jenga config set scope-thresholds.inline_max_files 4
 An address is `<file-id>.<key>`, where `<file-id>` is the config's file name without `.json`. Run it from inside the
 project (it finds `project/configs/` through `scripts/resolve-root.sh`, so `JENGA_PROJECT_ROOT` and the usual upward
 search apply). In a checkout of this repo, `node bin/jenga.js config ...` is the same command; in a consumer project it
-is the installed `jenga` binary.
+is the installed `jenga` binary, or, when `jenga` is not on PATH, the copy that `/jenga-config` installs into a per-user
+cache (see below).
 
 A `set` validates first, then writes the file atomically (a temp file renamed over the original), so a rejected value
 leaves the file byte-identical. When the key belongs to a version-counted file, the same write also increments the
 counter (see "Version counters" below).
+
+### Changing settings from a chat session: `/jenga-config`
+
+`/jenga-config` (also invoked as `j.jenga-config`) is the way to change these settings without leaving a chat session.
+It costs no tokens beyond the conversation itself: the skill is a thin wrapper that only collects the file, the key and
+the value, runs one script, and prints the script's output and exit code verbatim. Validation, the type and range
+checks, the version-counter bump and the atomic write all happen inside `jenga config`, never in the model. It does
+three things:
+
+| Action | What it runs | Result |
+|--------|--------------|--------|
+| list | `jenga config` | The interactive picker over the five config files and their keys. It needs a terminal; with none, use `get` or `set`, or run `jenga config` in a terminal. |
+| get | `jenga config get <file-id>.<key>` | Prints one value (read-only keys can be read too). |
+| set | `jenga config set <file-id>.<key> <value>` | Validates, writes, and bumps the version counter where the file has one. |
+
+**No global install is needed.** The skill runs `skills/jenga-config/scripts/run-config.sh` (under
+`node_modules/@jenga-ai/agent/` in a consumer project), which resolves the CLI the same way every time:
+
+1. A `jenga` already on PATH is used as is. It is never upgraded or replaced.
+2. Otherwise the script installs `@jenga-ai/agent`, at the version pinned in the script, into a per-user cache directory
+   with `npm install --prefix`, and skips the package's install scripts, which `jenga config` does not need. The cache is
+   `JENGA_CLI_CACHE` if set, else `$XDG_CACHE_HOME/jenga-cli` if `XDG_CACHE_HOME` is set, else `~/.cache/jenga-cli`. The
+   install runs only when the cached copy is absent, so later runs make no npm call.
+3. It then reruns the same subcommand against that cached copy, from your project directory, so the project is found
+   exactly as in the terminal form.
+
+Nothing is installed into the global npm prefix, and neither the project's `package.json` nor its `node_modules` is
+touched. If the install fails (offline, registry error), the script prints the reason to stderr and exits `7` without
+running the command; `7` is specific to `/jenga-config` and is not part of the table below. Every other exit code is
+the CLI's own, passed through unchanged.
+
+**Values are committed per project.** A `set` edits the file in `project/configs/` itself, which is version-controlled
+and shared with everyone on the project. There is no local override layer and no `--shared` flag: one value per project.
 
 ### Exit codes
 
@@ -40,8 +75,11 @@ counter (see "Version counters" below).
 
 ### What is editable
 
-Editable: the integer settings of `scope-thresholds.json` (every key except `threshold_version`) and of
-`playbook-config.json` (`max_composition_depth`). Everything else is shown read-only, with a pointer to where to change it:
+Editable: the integer settings of `scope-thresholds.json` (every key except `threshold_version`), of
+`playbook-config.json` (`max_composition_depth`), and the two string settings of `test-config.json` that control the
+commit-time test prompt (`commit_prompt_default`: empty, `skip`, `scoped` or `full`, empty meaning always prompt;
+`commit_scope_map_file`: a relative `.json` path, default `templates/test-scope-map.json`). Everything else is shown
+read-only, with a pointer to where to change it:
 
 | Read-only key | Why, and where to edit instead |
 |---------------|--------------------------------|
@@ -49,7 +87,7 @@ Editable: the integer settings of `scope-thresholds.json` (every key except `thr
 | `checklists.json` (`checklist_version`, `situations`, `items`) | Nested lists with their own validator: `scripts/validate-checklists.sh`; suggestions are filed through `scripts/checklist.sh`. |
 | `conventions.json` (`conventions_version`, `categories`) | The project's recorded conventions (an optional file: absent until the `j.conventions` wizard writes it, shown as `[not present]`); validated by `scripts/validate-conventions.sh`, format in `project/documentation/project-conventions.md`. |
 | `workflow.json` (`statuses`, `rapport_types`, `paths`, `agents`, `pipeline`) | Structural; see `templates/SCRUM_BOARD_SCHEMA.md` and `scripts/resolve-root.sh`, owned by `agents/scrum-master.md`. |
-| `test-config.json` (`tools`) | Added only with user approval; see `agents/tester.md` (Tool Stack Management). |
+| `test-config.json` (`tools` only) | Added only with user approval; see `agents/tester.md` (Tool Stack Management). |
 
 Each config file is described by one descriptor, `templates/config-descriptors/<file-id>.json`, which declares every
 key's label, type, bounds, default, description and bump rule. A new key or file is a descriptor edit, not a code change;

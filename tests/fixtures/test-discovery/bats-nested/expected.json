@@ -1,0 +1,35 @@
+{
+  "suites": [
+    {
+      "command": "bats integration/deep/*.bats",
+      "ecosystem": "bats",
+      "id": "bats:integration/deep",
+      "name": "bats integration/deep",
+      "paths": [
+        "integration/deep/*.bats"
+      ],
+      "type": "unit"
+    },
+    {
+      "command": "bats unit/*.bats",
+      "ecosystem": "bats",
+      "id": "bats:unit",
+      "name": "bats unit",
+      "paths": [
+        "unit/*.bats"
+      ],
+      "type": "unit"
+    },
+    {
+      "command": "bats integration/deep/*.bats",
+      "ecosystem": "config",
+      "id": "config:bats:integration",
+      "name": "bats (integration)",
+      "paths": [
+        "integration/deep/*.bats"
+      ],
+      "type": "integration"
+    }
+  ],
+  "warnings": []
+}

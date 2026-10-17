@@ -100,7 +100,7 @@ PROJECT_DIR="$JENGA_PROJECT_DIR"
 SKILLS_DIR="$PROJECT_DIR/skills"
 
 # ---- Single named source: directory exception list (mirrors repoint-skill-refs.sh) ----
-DELETE_BARE_SKILL_DIRS_EXCEPTIONS=(jenga jenga-permission-level index)
+DELETE_BARE_SKILL_DIRS_EXCEPTIONS=(jenga jenga-permission-level jenga-config index)
 
 is_exception() {
   local name="$1" ex

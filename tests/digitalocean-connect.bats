@@ -34,9 +34,12 @@
 # never creates an env file and the pre-write .gitignore guardrail
 # (ensure-secret-safe.sh) never runs for this descriptor. The guardrail test
 # therefore asserts that no env file or .gitignore is created in ANY scenario, and
-# fails loudly if the descriptor ever grows an env-token design (the ordering of
-# the guardrail before an env-file write is covered generically in
-# ensure-secret-safe.bats and run-descriptor.bats).
+# fails loudly if the descriptor ever grows an env-token design. The guardrail
+# before an env-file write is covered generically, not here: ensure-secret-safe.bats
+# tests the guard script alone; run-descriptor.bats has the two "env-token auth:
+# guardrail ..." tests (gitignore applied before the placeholder is written, and a
+# refused guard leaves .env untouched); connect-e2e.bats is the one that observes the
+# ordering directly. See project/documentation/e65-s08-decisions.md, AC4.
 
 # Each @test runs in its own subshell, so per-test env changes are intentional.
 # shellcheck disable=SC2030,SC2031

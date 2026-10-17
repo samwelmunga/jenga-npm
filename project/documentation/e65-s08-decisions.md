@@ -333,3 +333,27 @@ introduced. The idea is logged untagged in `project/ideas.md` through `scripts/i
 
 **If this is ever built:** its own `j.publish` target and epic, with its own descriptor-free design; never
 handles store credentials through `j.connect`.
+
+## AC6: Manual verification on real accounts (E65_S08_T07, E65_S08_T08)
+
+**Decision:** user-action, pending.
+
+**Reasoning:** An agent cannot do this. It needs a real Supabase account and a real DigitalOcean account, a
+`doctl` install (not installed, and no agent installs a CLI), a person logging in at each tool's own prompt,
+and a person giving OAuth consent inside Claude Code. Agents must not use a real account or handle a token.
+`E65_S08_T07` therefore only wrote the checklist; `E65_S08_T08` is the human run plus the recording of its
+results, and it blocks nothing.
+
+**Evidence:** the checklist is `project/instructions/E65_S08_T08_INSTRUCTIONS.md`. It covers, for both
+services, the logged-out and logged-in exit status of `supabase projects list` / `doctl account get`,
+`doctl version` before login, OAuth completing with a bare `{type,url}` `.mcp.json` entry, and the stdio MCP
+package run shape, with a results table that asks for exit statuses and yes/no answers only. It states the
+2026-10-02 Supabase observation as logged-in only, and lists what stays unverified. The unverified facts
+come from `supabase-connect-research.md` section 7 and `digitalocean-connect-research.md` section 9.
+
+**Results:** recorded by `E65_S08_T08` in the matching research doc, which also corrects any descriptor field
+that proves wrong. Until then nothing in the research docs is changed.
+
+Stale note for whoever records the results: `supabase-connect-research.md` section 5 still says a
+re-run rewrites a hand-edited `supabase` entry back to the bare URL; AC1 (E65_S08_T01) fixed that, and the
+sentence was not edited here because the research docs were out of this task's file list.

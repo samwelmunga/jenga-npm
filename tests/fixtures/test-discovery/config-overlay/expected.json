@@ -1,0 +1,51 @@
+{
+  "suites": [
+    {
+      "command": "npm test",
+      "ecosystem": "config",
+      "id": "config:npm:integration",
+      "name": "npm (integration)",
+      "paths": [],
+      "type": "integration"
+    },
+    {
+      "command": "",
+      "ecosystem": "config",
+      "id": "config:playwright:e2e",
+      "name": "playwright (e2e)",
+      "paths": [],
+      "type": "e2e"
+    },
+    {
+      "command": "npm test",
+      "ecosystem": "npm",
+      "id": "npm:test",
+      "name": "npm test",
+      "paths": [],
+      "type": "unit"
+    },
+    {
+      "command": "npm run test:unit",
+      "ecosystem": "npm",
+      "id": "npm:test:unit",
+      "name": "npm run test:unit",
+      "paths": [],
+      "type": "unit"
+    },
+    {
+      "command": "pytest tests",
+      "ecosystem": "pytest",
+      "id": "pytest:tests",
+      "name": "pytest tests",
+      "paths": [
+        "tests/**/*_test.py",
+        "tests/**/test_*.py"
+      ],
+      "type": "integration"
+    }
+  ],
+  "warnings": [
+    "configured tool not detected on disk: playwright (e2e)",
+    "test-config.json: ignored 1 tools entries without a string tool_name and type"
+  ]
+}

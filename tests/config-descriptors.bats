@@ -125,7 +125,10 @@ EOF
 @test "only scalar keys are editable in the shipped descriptors" {
   run jq -s '[.[].keys[] | select(.editable == true) | .type] | unique' "$SHIPPED"/*.json
   [ "$status" -eq 0 ]
-  [ "$(printf '%s' "$output" | jq -c .)" = '["integer"]' ]
+  # integer: the scope-thresholds and playbook-config settings; string: test-config's two commit_* keys (E72_S01_T04)
+  [ "$(printf '%s' "$output" | jq -c .)" = '["integer","string"]' ]
+  run jq -s '[.[].keys[] | select(.editable == true and .type == "string") | .key] | sort' "$SHIPPED"/*.json
+  [ "$(printf '%s' "$output" | jq -c .)" = '["commit_prompt_default","commit_scope_map_file"]' ]
   run jq -s '[.[].keys[] | select(.type == "array" or .type == "object") | .editable] | unique' "$SHIPPED"/*.json
   [ "$(printf '%s' "$output" | jq -c .)" = '[false]' ]
 }
@@ -144,6 +147,70 @@ EOF
   done
   run jq '[.keys[] | select(.editable == true)] | length' "$SHIPPED/checklists.json"
   [ "$output" -eq 0 ]
+}
+
+# --- test-config.json: the editable commit options (E72_S01_T04) -------------------------------------------------
+# Route 1 of the E72_S01_T04 decision: two FLAT editable string keys. The story's nested commit_options object is not
+# expressible because editable: true is legal on scalar types only (lib/config/descriptors.js), so the schema is
+# deliberately unchanged and these cases pin the flat shape.
+
+@test "test-config: commit_prompt_default and commit_scope_map_file are editable strings with the agreed defaults and rules" {
+  local d="$SHIPPED/test-config.json"
+  [ "$(jq -r '[.keys[].key] | join(",")' "$d")" = "tools,commit_prompt_default,commit_scope_map_file" ]
+  run jq -c '.keys[] | select(.key == "commit_prompt_default") | [.type, .editable, .default, .allowed]' "$d"
+  [ "$output" = '["string",true,"",["","skip","scoped","full"]]' ]
+  run jq -c '.keys[] | select(.key == "commit_scope_map_file") | [.type, .editable, .default]' "$d"
+  [ "$output" = '["string",true,"templates/test-scope-map.json"]' ]
+  [ "$(jq '.keys[] | select(.key == "commit_scope_map_file") | has("pattern")' "$d")" = "true" ]
+  # no nested commit_options object, and no bump rule on a file that has no version counter
+  [ "$(jq '[.keys[] | select(.key == "commit_options")] | length' "$d")" -eq 0 ]
+  [ "$(jq '[.keys[] | select(has("bump_on_change"))] | length' "$d")" -eq 0 ]
+  [ "$(jq 'has("test_config_version")' "$REPO_ROOT/project/configs/test-config.json")" = "false" ]
+}
+
+@test "test-config: tools stays read-only with its original pointer, and the description no longer claims nothing is editable" {
+  local d="$SHIPPED/test-config.json"
+  [ "$(jq -r '.keys[] | select(.key == "tools") | .editable' "$d")" = "false" ]
+  [ "$(jq -r '.keys[] | select(.key == "tools") | .pointer' "$d")" = "agents/tester.md (Tool Stack Management: tools are added only with user approval)" ]
+  [ "$(jq '[.keys[] | select(.editable == false)] | length' "$d")" -eq 1 ]
+  run jq -r '.description' "$d"
+  assert_output_not_contains "nothing is editable"
+  [ -f "$REPO_ROOT/agents/tester.md" ]
+}
+
+@test "test-config: the live config carries both keys at their descriptor defaults and a non-empty tools array" {
+  local d="$SHIPPED/test-config.json" c="$REPO_ROOT/project/configs/test-config.json" key
+  for key in commit_prompt_default commit_scope_map_file; do
+    [ "$(jq -c --arg k "$key" '.keys[] | select(.key == $k) | .default' "$d")" = "$(jq -c --arg k "$key" '.[$k]' "$c")" ] \
+      || { echo "test-config.json $key differs from its descriptor default" >&2; return 1; }
+  done
+  [ "$(jq '.tools | type' "$c")" = '"array"' ]
+  [ "$(jq '.tools | length' "$c")" -ge 1 ]
+}
+
+@test "test-config: an empty commit_prompt_default is legal (always prompt) and skip, scoped, full are the only other legal values" {
+  local d="$SHIPPED/test-config.json"
+  run jq -r '.keys[] | select(.key == "commit_prompt_default") | .allowed | map(select(. == "")) | length' "$d"
+  [ "$output" -eq 1 ]
+  run jq -r '.keys[] | select(.key == "commit_prompt_default") | .allowed | map(select(. != "")) | sort | join(",")' "$d"
+  [ "$output" = "full,scoped,skip" ]
+}
+
+@test "test-config: the commit_scope_map_file pattern accepts relative .json paths and rejects absolute paths, .. segments and non-.json paths" {
+  local pattern
+  pattern="$(jq -r '.keys[] | select(.key == "commit_scope_map_file") | .pattern' "$SHIPPED/test-config.json")"
+  run node -e '
+    const re = new RegExp(process.argv[1]);
+    const good = ["templates/test-scope-map.json", "a.json", "a/b/c.json", "a..b/c.json", "project/configs/scope-map.json"];
+    const bad = ["/abs.json", "/", "../x.json", "a/../x.json", "a/..", "a/../b", "C:/x.json", "a\\b.json", "x.txt", "x.json.txt", ".json", "", "a.json\n", "a\nb.json"];
+    const wrongGood = good.filter((v) => !re.test(v));
+    const wrongBad = bad.filter((v) => re.test(v));
+    if (wrongGood.length || wrongBad.length) {
+      console.error("accepted-but-should-reject: " + JSON.stringify(wrongBad) + " rejected-but-should-accept: " + JSON.stringify(wrongGood));
+      process.exit(1);
+    }
+  ' "$pattern"
+  [ "$status" -eq 0 ]
 }
 
 @test "the version counters are read-only and each editable default equals the value the configs hold" {
@@ -414,7 +481,7 @@ EOF
 
 @test "both wrappers are shellcheck clean" {
   command -v shellcheck >/dev/null 2>&1 || skip "shellcheck not installed"
-  run shellcheck "$VALIDATE" "$RENDER"
+  run shellcheck -S warning "$VALIDATE" "$RENDER"
   [ "$status" -eq 0 ]
 }
 

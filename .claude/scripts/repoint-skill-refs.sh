@@ -107,7 +107,7 @@ PROJECT_DIR="$JENGA_PROJECT_DIR"
 SKILLS_DIR="$PROJECT_DIR/skills"
 
 # ---- Single named source: directory exception list ----
-REPOINT_SKILL_REFS_EXCEPTIONS=(jenga jenga-permission-level index)
+REPOINT_SKILL_REFS_EXCEPTIONS=(jenga jenga-permission-level jenga-config index)
 
 is_exception() {
   local name="$1" ex

@@ -324,32 +324,75 @@ EOF
 }
 
 # Regression coverage for the bug this suite originally missed: a dev checkout
-# (has UI sources) whose node_modules/vite is absent -- e.g. never installed,
-# or pruned -- used to silently skip the rebuild AND skip any staleness check,
-# so a stale dist/ got bundled into the snapshot with no warning at all. A
-# previously-generated jenga.html could permanently bake in a fixed-in-source
-# bug this way.
-@test "dev checkout with stale dist and no installed vite refuses to bundle silently" {
+# (has UI sources) whose node_modules/vite is absent used to silently bundle a
+# stale dist/, then (as a fix) refuse outright. It now installs dependencies
+# and rebuilds -- but only when dist/ is missing or older than its sources.
+@test "dev checkout with stale dist and no installed vite installs and rebuilds" {
   mkdir -p "$TMP_REPO/project/app/ui/src"
   # dist/index.html (written by write_fixture_dist in setup) is pinned to a
   # fixed old timestamp; the src file is left at "now", making it newer --
   # touch -t is portable across macOS/BSD and GNU, unlike relative-touch flags.
   touch -t 202001010000 "$TMP_REPO/project/app/ui/dist/index.html"
   echo "export default 1" > "$TMP_REPO/project/app/ui/src/App.jsx"
-  # package.json present (looks buildable) but node_modules/vite is not --
-  # the rebuild sub-step is skipped, landing in the new staleness check.
-  cat > "$TMP_REPO/project/app/ui/package.json" <<'EOF'
+  cat > "$TMP_REPO/project/app/ui/package.json" <<'EOF2'
 { "name": "fixture-ui", "scripts": { "build": "vite build" } }
-EOF
+EOF2
 
   run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
-  [ "$status" -ne 0 ]
-  assert_output_contains "refusing to bundle a possibly-stale snapshot"
-  [ ! -f "$BATS_TEST_TMPDIR/result.html" ]
+  [ "$status" -eq 0 ]
+  assert_output_contains "installing dependencies and rebuilding"
 
   run cat "$NPM_LOG"
   [ "$status" -eq 0 ]
-  [ -z "$output" ]
+  assert_output_contains "ARGS:install --no-audit --no-fund"
+  assert_output_contains "ARGS:run build"
+  assert_output_contains "CWD:$TMP_REPO/project/app/ui"
+
+  run cat "$BATS_TEST_TMPDIR/result.html"
+  assert_output_contains "REBUILT bundle marker"
+}
+
+@test "dev checkout with no dist/ at all installs and builds it" {
+  mkdir -p "$TMP_REPO/project/app/ui/src"
+  echo "export default 1" > "$TMP_REPO/project/app/ui/src/App.jsx"
+  rm -rf "$TMP_REPO/project/app/ui/dist"
+  cat > "$TMP_REPO/project/app/ui/package.json" <<'EOF2'
+{ "name": "fixture-ui", "scripts": { "build": "vite build" } }
+EOF2
+  # The fake npm's build step writes only the JS asset; seed the rest the way
+  # a real build would so the inliner has a complete dist/ to read.
+  cat > "$FAKE_BIN/npm" <<'EOF2'
+#!/usr/bin/env bash
+echo "ARGS:$*" >> "$NPM_LOG"
+if [ "$1" = "run" ] && [ "$2" = "build" ]; then
+  mkdir -p dist/assets
+  printf '<!DOCTYPE html><html><head><script type="module" src="/assets/a.js"></script></head><body></body></html>' > dist/index.html
+  echo 'console.log("REBUILT bundle marker");' > dist/assets/a.js
+fi
+exit 0
+EOF2
+
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
+  [ "$status" -eq 0 ]
+  run cat "$NPM_LOG"
+  assert_output_contains "ARGS:install --no-audit --no-fund"
+  assert_output_contains "ARGS:run build"
+  run cat "$BATS_TEST_TMPDIR/result.html"
+  assert_output_contains "REBUILT bundle marker"
+}
+
+@test "dev checkout whose npm install fails hard-fails with no output file" {
+  mkdir -p "$TMP_REPO/project/app/ui/src"
+  touch -t 202001010000 "$TMP_REPO/project/app/ui/dist/index.html"
+  echo "export default 1" > "$TMP_REPO/project/app/ui/src/App.jsx"
+  cat > "$TMP_REPO/project/app/ui/package.json" <<'EOF2'
+{ "name": "fixture-ui", "scripts": { "build": "vite build" } }
+EOF2
+
+  run bash -c "cd '$INVOKE_DIR' && FAKE_BUILD_FAIL=1 '$SNAPSHOT' --out '$BATS_TEST_TMPDIR/result.html'"
+  [ "$status" -ne 0 ]
+  assert_output_contains "npm install failed"
+  [ ! -f "$BATS_TEST_TMPDIR/result.html" ]
 }
 
 @test "dev checkout with no installed vite but dist is not stale proceeds normally" {

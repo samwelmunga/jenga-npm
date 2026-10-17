@@ -1,11 +1,16 @@
 {
   "checklist_version": 1,
-  "situations": ["pre-publish", "pre-mirror"],
+  "situations": [
+    "pre-publish",
+    "pre-mirror"
+  ],
   "items": [
     {
       "id": "board-frontmatter-valid",
       "text": "Every staged scrum board file has valid frontmatter.",
-      "situations": ["pre-commit"],
+      "situations": [
+        "pre-commit"
+      ],
       "kind": "machine",
       "verify": "files=$(git diff --cached --name-only -- 'project/board/*.md'); [ -z \"$files\" ] || bash scripts/validate-board.sh $files",
       "enforcement": "block",
@@ -14,7 +19,9 @@
     {
       "id": "checklist-registries-valid",
       "text": "The shipped default and this project's checklist registry both pass the validator.",
-      "situations": ["pre-commit"],
+      "situations": [
+        "pre-commit"
+      ],
       "kind": "machine",
       "verify": "bash scripts/validate-checklists.sh templates/checklists.json project/configs/checklists.json",
       "enforcement": "block",
@@ -23,7 +30,9 @@
     {
       "id": "allow-list-artifact-not-dirtied",
       "text": "lib/skill-allow-list.json has no unstaged modifications, so a test run or postinstall has not silently rewritten the security-relevant allow-list.",
-      "situations": ["pre-commit"],
+      "situations": [
+        "pre-commit"
+      ],
       "kind": "machine",
       "verify": "git diff --quiet -- lib/skill-allow-list.json",
       "enforcement": "confirm",
@@ -31,8 +40,10 @@
     },
     {
       "id": "no-new-files-under-docs",
-      "text": "No new file is added under docs/. That directory is only for content meant for the published site; maintainer-internal documentation belongs under project/documentation/.",
-      "situations": ["pre-commit"],
+      "text": "No Jenga content is added under docs/. docs/ belongs to the project and Jenga never puts Jenga content in it; Jenga's internal documents belong under project/documentation/ and the published site source under site/.",
+      "situations": [
+        "pre-commit"
+      ],
       "kind": "machine",
       "verify": "! git diff --cached --name-only --diff-filter=A -- docs/ | grep -q .",
       "enforcement": "confirm",
@@ -41,7 +52,9 @@
     {
       "id": "canonical-source-rule-understood",
       "text": "I understand that skills, agents, hooks and scripts are created and edited in the root directories, and that .claude/ and .agents/ are generated outputs that are never the primary location for a change.",
-      "situations": ["pre-task"],
+      "situations": [
+        "pre-task"
+      ],
       "kind": "judgment",
       "enforcement": "advisory",
       "tick_scope": "persistent"
@@ -49,7 +62,9 @@
     {
       "id": "deterministic-steps-in-scripts",
       "text": "Deterministic, repeatable steps in this change are implemented as scripts rather than as inline instructions in a SKILL.md.",
-      "situations": ["pre-task"],
+      "situations": [
+        "pre-task"
+      ],
       "kind": "judgment",
       "enforcement": "advisory",
       "tick_scope": "run"
@@ -57,7 +72,9 @@
     {
       "id": "working-tree-clean-before-release",
       "text": "The working tree is clean, so what is released is exactly what is committed.",
-      "situations": ["pre-release"],
+      "situations": [
+        "pre-release"
+      ],
       "kind": "machine",
       "verify": "test -z \"$(git status --porcelain)\"",
       "enforcement": "confirm",
@@ -66,7 +83,9 @@
     {
       "id": "tests-pass-before-release",
       "text": "The project's test suite has been run and passes on the exact commit being released.",
-      "situations": ["pre-release"],
+      "situations": [
+        "pre-release"
+      ],
       "kind": "judgment",
       "enforcement": "confirm",
       "tick_scope": "run"
@@ -74,7 +93,9 @@
     {
       "id": "release-published-from-public-repo",
       "text": "This release is being published from the public repository, not from this private one; this repository's role is to mirror to it.",
-      "situations": ["pre-publish"],
+      "situations": [
+        "pre-publish"
+      ],
       "kind": "judgment",
       "enforcement": "confirm",
       "tick_scope": "run"
@@ -82,8 +103,21 @@
     {
       "id": "mirror-surface-reviewed",
       "text": "If a new top-level directory or config file was added, .publicignore has been reviewed so nothing private is reachable through the paths the public mirror publishes.",
-      "situations": ["pre-mirror"],
+      "situations": [
+        "pre-mirror"
+      ],
       "kind": "judgment",
+      "enforcement": "confirm",
+      "tick_scope": "run"
+    },
+    {
+      "id": "checkin-run-before-dispatch",
+      "text": "A pre-dispatch check-in has been run in this session and its findings surfaced, so no in-flight agent is wedged or orphaned before more work is dispatched. This item must never be set to block enforcement: satisfying it requires running a check-in, which is itself a tool call, so block would refuse the very dispatch that would satisfy it.",
+      "situations": [
+        "pre-task"
+      ],
+      "kind": "machine",
+      "verify": "bash skills/j-check-in/scripts/checkin-gate.sh",
       "enforcement": "confirm",
       "tick_scope": "run"
     }

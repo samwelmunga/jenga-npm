@@ -9,10 +9,19 @@
 # `.agents/settings.json`.
 #
 # Behaviour:
-#   - Merge by server name. Absent -> `added`. Present and semantically
-#     identical -> `unchanged` (the file is NOT rewritten, so it stays
-#     byte-identical). Present but different -> only that one entry is replaced
-#     in place -> `updated`.
+#   - Merge by server name. Absent -> `added`. Present and SATISFYING the
+#     descriptor -> `unchanged` (the file is NOT rewritten, so it stays
+#     byte-identical, and hand-made customisation such as
+#     `?read_only=true` on a URL, or an extra `env`/`headers` key, is kept).
+#     Present but NOT satisfying -> only that one entry is changed in place ->
+#     `updated`, with the desired fields merged OVER the existing entry (keys
+#     the descriptor does not own are preserved; transport-specific keys of a
+#     different `type` are dropped, since they would be meaningless).
+#     "Satisfies" (E65_S08_T01) compares identity fields only:
+#       http  : `type` is http and the URL equals the descriptor's ignoring
+#               query string and fragment;
+#       stdio : `type` is stdio (or absent), `command` and `args` equal, and
+#               every env NAME the descriptor lists is present in `env`.
 #   - Other mcpServers entries and every other top-level key (hooks,
 #     permissions, env, ...) are preserved (parsed and re-serialised by jq, so
 #     their content is identical; insignificant whitespace may be normalised on
@@ -31,10 +40,10 @@
 #   register-mcp.sh --name <server> --command <cmd> [--arg <a>]... \
 #                   [--env-name <NAME>]... [--project-root <dir>]
 #   register-mcp.sh --name <server> --type http --url <url> \
-#                   [--env-name <NAME>]... [--project-root <dir>]
+#                   [--project-root <dir>]
 #
 # Output (stdout): one JSON object
-#   {"status":"added|unchanged|updated|error","file":"<path>","server":"<name>"[,"message":"..."]}
+#   {"status":"added|unchanged|updated|error","file":"<path>","server":"<name>"[,"note":"..."][,"message":"..."]}
 # Exit: 0 added/unchanged/updated; 1 runtime error (unparseable file, ...); 2 usage error.
 # -----------------------------------------------------------------------------
 set -uo pipefail
@@ -91,6 +100,7 @@ case "$TYPE" in
          [ -z "$URL" ] || emit_error 2 "--url is only valid with --type http"
          looks_secret "$COMMAND" && emit_error 2 "--command looks like a literal credential" ;;
   http)  [ -n "$URL" ] || emit_error 2 "--url is required for type http"
+         [ "${#ENV_NAMES[@]}" -eq 0 ] || emit_error 2 "--env-name is only valid with --type stdio (http entries carry no env)"
          [ -z "$COMMAND" ] || emit_error 2 "--command is only valid with --type stdio"
          printf '%s' "$URL" | grep -Eq '^https?://[^ ]+$' || emit_error 2 "--url must be an http(s) URL"
          looks_secret "$URL" && emit_error 2 "--url looks like it embeds a literal credential" ;;
@@ -119,7 +129,10 @@ else
   ENTRY="$(jq -cn --arg u "$URL" '{type:"http", url:$u}')"
 fi
 
-result() { jq -cn --arg st "$1" --arg f "$TARGET" --arg s "$NAME" '{status:$st, file:$f, server:$s}'; }
+result() { # <status> [note]
+  jq -cn --arg st "$1" --arg f "$TARGET" --arg s "$NAME" --arg note "${2:-}" \
+    '{status:$st, file:$f, server:$s} + (if $note != "" then {note:$note} else {} end)'
+}
 
 # ---- read the existing file (never clobber) --------------------------------
 EXISTING='{}'
@@ -136,17 +149,55 @@ if [ -e "$TARGET" ]; then
 fi
 
 CURRENT="$(jq -c --arg n "$NAME" '.mcpServers[$n] // null' <<<"$EXISTING")"
+NOTE=""
 if [ "$CURRENT" = "null" ]; then
   STATUS="added"
+  MERGE=0
 elif [ "$(jq -cS . <<<"$CURRENT")" = "$(jq -cS . <<<"$ENTRY")" ]; then
   result "unchanged"
   exit 0
+elif [ "$(jq -n --argjson c "$CURRENT" --argjson e "$ENTRY" '
+      def strip: sub("[?#].*$"; "");
+      def norm: if ($c|type) == "object" then ($c.type // "stdio") else null end;
+      if ($c|type) != "object" then false
+      elif $e.type == "http" then
+        ($c.type == "http") and (($c.url // "") | type == "string") and (($c.url // "") | strip) == ($e.url | strip)
+      else
+        (norm == "stdio") and ($c.command == $e.command) and (($c.args // []) == $e.args)
+        and (((($e.env // {}) | keys) - (($c.env // {}) | if type == "object" then keys else [] end)) | length == 0)
+      end')" = "true" ]; then
+  # Satisfied: identity fields match; anything else on the entry is the user's.
+  result "unchanged" "kept local customisation"
+  exit 0
 else
   STATUS="updated"
+  MERGE=1
 fi
 
-NEW="$(jq --indent 2 --arg n "$NAME" --argjson e "$ENTRY" '.mcpServers = ((.mcpServers // {}) | .[$n] = $e)' <<<"$EXISTING")" \
-  || emit_error 1 "failed to build the updated document"
+if [ "$MERGE" -eq 1 ]; then
+  # Merge the desired fields over the existing entry. Keys the descriptor does
+  # not own survive; transport-specific keys of a different type are dropped.
+  NEW="$(jq --indent 2 --arg n "$NAME" --argjson e "$ENTRY" '
+    def tkeys($t): if $t == "http" then ["url","headers"] else ["command","args","env"] end;
+    .mcpServers[$n] as $c
+    | .mcpServers = ((.mcpServers // {})
+        | .[$n] = (
+            if ($c|type) != "object" then $e
+            else
+              (($c.type // "stdio")) as $ct
+              | (if $ct == $e.type then $c else ($c | del(.[tkeys($ct)[]])) end) as $base
+              | $base + $e
+                + (if ($e.env // null) != null and (($base.env // null)|type) == "object"
+                   then {env: ($base.env + $e.env)} else {} end)
+            end))' <<<"$EXISTING")" \
+    || emit_error 1 "failed to build the updated document"
+  if jq -e --arg n "$NAME" --argjson e "$ENTRY" '(.mcpServers[$n] | keys) - ($e | keys) | length > 0' <<<"$NEW" >/dev/null 2>&1; then
+    NOTE="kept local customisation"
+  fi
+else
+  NEW="$(jq --indent 2 --arg n "$NAME" --argjson e "$ENTRY" '.mcpServers = ((.mcpServers // {}) | .[$n] = $e)' <<<"$EXISTING")" \
+    || emit_error 1 "failed to build the updated document"
+fi
 
 # ---- atomic write -----------------------------------------------------------
 mkdir -p "$(dirname "$TARGET")" || emit_error 1 "cannot create $(dirname "$TARGET")"
@@ -155,5 +206,5 @@ trap 'rm -f "$TMP"' EXIT
 if [ "$HAD_FILE" -eq 1 ]; then cp -p "$TARGET" "$TMP"; else chmod 644 "$TMP"; fi
 printf '%s\n' "$NEW" > "$TMP" || emit_error 1 "cannot write the temp file"
 mv "$TMP" "$TARGET" || emit_error 1 "cannot replace $TARGET"
-result "$STATUS"
+result "$STATUS" "$NOTE"
 exit 0

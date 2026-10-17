@@ -111,3 +111,17 @@ FX="$REPO_ROOT/tests/fixtures/connect/descriptors"
   run bash "$VALIDATE" "$BATS_TEST_TMPDIR/bad.json"
   [ "$status" -eq 2 ]
 }
+
+@test "http register_mcp that lists env is rejected and the field path is named (E65_S08_T02)" {
+  run bash "$VALIDATE" "$FX/invalid-http-with-env.json"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"register_mcp.env"* ]] || false
+  [[ "$output" == *"stdio"* ]] || false
+}
+
+@test "every shipped descriptor still validates after the http-env rule" {
+  for f in "$REPO_ROOT"/skills/j-connect/descriptors/*.json; do
+    run bash "$VALIDATE" "$f"
+    [ "$status" -eq 0 ]
+  done
+}

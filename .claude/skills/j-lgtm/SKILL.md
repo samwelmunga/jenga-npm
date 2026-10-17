@@ -22,6 +22,8 @@ examples:
 
 ## Instructions
 
-1. Invoke the `/commit` skill and wait for it to finish.
+1. Invoke the `/commit` skill and wait for it to finish. If `/lgtm` was given `--tests <ask|skip|scoped|full>`, pass it to `/commit` unchanged (it is `/commit`'s per-invocation test-gate override; see `skills/j-commit/SKILL.md`).
 
-2. If the current workflow is part of a `/do` execution, return to that workflow. Otherwise, invoke the `/continue` skill.
+2. If `/commit` printed the line `TEST_GATE=HALT`, or reported that nothing was committed (the test gate halted, or there was no implementation to commit), **stop here**: do not invoke `/continue` and do not return to a `/do` workflow. Report `/commit`'s output and let the user decide what to do next.
+
+3. Otherwise, if the current workflow is part of a `/do` execution, return to that workflow. Otherwise, invoke the `/continue` skill.

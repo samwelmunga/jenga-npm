@@ -20,6 +20,20 @@ examples:
 
 > ⚠️ **`scripts/generate-j-alias.sh` was retired by `E50_S14` and no longer exists — there is nothing to run.** This file was previously generated from a bare `skills/commit/SKILL.md` source; `E50_S15` deleted that directory. This file is now the sole canonical, hand-edited source for this skill — edit it directly.
 
+## Arguments
+
+- `<E##|E##_S##|E##_S##_T##>` (optional) - the scope id handed to `/reconcile` in step 1, as before.
+- `--tests <ask|skip|scoped|full>` (optional) - the test gate's per-invocation override (step 3.5): it replaces the
+  recorded default for this one invocation only, and `ask` forces the prompt even when a default is recorded. A
+  value outside those four is rejected by `test-gate-decide.sh resolve` (exit 2) for every caller: nothing is
+  committed. A valid value is ignored for a non-interactive caller. `/lgtm` and `/dev-done` forward it unchanged.
+- `--caller <interactive|noninteractive>` (optional) - who is driving this commit. Pass `--caller noninteractive`
+  whenever `j.commit` was reached by a sub-agent, by a sender-object caller (a developer or tester agent), or by any
+  automated run with no human to answer; pass `--caller interactive` otherwise. This is the one judgment the test
+  gate leaves to you; everything else is decided by scripts.
+
+---
+
 ## Inline Mode (called by /do for inline-scoped tasks)
 
 When invoked with the `--inline` flag OR when the environment variable `JENGA_COMMIT_INLINE=1` is set, execute inline mode:
@@ -27,6 +41,8 @@ When invoked with the `--inline` flag OR when the environment variable `JENGA_CO
 1. **Skip** the reconcile step, the `/doc-sync` scan, and the user-action prerequisites check (steps 1-3 in normal mode). No `/reconcile` invocation, `/doc-sync` invocation, or `_INSTRUCTIONS.md` lookup is performed — inline tasks are single, already-scoped-small changes that reconcile and doc-sync would add overhead to, not risk, disproportionate to the size of the change.
 2. **Skip** any worktree merge logic — inline tasks execute in the main session with no dedicated worktree to merge.
 3. Stage all changed files relevant to the task (use `git add -A` or specific files if a list was provided by the caller).
+3.5. **Test gate skip** — inline mode never prompts and never runs tests. Call `bash "$TG/test-gate-decide.sh" resolve --inline --caller noninteractive` (`TG` as defined in step 3.5 of normal mode, below), print the one line `Tests skipped: <reason>` from its output (never "passed"), and log it with `bash "$TG/test-gate-run.sh" log --action skip --reason "<reason>" --caller noninteractive`. Then continue.
+
 4. **Pre-commit gate** — fire phase `pre-commit` per "Pre-commit gate" below. Inline mode skips reconcile and doc-sync but **not** this gate. On a `block` failure nothing is committed.
 5. Commit using the EST naming convention:
    ```
@@ -64,6 +80,39 @@ If no epic, task, or story has been implemented, exit with the message: "No impl
    - **If doc-sync reports no drift** — continue silently to the next step.
 
 3. **Verify user-action prerequisites** — Check whether an `_INSTRUCTIONS.md` file exists for this task at `project/instructions/<E##_S##_T##>_INSTRUCTIONS.md`. If the task has out-of-scope prerequisites but no instructions file was created, create one now using `assets/user_instructions_template.md`. If one already exists, surface it to the user as a reminder. (The developer should have created this file during task intake — this is a final safety check.)
+
+3.5. **Test gate** — ask whether to run tests before this commit, run them if the user chose to, and decide whether the commit may go on. This step sits **after** step 3 and **before** the pre-commit gate (step 4), and nowhere else, for two reasons: the reconcile in step 1 may merge orphaned worktrees, so the set of changed files is final only after step 3; and tests can run for a long time, so step 4's situation marker (written immediately before its first `check`) must never be open across them. The test gate writes **no** situation marker, and a halt leaves none behind. Step 4 stays the last thing before the commit command. The steps are not renumbered.
+
+   Everything deterministic is in three scripts under `skills/j-commit/scripts/` (`test-gate-decide.sh`, `test-gate-scoped.sh`, `test-gate-run.sh`; headers are the contract). This step only relays their output and holds the conversation: it parses nothing, maps no answer and decides no proceed/halt itself. Show each script's stdout to the user verbatim. The scripts are run with `bash`, from the dual path:
+
+   ```bash
+   TG="$([ -d skills/j-commit/scripts ] && echo skills/j-commit/scripts || echo node_modules/@jenga-ai/agent/skills/j-commit/scripts)"
+   ```
+
+   **Boundary.** The developer agent never runs tests (CLAUDE.md); a human answers this prompt, and a non-interactive caller skips with a logged note instead. A non-zero exit from a `test-gate-decide.sh` call other than the answer parsers' exit 1 and `directive`'s exit 1 (a usage error, a missing `jq`) means do not proceed: show its stderr, then follow **Halt** below.
+
+   **a. Resolve.** Run `bash "$TG/test-gate-decide.sh" resolve [--tests <value>] --caller <interactive|noninteractive>` (pass `--tests` only when it was given). It prints one JSON line; show any `warnings` entry, then branch on its `action`:
+   - `skip` - print the one line `Tests skipped: <reason>` (never "passed"), log it with `bash "$TG/test-gate-run.sh" log --action skip --reason "<reason>" --caller <caller>`, and go to step 4. A non-interactive caller always lands here and is never prompted.
+   - `run` - announce in one line which recorded default or per-invocation override applies and that `--tests ask` shows the prompt instead, then continue with its `choice`.
+   - `prompt` - show `bash "$TG/test-gate-decide.sh" prompt` (add `--default <recorded_default>` when the JSON's `recorded_default` is not empty) exactly as printed (it offers three options: 1 a scoped run of the tests covering the committed scope, 2 the full suite through `j.test`, 3 skip; blank skips, or takes the recorded default when one exists), take the answer exactly as typed, and run `bash "$TG/test-gate-decide.sh" answer "<raw>"` (same `--default`). On exit 1 show its stderr and ask again, until the answer is valid or the user cancels; a cancel is a Halt. Its stdout is the `choice`.
+
+   **b. Act on the choice.**
+   - `skip` - say that tests were skipped by choice and none were run, and log it (`test-gate-run.sh log --action skip --choice skip --caller interactive`). Go to step 4.
+   - `full` - `GATE_DIR="$(mktemp -d)"`, then `bash "$TG/test-gate-run.sh" full --out-dir "$GATE_DIR"`.
+   - `scoped` - `GATE_DIR="$(mktemp -d)"`, then `bash "$TG/test-gate-scoped.sh" --out-dir "$GATE_DIR"`; it prints the plan JSON. When its `status` is `mapped`, run `bash "$TG/test-gate-run.sh" scoped --plan "$GATE_DIR/plan.json"`. When `status` is `zero` or `error` (or the script itself exited non-zero), say plainly that the mapping found no test to run or failed and that this is **not a pass**; show `bash "$TG/test-gate-decide.sh" fallback-prompt --reason "<the plan's message>"`, take the answer exactly as typed, run `bash "$TG/test-gate-decide.sh" fallback-answer "<raw>"` (re-ask on exit 1), then run `full` as above or skip, logging `bash "$TG/test-gate-run.sh" log --action fallback --choice <full|skip> --reason "<the plan's message>" --caller interactive`.
+
+   **c. After a run.** `test-gate-run.sh` ends its stdout with `TEST_GATE_RESULT=<result>` and `TEST_GATE_FAILED=<names>`; read both. Exit 2 means two different things: with a `TEST_GATE_RESULT=error` line the run was attempted and could not execute (result `error`); with no `TEST_GATE_` line at all a plan was refused or the call was malformed and nothing ran (treat it like a `zero`/`error` plan: say nothing was run, then the fallback prompt from step b, with the stderr message as the reason). Then, by `<result>`:
+   - `passed`, `unavailable` - for `unavailable` say plainly that no tests were run (never a pass). Log it (`log --action passed` or `--action unavailable`), then `bash "$TG/test-gate-decide.sh" directive <result>`.
+   - `interrupted` - no prompt: log `--action interrupted`, then `directive interrupted` (it halts).
+   - `failed`, `error` - log it (`--action failed` or `--action error`, `--failed "<TEST_GATE_FAILED>"`). Show `bash "$TG/test-gate-decide.sh" failure-prompt --failed "<TEST_GATE_FAILED, or unknown suite when empty>" [--kind error]` (`--kind error` for `error`), take the answer exactly as typed, run `bash "$TG/test-gate-decide.sh" failure-answer "<raw>"`; on exit 1 show its stderr and ask again (there is no default and a blank answer never proceeds); a cancel is a Halt. For `fix`, tell the user which suites failed and that `j.commit` can be re-invoked after the fix (the gate then runs again from scratch). For `anyway`, log `--action override --choice anyway --failed "<names>"`. Then run `bash "$TG/test-gate-decide.sh" directive <result> --choice <fix|anyway|abort>`.
+
+   **d. Directive.** `directive` prints `GATE=PROCEED` (continue to step 4) or `GATE=HALT` (a **Halt**). Log every outcome with `test-gate-run.sh log` (`passed`, `failed`, `error`, `unavailable`, `interrupted`, `override`, `halt`, `skip`, `fallback`), always with `--caller`.
+
+   **Halt.** Print the line `TEST_GATE=HALT` on its own line and then `Commit halted at the test gate: nothing was committed.`, log `--action halt`, and stop the whole of `j.commit`: nothing is staged, committed or marked, no later step runs, and no situation marker exists. `/lgtm` and `/dev-done` recognise this and stop too.
+
+   **Cleanup.** When `GATE_DIR` was created, run `rm -rf "$GATE_DIR"` on every exit path (proceed, skip, Halt, error).
+
+   **Never persisted.** No choice made here (a skip, a full run, a failure answer, an override) is written to `test-config.json`: the next commit gates again. A recorded default changes only when the user runs `jenga config set test-config.commit_prompt_default <value>` (`""`, `skip`, `scoped` or `full`).
 
 4. **Pre-commit gate** — fire phase `pre-commit` per "Pre-commit gate" below: after the reconcile, doc-sync and prerequisites steps above, immediately before the commit command. On a `block` failure nothing is committed.
 

@@ -40,9 +40,16 @@ load helpers/assertions
 
 REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
 
+# postinstall.js regenerates $REPO_ROOT/lib/skill-allow-list.json in place; restore it afterwards so later test
+# files see the original (it differs in the mirror-shaped tree the public mirror's gate builds).
+teardown() {
+  cp "$BATS_TEST_TMPDIR/skill-allow-list.json.orig" "$REPO_ROOT/lib/skill-allow-list.json"
+}
+
 setup() {
   CONSUMER_DIR="$BATS_TEST_TMPDIR/consumer"
   mkdir -p "$CONSUMER_DIR"
+  cp "$REPO_ROOT/lib/skill-allow-list.json" "$BATS_TEST_TMPDIR/skill-allow-list.json.orig"
 
   # init.sh runs `git commit` on the repo it scaffolds, and it deliberately
   # sets no identity of its own -- it inherits whatever the invoking user has
@@ -413,4 +420,47 @@ run_j_init_as_consumer() {
   assert_output_not_contains "invoke the skill immediately using the slash-command syntax"
   # AGENTS.md's discovery path is .agents/skills/ per generate-agent-context.js's TARGETS table
   assert_output_contains ".agents/skills/<skill-name>/SKILL.md"
+}
+
+# E72_S01_T06: the scaffolded test-config.json carries the two commit option keys at
+# the defaults the test-config descriptor declares, so a new project starts with the
+# same shape this repo has and `jenga config get` finds both keys.
+@test "init.sh scaffolds test-config.json with the commit option defaults and an empty tools list" {
+  local init_script="$REPO_ROOT/skills/init/scripts/init.sh"
+  if [ ! -f "$init_script" ]; then init_script="$REPO_ROOT/skills/j-init/scripts/init.sh"; fi
+  run bash -c "cd '$CONSUMER_DIR' && bash '$init_script' --visibility visible"
+  [ "$status" -eq 0 ]
+
+  local cfg="$CONSUMER_DIR/project/configs/test-config.json"
+  run jq -e '.commit_prompt_default == ""' "$cfg"
+  [ "$status" -eq 0 ]
+  run jq -e '.commit_scope_map_file == "templates/test-scope-map.json"' "$cfg"
+  [ "$status" -eq 0 ]
+  run jq -e '.tools == []' "$cfg"
+  [ "$status" -eq 0 ]
+  run jq -e 'has("threshold_version") or has("config_version") | not' "$cfg"
+  [ "$status" -eq 0 ]
+}
+
+@test "the scaffolded test-config.json defaults equal the test-config descriptor defaults" {
+  local descriptor="$REPO_ROOT/templates/config-descriptors/test-config.json"
+  local template="$REPO_ROOT/skills/j-init/assets/test-config_template.json"
+  local key
+  for key in commit_prompt_default commit_scope_map_file; do
+    run jq -n -e --arg k "$key" --slurpfile d "$descriptor" --slurpfile t "$template" \
+      '($d[0].keys[] | select(.key == $k) | .default) == $t[0][$k]'
+    [ "$status" -eq 0 ]
+  done
+}
+
+@test "validate-config-descriptors.sh --all exits 0 on a freshly scaffolded root" {
+  local init_script="$REPO_ROOT/skills/init/scripts/init.sh"
+  if [ ! -f "$init_script" ]; then init_script="$REPO_ROOT/skills/j-init/scripts/init.sh"; fi
+  run bash -c "cd '$CONSUMER_DIR' && bash '$init_script' --visibility visible"
+  [ "$status" -eq 0 ]
+
+  run env JENGA_PROJECT_ROOT="$CONSUMER_DIR" bash "$REPO_ROOT/scripts/validate-config-descriptors.sh" --all
+  [ "$status" -eq 0 ]
+  assert_output_not_contains "commit_prompt_default"
+  assert_output_not_contains "commit_scope_map_file"
 }

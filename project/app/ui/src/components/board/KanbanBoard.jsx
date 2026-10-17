@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import StatusBadge from './StatusBadge'
-import { KANBAN_COLUMNS, flattenBoardItems, bucketIntoColumns } from './kanbanColumns'
+import { KANBAN_COLUMNS, flattenBoardItems, flattenIdeaItems, bucketIntoColumns } from './kanbanColumns'
 import EntryDetailPanel from '../history/EntryDetailPanel'
 import './kanban.css'
 
-const TYPE_LABELS = { epic: 'Epic', story: 'Story', task: 'Task' }
+const TYPE_LABELS = { epic: 'Epic', story: 'Story', task: 'Task', idea: 'Spike' }
 
 // `_promotedFromStatus` is set by bucketIntoColumns() on an item that reached
 // the In Progress column only because project/todo.md queues it (E06_S05_T04),
@@ -16,6 +16,47 @@ const TYPE_LABELS = { epic: 'Epic', story: 'Story', task: 'Task' }
 // pattern from the sibling task E06_S07_T01: the title element opens the same
 // EntryDetailPanel `board_item` branch, with `item._itemType` (set by
 // flattenBoardItems in kanbanColumns.js) supplying the `kind` argument.
+//
+// E35_S04_T04 — idea ("Spike") cards come from project/ideas.md via flattenIdeaItems(): no ID chip,
+// no status badge, read-only detail panel. A PROMOTED idea shows its linked board ID as a chip,
+// clickable only when `boardItemsById` resolves it to a loaded epic/story/task.
+function IdeaCard({ item, boardItemsById, onSelectIdea, onSelect }) {
+  const linked = item._boardId ? boardItemsById[item._boardId] : null
+  return (
+    <div className="kanban-card kanban-card-idea">
+      <div className="kanban-card-header">
+        <span className="kanban-card-type kanban-card-spike">{TYPE_LABELS.idea}</span>
+      </div>
+      <div
+        className="kanban-card-title kanban-card-idea-text"
+        role="button"
+        tabIndex={0}
+        onClick={() => onSelectIdea(item)}
+        onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onSelectIdea(item)}
+      >
+        {item.title}
+      </div>
+      {item._boardId && (
+        <div className="kanban-card-footer">
+          {linked ? (
+            <span
+              className="kanban-card-board-id kanban-card-board-id-link"
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelect(linked._itemType, linked)}
+              onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onSelect(linked._itemType, linked)}
+            >
+              {item._boardId}
+            </span>
+          ) : (
+            <span className="kanban-card-board-id">{item._boardId}</span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function KanbanCard({ item, onSelect }) {
   const promotedFrom = item._promotedFromStatus
   return (
@@ -54,7 +95,7 @@ function KanbanCard({ item, onSelect }) {
 // read-only per E06_S02). E06_S05_T04 additionally promotes
 // project/todo.md-queued Pending/Backlog items into In Progress, marked
 // "queued" — todo.md is only ever read, never written.
-export default function KanbanBoard({ epics }) {
+export default function KanbanBoard({ epics, ideas }) {
   // E06_S07_T02 — lifted selection state for the content overlay, mirroring
   // BoardView.jsx's lifted `selected` useState pattern from the sibling task
   // E06_S07_T01. Kept local to KanbanBoard rather than hoisted to
@@ -66,12 +107,25 @@ export default function KanbanBoard({ epics }) {
     setSelected({ type: 'board_item', kind, ...item })
   }
 
-  if (!epics || epics.length === 0) {
+  function onSelectIdea(item) {
+    setSelected({
+      type: 'idea',
+      text: item.title,
+      state: item._ideaState,
+      boardId: item._boardId,
+      rapport: item._rapport,
+    })
+  }
+
+  const hasIdeas = Array.isArray(ideas) && ideas.length > 0
+  if ((!epics || epics.length === 0) && !hasIdeas) {
     return <div className="empty-state">No board data available.</div>
   }
 
-  const items = flattenBoardItems(epics)
-  const buckets = bucketIntoColumns(items)
+  const boardItems = flattenBoardItems(epics)
+  const boardItemsById = {}
+  for (const b of boardItems) if (b.id) boardItemsById[b.id] = b
+  const buckets = bucketIntoColumns([...boardItems, ...flattenIdeaItems(ideas)])
 
   return (
     <div className="kanban-board">
@@ -91,9 +145,19 @@ export default function KanbanBoard({ epics }) {
               <div className="kanban-column-empty-state">No items</div>
             ) : (
               <div className="kanban-column-items">
-                {colItems.map((item) => (
-                  <KanbanCard key={`${item._itemType}-${item.id}`} item={item} onSelect={onSelect} />
-                ))}
+                {colItems.map((item, index) =>
+                  item._itemType === 'idea' ? (
+                    <IdeaCard
+                      key={`idea-${col.key}-${index}`}
+                      item={item}
+                      boardItemsById={boardItemsById}
+                      onSelectIdea={onSelectIdea}
+                      onSelect={onSelect}
+                    />
+                  ) : (
+                    <KanbanCard key={`${item._itemType}-${item.id}`} item={item} onSelect={onSelect} />
+                  )
+                )}
               </div>
             )}
           </div>

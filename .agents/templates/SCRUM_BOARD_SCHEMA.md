@@ -27,6 +27,7 @@ project/
     tester_triggers.jsonl        Trigger queue for tester agent
     project_summary_updates.jsonl Proposed PROJECT_SUMMARY.md edits
     handoffs/                    Per-session transient handoffs (written by agent, consumed by on_session_end.sh) — see `handoffs/` below
+    .break_request.json          Transient break signal: stop at the next task boundary — see `.break_request.json` below
   rapports/
     problems/       Problem rapports from developer and tester
     analysis/       Analysis rapports from tester
@@ -235,6 +236,13 @@ reopened_reason:             # YAML list, one entry per reopen cycle; see Reopen
 docs: []                     # optional list of repo-relative documentation paths, e.g. ["README.md", "docs/API.md"]
 epic_scope_approval: false     # set to true by the human operator only when any task in this epic has execution_scope: epic
 provenance:                  # optional; only valid value is `backfilled` (epic reverse-engineered from pre-existing code by `/uncharted onboard`). Omit for normally-authored epics.
+external_refs:               # optional; list of links to external systems (Jira, Confluence, Bitbucket); absence means no external links; see External Refs Fields
+  - system: jira
+    kind: issue
+    key: PROJ-123
+    linked_on: YYYY-MM-DD
+external_refs_declined:      # optional; true only; absence means no skip is on record; see Declined External Refs Fields
+external_refs_declined_note: # required when external_refs_declined: true; free-text: date and that the user skipped the link prompt
 stories:
   - E##_S##
   - E##_S##
@@ -274,6 +282,13 @@ crucial_set_by:                # required when crucial_level is set; user | scru
 crucial_note:                  # required when crucial_level is set; free-text justification
 crucial_declined:              # optional; true only; absence means no declined proposal is on record
 crucial_declined_note:         # required when crucial_declined: true; free-text: heuristic matched, proposed tier, date declined
+external_refs:                 # optional; list of links to external systems (Jira, Confluence, Bitbucket); absence means no external links; see External Refs Fields
+  - system: confluence
+    kind: page
+    url: https://example.atlassian.net/wiki/spaces/PROJ/pages/123456
+    linked_on: YYYY-MM-DD
+external_refs_declined:        # optional; true only; absence means no skip is on record; see Declined External Refs Fields
+external_refs_declined_note:   # required when external_refs_declined: true; free-text: date and that the user skipped the link prompt
 tasks:
   - E##_S##_T##
   - E##_S##_T##
@@ -321,6 +336,13 @@ crucial_set_by:                  # required when crucial_level is set; user | sc
 crucial_note:                    # required when crucial_level is set; free-text justification
 crucial_declined:                # optional; true only; absence means no declined proposal is on record
 crucial_declined_note:           # required when crucial_declined: true; free-text: heuristic matched, proposed tier, date declined
+external_refs:                   # optional; list of links to external systems (Jira, Confluence, Bitbucket); absence means no external links; see External Refs Fields
+  - system: bitbucket
+    kind: pull-request
+    url: https://bitbucket.org/workspace/repo/pull-requests/42
+    linked_on: YYYY-MM-DD
+external_refs_declined:          # optional; true only; absence means no skip is on record; see Declined External Refs Fields
+external_refs_declined_note:     # required when external_refs_declined: true; free-text: date and that the user skipped the link prompt
 ---
 
 # Task: <Title>
@@ -511,6 +533,13 @@ These six fields control the execution footprint of a task within the `/jenga` a
 - Valid values: any non-empty string
 - When required: required when `jenga_assigned: false`
 - Description: explains why the human operator overrode the machine-assigned scope. Must be non-empty when present.
+- **Mechanically enforced** by `scripts/validate-board.sh` — unlike the equivalent `crucial_level` and
+  `scope_rationale` pairing rules, which are authoring discipline only. The reason for the difference is
+  that `skills/j-do/SKILL.md`'s step 4.1 *halts dispatch* on `jenga_assigned: false` with an empty
+  `override_justification`, so a violation makes the task unworkable rather than merely untidy. 35 task
+  files accumulated the invalid pairing before the check existed (found 2026-10-04 when `/do E28_S18_T01`
+  halted); all 35 were repaired to `jenga_assigned: true`, since an empty justification means no human
+  override was ever actually recorded. Regression coverage: `tests/validate-board-override-pairing.bats`.
 
 **`epic_scope_approval`**
 - Valid values: `true` | `false`
@@ -565,6 +594,78 @@ These two fields record that a scrum-master heuristic proposed a `crucial_level`
 
 **Backward compatibility.** Existing board files that omit both fields remain valid — no item has ever had a decline recorded before this convention existed, so every pre-existing file is trivially compliant.
 
+## External Refs Fields (Epic, Story, Task)
+
+`external_refs` gives a board item one documented home for its links to items in external systems: a Jira issue, a Confluence page, a Bitbucket repo or pull request. It is **one list field** on epics, stories and tasks, deliberately not separate `jira_key` / `confluence_url` / `bitbucket_repo` fields: a new system adds a new `system` value, never a new frontmatter key. It follows the same "optional field, absence is the signal, backward compatible" convention already used by `docs`, `provenance`, and the `crucial_*` fields.
+
+**`external_refs`**
+- Valid values: a YAML list; each entry is a mapping with the keys below
+- When required: optional; **absence means "no external links"**. An empty list (`external_refs: []`) carries the same meaning.
+- Description: the external items this board item is linked to.
+
+Entry keys (every entry):
+
+| Key | Required | Valid values |
+|---|---|---|
+| `system` | yes | `jira` \| `confluence` \| `bitbucket` |
+| `kind` | yes | one of the kinds valid for that `system` (table below) |
+| `key` **or** `url` | yes, exactly one of the two | `key`: a Jira issue key such as `PROJ-123` (only meaningful for `system: jira`); `url`: the URL of the item. Both present, or neither, is malformed. |
+| `linked_on` | yes | ISO date `YYYY-MM-DD`: the day the link was recorded |
+
+Valid `kind` per `system`:
+
+| `system` | Valid `kind` values |
+|---|---|
+| `jira` | `issue` |
+| `confluence` | `page` |
+| `bitbucket` | `repo`, `pull-request` |
+
+Adding a system later means adding a row to both tables here and to the validator's value lists; it never means adding a frontmatter key.
+
+**On-disk shape.** A block list of mappings, one entry per `- system:` line, the remaining keys of the entry indented to align under `system`:
+
+```yaml
+external_refs:
+  - system: jira
+    kind: issue
+    key: PROJ-123
+    linked_on: 2026-10-06
+  - system: confluence
+    kind: page
+    url: https://example.atlassian.net/wiki/spaces/PROJ/pages/123456
+    linked_on: 2026-10-06
+```
+
+*Parser constraint and why this shape.* `scripts/validate-board.sh`'s hand-rolled `parse_frontmatter()` understands only scalar values, `[a, b]` flow lists and `  - item` lists of plain strings. It cannot read a block list of mappings, and without a change it would report `system`, `kind`, `key`, `url` and `linked_on` lines as unknown top-level keys. The block list of mappings is nonetheless the chosen shape: it is the form humans expect to read and edit as YAML, it is parsed correctly by PyYAML (which `assert_parses_as_yaml` in the same script already uses as its real-YAML check), and it keeps each entry self-describing. The alternative, a flow mapping per line (`  - {system: jira, kind: issue, key: PROJ-123, linked_on: 2026-10-06}`), would have slipped past the existing string-list branch of `parse_frontmatter()` but was rejected: it would be read as one opaque string, so no per-entry check (missing `system`, both or neither of `key` / `url`, non-date `linked_on`) could run, and it wraps badly for long URLs. `E71_S03_T02` therefore extends the validator to read the block-list-of-mappings shape and to enforce the entry rules above; until that task lands, the validator does not yet know the field.
+
+**Ownership.** Only the **scrum-master** writes `external_refs` (and the skip marker below), and only through the link script delivered by `E71_S04`, so every write goes through the same lock and validation path as other board writes. The **developer** and **tester** agents may read `external_refs` and surface it in their context (for example to name the Jira key a task belongs to), but never write, add, edit or remove it.
+
+**Scope: epics, stories and tasks.** Unlike the Crucial Flag Fields, epics carry these fields too.
+
+**Backward compatibility.** Board files that omit `external_refs` (every file on the board before this convention existed) remain valid unchanged. Agents and board tools must not reject a file for lacking it, and must not drop, reorder or rewrite it when it is present.
+
+## Declined External Refs Fields (Epic, Story, Task)
+
+These two fields record that the user was offered the chance to link this item to an external system (the link prompt in `E71_S05` / `E71_S06`) and explicitly chose to skip it. They are the **authoritative skip-tracking mechanism**: `E71_S05` and `E71_S06` check `external_refs_declined` before prompting, so an item that was skipped is not re-asked on a later pass. The shape deliberately mirrors `crucial_declined` / `crucial_declined_note` above.
+
+**`external_refs_declined`**
+- Valid values: `true` (the only recognised value)
+- When required: optional; absence means no skip is on record for this item. There is no `false` state to write: an item either has a recorded skip or it doesn't.
+- Description: a boolean marker, deliberately separate from free text, so the link-prompt flows can check a single unambiguous field instead of parsing prose.
+
+**`external_refs_declined_note`**
+- Valid values: any non-empty string
+- When required: required when `external_refs_declined: true` (same required-when-present pattern as `crucial_declined_note`)
+- Description: free-text record naming the date and that the user skipped the link prompt, e.g. `"Skipped 2026-10-06: user chose not to link this item to Jira/Confluence/Bitbucket."` Validators reject a blank value when `external_refs_declined` is present.
+
+**Ownership.** Written only by the scrum-master through the `E71_S04` link script; developer and tester never write it.
+
+**Relationship to `external_refs`.** `external_refs_declined` and a non-empty `external_refs` list are mutually exclusive in the normal flow: if the user links the item, it gets `external_refs` entries and no skip is recorded; if the user skips, it gets `external_refs_declined: true` / `external_refs_declined_note` and no entries. Linking an item that carries a recorded skip later is allowed (the user changed their mind); the fields are not validated as exclusive, only documented as normally following one path or the other.
+
+**Scope: epics, stories and tasks.**
+
+**Backward compatibility.** Existing board files that omit both fields remain valid; no item has ever had a skip recorded before this convention existed. Agents must not reject board files that lack them.
+
 ### Acceptance Criteria (`## Acceptance Criteria`)
 
 - **Required** — the section must exist in every story file.
@@ -581,7 +682,7 @@ These two fields record that a scrum-master heuristic proposed a `crucial_level`
 
 Run `scripts/validate-story-format.sh <path-to-story-file>` to verify a story file meets these requirements. The script exits 0 on success and non-zero with a descriptive error message on failure.
 
-Run `scripts/validate-board.sh <path-to-board-file>` to validate epic, story, or task frontmatter keys. The helper accepts optional `docs` and (on epics) `provenance` annotations, and remains backward compatible with existing board files that omit them.
+Run `scripts/validate-board.sh <path-to-board-file>` to validate epic, story, or task frontmatter keys. The helper accepts optional `docs` and (on epics) `provenance` annotations, and remains backward compatible with existing board files that omit them. Validator support for `external_refs` and the `external_refs_declined*` marker (see External Refs Fields) is delivered by `E71_S03_T02`.
 
 ---
 
@@ -668,6 +769,59 @@ A `crucial_escalation` rapport must also name the target item's ID (`E##`, `E##_
 | Type              | Written by          | Purpose                                         |
 |-------------------|---------------------|-------------------------------------------------|
 | `test_assignment` | on_session_end.sh (from developer handoff) | Implementation complete; run tests against worktree |
+
+### `.break_request.json` — the break signal, consumed by the loop that honours it
+
+**File:** `project/queue/.break_request.json`
+
+A **transient runtime signal**, like the handoff files below it — not a board item. It carries no board
+status value, is not subject to the board status vocabulary, and is never a thing to roll up or report on.
+Its absence is the normal steady state.
+
+It exists because a slash command cannot reach a running loop. `/jenga` Phase 4, `/do`'s step 8 loop and
+`/dooo`'s fan-out all keep advancing on their own, and a background sub-agent has no channel to receive a
+command typed by the operator. So `/break` does not interrupt anything: it writes this file, and every
+orchestration loop checks for it at its own task boundary. That indirection is the whole design.
+
+#### Fields
+
+| Field | Type | Meaning |
+|---|---|---|
+| `mode` | `"soft"` \| `"hard"` | `soft` is consumed by the first loop that honours it; `hard` persists until `/break clear` |
+| `with_status` | boolean | Whether the halting loop should also print the scoped execution rapport |
+| `requested_at` | ISO-8601 UTC string | When the break was requested |
+| `requested_by` | string | Origin of the request, e.g. `"/break"` — for the event log and the halt message |
+
+All four are required. A file missing any of them, or carrying a `mode` outside the two allowed values, is
+malformed and is treated exactly as described under "Unparseable" below.
+
+#### Lifecycle — who deletes the file, which is the entire behavioural contract
+
+- **A `soft` flag is deleted by the loop that consumes it.** One-shot: the first loop to reach a task
+  boundary reports the break, halts, and removes the flag as part of the same step. The next `/do` or
+  `/jenga` run proceeds normally. This is "let me look at this one thing".
+- **A `hard` flag is never deleted by a loop.** It survives consumption and session end, so every
+  subsequent orchestration keeps refusing to advance. Only `/break clear` removes it. This is "nobody runs
+  the board until I say so".
+
+Consumption is implemented in exactly one place, `skills/j-break/scripts/check-break.sh`. No orchestrator
+parses this file itself; a loop that reads `.break_request.json` directly is a bug, because the
+consume-and-clear rule would then exist in more than one place and the two would drift.
+
+**Escalation is one-way.** A bare `/break` issued while a `hard` flag is standing leaves the mode `hard` —
+a weaker request never silently downgrades a standing hard break. A `soft` flag given `--hard` does become
+`hard`. In both directions `requested_at` and `with_status` are refreshed, because the operator has just
+restated their intent.
+
+#### Missing, and unparseable
+
+- **Missing file = no break.** This is the overwhelmingly common case and the normal steady state. The
+  check is a single existence test with no JSON parsing and no board read, because it runs at every task
+  boundary of every loop.
+- **Present but unparseable = no break, reported, non-fatal.** A corrupt or malformed flag is ignored with
+  a warning on stderr, and the checker exits as though no break existed. Two deliberate choices: exiting
+  non-zero would let one bad write wedge every orchestration on the board, and the file is **not** deleted
+  because the operator needs to see the evidence. Clearing it is `/break clear`'s job, not the loop's.
 
 ### `handoffs/` — per-session transient handoffs, consumed by on_session_end.sh
 

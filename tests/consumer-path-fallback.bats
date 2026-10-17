@@ -20,9 +20,16 @@ load helpers/assertions
 
 REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
 
+# postinstall.js regenerates $REPO_ROOT/lib/skill-allow-list.json in place; restore it so later tests
+# (j-test-skill.bats compares it to the .claude/ copy) see the original, which differs in a mirror-shaped tree.
 setup() {
   CONSUMER_DIR="$BATS_TEST_TMPDIR/consumer"
   mkdir -p "$CONSUMER_DIR"
+  cp "$REPO_ROOT/lib/skill-allow-list.json" "$BATS_TEST_TMPDIR/skill-allow-list.json.orig"
+}
+
+teardown() {
+  cp "$BATS_TEST_TMPDIR/skill-allow-list.json.orig" "$REPO_ROOT/lib/skill-allow-list.json"
 }
 
 # Mirrors skills/ and agents/ into .claude/ and .agents/ via the real

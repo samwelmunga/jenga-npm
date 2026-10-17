@@ -1,6 +1,9 @@
 ---
 name: j.playbook
-description: Invoke a specific /jenga playbook directly by ID, skipping natural-language matching entirely and going straight to chain confirmation and execution.
+description: Invoke a specific /jenga playbook directly by ID or by its list number, skipping natural-language matching entirely and going straight to chain confirmation and execution. Bare, it lists the playbooks as a numbered list.
+output_types:
+  - when: argument_empty
+    type: ranked_list
 keywords:
   - run playbook
   - invoke playbook by id
@@ -8,6 +11,7 @@ keywords:
   - execute playbook
 examples:
   - "j.playbook brainstorm-to-mirror"
+  - "j.playbook 2"
   - "run the understand-then-commit playbook"
   - "invoke playbook by id"
 ---
@@ -32,20 +36,27 @@ this skill is id resolution (step 1 below).
 
 ## Instructions
 
-0. **Bare invocation — no id given.** If this skill was invoked with no argument at all, do not
-   proceed to step 1. Instead:
-   a. Invoke `skills/jenga/scripts/load-playbooks.sh` with no arguments (its existing full-catalog
-      mode — the same call step 1's `"not_found"` branch already uses for its "did you mean"
-      nudge; no new script is introduced for this).
-   b. Render the returned JSON array as a Markdown table with columns `Id`, `Name`, `Source`, and
-      `Steps`. For the `Source` column, render `Built-in` for a `source` field of `"builtin"` and
-      `Project` for `"project"`. For the `Steps` column, render each entry in that playbook's
-      `steps` array joined by `->`: a bare string step renders as itself; a StepObject step
-      renders its `skill` or `playbook` field value (whichever is present).
-   c. Halt this invocation after rendering the table — do not proceed to step 1.
+0. **Bare invocation — no argument given.** If this skill was invoked with no argument at all, do
+   not proceed to step 1. Instead:
+   a. Run `bash "$([ -f skills/j-playbook/scripts/playbook-list.sh ] && echo skills/j-playbook/scripts/playbook-list.sh || echo node_modules/@jenga-ai/agent/skills/j-playbook/scripts/playbook-list.sh)" render`.
+      It reads `skills/jenga/scripts/load-playbooks.sh`'s existing full-catalog output and prints one
+      line per playbook in the `ranked_list` object type (`templates/playbook-types.json`):
+      `<n>. <id> — <name> (<built-in|project>) · steps: <step> -> <step> -> ...`.
+   b. Print its output **verbatim**, as the numbered list it is — do not re-render it as a table or
+      add a trailing menu line. If the output is empty, say plainly that no playbooks are available.
+      On exit `2` (loader failure) surface the script's stderr rather than an empty list.
+   c. Halt this invocation after printing the list — do not proceed to step 1. The user can then
+      re-invoke with `j.playbook <n>` (the list number) or `j.playbook <id>`.
+
+   **Numeric argument.** If the argument is purely numeric (`^[0-9]+$`), it is a list number into
+   the listing above, not an id. Run the same script with `resolve <n>`: exit `0` prints the id of
+   the n-th playbook (same ordering as the listing) — use that as `<id>` in step 1 and proceed
+   exactly as the id path does; exit `1` means the number is out of range, so report the script's
+   stderr (it names the valid range) and halt without proceeding to step 1.
 
 1. **Resolve the id** — invoke `skills/jenga/scripts/load-playbooks.sh lookup "<id>"`
-   (`E53_S06_T02`), where `<id>` is this skill's argument. Branch on the returned `status` field:
+   (`E53_S06_T02`), where `<id>` is this skill's argument (or the id a numeric argument resolved
+   to). Branch on the returned `status` field:
 
    - **`"not_found"`** — no playbook with that id exists. Tell the user plainly that no such
      playbook was found. As a "did you mean" nudge, you may additionally invoke

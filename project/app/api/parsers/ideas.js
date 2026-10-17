@@ -59,4 +59,61 @@ async function readIdeas() {
   return results;
 }
 
-module.exports = { readIdeas };
+const COMMENT_RE = /<!--([\s\S]*?)-->/g;
+
+/**
+ * Parse one idea line into the structured item shape consumed by the dashboard kanban
+ * (E35_S04): { text, state, boardId, rapport }. Tag grammar: skills/j-idea/SKILL.md.
+ * If a line carries both PROMOTED and REJECTED, REJECTED wins: a decline is the later,
+ * more deliberate act than a promotion it overrides.
+ * @param {string} trimmedLine
+ * @returns {{text:string,state:'none'|'promoted'|'rejected',boardId:string|null,rapport:string|null}}
+ */
+function parseIdeaLine(trimmedLine) {
+  let state = 'none';
+  let boardId = null;
+  let rapport = null;
+  let promoted = false;
+  let promotedId = null;
+  let rejected = false;
+
+  for (const m of trimmedLine.matchAll(COMMENT_RE)) {
+    const body = m[1].trim();
+    const rap = body.match(/^rapport:\s*(.+)$/i);
+    if (rap) { rapport = rap[1].trim(); continue; }
+    const pro = body.match(/^PROMOTED(?::\s*(E\d+(?:_S\d+(?:_T\d+)?)?))?$/);
+    if (pro) { promoted = true; promotedId = pro[1] || promotedId; continue; }
+    if (/^REJECTED$/.test(body)) rejected = true;
+  }
+
+  if (rejected) state = 'rejected';
+  else if (promoted) { state = 'promoted'; boardId = promotedId; }
+
+  const text = trimmedLine.replace(COMMENT_RE, '').replace(/\s+/g, ' ').trim();
+  return { text, state, boardId, rapport };
+}
+
+/**
+ * Read project/ideas.md and return one structured item per idea line (read-only).
+ * Same skip rules as readIdeas(). Returns [] if the file is missing or unreadable.
+ * @returns {Promise<Object[]>}
+ */
+async function readIdeaItems() {
+  if (!fs.existsSync(IDEAS_FILE)) return [];
+  let raw;
+  try {
+    raw = fs.readFileSync(IDEAS_FILE, 'utf8');
+  } catch (err) {
+    console.warn(`[ideas] Skipping unreadable file: ${IDEAS_FILE} — ${err.message}`);
+    return [];
+  }
+  const items = [];
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (isSkippableLine(trimmed)) continue;
+    items.push(parseIdeaLine(trimmed));
+  }
+  return items;
+}
+
+module.exports = { readIdeas, readIdeaItems };
