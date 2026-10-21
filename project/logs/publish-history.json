@@ -734,5 +734,61 @@
     "dist_tag": null,
     "result": "pass",
     "reason": null
+  },
+  {
+    "id": "658f4bd9-2323-4177-858c-10fd8b59a082",
+    "version": "v4.2.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-10-17T09:47:53Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "approved",
+    "git_tag": "v4.2.0",
+    "commit_sha": "5b6d4d56e0cd0a93bfcd91917da3227b557edce1",
+    "stage_id": "b438d6eb-0fda-41e0-b347-66bfc1db948e",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": "Backfilled: approved outside /publish; approval time not recorded. npm dist-tag latest confirmed at 4.2.0."
+  },
+  {
+    "event": "gate_failure",
+    "gate": "test",
+    "phase": "pre",
+    "target": "npm-jenga",
+    "date": "2026-10-17T10:33:10Z",
+    "exit_code": 2
+  },
+  {
+    "id": "f5356fd8-e4da-4352-92d7-5447262ac014",
+    "version": "v4.3.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-10-17T11:25:45Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "staged",
+    "git_tag": "v4.3.0",
+    "commit_sha": "21277103c5304e4757c6a17c22e239f7a8f0e629",
+    "stage_id": "e517533a-0cb5-412f-8d90-6bf3f8de61f0",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": null
+  },
+  {
+    "id": "8c1f6d52-3b7e-4a09-9d41-5e2a7b0c4f63",
+    "version": "v4.3.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-10-17T16:31:20Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "approved",
+    "git_tag": "v4.3.0",
+    "commit_sha": "21277103c5304e4757c6a17c22e239f7a8f0e629",
+    "stage_id": "e517533a-0cb5-412f-8d90-6bf3f8de61f0",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": "Backfilled: approved outside /publish. Timestamp is the npm publish time for 4.3.0; npm dist-tag latest confirmed at 4.3.0."
   }
 ]
