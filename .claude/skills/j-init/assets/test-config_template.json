@@ -1,5 +1,8 @@
 {
   "tools": [],
   "commit_prompt_default": "",
-  "commit_scope_map_file": "templates/test-scope-map.json"
+  "commit_scope_map_file": "templates/test-scope-map.json",
+  "test_run_task": "none",
+  "test_run_story": "scoped",
+  "test_run_epic": "full"
 }

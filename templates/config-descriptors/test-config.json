@@ -1,7 +1,7 @@
 {
   "descriptor_version": 1,
   "file": "test-config.json",
-  "description": "The tester's tool stack plus the commit-time test options. The tool list is read-only here and changes only through the tester's user-approval flow; the two commit_* keys are plain strings you can set.",
+  "description": "The tester's tool stack, the commit-time test options and the per-scope test-run policy. The tool list is read-only here and changes only through the tester's user-approval flow; the two commit_* keys and the three test_run_* keys are plain strings you can set.",
   "keys": [
     {
       "key": "tools",
@@ -28,6 +28,33 @@
       "editable": true,
       "default": "templates/test-scope-map.json",
       "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(^|/)\\.\\.(/|$))[^\\\\\\n]+\\.json$"
+    },
+    {
+      "key": "test_run_task",
+      "label": "Task test run",
+      "type": "string",
+      "description": "Which test run must pass before a task is closed: none runs no suite beyond the tester's own tests, scoped runs only the suites mapped from the changed files, full runs the whole catalog.",
+      "editable": true,
+      "default": "none",
+      "allowed": ["none", "scoped", "full"]
+    },
+    {
+      "key": "test_run_story",
+      "label": "Story test run",
+      "type": "string",
+      "description": "Which test run must pass before a story is closed: none runs no suite beyond the tester's own tests, scoped runs only the suites mapped from the changed files, full runs the whole catalog.",
+      "editable": true,
+      "default": "scoped",
+      "allowed": ["none", "scoped", "full"]
+    },
+    {
+      "key": "test_run_epic",
+      "label": "Epic test run",
+      "type": "string",
+      "description": "Which test run must pass before an epic is closed: none runs no suite beyond the tester's own tests, scoped runs only the suites mapped from the changed files, full runs the whole catalog.",
+      "editable": true,
+      "default": "full",
+      "allowed": ["none", "scoped", "full"]
     }
   ]
 }

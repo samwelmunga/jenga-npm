@@ -588,3 +588,128 @@ manual stopgap for pre-manifest and other drift, `E26_S08_T03` added legacy-path
 permanent automatic fix for the same pre-manifest gap, `E26_S09` documents the lifecycle-script
 (`allowScripts`) requirement that all of the above depends on. `E27` owns `j.self-sync` and
 explicitly scopes out consumer install behaviour.
+
+---
+
+## Mirror safety: can /mirror-public alter repo metadata?
+
+**Finding: static audit and mechanism only; empirical confirmation pending run X**
+
+Run X is the next real, user-approved `/mirror-public` run. Nothing below is an empirical result:
+no real mirror run has been observed, and the dry-run cannot stand in for one (it never pushes).
+Recorded by `E41_S03_T01`; it closes the mirror-safety item of `E41_S03`.
+
+### 1. Static audit of `skills/j-mirror-public/scripts/mirror.sh` (2101 lines)
+
+A naive `grep -n 'gh '` matches the substring inside comments ("through ", "enough "), so a
+word-boundary form is used for the real check. Both are recorded.
+
+```
+$ grep -nE '(^|[^a-zA-Z_-])gh +(api|repo|release|pr|auth)' skills/j-mirror-public/scripts/mirror.sh
+(no output; exit 1)
+
+$ grep -n 'gh api' skills/j-mirror-public/scripts/mirror.sh        (no output; exit 1)
+$ grep -n 'repo edit' skills/j-mirror-public/scripts/mirror.sh     (no output; exit 1)
+$ grep -n 'repo create' skills/j-mirror-public/scripts/mirror.sh   (no output; exit 1)
+$ grep -n 'repo delete' skills/j-mirror-public/scripts/mirror.sh   (no output; exit 1)
+$ grep -n 'repo rename' skills/j-mirror-public/scripts/mirror.sh   (no output; exit 1)
+$ grep -n 'curl' skills/j-mirror-public/scripts/mirror.sh          (no output; exit 1)
+
+$ grep -n 'gh ' skills/j-mirror-public/scripts/mirror.sh           (naive form; comment-only hits)
+376:    # but -fd is enough because we hard-reset above.
+472:# Piped through the same _filter_itemize_changes parser as everything else.
+947:# "all clear" because the suite was piped through `tail -40`, so the grep only
+1421:# through into the normal push path immediately afterward, identically to
+1721:# push paths (plain and --force, which falls through to this same point
+1746:# and --force, which falls through here after its enumeration/confirmation)
+```
+
+Helper scripts called by `mirror.sh` (`compute-publicize-diff.sh` and `mark-publicized.sh`, same
+directory, invoked at lines 2069-2070):
+
+```
+$ grep -nE '(^|[^a-zA-Z_-])gh +|curl|\bgh\b' skills/j-mirror-public/scripts/compute-publicize-diff.sh skills/j-mirror-public/scripts/mark-publicized.sh
+(no output; exit 1)
+```
+
+The only commands in `mirror.sh` that write to the remote (read from the script, not inferred):
+
+| Line | Command | When |
+|---|---|---|
+| 1183 | `git push origin "refs/tags/$RESCUE_TAG"` (a `pre-force-<12 char sha>` rescue tag) | Only on a confirmed `--force` run |
+| 2046 | `git push --force origin "$DEFAULT_BRANCH:refs/heads/$STAGING_BRANCH"` | Every real run |
+
+`STAGING_BRANCH` is `stagingBranch` from the skill config (`skills/j-mirror-public/assets/config.json`:
+`mirror-staging`). A real push therefore lands on `mirror-staging`, never directly on `main`; `main`
+advances only through the public repo's CI workflow fast-forward promotion (the script's own comment
+at lines 2040-2042). The other remote-touching call is the read-only `ls-remote` rescue-tag collision
+check (line 1176).
+
+### 2. Mechanism (reasoning, not an empirical result)
+
+Pushing a branch or a tag transfers git objects and updates refs. The repository description,
+`homepageUrl`, topics and social preview image are repository settings stored GitHub-side, outside
+git objects. A push of refs has no write path to them. One theoretical caveat: a force push to a
+branch cannot recreate or replace the repository itself, and the audit above shows no
+`repo create`/`repo delete`/`repo rename` call anywhere, so no repo re-creation (which would reset
+settings) occurs.
+
+### 3. BEFORE snapshot (captured by the orchestrator 2026-10-21)
+
+From `gh repo view samwelmunga/jenga-npm --json description,homepageUrl,repositoryTopics`:
+
+- description: "Jenga AI is an agentic framework for AI-driven development on large codebases — new projects and existing applications, across multiple repositories. Persistent Epic/Story/Task board, an isolated git worktree per task, and a separate tester agent that runs your test suite before anything is marked done. Works with Claude Code, Copilot, and Codex."
+- homepageUrl: "https://www.npmjs.com/package/@jenga-ai/agent"
+- topics (20): agent, agentic, agents-md, ai, ai-driven-development, claude, claude-code, codex, coding, copilot, development, framework, jenga, kanban, large-codebase, legacy-code, monorepo, software, workflow, jenga-ai
+- social preview: GraphQL `usesCustomOpenGraphImage` true, `openGraphImageUrl`
+  `https://repository-images.githubusercontent.com/1321581321/bcdfd6f1-6df6-4520-be35-2c524b4f9dfb`;
+  the served PNG (1280x640, 605367 bytes) is byte-identical to
+  `project/documentation/assets/jenga-social-preview.png` (uploaded by the user).
+
+The read-only commands were re-run in the `E41_S03_T01` worktree on 2026-10-21 and returned the same
+description, homepageUrl, 20 topics, `usesCustomOpenGraphImage: true` and the same image URL; the
+served image's SHA-256 matched the local asset (`81a6aed1c95a966f4aeacb741bec68b06897eb2367b9b73b10af93236a8d5b54`).
+
+### 4. Social preview caveat
+
+The social preview image is also GitHub-side state outside git objects, so the same mechanism says
+a push cannot change it. This is likewise unverified empirically; the pending run's re-capture covers it.
+
+### 5. Re-capture commands for after run X (all read-only)
+
+```
+gh repo view samwelmunga/jenga-npm --json description,homepageUrl,repositoryTopics
+gh api graphql -f query='{repository(owner:"samwelmunga",name:"jenga-npm"){usesCustomOpenGraphImage openGraphImageUrl}}'
+curl -sL "<openGraphImageUrl from the previous command>" -o /tmp/og.png
+shasum -a 256 /tmp/og.png project/documentation/assets/jenga-social-preview.png
+```
+
+Run X closes this finding only if the diff against section 3 is empty for all four (description,
+homepageUrl, topics, social preview: flag, URL and SHA-256).
+
+### 6. Dry-run observation (2026-10-21, orchestrator; read-only toward the remote)
+
+`mirror.sh --dry-run` aborted: "origin/main (bfc3ebc...) has moved past last-mirror-sync
+(441aafe...). The public repo has commits the mirror did not create. Re-run with --force to
+overwrite." The public `main` tip is `bfc3ebc` "docs(assets): add README logo and social preview
+images". The next real run will hit this safety abort and needs the version-only reconcile or
+`--force`. `--force` pushes a `pre-force-*` rescue tag and would overwrite those public-side asset
+files; that is a file-content matter, not repo metadata.
+
+### 7. Dependency on E51_S03_T05
+
+`check_test_subject_invariant` (defined line 961, called line 1751, before the push at line 2046)
+dies with "refusing to push" when a shipping test file fails in a mirror-shaped tree.
+`tests/mirror-test-subject-invariant.bats` tests 5-7 ("push proceeds") currently fail, tracked as
+`E51_S03_T05` (status Pending on the board). From reading the script, a real mirror run may
+therefore be blocked until that is resolved, so run X may depend on `E51_S03_T05`. No real push was
+attempted to check this.
+
+### 8. If run X shows any diff
+
+No check has shown that a mirror run can overwrite a setting, so no rapport and no
+"reapply after mirror" step is required today. Conditional: if run X shows any diff in section 5,
+write a rapport under `project/rapports/problems/` and add a "reapply after mirror" step here:
+re-set the description, homepage and topics (repository "About" settings, or `gh repo edit`) and
+re-upload `project/documentation/assets/jenga-social-preview.png` (repository Settings, Social
+preview), all through the GitHub UI or an explicit user-approved command.

@@ -47,11 +47,12 @@
 # --------------------------------------
 # REPOINT_SKILL_REFS_EXCEPTIONS below is the ONLY place this script's exception list is
 # defined; every other check in this script calls is_exception() rather than
-# re-listing the names. These three directories keep their bare names permanently
-# (E50_S06/E50's "three permanent exceptions") and are never rewritten to a `j-` form,
+# re-listing the names. These four directories keep their bare names permanently
+# (E50_S06/E50's permanent exceptions; jenga-config added by E68_S04) and are never rewritten to a `j-` form,
 # and never required to have a `j-` twin:
 #   - skills/jenga/                  (root orchestrator command)
 #   - skills/jenga-permission-level/ (root orchestrator command)
+#   - skills/jenga-config/           (root settings command, E68_S04)
 #   - skills/index/                  (not a skill — no SKILL.md, not part of routing)
 #
 # Double-prefix safety

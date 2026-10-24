@@ -114,18 +114,33 @@ except (OSError, UnicodeDecodeError) as exc:
 if not raw.strip():
     sys.exit(0)
 
-try:
-    data = json.loads(raw)
-except (ValueError, RecursionError) as exc:
-    sys.stderr.write("%s: events file %s is malformed: %s\n" % (SELF, path, exc))
-    sys.exit(1)
-
-if not isinstance(data, list):
+# events.json is JSONL: one JSON record per line (project/documentation/event-log-merge-strategy.md).
+# A file still in the legacy array shape is refused with the migration hint, not guessed at.
+if raw.lstrip().startswith("["):
     sys.stderr.write(
-        "%s: events file %s is malformed: expected a JSON array of events, found %s\n"
-        % (SELF, path, type(data).__name__)
+        "%s: events file %s is in the legacy JSON-array shape; convert it with "
+        "scripts/events-log-migrate.sh\n" % (SELF, path)
     )
     sys.exit(1)
+
+lines = raw.split("\n")
+final_line_terminated = raw.endswith("\n")
+data = []
+for lineno, line in enumerate(lines, 1):
+    if not line.strip():
+        continue
+    try:
+        data.append(json.loads(line))
+    except (ValueError, RecursionError) as exc:
+        if lineno == len(lines) and not final_line_terminated:
+            # An unterminated last line can be a writer still mid-append (readers take no lock).
+            # It is not yet a record, so it is not counted. Any other bad line is real damage.
+            break
+        sys.stderr.write(
+            "%s: events file %s is malformed: line %d is not a JSON record (%s)\n"
+            % (SELF, path, lineno, exc)
+        )
+        sys.exit(1)
 
 seen = set()
 out = []

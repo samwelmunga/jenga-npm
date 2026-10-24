@@ -727,6 +727,183 @@ The script suites and the end-to-end suite use stub commands and fixtures under 
 hands discovery over as a hand-written JSON file, so no real discovery runs); the skill suite reads text only and
 executes no gate script and no test command. None runs this repository's real `npm test`.
 
+## Scope test policy
+
+### What it is
+
+The scope test policy says which test run must pass **before a board scope is closed**: a task, a story or an epic. It is
+configured per scope, and it is independent of the commit-time gate above. By default:
+
+| Scope | Key | Default | What runs before it closes |
+|---|---|---|---|
+| Task | `test_run_task` | `none` | Nothing beyond the tests the tester agent writes and runs for the task |
+| Story | `test_run_story` | `scoped` | The suites mapped from the story's changed files |
+| Epic | `test_run_epic` | `full` | The whole `j.test` catalog |
+
+The scripts are the contract: `skills/j-test/scripts/scope-policy.sh` resolves a key to a mode and
+`skills/j-test/scripts/scope-test-gate.sh` runs what the mode asks for. Both headers carry the full detail; this section
+summarises them, and where they disagree the scripts win.
+
+### The three keys and their values
+
+The keys are three more flat top-level strings of `project/configs/test-config.json`, in addition to the two in
+"Configuration". Each takes one of `none`, `scoped` or `full`:
+
+- **`none`**: no suite run beyond the tests the tester agent writes and runs for the item. The gate prints exactly
+  `no suite run (policy none)` and exits 0. Nothing is derived, discovered or run, so the tester's existing flow is unchanged.
+- **`scoped`**: run only the suites mapped from the scope's changed files by `map-scope.sh`, using the same scope map
+  `j.commit` uses (`commit_scope_map_file`, else `templates/test-scope-map.json`).
+- **`full`**: run the whole `j.test` catalog: `discover-tests.sh`, then `build-catalog.sh`, then `run-suites.sh`. The gate
+  adds no exclusion logic of its own; once `E77_S02` lands, manual-only tests stay excluded because the same discovery,
+  catalog and run scripts are reused.
+
+**An absent key reads as its default.** A `test-config.json` written before these keys existed lacks them, and that is not
+an error: `scope-policy.sh` prints the default silently. A key that is present but holds anything other than `none`,
+`scoped` or `full` (another string, the empty string, a number, `null`, an object) reads as the key's default **with one
+warning on stderr** naming the key, the offending value and the default used. An unreadable or malformed
+`test-config.json` is treated the same way. A bad value therefore never skips testing silently, and it never fails the
+gate by itself.
+
+### When it runs
+
+At the boundary the key is named for, and always before the status that closes the scope is written:
+
+- **Task**: after the tests the tester wrote and ran for the task, before the tester writes the task's judged status.
+- **Story**: in the tester's story-closing pass, before it writes the story's `Passed` or `Passed with remarks`. A
+  mid-story pass does not call the story gate.
+- **Epic**: before the scrum master's rollup writes the epic's closing status. The scrum master requests the gate from
+  the tester; it does not run suites itself.
+
+### Who runs it, and what a failure does
+
+The **tester** runs the gate, because it owns test running. The **scrum master** requests the epic gate from the tester
+before the epic's closing status. The **developer never runs tests** and never runs the gate. The gate itself never writes
+board status; the caller applies the rule:
+
+| Exit | Task | Story | Epic |
+|---|---|---|---|
+| `0` (satisfied, including policy `none`) | Continue to the judged status | Continue to the story's closing status | Continue the rollup |
+| `1` (a suite failed) | `Failed` plus a problem rapport naming the failed suites | `Failed` plus a rapport, and no `story_rollup` trigger | Stays `In Progress`, no `date_completed`, plus a rapport |
+| `2` or `3` (usage or tooling error) | Reported as an error with a rapport; never a pass | Reported as an error with a rapport; the story's closing status is not written | Reported to the user; no rollup. Never a pass |
+
+A failing policy run therefore prevents closing the scope. It never passes silently.
+
+### How to change it
+
+```bash
+jenga config get test-config.test_run_story
+jenga config set test-config.test_run_story full
+jenga config set test-config.test_run_task scoped
+```
+
+`jenga config` validates the value against the descriptor `templates/config-descriptors/test-config.json`, where the
+three keys are editable strings with `allowed: ["none", "scoped", "full"]`. `jenga config set test-config.test_run_story banana`
+is refused with exit 4 and the file is not changed. Projects scaffolded by `j.init` carry all three keys with the
+defaults above; for an older file, `jenga config set` creates the key. Usage and exit codes are in `project/configs/README.md`.
+
+### Which changed files a scope is derived from
+
+For `scoped`, the gate derives the scope's changed files from the git history, unless you give it an explicit range:
+
+- **Commits are found by subject** on the history of `HEAD` of the repository at `--root`: a subject starting
+  `task(<task id>)`, or the merge commit of a task branch (`Merge branch '<task id>...'`). Other commits that merely
+  mention the id (rapports, board bookkeeping, `chore(<id>): ...`) are not part of the change.
+- **Each commit contributes the files of its diff against its first parent**, so a merge commit contributes everything its
+  branch brought in. The changed files are the unique union over the commits, handed to `map-scope.sh` in one call with its
+  additive `--files-from` input.
+- **Task**: the commits of that one task id. **Story**: the union over the tasks in the story file's `tasks:` list.
+  **Epic**: the union over the stories in the epic file's `stories:` list, each expanded to its tasks. The lists are read
+  from the board **under `--root`**, never from the directory of the script. When a board file or its list is missing
+  (a worktree that does not carry uncommitted board files, a project that keeps no board), the id prefix is used instead:
+  story `E##_S##` matches task ids `E##_S##_T<n>`, and epic `E##` matches `E##_S<n>_T<n>`.
+- **`--range <a..b>` or `--rev <commit>`** replaces all of the above for any scope and is passed to `map-scope.sh`
+  verbatim. At most one of the two may be given; both are ignored under `none` and `full`.
+
+The consequence for the caller is where the gate runs from. For the task boundary the tester runs it from the task's
+worktree (`--root <worktree>`, the sender object's `worktree`) or passes an explicit `--rev` / `--range`, because the
+task's commits sit on an unmerged task branch. Story and epic boundaries run against the merged state (the main checkout,
+the default `--root`), or with `--root <worktree>` when the closing task's branch is still unmerged.
+
+### The scripts and their exit codes
+
+```bash
+bash skills/j-test/scripts/scope-policy.sh get <task|story|epic> [--root <dir>] [--config <file>]
+bash skills/j-test/scripts/scope-test-gate.sh --scope <task|story|epic> --id <E##[_S##[_T##]]> \
+    [--range <a..b> | --rev <commit>] [--root <dir>] [--config <file>] [--json]
+```
+
+`scope-policy.sh` prints exactly one token (`none`, `scoped` or `full`) on stdout. Its exit code is `0` or `2`; exit 1 is
+deliberately unused, because a resolver that could fail would let a scope be closed without the gate it asks for.
+
+| `scope-policy.sh` exit | Meaning |
+|---|---|
+| `0` | Resolved: one mode token on stdout, including every fallback to the default |
+| `2` | Usage error: no or unknown subcommand, missing or unknown scope, extra argument, unknown option, an option without its argument, a `--root` that is not a directory |
+
+| `scope-test-gate.sh` exit | Meaning |
+|---|---|
+| `0` | Gate satisfied: policy `none`, or every suite that ran passed |
+| `1` | At least one suite failed; the caller must not close the scope. Reserved for test failures, so a caller can tell "tests failed" from "the gate broke" |
+| `2` | Usage error, nothing ran: a missing, unknown or repeated option, a missing or unknown `--scope`, a missing `--id` or one malformed for the scope, both `--range` and `--rev`, a range or revision git rejects, a `--root` that is not a directory |
+| `3` | Infrastructure error, nothing was verified: `jq` or `git` missing, no git repository for a scoped derivation, a helper script or the root not found, discovery, catalog, mapping or run failing for a reason other than a test failing, or a full (or fallback) catalog with no runnable suite |
+| `130` | Interrupted while the suites ran: `run-suites.sh`'s code, passed through unchanged |
+
+With `--json` the gate prints one compact JSON object on stdout whenever it reached a verdict (exit 0, 1 or 130) and sends
+the human text and the suites' own output to stderr. The object has `scope`, `id`, `mode` (what the policy asked for),
+`effective_mode` (what ran), `fallback_reason` (`null`, `"no-commits"` or `"no-mapped-suites"`), `suites_run`, `passed`,
+`failed`, `suites` and `exit_code`.
+
+### Zero mapped suites, and no commits
+
+A `scoped` run never exits 0 having executed nothing. Two cases fall back to the full catalog, each with an explicit line
+on stdout and `effective_mode` `full` in the JSON:
+
+```text
+scoped policy: no commits found for <id>; falling back to the full catalog          (fallback_reason "no-commits")
+scoped policy: no suite maps to the changed files; falling back to the full catalog (fallback_reason "no-mapped-suites")
+```
+
+The fallback then behaves exactly like `full`, including exit 3 for an empty catalog. This is the safe direction (more
+tests, not fewer), and it is always surfaced: the tester copies the line and the reason into its status note and its
+report, and the scrum master passes a fallback on to the user as a note rather than a failure.
+
+### Interplay with the `j.commit` gate
+
+The two are independent. The commit gate runs at commit time and is steered by `commit_prompt_default`; the scope test
+policy runs at the close of a task, story or epic and is steered by the three keys above. Neither is steered by the other's
+keys, and changing one never changes the other. Both reuse the same discovery, mapping, catalog and run scripts and the same
+scope map (`commit_scope_map_file`), so a better project scope map improves both. Once `E77_S02` lands, manual-only tests
+stay excluded from both for the same reason: the exclusion lives in the shared scripts, not in either gate.
+
+### Troubleshooting the scope test gate
+
+**The gate exits 3.** Nothing was verified, so the scope must not close on it. Read the stderr message: the script names
+the cause. The usual ones are `jq` or `git` missing from `PATH`; a `scoped` policy run outside a git repository; the root
+or a helper script (`scope-policy.sh`, `discover-tests.sh`, `build-catalog.sh`, `map-scope.sh`, `run-suites.sh`) not
+found; a scope map that is missing or invalid (the same causes as "A configured scope map is missing or invalid" below);
+or a `full` run, or a fallback to one, whose catalog has no runnable suite (see "No suites found"). Fix the cause and run
+the gate again. Exit 2 is different: the invocation itself was wrong, so check `--scope`, `--id` and `--root`.
+
+**A scoped run fell back to the full catalog.** Read `fallback_reason` (or the line the gate printed). For
+`no-mapped-suites`, the changed files matched no rule of the scope map, as in "A scoped run maps nothing": add a rule to a
+project scope map (see "A project scope map") or accept the full run. For `no-commits`, the gate found no
+`task(<id>)` commit on the history of `HEAD` at `--root`. For a task this usually means the gate ran from the wrong
+checkout: run it with `--root <worktree>`, or pass `--rev` / `--range`. For a story or an epic, check that the task
+branches are merged into the checkout being used, or pass `--root <worktree>` or `--range`.
+
+**A policy value set in the main checkout is not seen.** With `--root <worktree>` the gate reads `test-config.json` from
+that worktree, so a `jenga config set` made only in the main checkout and not yet committed is not there, and the defaults
+apply (`none`, `scoped`, `full`). Commit the config change so the worktree carries it, or run the gate against the
+checkout where you set it.
+
+**A scoped run is very large.** The shipped scope map maps by file type: its `**/*.sh` rule maps a changed shell script to
+every `tests/**/*.bats` file, so in a repository like this one a change to a single script selects a very large suite.
+That is the shipped map being generic, not a malfunction. A project that wants a finer mapping supplies its own scope map
+through `commit_scope_map_file` (see "A project scope map"), which both this policy and the `j.commit` gate then use.
+
+**The run was interrupted.** The gate returns `run-suites.sh`'s exit 130 unchanged. Nothing was verified, so the scope
+must not close on it; run the gate again.
+
 ## Troubleshooting
 
 ### No suites found

@@ -4,7 +4,7 @@
 # skills/j-smoke-test/scripts/smoke-test-skills.sh and its SKILL.md / registration.
 #
 # Two kinds of case:
-#   - Synthetic skill trees built under BATS_TEST_TMPDIR with the harness's --root option. These cover each of the five
+#   - Synthetic skill trees built under BATS_TEST_TMPDIR with the harness's --root option. These cover each of the six
 #     structural checks independently, the critical-versus-minor classification, the JSON-lines output and the exit
 #     codes. Nothing here reads the real skills/ directory.
 #   - Cases against the real catalog (run once, in setup_file), asserting the harness covers every skill directory and
@@ -49,6 +49,7 @@ setup() {
   mkdir -p "$ROOT/skills" "$ROOT/agents" "$ROOT/templates" "$ROOT/scripts"
   : > "$ROOT/agents/developer.md"
   : > "$ROOT/agents/scrum-master.md"
+  printf '%s\n' 'skills/j-convert/' 'skills/j-mirror-public/' 'skills/commit/' > "$ROOT/.publicignore"
 }
 
 # --- helpers -------------------------------------------------------------------------------------------------------
@@ -757,4 +758,152 @@ frontmatter() {
   assert_contains "$header" "SEVERITY BAR"
   assert_contains "$header" "critical"
   assert_contains "$header" "minor"
+}
+
+# --- check 6: references to skills that never ship -------------------------------------------------------------------
+
+@test "check 6: a SKILL.md path into a never-shipped skill directory is critical" {
+  skill j-caller <<'EOF'
+---
+name: j.caller
+description: A fixture that points at a skill that never ships.
+---
+
+See skills/j-convert/README.md before you start.
+EOF
+  harness
+  [ "$status" -eq 1 ]
+  finding never-public-path j-caller critical
+  [ "$(count_findings)" -eq 1 ]
+}
+
+@test "check 6: a prose name for a never-shipped skill is minor and does not fail the run" {
+  skill j-caller <<'EOF'
+---
+name: j.caller
+description: A fixture that mentions a skill that never ships.
+---
+
+Afterwards, run /mirror-public to publish.
+EOF
+  harness
+  [ "$status" -eq 0 ]
+  finding never-public-mention j-caller minor
+  [ "$(count_findings)" -eq 1 ]
+}
+
+@test "check 6: a comment in a skill script that names a never-shipped path is minor, not critical" {
+  healthy_skill j-caller j.caller
+  mkdir -p "$ROOT/skills/j-caller/scripts"
+  printf '%s\n' '#!/usr/bin/env bash' '# the twin lives at skills/j-convert/convert_cli.py' 'echo ok' \
+    > "$ROOT/skills/j-caller/scripts/run.sh"
+  harness
+  [ "$status" -eq 0 ]
+  finding never-public-mention j-caller minor
+  [ "$(count_findings)" -eq 1 ]
+}
+
+@test "check 6: an executable line in a skill script that runs a never-shipped path is critical" {
+  healthy_skill j-caller j.caller
+  mkdir -p "$ROOT/skills/j-caller/scripts"
+  printf '%s\n' '#!/usr/bin/env bash' 'bash skills/j-mirror-public/scripts/mirror.sh --dry-run' \
+    > "$ROOT/skills/j-caller/scripts/run.sh"
+  harness
+  [ "$status" -eq 1 ]
+  finding never-public-path j-caller critical
+}
+
+@test "check 6: a never-shipped skill is not judged, since nothing it says reaches a consumer" {
+  skill j-mirror-public <<'EOF'
+---
+name: j.mirror-public
+description: A fixture for a skill that never ships.
+---
+
+Run /self-sync, then skills/j-convert/convert_cli.py.
+EOF
+  harness
+  [ "$status" -eq 0 ]
+  [ "$(count_findings)" -eq 0 ]
+}
+
+@test "check 6: ordinary uses of a never-shipped word are not references" {
+  skill j-caller <<'EOF'
+---
+name: j.caller
+description: A fixture with ordinary words.
+---
+
+Keep the strategy notes in data/train/strategy.md and the docs/strategy page.
+EOF
+  harness
+  [ "$status" -eq 0 ]
+  [ "$(count_findings)" -eq 0 ]
+}
+
+@test "check 6: a skill newly blocked in .publicignore is never-shipped, with no harness edit" {
+  printf '%s\n' 'skills/j-newthing/' >> "$ROOT/.publicignore"
+  skill j-caller <<'EOF'
+---
+name: j.caller
+description: A fixture that points at a skill blocked after the harness was written.
+---
+
+See skills/j-newthing/README.md before you start.
+EOF
+  harness
+  [ "$status" -eq 1 ]
+  finding never-public-path j-caller critical
+}
+
+@test "check 6: a bare-name entry in .publicignore does not make the canonical skill never-shipped" {
+  skill j-caller <<'EOF'
+---
+name: j.caller
+description: A fixture that names the canonical commit skill.
+---
+
+Finish with /commit or j.commit once the tests pass.
+EOF
+  harness
+  [ "$status" -eq 0 ]
+  [ "$(count_findings)" -eq 0 ]
+}
+
+# E28_S19_T01: the shared never-public rule (scripts/never-public-refs.sh), exercised with a synthetic .publicignore.
+npr() { # npr <script body>: source the shared rule and run the body in a fresh bash
+  "$BASH_BIN" -c ". '$REPO_ROOT/scripts/never-public-refs.sh'; $1"
+}
+
+@test "never-public-refs: the set comes from the given .publicignore, bare-name entries are ignored" {
+  run npr "never_public_load '$ROOT/.publicignore'; echo \"\$NEVER_PUBLIC_NAMES\""
+  [ "$status" -eq 0 ]
+  [ "$output" = "convert|mirror-public" ]
+}
+
+@test "never-public-refs: path, /name, j.name and j-name references are all recognised; others are not" {
+  run npr "never_public_load '$ROOT/.publicignore'
+    p() { printf '%s\n' \"\$2\" | grep -qE \"\$1\" && echo hit || echo miss; }
+    p \"\$NEVER_PUBLIC_PATH_RE\" 'cat skills/j-convert/run.sh'
+    p \"\$NEVER_PUBLIC_NAME_RE\" 'run /convert now'
+    p \"\$NEVER_PUBLIC_NAME_RE\" 'run j.convert now'
+    p \"\$NEVER_PUBLIC_BARE_RE\" 'steps: \"j-convert\"'
+    p \"\$NEVER_PUBLIC_NAME_RE\" 'run /converter now'
+    p \"\$NEVER_PUBLIC_PATH_RE\" 'skills/j-commit/run.sh'"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(printf 'hit\nhit\nhit\nhit\nmiss\nmiss')" ]
+}
+
+@test "never-public-refs: classification, default keeps name hits minor, strict makes them critical" {
+  run npr "never_public_severity path 'bash skills/j-convert/a.sh'
+    never_public_severity path '# see skills/j-convert/a.sh'
+    never_public_severity name 'run /convert'
+    never_public_severity name 'run /convert' 0 1
+    never_public_severity name '// run /convert' 0 1"
+  [ "$output" = "$(printf 'critical\nminor\nminor\ncritical\nminor')" ]
+}
+
+@test "never-public-refs: with no .publicignore the set is empty" {
+  run npr "never_public_load '$BATS_TEST_TMPDIR/absent'; [ -z \"\$NEVER_PUBLIC_NAMES\" ] && ! never_public_skill convert && echo empty"
+  [ "$output" = "empty" ]
 }

@@ -123,12 +123,19 @@ A read-only key is listed with its value summarised (for example `38 items`, nev
 `test-config.json` is the tester's tool stack. Its `tools` array is changed only through the tester's
 user-approval flow (`agents/tester.md`, Tool Stack Management), so `tools` stays `editable: false` with that
 pointer. Since `E72_S01_T04` the file also carries the two settings `j.commit`'s commit-time test prompt reads
-(`E72_S04`), both editable strings:
+(`E72_S04`), both editable strings. Since `E72_S06_T01` it carries three more editable strings, the per-scope test
+policy (`test_run_task`, `test_run_story`, `test_run_epic`):
 
 | Key | Type | Default | Legal values |
 |-----|------|---------|--------------|
 | `commit_prompt_default` | string | `""` | `""`, `skip`, `scoped`, `full` (enforced by `allowed`) |
 | `commit_scope_map_file` | string | `templates/test-scope-map.json` | a relative path ending in `.json` (enforced by `pattern`) |
+| `test_run_task` | string | `none` | `none`, `scoped`, `full` (enforced by `allowed`) |
+| `test_run_story` | string | `scoped` | `none`, `scoped`, `full` (enforced by `allowed`) |
+| `test_run_epic` | string | `full` | `none`, `scoped`, `full` (enforced by `allowed`) |
+
+The three `test_run_*` keys say which test run must pass before a task, a story or an epic is closed; what each value
+runs and how the gate behaves is documented in the "Scope test policy" section of `project/documentation/test-runner.md`.
 
 - **`commit_prompt_default`**: the answer the prompt assumes without asking. The empty string is a legal value and
   means **no recorded default: always prompt**, so `""` is in `allowed` on purpose. Setting it to `skip`, `scoped`

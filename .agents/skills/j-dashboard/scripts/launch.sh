@@ -2,22 +2,17 @@
 # -----------------------------------------------------------------------------
 # skills/j-dashboard/scripts/launch.sh
 #
-# Thin wrapper around project/app's existing `dashboard:start` / `dashboard:open`
-# npm scripts (which themselves shell into
-# project/app/ui/scripts/dashboard-start.cjs / dashboard-open.cjs). This script
-# introduces NO server-launch, health-check, or browser-open logic of its own —
-# it only resolves paths and forwards flags to those existing scripts, per
-# E47_S04_T01's scope (the default, no-`--snapshot` launch mode of `j.dashboard`).
+# Thin wrapper around project/app's `dashboard:start` / `dashboard:open` npm
+# scripts (which themselves run project/app/ui/scripts/dashboard-start.cjs).
+# It resolves the app directory and forwards flags unchanged; it introduces NO
+# server-launch logic of its own.
 #
 # Usage:
-#   launch.sh start [--port <n>] [--serve-app]
+#   launch.sh start [--port <n>] [--api-only]
 #   launch.sh open  [--port <n>]
-#   launch.sh both  [--port <n>] [--serve-app]
 #
-# `both` starts the server in the background (it is long-running / blocking by
-# design — see dashboard-start.cjs), waits briefly, then runs `open`, which
-# itself health-checks before opening the browser and always exits 0 regardless
-# of outcome (dashboard-open.cjs's own documented contract).
+# `start` serves the UI alongside the API unless --api-only is given. `open`
+# does the same and also opens the dashboard in the browser.
 #
 # Same symlink-resolution + repo-root derivation pattern used elsewhere in this
 # skill library (e.g. skills/j-mirror-public/scripts/compute-publicize-diff.sh),
@@ -29,14 +24,13 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: launch.sh <start|open|both> [--port <n>] [--serve-app]
+Usage: launch.sh <start|open> [--port <n>] [--api-only]
 
-  start       Run `npm run dashboard:start` in project/app.
-  open        Run `npm run dashboard:open` in project/app.
-  both        Start the server in the background, then open the browser.
+  start       Run `npm run dashboard:start` in project/app (API + UI).
+  open        Run `npm run dashboard:open` in project/app (API + UI, then the browser).
 
   --port <n>       Forwarded unchanged to the underlying npm script.
-  --serve-app      Forwarded unchanged to `dashboard:start` only (ignored by `open`).
+  --api-only       Forwarded unchanged; launches the API without the UI.
 EOF
 }
 
@@ -54,9 +48,9 @@ MODE="$1"
 shift
 
 case "$MODE" in
-  start|open|both) ;;
+  start|open) ;;
   -h|--help) usage; exit 0 ;;
-  *) usage >&2; die "unknown mode: $MODE (expected start|open|both)" ;;
+  *) usage >&2; die "unknown mode: $MODE (expected start|open)" ;;
 esac
 
 # -----------------------------------------------------------------------------
@@ -72,7 +66,6 @@ while [ -h "$SCRIPT_PATH" ]; do
   esac
 done
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
-SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # project/app is NOT always at the repo root: in a consumer install it ships
 # inside the package, under node_modules/@jenga-ai/agent/. resolve-app-dir.sh
@@ -83,39 +76,16 @@ SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_DIR="$(bash "$SCRIPT_DIR/resolve-app-dir.sh" --marker "package.json" --from "$(pwd)")" \
   || die "could not locate the dashboard app directory (see message above)"
 
-# Remaining args (--port <n>, --serve-app) are forwarded verbatim via the
-# "${EXTRA_ARGS[@]:-}" default-expansion form, not the bare "${EXTRA_ARGS[@]}"
-# form. On bash < 4.4 — notably including macOS's stock /bin/bash 3.2, which
-# `#!/usr/bin/env bash` resolves to by default on that platform — expanding
-# an empty array under `set -u` ("nounset") throws "unbound variable"; the
-# `:-` default (even though the default itself is empty) is an explicit,
-# nounset-safe form that keeps `set -u` in force everywhere in this script.
-# This preserves the `-- ` separator unconditionally (npm run <script> --
-# with nothing after it is a harmless no-op, and always including it avoids
-# reintroducing the nested-npm-run flag-forwarding bug this epic already hit
-# once — see epic E47's own history) rather than branching on argument count.
-EXTRA_ARGS=("$@")
-
-run_start() {
-  (cd "$APP_DIR" && npm run dashboard:start -- "${EXTRA_ARGS[@]:-}")
-}
-
-run_open() {
-  (cd "$APP_DIR" && npm run dashboard:open -- "${EXTRA_ARGS[@]:-}")
-}
+# Forwarded verbatim via the "${FORWARD_ARGS[@]:-}" default-expansion form, not
+# the bare "${FORWARD_ARGS[@]}" form: on bash < 4.4 (macOS's stock /bin/bash 3.2
+# included), expanding an empty array under `set -u` throws "unbound variable".
+FORWARD_ARGS=("$@")
 
 case "$MODE" in
   start)
-    run_start
+    (cd "$APP_DIR" && npm run dashboard:start -- "${FORWARD_ARGS[@]:-}")
     ;;
   open)
-    run_open
-    ;;
-  both)
-    run_start &
-    START_PID=$!
-    echo "Started dashboard server in background (pid $START_PID)."
-    sleep 1
-    run_open
+    (cd "$APP_DIR" && npm run dashboard:open -- "${FORWARD_ARGS[@]:-}")
     ;;
 esac

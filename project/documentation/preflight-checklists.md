@@ -426,7 +426,17 @@ remove that run's tick). It is idempotent and does not need the registry, so a t
 can still be cleared. Deleting a state file by hand is always safe: the worst outcome is re-evaluation.
 
 **Corruption.** An unreadable or malformed state file reads as unticked with a warning on stderr, never as a
-pass; the next tick of that file moves it aside to `<file>.corrupt` and starts a fresh one.
+pass. Writing draws a line that reading does not, and the distinction is which failure happened:
+
+- **Malformed** — the bytes were read and are not a usable store (not JSON, wrong shape). This is real
+  corruption, so the next tick moves the file aside to `<file>.corrupt` and starts a fresh one.
+- **Unreadable** — the bytes could not be read at all (`EIO`, `EACCES`, `ENOMEM`, a vanished mount). This is no
+  evidence the store is bad; it is probably intact and holding other writers' ticks. `tick` therefore refuses:
+  it leaves the file exactly as it was, records nothing, and exits 8 (`--clear` likewise reports that the tick
+  was *not* removed, rather than guessing "no tick recorded").
+
+Conflating the two was a silent data-loss bug: one transient read error discarded every tick in the file and
+still exited 0 — which, from the caller's side, is indistinguishable from a lost update under a broken lock.
 
 **Known limit.** State is rooted at the resolved project root. A session inside a git worktree resolves that
 worktree's own tree, so its ticks are not shared with the main tree unless `JENGA_PROJECT_ROOT` points both at

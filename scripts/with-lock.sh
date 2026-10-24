@@ -31,7 +31,9 @@
 #   WITH_LOCK_POLL_SECONDS      Poll interval while waiting (default: 0.2)
 #   WITH_LOCK_STALE_SECONDS     Age after which a still-held lock is treated
 #                               as abandoned (crashed holder) and reclaimed
-#                               (default: 60)
+#                               (default: 60). A lock whose age cannot be
+#                               established is never reclaimed -- see
+#                               maybe_reclaim_stale_lock.
 #
 # Exit codes:
 #   0    lock acquired, command ran, exit code is the command's own
@@ -83,6 +85,14 @@ maybe_reclaim_stale_lock() {
   local mtime now age
   mtime="$(lock_mtime_epoch)" || return 0
   now="$(now_epoch)"
+  # Fail CLOSED on any timestamp that is not a plain non-negative integer. Bash arithmetic treats an empty
+  # (or unset) operand as 0, so an empty mtime would make `age` the current epoch -- about 1.79e9, which is
+  # >= every possible STALE_SECONDS. The reclaim below would then rm -rf a LIVE lock directory and let a
+  # second writer straight into the critical section, breaking the one guarantee this script exists to
+  # provide, and doing it silently. A lock whose age we cannot establish is a lock we do not touch: the
+  # cost of being wrong here is a caller that waits out its timeout and reports it, not corrupted state.
+  case "$mtime" in ''|*[!0-9]*) return 0 ;; esac
+  case "$now" in ''|*[!0-9]*) return 0 ;; esac
   age=$(( now - mtime ))
   if [ "$age" -ge "$STALE_SECONDS" ]; then
     echo "with-lock: reclaiming stale lock '$LOCK_DIR' (age ${age}s >= ${STALE_SECONDS}s)" >&2

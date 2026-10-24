@@ -28,9 +28,9 @@
  *   skills/j-<name>/  (directory)  <->  name: j.<name>  (frontmatter)  <->  <name>  (allow-listed
  *   identifier, after extractName's /^j[.:]/i strip)
  *
- * Three permanent exceptions skip the `j-` prefix on all three legs of that mapping and keep their
+ * Four permanent exceptions skip the `j-` prefix on all three legs of that mapping and keep their
  * bare form everywhere: `jenga`, `jenga-permission-level` (both deliberately excluded from twin
- * generation, E50_S06), and `index` (not a skill — no SKILL.md, not part of routing). Every other
+ * generation, E50_S06), `jenga-config` (E68_S04), and `index` (not a skill — no SKILL.md, not part of routing). Every other
  * skill under `skills/` is expected to satisfy the mapping above once E50_S15 lands (see that
  * story's frontmatter-rewrite scope) — see the note below on the transitional state this generator
  * currently has to tolerate.
@@ -69,8 +69,8 @@ const DEFAULT_PACKAGE_ROOT = join(__dirname, "..");
  * header (`directory <-> frontmatter name: <-> allow-listed identifier`): given a SKILL.md's raw
  * frontmatter `name:` value, it returns the bare identifier that goes into the allow-list. For a
  * normal skill (post-E50_S15) that value is `j.<name>` and this strips to `<name>`, matching the
- * `skills/j-<name>/` directory it was read from with the `j-` prefix removed. For the three
- * permanent exceptions (`jenga`, `jenga-permission-level`, `index`) the frontmatter carries no
+ * `skills/j-<name>/` directory it was read from with the `j-` prefix removed. For the four
+ * permanent exceptions (`jenga`, `jenga-permission-level`, `jenga-config`, `index`) the frontmatter carries no
  * prefix at all and this is a no-op, matching their bare directory name directly.
  *
  * Transitional note (pre-E50_S15): as of E50_S12, most `skills/j-<name>/SKILL.md` twins still

@@ -24,6 +24,7 @@ examples:
 
 - It **never writes board status** (no task, story or epic status) and never replaces the tester agent. A `j.test` result is information for the user, not a verdict on any board item.
 - The developer agent never invokes it on its own: the developer never runs tests (see `CLAUDE.md`).
+- Per-scope test-run policy (which run must pass before a task, story or epic closes) is a separate mechanism owned by the tester agent: see `scope-policy.sh` and `scope-test-gate.sh` in `skills/j-test/scripts/` and the "Scope test policy" section of `project/documentation/test-runner.md`.
 - Blank input means **all suites**: running the full suite is the default.
 
 ## Instructions

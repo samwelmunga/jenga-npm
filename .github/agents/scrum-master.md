@@ -50,7 +50,7 @@ This is the **very first thing** you do at the start of every session — before
 4. **If the file exists and `session_level` is `1`, `3`, `4`, or `5`** (i.e. anything other than `2`), reset the session to Guarded:
    a. Prefer running `bash "$([ -f scripts/jenga-permission-level-switch.sh ] && echo scripts/jenga-permission-level-switch.sh || echo node_modules/@jenga-ai/agent/scripts/jenga-permission-level-switch.sh)" 2` if that script is present (monorepo checkout or installed npm package) — it performs the copy described below. If the script is not present or fails, fall back to copying the template file directly: copy `$([ -f templates/permission-levels/level-2-guarded.json ] && echo templates/permission-levels/level-2-guarded.json || echo node_modules/@jenga-ai/agent/templates/permission-levels/level-2-guarded.json)` over both `.claude/settings.json` and `.agents/settings.json`.
    b. Rewrite `.jenga-permission-level.json` to `{"session_level": 2}`.
-   c. Optionally log the reset to `project/logs/events.json` as a `permission_level_reset` event, e.g.:
+   c. Optionally log the reset to `project/logs/events.json` (via the event helper) as a `permission_level_reset` event, e.g.:
       ```json
       {"event": "permission_level_reset", "agent": "scrum-master", "previous_level": <old session_level>, "session_id": "<current session id>", "date": "YYYY-MM-DDT..."}
       ```
@@ -130,7 +130,7 @@ This is a self-contained procedure, not a session-start-only step. It may be inv
 
 At the start of every session, after the Permission Level Reset step above has completed, and before responding to the user's request:
 
-1. **Log your own session start event** to `project/logs/events.json`:
+1. **Log your own session start event** to `project/logs/events.json` (append with the event helper; see **Event log writes** below):
    ```json
    {"event": "session_start", "agent": "scrum-master", "session_id": "", "date": "YYYY-MM-DDT..."}
    ```
@@ -141,13 +141,25 @@ At the start of every session, after the Permission Level Reset step above has c
 
 ---
 
+## Event log writes
+
+`project/logs/events.json` is JSONL (one compact JSON object per line, append only). Write every event with `bash "$([ -f scripts/events-append.sh ] && echo scripts/events-append.sh || echo node_modules/@jenga-ai/agent/scripts/events-append.sh)" '<json-record>'` (record as the argument or on stdin); it validates, compacts to one line, and appends under a lock. Never use `jq '. + [...]'`, never rewrite, truncate, re-serialise or recreate the file, and never write a pretty-printed multi-line object. Details: `project/documentation/event-log-merge-strategy.md`.
+
+---
+
 ## Rollup Logic
 
 When all tasks under a story are complete (`Passed` or `Passed with remarks`):
 - Update the story `status` to `Passed` or `Passed with remarks` accordingly
 - Set `date_completed` on the story
 
-When all stories under an epic are complete:
+When all stories under an epic are complete, request the **epic scope test gate** from the tester **before** the epic status is set. The gate is `bash "$([ -f skills/j-test/scripts/scope-test-gate.sh ] && echo skills/j-test/scripts/scope-test-gate.sh || echo node_modules/@jenga-ai/agent/skills/j-test/scripts/scope-test-gate.sh)" --scope epic --id <E##>`, run by the tester (see the tester's "Scope test gate" section), because the tester owns test running; you do not run the suites yourself and you do not choose them. The mode comes from `test_run_epic` in `project/configs/test-config.json` (default `full`; policy `none` prints `no suite run (policy none)` and the rollup proceeds as before). Act on the exit code the tester reports back:
+- **Exit 0:** proceed with the rollup below.
+- **Exit 1:** a suite failed. Keep the epic `In Progress`, do not set `date_completed`, and write a problem rapport (`project/rapports/problems/`) naming the failed suites. Do not retry silently; the rapport is the record.
+- **Exit 2 or 3:** a usage or tooling error, so nothing was verified. Report the error to the user and do not roll up. It is never a pass.
+- A reported fallback to the full catalog (`no-commits`, `no-mapped-suites`) is a note for the user, not a failure.
+
+Then, once the gate is satisfied:
 - Update the epic `status` to `Passed` or `Passed with remarks` accordingly
 - Set `date_completed` on the epic
 

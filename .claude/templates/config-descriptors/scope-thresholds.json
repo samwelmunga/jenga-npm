@@ -61,7 +61,7 @@
       "type": "integer",
       "description": "Most developer subagents (one slot per story bundle) one orchestrating session may run at once.",
       "editable": true,
-      "default": 3,
+      "default": 4,
       "min": 1,
       "max": 20,
       "bump_on_change": "threshold_version"
@@ -72,7 +72,7 @@
       "type": "integer",
       "description": "Most in-session tester invocations one orchestrating session may run at once; on a full cap the developer falls back to the handoff queue.",
       "editable": true,
-      "default": 3,
+      "default": 4,
       "min": 1,
       "max": 20,
       "bump_on_change": "threshold_version"

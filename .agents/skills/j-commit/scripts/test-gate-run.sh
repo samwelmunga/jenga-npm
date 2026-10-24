@@ -85,17 +85,18 @@
 #   --choice / --reason   free text, an empty value is null
 #   --failed   `;`-separated names -> failed_suites (empty items dropped, absent -> [])
 #   --caller   interactive | noninteractive, absent -> null
-# The whole read-modify-write runs under `with-lock.sh <events.json> -- bash -c
-# ...` (the pattern of hooks/on_session_end.sh): a `mktemp` file in the SAME
-# directory, then an atomic `mv`. A missing or empty events.json becomes a
-# one-element array. A file that is not exactly one JSON array is left untouched
-# and the call fails (exit 1). `log` writes nothing else: in particular it never
-# writes test-config.json, so a failure choice is never persisted.
+# events.json is JSONL: `log` appends ONE compact line under `with-lock.sh <events.json>
+# -- bash -c ...` (the pattern of hooks/on_session_end.sh). Nothing already in the file
+# is read back or rewritten. A missing or empty events.json simply gains its first line.
+# A legacy array-shaped file (first byte `[`) is left untouched and the call fails
+# (exit 1); convert it with scripts/events-log-migrate.sh first. `log` writes nothing
+# else: in particular it never writes test-config.json, so a failure choice is never
+# persisted. Format: project/documentation/event-log-merge-strategy.md.
 #
 # EXIT CODES
 #   0    run: passed.  log: the event was appended.
-#   1    run: failed.  log: the append failed (events.json not a JSON array, not
-#        writable, jq missing); nothing was written.
+#   1    run: failed.  log: the append failed (events.json in the legacy array shape,
+#        not writable, jq missing); nothing was written.
 #   2    usage error, a refused scoped plan, or a run that could not execute
 #        (see the note on the result line above)
 #   3    full: no runnable suite (unavailable)
@@ -407,24 +408,8 @@ EOF
 
 # ---- log -----------------------------------------------------------------------
 
-# The locked read-modify-write, run through `bash -c` with positional arguments
-# (never interpolated into the script text), as hooks/on_session_end.sh does.
-APPEND_EVENT_SCRIPT=$(cat <<'EOS'
-events_log="$1"
-entry="$2"
-tmp_file=$(mktemp "$(dirname "$events_log")/events_tmp.XXXXXX") || exit 1
-trap 'rm -f "$tmp_file"' EXIT
-if [ -s "$events_log" ]; then
-  jq -s --argjson e "$entry" \
-    'if length == 1 and (.[0] | type == "array") then .[0] + [$e] else error("events.json is not a single JSON array") end' \
-    "$events_log" > "$tmp_file" || exit 1
-else
-  jq -n --argjson e "$entry" '[$e]' > "$tmp_file" || exit 1
-fi
-[ -s "$tmp_file" ] || exit 1
-mv "$tmp_file" "$events_log" || exit 1
-EOS
-)
+# The append goes through the shared helper scripts/events-append.sh (E75_S01), which holds the
+# lock, validates the record and refuses a legacy array-shaped log.
 
 # Prints the logs directory, or nothing when it cannot be resolved.
 logs_dir() {
@@ -445,7 +430,7 @@ logs_dir() {
 }
 
 cmd_log() {
-  local action="" choice="" reason="" failed="" caller="" root="" dir events entry date_now rc=0 locker
+  local action="" choice="" reason="" failed="" caller="" root="" dir events entry date_now rc=0 appender
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --action) need_value "$1" $#; action="$2"; shift 2 ;;
@@ -484,12 +469,12 @@ cmd_log() {
      caller: (if $caller == "" then null else $caller end),
      date: $date}')" || { err "could not build the event"; exit 1; }
 
-  locker="$(find_script scripts/with-lock.sh)" || { err "scripts/with-lock.sh not found; the event was not written"; exit 1; }
-  bash "$locker" "$events" -- bash -c "$APPEND_EVENT_SCRIPT" _ "$events" "$entry" || rc=$?
+  appender="$(find_script scripts/events-append.sh)" || { err "scripts/events-append.sh not found; the event was not written"; exit 1; }
+  bash "$appender" --file "$events" "$entry" || rc=$?
   case "$rc" in
     0) exit 0 ;;
     2) err "could not acquire the lock on $events; the event was not written"; exit 4 ;;
-    *) err "could not append to $events (it must be a single JSON array); nothing was written"; exit 1 ;;
+    *) err "could not append to $events (it must be JSONL, one JSON object per line); nothing was written"; exit 1 ;;
   esac
 }
 

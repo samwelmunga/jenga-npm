@@ -403,6 +403,9 @@ external_refs: []"
 }
 
 @test "still rejects invalid YAML in a file that has external_refs" {
+  # validate-board.sh's strict-YAML gate needs PyYAML; without it the gate is skipped (with a
+  # warning on stderr) and this shape is genuinely not rejected, so a skip is the honest result.
+  python3 -c 'import yaml' 2>/dev/null || skip "PyYAML is not installed: validate-board.sh's strict-YAML gate is skipped (install python3-yaml / PyYAML)"
   write_item "E99_S01_badyaml.md" "$STORY_BASE
 external_refs:
 $JIRA_ENTRY

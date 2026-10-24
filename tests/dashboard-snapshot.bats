@@ -648,3 +648,53 @@ EOF
   [ ! -f "$BATS_TEST_TMPDIR/fail-result.html" ]
   ! printf '%s\n' "$output" | grep -q '^data:text/html;base64,'
 }
+
+# -----------------------------------------------------------------------------
+# Dark mode survives bundling (E47_S07_T06)
+#
+# The pre-paint theme script (index.html) and the dark selectors (tokens.css)
+# must reach the exported snapshot, because j.dashboard-share uploads that same
+# file. These use the REAL dist, not the fixture: the fixture's index.html has
+# no theme script, so it could never catch the bundler dropping or reordering one.
+# -----------------------------------------------------------------------------
+
+@test "UI source index.html resolves the theme in a classic inline script ahead of the module script" {
+  local html="$REPO_ROOT/project/app/ui/index.html"
+  local theme_line module_line
+  theme_line=$(grep -n 'jenga-dashboard-theme' "$html" | head -1 | cut -d: -f1)
+  module_line=$(grep -n 'type="module"' "$html" | head -1 | cut -d: -f1)
+  [ -n "$theme_line" ]
+  [ -n "$module_line" ]
+  [ "$theme_line" -lt "$module_line" ]
+  # Classic (non-module) and inline: no src on the script that holds the theme logic.
+  ! grep -E '<script[^>]*src=[^>]*>' "$html" | grep -q 'jenga-dashboard-theme'
+}
+
+@test "tokens.css defines dark values under both prefers-color-scheme and data-theme=dark" {
+  local css="$REPO_ROOT/project/app/ui/src/tokens.css"
+  grep -q 'prefers-color-scheme: dark' "$css"
+  grep -q ':root\[data-theme="dark"\]' "$css"
+  grep -q 'data-theme="light"' "$css"
+}
+
+@test "bundled snapshot of the real dist keeps the theme script before the module bundle and both dark selectors" {
+  local dist="$REPO_ROOT/project/app/ui/dist"
+  [ -f "$dist/index.html" ] || skip "project/app/ui/dist not built"
+  echo '{}' > "$BATS_TEST_TMPDIR/theme-data.json"
+
+  run node "$BUNDLER_SRC" --dist "$dist" --data "$BATS_TEST_TMPDIR/theme-data.json" --out "$BATS_TEST_TMPDIR/theme.html"
+  [ "$status" -eq 0 ]
+
+  local out="$BATS_TEST_TMPDIR/theme.html"
+  local theme_line module_line
+  theme_line=$(grep -n 'jenga-dashboard-theme' "$out" | head -1 | cut -d: -f1)
+  module_line=$(grep -n '<script type="module"' "$out" | head -1 | cut -d: -f1)
+  [ -n "$theme_line" ]
+  [ -n "$module_line" ]
+  [ "$theme_line" -lt "$module_line" ]
+
+  grep -q 'prefers-color-scheme' "$out"
+  grep -Eq 'data-theme=("?)dark' "$out"
+  ! grep -q 'src="/assets/' "$out"
+  ! grep -q 'href="/assets/' "$out"
+}

@@ -1,0 +1,5 @@
+# Shared event log: one JSON record per line (JSONL). Parallel branches each append
+# records at end-of-file; `union` keeps the lines from both sides instead of conflicting.
+# Safe only because every record is a single self-contained line. See
+# project/documentation/event-log-merge-strategy.md before changing this rule.
+project/logs/events.json merge=union

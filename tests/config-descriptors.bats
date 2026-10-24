@@ -125,10 +125,10 @@ EOF
 @test "only scalar keys are editable in the shipped descriptors" {
   run jq -s '[.[].keys[] | select(.editable == true) | .type] | unique' "$SHIPPED"/*.json
   [ "$status" -eq 0 ]
-  # integer: the scope-thresholds and playbook-config settings; string: test-config's two commit_* keys (E72_S01_T04)
+  # integer: the scope-thresholds and playbook-config settings; string: test-config's two commit_* keys (E72_S01_T04) and three test_run_* keys (E72_S06_T01)
   [ "$(printf '%s' "$output" | jq -c .)" = '["integer","string"]' ]
   run jq -s '[.[].keys[] | select(.editable == true and .type == "string") | .key] | sort' "$SHIPPED"/*.json
-  [ "$(printf '%s' "$output" | jq -c .)" = '["commit_prompt_default","commit_scope_map_file"]' ]
+  [ "$(printf '%s' "$output" | jq -c .)" = '["commit_prompt_default","commit_scope_map_file","test_run_epic","test_run_story","test_run_task"]' ]
   run jq -s '[.[].keys[] | select(.type == "array" or .type == "object") | .editable] | unique' "$SHIPPED"/*.json
   [ "$(printf '%s' "$output" | jq -c .)" = '[false]' ]
 }
@@ -156,7 +156,7 @@ EOF
 
 @test "test-config: commit_prompt_default and commit_scope_map_file are editable strings with the agreed defaults and rules" {
   local d="$SHIPPED/test-config.json"
-  [ "$(jq -r '[.keys[].key] | join(",")' "$d")" = "tools,commit_prompt_default,commit_scope_map_file" ]
+  [ "$(jq -r '[.keys[].key] | join(",")' "$d")" = "tools,commit_prompt_default,commit_scope_map_file,test_run_task,test_run_story,test_run_epic" ]
   run jq -c '.keys[] | select(.key == "commit_prompt_default") | [.type, .editable, .default, .allowed]' "$d"
   [ "$output" = '["string",true,"",["","skip","scoped","full"]]' ]
   run jq -c '.keys[] | select(.key == "commit_scope_map_file") | [.type, .editable, .default]' "$d"
@@ -178,14 +178,45 @@ EOF
   [ -f "$REPO_ROOT/agents/tester.md" ]
 }
 
-@test "test-config: the live config carries both keys at their descriptor defaults and a non-empty tools array" {
+@test "test-config: the live config carries every editable key at its descriptor default and a non-empty tools array" {
   local d="$SHIPPED/test-config.json" c="$REPO_ROOT/project/configs/test-config.json" key
-  for key in commit_prompt_default commit_scope_map_file; do
+  for key in commit_prompt_default commit_scope_map_file test_run_task test_run_story test_run_epic; do
     [ "$(jq -c --arg k "$key" '.keys[] | select(.key == $k) | .default' "$d")" = "$(jq -c --arg k "$key" '.[$k]' "$c")" ] \
       || { echo "test-config.json $key differs from its descriptor default" >&2; return 1; }
   done
   [ "$(jq '.tools | type' "$c")" = '"array"' ]
   [ "$(jq '.tools | length' "$c")" -ge 1 ]
+}
+
+# --- test-config.json: the per-scope test-run policy keys (E72_S06_T01) ------------------------------------------
+# Three FLAT editable string keys (the schema can only express an editable key as a scalar), same shape as
+# commit_prompt_default but with no empty value: an absent key reads as its default, so "" is never needed.
+
+@test "test-config: test_run_task, test_run_story and test_run_epic are editable strings defaulting to none, scoped and full, allowing none, scoped and full" {
+  local d="$SHIPPED/test-config.json" key
+  run jq -c '.keys[] | select(.key == "test_run_task") | [.type, .editable, .default, .allowed]' "$d"
+  [ "$output" = '["string",true,"none",["none","scoped","full"]]' ]
+  run jq -c '.keys[] | select(.key == "test_run_story") | [.type, .editable, .default, .allowed]' "$d"
+  [ "$output" = '["string",true,"scoped",["none","scoped","full"]]' ]
+  run jq -c '.keys[] | select(.key == "test_run_epic") | [.type, .editable, .default, .allowed]' "$d"
+  [ "$output" = '["string",true,"full",["none","scoped","full"]]' ]
+  for key in test_run_task test_run_story test_run_epic; do
+    # each carries a label and a description, and no nested policy object or bump rule exists
+    [ "$(jq -r --arg k "$key" '.keys[] | select(.key == $k) | (.label | length > 0) and (.description | length > 0)' "$d")" = "true" ]
+    [ "$(jq --arg k "$key" '.keys[] | select(.key == $k) | has("bump_on_change")' "$d")" = "false" ]
+  done
+  [ "$(jq '[.keys[] | select(.key == "test_run")] | length' "$d")" -eq 0 ]
+  # tools is untouched and still the only read-only key
+  [ "$(jq -r '[.keys[] | select(.editable | not) | .key] | join(",")' "$d")" = "tools" ]
+}
+
+@test "test-config: the live config and the init template carry the three test_run_* keys at the descriptor defaults" {
+  local c="$REPO_ROOT/project/configs/test-config.json" t="$REPO_ROOT/skills/j-init/assets/test-config_template.json"
+  local f
+  for f in "$c" "$t"; do
+    run jq -c '[.test_run_task, .test_run_story, .test_run_epic]' "$f"
+    [ "$output" = '["none","scoped","full"]' ] || { echo "$f has the wrong test_run_* values: $output" >&2; return 1; }
+  done
 }
 
 @test "test-config: an empty commit_prompt_default is legal (always prompt) and skip, scoped, full are the only other legal values" {

@@ -745,7 +745,7 @@ Queue depth: 2 triggers pending
 
 **Exit code:** `0` when every selected suite passed, `1` otherwise.
 
-**Notes:** It never writes board status — that remains the Tester agent's exclusive responsibility. See [`project/documentation/test-runner.md`](https://github.com/samwelmunga/jenga-npm/blob/main/project/documentation/test-runner.md).
+**Notes:** It never writes board status — that remains the Tester agent's exclusive responsibility. The Tester also runs the same discovery and run scripts as a per-scope test policy (`test_run_task`, `test_run_story`, `test_run_epic`) before it closes a task, story or epic. See [`project/documentation/test-runner.md`](https://github.com/samwelmunga/jenga-npm/blob/main/project/documentation/test-runner.md).
 
 ---
 

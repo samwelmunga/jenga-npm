@@ -70,10 +70,11 @@
 
 ### Tester (`agents/tester.md`)
 
-- **Sole agent** permitted to update task and story statuses on the board.
+- **Sole agent** permitted to write the *judged* task and story statuses on the board. The five lifecycle statuses (`Merged`, `Publicized`, `Privatized`, `Deployed to Stage`, `Deployed to Prod`) are script-set and are the exception; the rule, including what to do about an unexpected script-set write, lives in `templates/SCRUM_BOARD_SCHEMA.md` (Status Values, "Status Writers").
 - Validates all required sender fields before proceeding (rejects with `"error"` if any are missing).
 - Manages the full testing lifecycle: unit, integration, e2e, SAST, vulnerability, performance, coverage.
 - Test tool configuration lives in `project/configs/test-config.json` (user-approved).
+- Before a task, story or epic closes, runs the configured scope test policy (`test_run_task` / `test_run_story` / `test_run_epic` in `project/configs/test-config.json`; defaults none, scoped, full) via `skills/j-test/scripts/scope-test-gate.sh`; see `project/documentation/test-runner.md`.
 - SAST/vulnerability scans are opt-in and require explicit user approval, logged to `events.json`.
 - Writes `Rejected` status only after notifying the user and receiving confirmation.
 - After every status update, checks for story/epic rollup and writes a trigger to the queue if warranted.

@@ -6,7 +6,7 @@
 
 .epic-card {
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 1rem;
 }
@@ -26,7 +26,7 @@
 }
 
 .epic-id {
-  color: #6b7280;
+  color: var(--color-text-muted);
   font-size: 0.85rem;
 }
 
@@ -38,8 +38,8 @@
 }
 
 .story-card {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 0.75rem;
 }
@@ -59,7 +59,7 @@
 }
 
 .story-id {
-  color: #6b7280;
+  color: var(--color-text-muted);
   font-size: 0.8rem;
 }
 
@@ -72,7 +72,7 @@
 
 .task-card {
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-border);
   border-radius: 3px;
   padding: 0.5rem 0.75rem;
   display: flex;
@@ -87,12 +87,12 @@
 }
 
 .task-id {
-  color: #9ca3af;
+  color: var(--color-text-muted);
   font-size: 0.75rem;
 }
 
 .task-assigned {
-  color: #6b7280;
+  color: var(--color-text-muted);
   font-size: 0.8rem;
 }
 
@@ -104,45 +104,45 @@
 }
 
 .badge-pending {
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--color-surface-alt);
+  color: var(--color-text);
 }
 
 .badge-running {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .badge-in-progress {
-  background: #ffedd5;
-  color: #c2410c;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .badge-passed {
-  background: #dcfce7;
-  color: #15803d;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .badge-passed-remarks {
-  background: #ffffff;
-  color: #15803d;
-  border: 1px solid #dcfce7;
+  background: var(--color-surface);
+  color: var(--color-success);
+  border: 1px solid var(--color-success-bg);
 }
 
 .badge-done {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .badge-failed {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
 }
 
 .empty-state {
   padding: 2rem;
   text-align: center;
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .status-filter {
@@ -150,8 +150,8 @@
   flex-wrap: wrap;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
 }
 
@@ -160,7 +160,7 @@
   align-items: center;
   gap: 0.35rem;
   font-size: 0.85rem;
-  color: #374151;
+  color: var(--color-text);
   cursor: pointer;
 }
 
@@ -172,8 +172,8 @@
   gap: 0.75rem;
   padding: 0.75rem 1rem;
   margin-bottom: 0.5rem;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
 }
 
@@ -182,17 +182,17 @@
   align-items: center;
   gap: 0.35rem;
   font-size: 0.85rem;
-  color: #374151;
+  color: var(--color-text);
   cursor: pointer;
 }
 
 .epic-range-option select {
   font-size: 0.85rem;
-  color: #374151;
+  color: var(--color-text);
   padding: 0.15rem 0.35rem;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--color-border-strong);
   border-radius: 4px;
-  background: #fff;
+  background: var(--color-surface);
   cursor: pointer;
 }
 
@@ -214,8 +214,8 @@
   content: '';
   width: 0.45rem;
   height: 0.45rem;
-  border-right: 2px solid #6b7280;
-  border-bottom: 2px solid #6b7280;
+  border-right: 2px solid var(--color-text-muted);
+  border-bottom: 2px solid var(--color-text-muted);
   transform: rotate(-45deg);
   transition: transform 0.15s ease;
 }
@@ -225,11 +225,11 @@
 }
 
 .collapse-toggle:hover {
-  background: #f3f4f6;
+  background: var(--color-surface-alt);
 }
 
 .collapse-toggle:focus-visible {
-  outline: 2px solid #2563eb;
+  outline: 2px solid var(--color-accent);
   outline-offset: 1px;
 }
 

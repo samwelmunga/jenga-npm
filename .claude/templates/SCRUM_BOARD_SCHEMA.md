@@ -32,8 +32,19 @@ project/
     problems/       Problem rapports from developer and tester
     analysis/       Analysis rapports from tester
   logs/
-    events.json     Append-only inter-agent event log
+    events.json     Append-only inter-agent event log (JSONL: one JSON record per line)
 ```
+
+> **`events.json` format (E75_S01_T02).** Despite the `.json` suffix, the file is **JSONL**, not a JSON array:
+> each line is one complete, self-contained JSON object (an event), terminated by `\n`. The file is never a
+> single top-level array and is never re-serialised as a whole. Writers append exactly one line per event,
+> under `scripts/with-lock.sh project/logs/events.json -- ...`, so two writers on one checkout never interleave.
+> Readers parse line by line; a torn final line (no trailing `\n`, mid-append) is not yet a record.
+> The file is listed in the project's `.gitattributes` as `project/logs/events.json merge=union`, so when two
+> branches each append events, git keeps the lines from both sides and the merge is clean. That rule is only
+> safe because the format is line-oriented; it would corrupt a JSON array. The `.json` suffix is kept
+> deliberately so existing paths, globs and tooling keep matching. The rationale, rejected options and
+> migration record are in `project/documentation/event-log-merge-strategy.md`.
 
 > **Note:** `project/epics/` and `project/stories/` and `project/tasks/` are legacy paths from earlier skills. All new board items are written under `project/board/`. Skills and agents that reference the legacy paths should migrate to `project/board/` when next touched.
 
@@ -198,9 +209,18 @@ All status fields must use one of the following exact strings:
 
 **Mid-story pass status (`E17_S08`):** when the tester verifies a task that is not the last non-terminal task of its story, it writes `In Progress` (not `Pending`, which means "not yet started") to the parent story and leaves any DoD items gated on still-outstanding sibling tasks unticked. The existing `In Progress` value covers this case, so no status row is added or redefined here. See `agents/tester.md` step 6c-6e.
 
-Only the **tester agent** may write status values to story and task files. Only the **scrum master** may write status values to epic files and may update story status as part of rollup.
+### Status Writers (authoritative rule)
 
-All five statuses above are **script-set, never agent-judged** — no agent decides when a ticket becomes `Merged`, `Publicized`, `Privatized`, `Deployed to Stage`, or `Deployed to Prod`; a deterministic script observation sets them, per the mechanisms described below.
+This section is the single home of the status-writer rule. `CLAUDE.md` and `agents/tester.md` refer here and do not restate it.
+
+- **Judged statuses** (`Pending`, `In Progress`, `Passed`, `Passed with remarks`, `Failed`, `Rejected`, `Blocked`): only the **tester agent** may write these to story and task files. Only the **scrum master** may write status values to epic files and may update story status as part of rollup.
+- **Script-set statuses** (`Merged`, `Publicized`, `Privatized`, `Deployed to Stage`, `Deployed to Prod`): **script-set, never agent-judged**. No agent, the tester included, decides when a ticket becomes one of these; a deterministic script observation sets them, per the mechanisms described below. A script writing one (for example `mark-merged.sh` writing `Merged` after a `/self-sync` run) is the designed behaviour, not a breach of the tester-only rule above, and needs no tester in the loop. Agents still must not write these five values by hand.
+
+**Encountering an unexpected script-set write.** If a script-set status appears on tickets you did not expect (for example `/self-sync` auto-invoking `mark-merged.sh` and moving many board files to `Merged`), the default is **accept or escalate, never revert**:
+
+1. **Accept** when the write is plausibly legitimate: the affected tickets were in a terminal state (`Passed`, `Passed with remarks`, `Done`) beforehand and none were in flight. Isolate the board-file changes in their own commit, never folded into unrelated implementation work, and note it in your report.
+2. **Escalate** (problem rapport, committed per the usual rapport rule) when anything looks wrong, such as a ticket that was in flight, or the count or set of tickets is unexplained. Report the evidence and stop touching those files.
+3. **Do not revert** unless a human or the owning task explicitly instructs it. Reverting is destructive: the script's bookkeeping marker has usually already advanced (in `E50_S07_T05` the `last-self-sync` tag had already moved), so a re-run computes an empty diff and the status bookkeeping is lost permanently, with nothing to regenerate it from.
 
 ### Static vs. Reactive Status Setting
 

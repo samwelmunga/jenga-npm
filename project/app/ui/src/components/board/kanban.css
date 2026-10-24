@@ -9,8 +9,8 @@
 .kanban-column {
   flex: 0 0 220px;
   width: 220px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 0.6rem;
   display: flex;
@@ -34,7 +34,7 @@
 .kanban-column-title {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #374151;
+  color: var(--color-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -42,15 +42,15 @@
 
 .kanban-column-count {
   font-size: 0.7rem;
-  color: #6b7280;
-  background: #e5e7eb;
+  color: var(--color-text-muted);
+  background: var(--color-border);
   border-radius: 9999px;
   padding: 0.05rem 0.4rem;
 }
 
 .kanban-column-empty-state {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--color-text-muted);
   text-align: center;
   padding: 0.5rem 0;
 }
@@ -63,7 +63,7 @@
 
 .kanban-card {
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 0.5rem 0.6rem;
   display: flex;
@@ -82,17 +82,17 @@
   font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #9ca3af;
+  color: var(--color-text-muted);
 }
 
 .kanban-card-id {
   font-size: 0.7rem;
-  color: #9ca3af;
+  color: var(--color-text-muted);
 }
 
 .kanban-card-title {
   font-size: 0.85rem;
-  color: #111827;
+  color: var(--color-text);
   /* E06_S07_T02 — clickability affordance, matching board.css's equivalent
      addition on .epic-title/.story-title/.task-title in E06_S07_T01. */
   cursor: pointer;
@@ -104,8 +104,8 @@
    natively-In Progress work at a glance. */
 .kanban-card-queued {
   border-style: dashed;
-  border-color: #c4b5fd;
-  background: #fdfcff;
+  border-color: var(--color-purple-border);
+  background: var(--color-surface-alt);
 }
 
 .kanban-card-footer {
@@ -119,21 +119,20 @@
   font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #6d28d9;
-  background: #ede9fe;
-  border: 1px solid #ddd6fe;
+  color: var(--color-purple);
+  background: var(--color-purple-bg);
+  border: 1px solid var(--color-purple-border);
   border-radius: 9999px;
   padding: 0.05rem 0.4rem;
   white-space: nowrap;
   cursor: help;
 }
 
-/* E35_S04_T04 — Spike (idea) cards from project/ideas.md. Colours are literals here;
-   E47_S07_T04 converts them to tokens. */
+/* E35_S04_T04 — Spike (idea) cards from project/ideas.md. Colours are tokens (teal added in tokens.css). */
 .kanban-card-spike {
-  color: #0f766e;
-  background: #ccfbf1;
-  border: 1px solid #99f6e4;
+  color: var(--color-teal);
+  background: var(--color-teal-bg);
+  border: 1px solid var(--color-teal-border);
   border-radius: 9999px;
   padding: 0.05rem 0.4rem;
   font-weight: 600;
@@ -150,18 +149,18 @@
 
 .kanban-card-board-id {
   font-size: 0.7rem;
-  color: #374151;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  color: var(--color-text);
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
   border-radius: 9999px;
   padding: 0.05rem 0.4rem;
   white-space: nowrap;
 }
 
 .kanban-card-board-id-link {
-  color: #1d4ed8;
-  border-color: #bfdbfe;
-  background: #eff6ff;
+  color: var(--color-info);
+  border-color: var(--color-accent-border);
+  background: var(--color-info-bg);
   cursor: pointer;
 }
 
@@ -214,7 +213,7 @@
     right: 0;
     flex: 0 0 var(--space-xl);
     align-self: stretch;
-    background: linear-gradient(to right, transparent, rgba(249, 250, 251, 0.95));
+    background: linear-gradient(to right, transparent, var(--color-surface-alt));
     pointer-events: none;
   }
 }

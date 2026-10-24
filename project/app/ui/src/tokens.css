@@ -9,6 +9,24 @@
  *
  * Future mobile-retrofit work should reuse these tokens rather than
  * inventing new spacing/breakpoint values per component.
+ *
+ * Colour tokens (E47_S07): components consume `var(--color-*)` and never
+ * hardcode a hex/rgb literal. Light values are the default; dark values apply
+ * under `prefers-color-scheme: dark` (unless `data-theme="light"` is set) and
+ * under an explicit `data-theme="dark"` on <html>.
+ *   --color-bg, --color-surface, --color-surface-alt   page / card / inset surfaces
+ *   --color-text, --color-text-muted                   body / secondary text
+ *   --color-border                                     dividers and outlines
+ *   --color-accent, --color-accent-contrast            interactive accent and text on it
+ *   --color-overlay                                    backdrops and shadows
+ *   --color-{success,warning,danger,info,purple}[-bg]  status foreground / background pairs
+ *   --color-accent-bg, --color-accent-border           selected / hover tint and accent outline
+ *   --color-border-strong                              stronger divider
+ *   --color-shadow, --color-shadow-soft, --color-focus-ring   shadows and focus halo
+ *   --color-chart-*                                    Architecture diagram node-type hues, edges, labels
+ * A token missing from this list is appended here (light AND dark values),
+ * not invented as a local colour. Contrast is checked by
+ * `node scripts/check-theme-contrast.cjs`.
  */
 :root {
   --space-xs: 0.25rem;
@@ -19,4 +37,150 @@
 
   --breakpoint-mobile: 480px;
   --breakpoint-tablet: 768px;
+}
+
+:root {
+  color-scheme: light;
+
+  --color-bg: #f5f5f5;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f9fafb;
+  --color-text: #1f2937;
+  --color-text-muted: #5b6472;
+  --color-border: #e5e7eb;
+  --color-accent: #2563eb;
+  --color-accent-contrast: #ffffff;
+  --color-overlay: rgba(0, 0, 0, 0.25);
+
+  --color-success: #15803d;
+  --color-success-bg: #dcfce7;
+  --color-warning: #b45309;
+  --color-warning-bg: #fffbeb;
+  --color-danger: #b91c1c;
+  --color-danger-bg: #fee2e2;
+  --color-info: #1d4ed8;
+  --color-info-bg: #dbeafe;
+
+  --color-accent-bg: #f0f7ff;
+  --color-accent-border: #93c5fd;
+  --color-border-strong: #d1d5db;
+  --color-purple: #6d28d9;
+  --color-purple-bg: #ede9fe;
+  --color-purple-border: #ddd6fe;
+  --color-teal: #0f766e;
+  --color-teal-bg: #ccfbf1;
+  --color-teal-border: #99f6e4;
+  --color-shadow: rgba(0, 0, 0, 0.15);
+  --color-shadow-soft: rgba(0, 0, 0, 0.06);
+  --color-focus-ring: rgba(59, 130, 246, 0.25);
+
+  --color-chart-epic: #3b82f6;
+  --color-chart-story: #22c55e;
+  --color-chart-service: #a855f7;
+  --color-chart-dependency: #6b7280;
+  --color-chart-default: #94a3b8;
+  --color-chart-edge: #94a3b8;
+  --color-chart-outline: #1f2937;
+  --color-chart-label: #ffffff;
+  --color-chart-stale: #f59e0b;
+  --color-chart-stale-ring: #ffffff;
+}
+
+/* Dark values. The media-query block and the [data-theme="dark"] block below
+ * carry identical declarations on purpose: CSS cannot share one rule body
+ * between a media query and an attribute selector. Keep them in sync. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --color-bg: #0f1115;
+    --color-surface: #1a1d23;
+    --color-surface-alt: #232830;
+    --color-text: #e5e7eb;
+    --color-text-muted: #9ca3af;
+    --color-border: #374151;
+    --color-accent: #60a5fa;
+    --color-accent-contrast: #0b1220;
+    --color-overlay: rgba(0, 0, 0, 0.6);
+
+    --color-success: #4ade80;
+    --color-success-bg: #14301f;
+    --color-warning: #fbbf24;
+    --color-warning-bg: #3a2a0a;
+    --color-danger: #f87171;
+    --color-danger-bg: #3b1515;
+    --color-info: #93c5fd;
+    --color-info-bg: #172554;
+
+    --color-accent-bg: #1e2a40;
+    --color-accent-border: #3b6fb5;
+    --color-border-strong: #4b5563;
+    --color-purple: #c4b5fd;
+    --color-purple-bg: #2e1f5e;
+    --color-purple-border: #5b45a0;
+  --color-teal: #5eead4;
+  --color-teal-bg: #0f2e2b;
+  --color-teal-border: #1f6b63;
+    --color-shadow: rgba(0, 0, 0, 0.5);
+    --color-shadow-soft: rgba(255, 255, 255, 0.06);
+    --color-focus-ring: rgba(96, 165, 250, 0.4);
+
+    --color-chart-epic: #2563eb;
+    --color-chart-story: #15803d;
+    --color-chart-service: #7e22ce;
+    --color-chart-dependency: #4b5563;
+    --color-chart-default: #475569;
+    --color-chart-edge: #64748b;
+    --color-chart-outline: #e5e7eb;
+    --color-chart-label: #ffffff;
+    --color-chart-stale: #f59e0b;
+    --color-chart-stale-ring: #1a1d23;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-bg: #0f1115;
+  --color-surface: #1a1d23;
+  --color-surface-alt: #232830;
+  --color-text: #e5e7eb;
+  --color-text-muted: #9ca3af;
+  --color-border: #374151;
+  --color-accent: #60a5fa;
+  --color-accent-contrast: #0b1220;
+  --color-overlay: rgba(0, 0, 0, 0.6);
+
+  --color-success: #4ade80;
+  --color-success-bg: #14301f;
+  --color-warning: #fbbf24;
+  --color-warning-bg: #3a2a0a;
+  --color-danger: #f87171;
+  --color-danger-bg: #3b1515;
+  --color-info: #93c5fd;
+  --color-info-bg: #172554;
+
+  --color-accent-bg: #1e2a40;
+  --color-accent-border: #3b6fb5;
+  --color-border-strong: #4b5563;
+  --color-purple: #c4b5fd;
+  --color-purple-bg: #2e1f5e;
+  --color-purple-border: #5b45a0;
+  --color-teal: #5eead4;
+  --color-teal-bg: #0f2e2b;
+  --color-teal-border: #1f6b63;
+  --color-shadow: rgba(0, 0, 0, 0.5);
+  --color-shadow-soft: rgba(255, 255, 255, 0.06);
+  --color-focus-ring: rgba(96, 165, 250, 0.4);
+
+  --color-chart-epic: #2563eb;
+  --color-chart-story: #15803d;
+  --color-chart-service: #7e22ce;
+  --color-chart-dependency: #4b5563;
+  --color-chart-default: #475569;
+  --color-chart-edge: #64748b;
+  --color-chart-outline: #e5e7eb;
+  --color-chart-label: #ffffff;
+  --color-chart-stale: #f59e0b;
+  --color-chart-stale-ring: #1a1d23;
 }

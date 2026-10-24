@@ -3,10 +3,9 @@
  *
  * Reuse decision (documented per this task's `needs_docs: true`)
  * ────────────────────────────────────────────────────────────────
- * `project/app/ui/scripts/dashboard-start.cjs` and `dashboard-open.cjs` are standalone CommonJS
- * scripts that parse `process.argv.slice(2)` directly at the top level and act on it immediately
- * (start listening / run a health check then `process.exit`). They are not written as importable,
- * args-parameterized functions.
+ * `project/app/ui/scripts/dashboard-start.cjs` is a standalone CommonJS script that parses
+ * `process.argv.slice(2)` directly at the top level and acts on it immediately (start listening).
+ * It is not written as an importable, args-parameterized function.
  *
  * Two reuse strategies were considered:
  *   1. Refactor their bodies into an exported function both the `.cjs` entry points and this
@@ -33,17 +32,19 @@ import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, "..", "..");
 
+const DASHBOARD_SCRIPT = "dashboard-start.cjs";
+
 const SUBCOMMANDS = {
-  start: "dashboard-start.cjs",
-  open: "dashboard-open.cjs",
+  start: [],
+  open: ["--open"],
 };
 
 const DASHBOARD_USAGE = `
 Usage:
-  jenga dashboard start [--port <n>] [--serve-app]   Start the dashboard API server
-                                                      (and optionally serve the built UI)
-  jenga dashboard open [--port <n>]                  Health-check the dashboard and open it
-                                                      in your browser
+  jenga dashboard start [--port <n>] [--api-only]   Start the dashboard API and UI
+                                                     (--api-only serves the API without the UI)
+  jenga dashboard open [--port <n>]                 Start the dashboard API and UI, then open
+                                                     it in your browser
 `.trim();
 
 export async function runDashboard(args, root = projectRoot) {
@@ -60,7 +61,7 @@ export async function runDashboard(args, root = projectRoot) {
     return;
   }
 
-  const scriptPath = join(root, "project", "app", "ui", "scripts", SUBCOMMANDS[sub]);
+  const scriptPath = join(root, "project", "app", "ui", "scripts", DASHBOARD_SCRIPT);
   if (!existsSync(scriptPath)) {
     console.error(`Error: dashboard script not found at ${scriptPath}`);
     process.exit(1);
@@ -68,7 +69,7 @@ export async function runDashboard(args, root = projectRoot) {
   }
 
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [scriptPath, ...rest], {
+    const child = spawn(process.execPath, [scriptPath, ...SUBCOMMANDS[sub], ...rest], {
       stdio: "inherit",
       env: process.env,
     });

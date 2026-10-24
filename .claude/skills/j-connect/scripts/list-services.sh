@@ -72,7 +72,17 @@ SERVICES=""      # newline-separated compact JSON objects
 SKIPPED=""
 RESOLVED=""      # newline-separated ids that have a valid <id>.json
 SEEN_IDS=" "     # ids already listed (first dir wins)
-declare -A SEEN_FILE
+# "<id><TAB><file>" pairs, one per line. A newline-delimited string rather than
+# an associative array: `declare -A` is bash 4+, and stock macOS bash is 3.2
+# (see project/documentation/skill-authoring.md). Under 3.2 `declare -A` failed
+# outright and the later subscript assignment was then parsed as an arithmetic
+# subscript, aborting the loop with "<id>: unbound variable" while still
+# exiting 0 — a silent empty picker.
+SEEN_FILES=""
+
+seen_file_for() { # <id> -> the file that first claimed <id>, or empty
+  printf '%s' "$SEEN_FILES" | awk -F'\t' -v id="$1" '$1 == id { print $2; exit }'
+}
 
 add_skipped() { # <file> <reason>
   SKIPPED="${SKIPPED}$(jq -cn --arg f "$1" --arg r "$2" '{file:$f, reason:$r}')"$'\n'
@@ -95,10 +105,10 @@ for dir in ${ABS_DIRS[@]+"${ABS_DIRS[@]}"}; do
     fi
     RESOLVED="${RESOLVED}${id}"$'\n'
     case "$SEEN_IDS" in
-      *" $id "*) add_skipped "$f" "duplicate id '$id': already listed from ${SEEN_FILE[$id]}"; continue ;;
+      *" $id "*) add_skipped "$f" "duplicate id '$id': already listed from $(seen_file_for "$id")"; continue ;;
     esac
     SEEN_IDS="${SEEN_IDS}${id} "
-    SEEN_FILE[$id]="$f"
+    SEEN_FILES="${SEEN_FILES}${id}"$'\t'"${f}"$'\n'
     SERVICES="${SERVICES}$(jq -c --arg file "$f" \
       '{id, name, file:$file, mcp:(.register_mcp.supported == true), requires:(.requires // [])}' "$f")"$'\n'
   done

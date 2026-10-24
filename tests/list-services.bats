@@ -175,3 +175,44 @@ ids() { jq -r '.services | map(.id) | join(",")' <<<"$output"; }
   run grep -i -E 'supabase|digitalocean|github|figma|expo|fakeservice|fake-prereq' "$LIST"
   [ "$status" -ne 0 ]
 }
+
+# --- bash 3.2 portability (regression guard) --------------------------------
+# `declare -A SEEN_FILE` made this script bash 4+ only. On stock macOS bash 3.2
+# the declare failed, the later `SEEN_FILE[$id]=` was parsed as an arithmetic
+# subscript, and the loop aborted with "<id>: unbound variable" — while still
+# exiting 0, so callers saw an empty picker and no error.
+
+@test "bash 3.2 compatibility: no associative arrays, mapfile or case-modifying expansions" {
+  local code
+  code="$(grep -v '^[[:space:]]*#' "$LIST")"
+  run grep -E 'declare -A|local -A|mapfile|readarray|\$\{[A-Za-z_]+(,,|\^\^)|\[\[ -v' <<<"$code"
+  [ "$status" -eq 1 ]
+}
+
+@test "runs identically under a pre-4 bash: same services, clean stderr, exit 0" {
+  local old=""
+  for c in /bin/bash /usr/bin/bash; do
+    [ -x "$c" ] || continue
+    case "$("$c" -c 'echo ${BASH_VERSINFO[0]}')" in 1|2|3) old="$c"; break ;; esac
+  done
+  [ -n "$old" ] || skip "no bash older than 4 available on this host"
+
+  run --separate-stderr "$old" "$LIST" --descriptors-dir "$D1"
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+  [ "$(jq -r '.services | map(.id) | join(",")' <<<"$output")" = "fake-prereq,fakeservice,nomcp-svc" ]
+}
+
+@test "the duplicate-id message names the first file under a pre-4 bash too" {
+  local old=""
+  for c in /bin/bash /usr/bin/bash; do
+    [ -x "$c" ] || continue
+    case "$("$c" -c 'echo ${BASH_VERSINFO[0]}')" in 1|2|3) old="$c"; break ;; esac
+  done
+  [ -n "$old" ] || skip "no bash older than 4 available on this host"
+
+  cp "$D1/fakeservice.json" "$D2/fakeservice.json"
+  run --separate-stderr "$old" "$LIST" --descriptors-dir "$D1" --descriptors-dir "$D2"
+  [ "$status" -eq 0 ]
+  assert_contains "$stderr" "duplicate id 'fakeservice': already listed from $D1/fakeservice.json"
+}

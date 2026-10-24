@@ -211,11 +211,14 @@ fi
 
 # --- look for a checkin event belonging to this session ----------------------
 #
-# Parsed tolerantly, for the same reason collect-liveness.sh is: this
-# repository's real events.json is an unterminated JSON array with a missing
-# comma, so a strict json.load fails on it outright. A strict parse here would
-# make the gate permanently unsatisfiable, which under `confirm` means prompting
-# on every single dispatch forever.
+# Parsed tolerantly. events.json is JSONL, one JSON object per line (format and
+# reasons: project/documentation/event-log-merge-strategy.md). The scanner below
+# decodes any run of top-level JSON values, so it reads JSONL and also the legacy
+# array shape that a not-yet-migrated branch may still carry. A malformed region is
+# skipped, not fatal. The cases that actually occur are a torn final line while a
+# writer is mid-append, and a region damaged by an interrupted write. A strict parse
+# here would make the gate permanently unsatisfiable, which under `confirm` means
+# prompting on every single dispatch forever.
 #
 # The event spelling is matched EXACTLY against "checkin". A differently-spelled
 # event does not satisfy the gate — that is what makes the single-canonical-

@@ -78,3 +78,43 @@ run_guard() {
   [ "$status" -eq 1 ]
   assert_output_contains "OPEN"
 }
+
+# --- bash 3.2 portability (regression guard) --------------------------------
+# `mapfile -t TASK_IDS` made this guard bash 4+ only: on stock macOS bash 3.2 it
+# died with "mapfile: command not found" and, under `set -e`, exited 127 before
+# a single task status was read.
+
+@test "bash 3.2 compatibility: no mapfile, associative arrays or case-modifying expansions" {
+  local code
+  code="$(grep -v '^[[:space:]]*#' "$SCRIPT")"
+  run grep -E 'mapfile|readarray|declare -A|local -A|\$\{[A-Za-z_]+(,,|\^\^)|\[\[ -v' <<<"$code"
+  [ "$status" -eq 1 ]
+}
+
+@test "a terminal status is still CLOSEABLE under a pre-4 bash" {
+  local old=""
+  for c in /bin/bash /usr/bin/bash; do
+    [ -x "$c" ] || continue
+    case "$("$c" -c 'echo ${BASH_VERSINFO[0]}')" in 1|2|3) old="$c"; break ;; esac
+  done
+  [ -n "$old" ] || skip "no bash older than 4 available on this host"
+
+  write_task_status "Passed with remarks"
+  run "$old" "$FIXTURE_REPO/skills/j-close-story/scripts/check-story-closeable.sh" E99_S01
+  [ "$status" -eq 0 ]
+  assert_output_contains "CLOSEABLE"
+}
+
+@test "an open status is still OPEN under a pre-4 bash (no false CLOSEABLE, no 127)" {
+  local old=""
+  for c in /bin/bash /usr/bin/bash; do
+    [ -x "$c" ] || continue
+    case "$("$c" -c 'echo ${BASH_VERSINFO[0]}')" in 1|2|3) old="$c"; break ;; esac
+  done
+  [ -n "$old" ] || skip "no bash older than 4 available on this host"
+
+  write_task_status "In Progress"
+  run "$old" "$FIXTURE_REPO/skills/j-close-story/scripts/check-story-closeable.sh" E99_S01
+  [ "$status" -eq 1 ]
+  assert_output_not_contains "mapfile"
+}

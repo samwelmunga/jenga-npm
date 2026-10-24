@@ -121,7 +121,7 @@ A run whose findings are all clear or informational **spawns no agent at all**. 
 
 5. **Offer options** for actionable findings only, per `### 5`. Every option list follows CLAUDE.md's numbered Interaction Pattern with free text as the final numbered option.
 
-6. **Append exactly one event** to `project/logs/events.json`, matching the file's established array-of-objects shape:
+6. **Append exactly one event** to `project/logs/events.json` with `bash "$([ -f scripts/events-append.sh ] && echo scripts/events-append.sh || echo node_modules/@jenga-ai/agent/scripts/events-append.sh)" '<json-record>'` (the file is JSONL: one compact object per line, append only; never rewrite it). The record:
 
    ```json
    {

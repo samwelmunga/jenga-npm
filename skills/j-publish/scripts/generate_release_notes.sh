@@ -76,13 +76,11 @@ git rev-parse --verify "$TO_REF" >/dev/null 2>&1 || {
 # Absence of .publicignore is a strict no-op — PI_ACTIVE stays 0 and every
 # _pi_* helper below fails open immediately.
 #
-# Matching semantics are borrowed from skills/j-mirror-public/scripts/mirror.sh
-# rather than reimplemented: that script's compute_ship_list asks rsync
-# itself "what would transfer past --exclude-from=.publicignore?" and that
-# is the single source of truth /mirror-public --dry-run reports as
-# shipped/blocked. This script has no real destination tree to rsync into,
-# so _pi_classify_paths below builds a throwaway stub tree with zero-byte
-# files at each candidate path and asks rsync the identical question.
+# Matching semantics come from rsync itself: the question asked is "what would
+# transfer past --exclude-from=.publicignore?", which is how the mirror decides
+# what ships. This script has no real destination tree to rsync into, so
+# _pi_classify_paths below builds a throwaway stub tree with zero-byte files at
+# each candidate path and asks rsync the identical question.
 # ---------------------------------------------------------------------------
 
 PUBLICIGNORE="$PUBLISH_REPO_ROOT/.publicignore"

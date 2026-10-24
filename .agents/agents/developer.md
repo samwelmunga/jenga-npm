@@ -47,7 +47,7 @@ Keep file exploration surgical. Only search files when a specific technical ques
 
 At the start of every session, before responding to any request:
 
-1. **Log your own session start event** to `project/logs/events.json`:
+1. **Log your own session start event** to `project/logs/events.json` (append with the event helper, see **Event log writes** below):
    ```json
    {"event": "session_start", "agent": "developer", "session_id": "", "date": "YYYY-MM-DDT..."}
    ```
@@ -89,7 +89,7 @@ If no implementation work was performed during the session (e.g., a planning-onl
 
 , triggered either by the user or the scrum master agent. When a task is received:
 
-1. **Log the incoming sender object** to `project/logs/events.json` — append the sender JSON as a new entry before doing any other work. This step is mandatory on every invocation.
+1. **Log the incoming sender object** to `project/logs/events.json` — append the sender JSON with the event helper before doing any other work. This step is mandatory on every invocation.
 2. Read `PROJECT_SUMMARY.md`
 3. Read the task/story file from the scrum board to fully understand what is expected
 4. Assess what the implementation requires — dependencies, affected files, security considerations, reuse opportunities
@@ -101,14 +101,30 @@ If no implementation work was performed during the session (e.g., a planning-onl
 
 ---
 
+### Event log writes
+
+`project/logs/events.json` is JSONL (one compact JSON object per line, append only). Write every event with `bash "$([ -f scripts/events-append.sh ] && echo scripts/events-append.sh || echo node_modules/@jenga-ai/agent/scripts/events-append.sh)" '<json-record>'` (record as the argument or on stdin); it validates, compacts to one line, and appends under a lock. Never use `jq '. + [...]'`, never rewrite, truncate, re-serialise or recreate the file, and never write a pretty-printed multi-line object. Details: `project/documentation/event-log-merge-strategy.md`.
+
+---
+
 ## Worktree Management
 
 Each task or story gets its own isolated git worktree. You are responsible for creating and removing worktrees.
 
 - Create a worktree before starting any implementation
 - Name it using the task ID and a short slug (e.g. `E01_S02_T03-add-jwt-middleware`)
+- Create it with `scripts/create-task-worktree.sh <dir> <name>` (the `WorktreeCreate` hook calls the same script), never with a bare `git worktree add`. When the session has a perceived branch (`scripts/perceived-branch.sh`, set by `j.checkout`) it becomes the worktree's start-point; if that branch no longer exists the script exits with a message naming it and you **stop**, without falling back to `HEAD`.
 - All implementation work happens inside the worktree
 - When the work is complete and verified, merge and remove the worktree
+
+Before that merge, call `scripts/merge-task-into-perceived-branch.sh <task-branch>` and act on its exit status:
+
+- `0` (applied): the task branch is merged into the perceived branch from a dedicated worktree of it; continue to remove the task worktree.
+- `3` (not applicable): no perceived branch is set, or it is the checked-out branch; use the merge procedure above unchanged.
+- `2` (conflict): the merge was aborted and the conflicted paths printed; follow Conflict Resolution below, unchanged.
+- `4` (perceived branch missing): **stop** with the script's message; never merge into `HEAD` instead.
+
+Any other status is a failure of the script itself: report its stderr and stop. Board status writes and board commits stay on the real checked-out branch; only code follows the perceived branch. If `E56` (story branches) lands, the perceived branch is the parent that story branches are cut from and merge into; this section adds no story-branch behaviour.
 
 ### Conflict Resolution
 If your worktree conflicts with a parallel implementation in another worktree:
@@ -180,7 +196,7 @@ Use the `j.commit` skill to commit.
 
 **Behavior change.** Raise your reporting cadence above default. Under the default flow (above), a status touchpoint happens at milestone commits and at task completion/tester-call time. For an `advisory`-tier item, append a lightweight checkpoint **after every milestone commit** — not only at completion or when a problem occurs. This applies in addition to, not instead of, the normal commit and tester-invocation flow.
 
-**Concrete mechanism.** Do not write a new rapport file per checkpoint — that is heavier-weight than this tier calls for (see Rapport System, which stays reserved for blocking issues, conflicts, and security concerns). Instead, reuse the existing event-log mechanism: immediately after each milestone commit, append one entry to `project/logs/events.json` (the same file already used for session-start events, sender-object logging, and tool approvals) with this shape:
+**Concrete mechanism.** Do not write a new rapport file per checkpoint — that is heavier-weight than this tier calls for (see Rapport System, which stays reserved for blocking issues, conflicts, and security concerns). Instead, reuse the existing event-log mechanism: immediately after each milestone commit, append one entry to `project/logs/events.json` with the event helper (the same file already used for session-start events, sender-object logging, and tool approvals) with this shape:
 
 ```json
 {
@@ -381,7 +397,7 @@ hooks:
           command: |
             NAME=$(jq -r '.name')
             DIR="$JENGA_PROJECT_DIR/.claude/worktrees/$NAME"
-            git worktree add "$DIR" -b "$NAME" 2>&1
+            scripts/create-task-worktree.sh "$DIR" "$NAME" >/dev/null || exit $?
             echo "$DIR"
   WorktreeRemove:
     - hooks:

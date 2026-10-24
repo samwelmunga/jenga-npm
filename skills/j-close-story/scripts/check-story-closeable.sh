@@ -120,7 +120,14 @@ extract_tasks() {
   done < "$file"
 }
 
-mapfile -t TASK_IDS < <(extract_tasks "$story_file")
+# A portable read loop, not `mapfile`: that builtin is bash 4+ and stock macOS
+# bash is 3.2, where it failed with "mapfile: command not found" and (under
+# set -e) aborted the guard with exit 127 before any task status was checked.
+TASK_IDS=()
+while IFS= read -r _task_id; do
+  [[ -n "$_task_id" ]] || continue
+  TASK_IDS+=("$_task_id")
+done < <(extract_tasks "$story_file")
 
 # ---------------------------------------------------------------------------
 # Step 3: Validate tasks: list is present and non-empty
@@ -137,7 +144,7 @@ fi
 
 all_closeable=1
 
-for task_id in "${TASK_IDS[@]}"; do
+for task_id in ${TASK_IDS[@]+"${TASK_IDS[@]}"}; do
   # 4a. Locate the task file (always re-read from disk)
   task_file=""
   while IFS= read -r -d '' candidate; do

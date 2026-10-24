@@ -31,6 +31,8 @@ After `/do` hands back control, mark the story/task that was just started as **I
 
 **Exception — a deferred unit is not started.** If `/do` reports the unit was **deferred** ("deferred: pre-flight checklist needs a user decision", per `skills/j-do/SKILL.md` step 4.1.2), do **not** mark it `In Progress`: nothing was started and `/do` has already left (or reverted) it at `Pending`. Say so explicitly to the user — that the unit was deferred, which checklist items need their decision, and that it will be offered again once resolved — then carry on to step 2 as usual.
 
+**Task-completion cleanup is inherited, not re-implemented here.** `/dooo` never dispatches developer sub-agents itself; every task it starts goes through this step's `/do` call, so each one reaches `/do`'s own step 7 and its **Task-Completion Cleanup Procedure** (`skills/j-do/SKILL.md` `### 7.1`) unmodified. No separate wiring is needed in `/dooo` (`E37_S05_T04`). If `/dooo` ever gains a dispatch path that bypasses `/do`, that path must call the procedure by name.
+
 ### 2. Return to the board — identify parallelisable tasks
 
 **Break check first** (`E44_S02`). This is the boundary where `/dooo` decides to widen the fan-out, so it is where a requested stop takes effect: after the previous `/do` has handed control back, and **before** the board is scanned for the next set of tasks.

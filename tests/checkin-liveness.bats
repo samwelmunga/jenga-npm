@@ -792,8 +792,9 @@ EOF
 
 @test "the real repository's events.json yields derivable idle times, not a silent empty parse" {
   # Regression guard for the defect that made F1 unreachable in practice. The
-  # committed project/logs/events.json is an unterminated JSON array with a
-  # missing comma, so a strict `jq -s` parse fails on it outright and the old
+  # committed project/logs/events.json (JSONL since E75_S01_T02) must keep
+  # yielding idle times; it was once an unterminated JSON array with a missing
+  # comma, so a strict `jq -s` parse fails on the legacy shape outright and the old
   # `|| echo "[]"` fallback degraded to "no activity data". Nothing in the
   # envelope tests notices that: the report still renders, still validates,
   # and still reads clean — it just can never derive an idle time for anyone,

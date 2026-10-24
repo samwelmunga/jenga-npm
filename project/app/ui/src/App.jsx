@@ -5,6 +5,7 @@ import HistoryTab from './tabs/HistoryTab'
 import ArchitectureTab from './tabs/ArchitectureTab'
 import RapportsTab from './tabs/RapportsTab'
 import DocumentationTab from './tabs/DocumentationTab'
+import ThemeToggle from './components/ThemeToggle'
 import TodoWarningsBanner from './components/TodoWarningsBanner'
 import { get } from './api/client'
 import './App.css'
@@ -42,17 +43,20 @@ export default function App() {
 
   return (
     <div className="app">
-      <nav className="tabs">
-        {TABS.map(tab => (
-          <button
-            key={tab.id}
-            className={`tab-btn${activeTab === tab.id ? ' active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </nav>
+      <header className="app-header">
+        <nav className="tabs">
+          {TABS.map(tab => (
+            <button
+              key={tab.id}
+              className={`tab-btn${activeTab === tab.id ? ' active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+        <ThemeToggle />
+      </header>
       <TodoWarningsBanner />
       <div className="tab-content">
         {activeTab === 'board' && <BoardTab />}

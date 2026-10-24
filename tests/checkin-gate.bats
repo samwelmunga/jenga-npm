@@ -68,7 +68,7 @@ EOF
   "marker_ttl_minutes": 60
 }
 EOF
-  printf '[]\n' > "$EVENTS"
+  : > "$EVENTS"
 
   export JENGA_PROJECT_ROOT="$PROJ"
   export JENGA_CHECKLISTS_FILE="$F"
@@ -224,8 +224,10 @@ run_hook() { run --separate-stderr bash "$HOOK" <<<"$(payload "$1" "${2:-}")"; }
 }
 
 @test "gate parses a malformed events.json rather than failing permanently open or shut" {
-  # The real events.json is an unterminated JSON array with a missing comma. A strict parse would make
-  # the gate permanently unsatisfiable, which under `confirm` means prompting on every dispatch forever.
+  # The pre-E75 events.json was an unterminated JSON array with a missing comma. The file is now JSONL, but the
+  # gate must still tolerate the legacy array shape for the transition (in-flight branches that have not run
+  # scripts/events-log-migrate.sh yet). A strict parse would make the gate permanently unsatisfiable, which under
+  # `confirm` means prompting on every dispatch forever.
   cat > "$EVENTS" <<EOF
 [
   {"event": "session_start", "session_key": "sess-main", "date": "2026-10-12T11:00:00Z"}

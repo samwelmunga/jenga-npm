@@ -6,11 +6,11 @@
 # ---------------------
 # launch.sh is a thin wrapper around project/app's existing `dashboard:start`
 # / `dashboard:open` npm scripts (E47_S04_T01's scope: default, no-`--snapshot`
-# launch mode). Its own logic -- mode parsing (start|open|both), --port /
-# --serve-app pass-through, repo-root resolution via `git rev-parse
+# launch mode). Its own logic -- mode parsing (start|open), --port /
+# --api-only pass-through, repo-root resolution via `git rev-parse
 # --show-toplevel`, and the missing-package.json guard -- is what this task
 # actually added, and is what this suite pins. It deliberately does NOT
-# exercise the real dashboard-start.cjs/dashboard-open.cjs server behavior
+# exercise the real dashboard-start.cjs server behavior
 # (that belongs to their own epics, E05-E09) -- a fake `npm` on PATH captures
 # what launch.sh invokes and where, so these tests run fast and don't bind a
 # real port.
@@ -52,7 +52,7 @@ setup() {
 EOF
 
   # Fake `npm` placed ahead of the real one on PATH -- logs its cwd and args
-  # instead of actually running dashboard-start.cjs/dashboard-open.cjs, so
+  # instead of actually running dashboard-start.cjs, so
   # these tests assert what launch.sh forwards, not the real server's
   # behavior (out of this task's scope).
   FAKE_BIN="$BATS_TEST_TMPDIR/bin"
@@ -70,14 +70,23 @@ EOF
   export NPM_LOG
 }
 
-@test "start mode invokes npm run dashboard:start in project/app with --port and --serve-app forwarded unchanged" {
-  run "$LAUNCH" start --port 4321 --serve-app
+@test "start mode invokes npm run dashboard:start in project/app with --port forwarded unchanged" {
+  run "$LAUNCH" start --port 4321
   [ "$status" -eq 0 ]
 
   run cat "$NPM_LOG"
   [ "$status" -eq 0 ]
   assert_output_contains "CWD:$TMP_REPO/project/app"
-  assert_output_contains "ARGS:run dashboard:start -- --port 4321 --serve-app"
+  assert_output_contains "ARGS:run dashboard:start -- --port 4321"
+}
+
+@test "start mode forwards --api-only unchanged so the UI is left unserved" {
+  run "$LAUNCH" start --api-only
+  [ "$status" -eq 0 ]
+
+  run cat "$NPM_LOG"
+  [ "$status" -eq 0 ]
+  assert_output_contains "ARGS:run dashboard:start -- --api-only"
 }
 
 @test "open mode invokes npm run dashboard:open in project/app with --port forwarded unchanged" {
@@ -87,16 +96,6 @@ EOF
   run cat "$NPM_LOG"
   [ "$status" -eq 0 ]
   assert_output_contains "CWD:$TMP_REPO/project/app"
-  assert_output_contains "ARGS:run dashboard:open -- --port 4321"
-}
-
-@test "both mode invokes dashboard:start then dashboard:open with the same forwarded flags" {
-  run "$LAUNCH" both --port 4321
-  [ "$status" -eq 0 ]
-
-  run cat "$NPM_LOG"
-  [ "$status" -eq 0 ]
-  assert_output_contains "ARGS:run dashboard:start -- --port 4321"
   assert_output_contains "ARGS:run dashboard:open -- --port 4321"
 }
 
@@ -175,10 +174,10 @@ EOF
 # Currently RED -- pins a real regression found during E47_S04_T01 tester
 # verification: `EXTRA_ARGS=()` plus `set -u` means `"${EXTRA_ARGS[@]}"`
 # throws "unbound variable" under bash < 4.4 (e.g. macOS's stock /bin/bash
-# 3.2) whenever launch.sh is invoked with neither --port nor --serve-app --
-# the single most common invocation shape start/open/both all support. See
+# 3.2) whenever launch.sh is invoked with no --port --
+# the single most common invocation shape start/open both support. See
 # project/rapports/problems/E47_S04_T01-launch-sh-empty-args-crash.md.
-@test "no --port/--serve-app given forwards no extra args beyond the npm run script name" {
+@test "no --port given forwards no extra args beyond the npm run script name" {
   run "$LAUNCH" open
   [ "$status" -eq 0 ]
 

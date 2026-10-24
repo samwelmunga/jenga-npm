@@ -19,16 +19,19 @@ import { select } from 'd3-selection'
 import { zoom as d3zoom, zoomIdentity } from 'd3-zoom'
 import { line as d3line, curveBasis } from 'd3-shape'
 
+// E47_S07_T05: colours are theme tokens (tokens.css `--color-chart-*`), referenced as CSS `var()`
+// strings. They are applied through the `style` prop (never SVG presentation attributes, where
+// `var()` does not resolve), so a theme toggle recolours the mounted diagram with no JS re-read.
 const TYPE_COLORS = {
-  epic: '#3b82f6',       // blue
-  story: '#22c55e',      // green
-  service: '#a855f7',    // purple
-  dependency: '#6b7280', // grey
+  epic: 'var(--color-chart-epic)',
+  story: 'var(--color-chart-story)',
+  service: 'var(--color-chart-service)',
+  dependency: 'var(--color-chart-dependency)',
 }
 
 // Fallback fill for any node type not present in TYPE_COLORS (e.g. free-text
 // types sourced from knowledge-graph/graph.json such as 'module' or 'function').
-const DEFAULT_TYPE_COLOR = '#94a3b8' // slate
+const DEFAULT_TYPE_COLOR = 'var(--color-chart-default)'
 const CLUSTER_PREFIX = '__cluster__'
 
 const NODE_W = 140
@@ -386,7 +389,7 @@ export default function SADMap({ nodes, edges, coverage }) {
         >
           <defs>
             <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-              <path d="M0,0 L0,6 L8,3 z" fill="#94a3b8" />
+              <path d="M0,0 L0,6 L8,3 z" style={{ fill: 'var(--color-chart-edge)' }} />
             </marker>
           </defs>
 
@@ -403,7 +406,7 @@ export default function SADMap({ nodes, edges, coverage }) {
                   key={i}
                   d={d}
                   fill="none"
-                  stroke="#94a3b8"
+                  style={{ stroke: 'var(--color-chart-edge)' }}
                   strokeWidth={1.5}
                   markerEnd="url(#arrow)"
                 />
@@ -454,9 +457,11 @@ export default function SADMap({ nodes, edges, coverage }) {
                     width={NODE_W}
                     height={NODE_H}
                     rx={6}
-                    fill={isGhost ? DEFAULT_TYPE_COLOR : fill}
+                    style={{
+                      fill: isGhost ? DEFAULT_TYPE_COLOR : fill,
+                      stroke: isCluster || isGhost ? 'var(--color-chart-outline)' : 'none',
+                    }}
                     opacity={opacity}
-                    stroke={isCluster || isGhost ? '#1f2937' : 'none'}
                     strokeWidth={isCluster || isGhost ? 1.5 : 0}
                     strokeDasharray={isCluster || isGhost ? '4 2' : undefined}
                   />
@@ -465,7 +470,7 @@ export default function SADMap({ nodes, edges, coverage }) {
                     y={NODE_H / 2}
                     dominantBaseline="middle"
                     textAnchor="middle"
-                    fill="#fff"
+                    style={{ fill: 'var(--color-chart-label)' }}
                     fontSize={11}
                     fontFamily="inherit"
                   >
@@ -477,8 +482,7 @@ export default function SADMap({ nodes, edges, coverage }) {
                       cx={NODE_W - 8}
                       cy={8}
                       r={5}
-                      fill="#f59e0b"
-                      stroke="#fff"
+                      style={{ fill: 'var(--color-chart-stale)', stroke: 'var(--color-chart-stale-ring)' }}
                       strokeWidth={1.5}
                     />
                   )}

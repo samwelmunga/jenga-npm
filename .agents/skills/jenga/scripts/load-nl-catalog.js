@@ -13,8 +13,8 @@
  * per E53_S01_T02's acceptance criteria and the drift lesson E41_S04 already documented for that
  * generator. That inventory holds bare identifiers (e.g. "brainstorm"), stripped of the `j.`
  * frontmatter prefix — but per project/documentation/skill-authoring.md's Canonical Naming Contract, the actual
- * on-disk directory is `skills/j-<name>/`, except the three permanent exceptions (`jenga`,
- * `jenga-permission-level`, `index`) which keep their bare directory name. For each name in the
+ * on-disk directory is `skills/j-<name>/`, except the four permanent exceptions (`jenga`,
+ * `jenga-permission-level`, `jenga-config`, `index`) which keep their bare directory name. For each name in the
  * inventory, this script re-derives that canonical directory name, reads exactly one file —
  * `skills/<dirName>/SKILL.md` — to populate the remaining catalog fields: `description`,
  * `keywords`, `examples`, and `metadata.prefered_agent`, and emits `dirName` (not the bare

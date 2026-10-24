@@ -228,10 +228,12 @@ fi
 # incoming_sender (14) — plus 132 entries with no `event` key at all. Any logic
 # keyed on event names will be wrong. Reading only `date` sidesteps it entirely.
 #
-# TOLERANT PARSE, DELIBERATELY. This repository's real events.json is not valid
-# JSON: it opens as an array, is never closed, carries a stray `}` and bare `,`
-# separator lines where agents appended to it, and has entries with no comma
-# between them. A strict `jq -s` parse fails outright on it. Degrading to "no
+# TOLERANT PARSE, DELIBERATELY. events.json is JSONL, one record per line (format
+# and reasons: project/documentation/event-log-merge-strategy.md). A reader can still
+# meet a torn final line while a writer is mid-append, and a not-yet-migrated branch
+# may carry the legacy array shape. The scanner decodes any run of top-level values
+# and counts each unparseable region as "bad", so the shortfall is disclosed. A
+# strict `jq -s` parse fails outright on a damaged file. Degrading to "no
 # activity data" would make every F1 unreachable while still printing a
 # clean-looking report — the exact false "all clear" this feature exists to
 # prevent. So we recover every well-formed object we can and DISCLOSE the

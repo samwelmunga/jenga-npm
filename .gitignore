@@ -121,3 +121,12 @@ project/queue/bundle-*.json
 project/queue/concurrency-slots-*.json
 project/queue/conflict-*.md
 project/queue/epic-lock-*.json
+
+# Per-session perceived-branch state (project/queue/perceived-branch/, E78_S01):
+# one file per live session, removed at SessionEnd; never a durable record.
+project/queue/perceived-branch/
+
+# E73_S01 spike: raw hook-payload logs (project/logs/spike-hook-payloads/) can contain prompt text.
+# They are research artefacts only and must never be committed; only redacted summaries in the
+# report leave this directory. Also blocklisted for the public mirror in .publicignore.
+project/logs/spike-hook-payloads/

@@ -36,8 +36,16 @@ echo "→ Creating baselines.json..."
 echo '{}' > project/data/baselines.json
 
 # ─── 8. Create project/logs/events.json ──────────────────────────────────────
+# events.json is JSONL (one record per line), so it starts empty, not as '[]'.
+# The merge=union rule lets concurrent branches append to it without a conflict
+# (project/documentation/event-log-merge-strategy.md). Added idempotently.
 echo "→ Creating events.json..."
-echo '[]' > project/logs/events.json
+: > project/logs/events.json
+echo "→ Adding events.json merge=union rule to .gitattributes..."
+EVENTS_MERGE_RULE='project/logs/events.json merge=union'
+if [ ! -f .gitattributes ] || ! grep -qxF "$EVENTS_MERGE_RULE" .gitattributes; then
+  printf '%s\n' "$EVENTS_MERGE_RULE" >> .gitattributes
+fi
 
 # ─── 9. Initial commit ───────────────────────────────────────────────────────
 echo "→ Staging and committing scaffolded files..."

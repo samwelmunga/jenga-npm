@@ -20,7 +20,7 @@
 #      reflect the *consumer's* fixture data, never this repo's own. No manual dependency install
 #      step is run inside the installed copy — the consumer's own top-level `npm install` (E47_S01_T03's
 #      root `dependencies`) must be sufficient on its own for express/cors/gray-matter to resolve.
-#   D. SERVED UI (installed tarball) — `--serve-app` launched against the SAME already-installed
+#   D. SERVED UI (installed tarball) — launched with its default UI serving against the SAME already-installed
 #      consumer copy from Scenario C, with no build step run inside the consumer directory at any
 #      point, confirms the UI ships pre-built (E47_S01_T02's `prepack` step) and is servable as-is.
 #   E. `jenga dashboard start`/`jenga dashboard open` CLI VERBS (installed tarball, E47_S03) — the
@@ -318,10 +318,10 @@ FIXTURE
   stop_server "$DASHBOARD_START"
 
   # ── Scenario D: served UI, against the SAME already-installed consumer copy ────────────
-  echo "== Scenario D: served UI (installed tarball, --serve-app, no build step in consumer) =="
+  echo "== Scenario D: served UI (installed tarball, default UI serving, no build step in consumer) =="
   if [ -d "$INSTALLED_DIST" ]; then
     PORT_D=41004
-    ( cd "$CONSUMER" && JENGA_API_PORT="$PORT_D" node "$DASHBOARD_START" --port "$PORT_D" --serve-app >"$SCRATCH/server-d.log" 2>&1 & )
+    ( cd "$CONSUMER" && JENGA_API_PORT="$PORT_D" node "$DASHBOARD_START" --port "$PORT_D" >"$SCRATCH/server-d.log" 2>&1 & )
 
     if wait_for_health "$PORT_D"; then
       ROOT_STATUS_D="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${PORT_D}/")"
@@ -356,6 +356,28 @@ fi
 
 # ── Scenario E: `jenga dashboard start`/`open` CLI verbs (installed tarball, E47_S03) ────────
 echo "== Scenario E: 'jenga dashboard start'/'open' via installed CLI (npm pack + npm install) =="
+
+# `open` starts the server and launches the browser; a fake opener on PATH records the URL
+# instead of popping a real browser window in this harness.
+FAKE_OPEN_DIR="$SCRATCH/fake-open"
+mkdir -p "$FAKE_OPEN_DIR"
+for opener in open xdg-open; do
+  printf '#!/bin/sh\necho "$@" >> "%s/opened.log"\n' "$FAKE_OPEN_DIR" > "$FAKE_OPEN_DIR/$opener"
+  chmod +x "$FAKE_OPEN_DIR/$opener"
+done
+
+# Waits until the fake opener has recorded a launch of $1 (a port number).
+wait_for_opened() {
+  local port="$1" tries=0
+  while [ "$tries" -lt 20 ]; do
+    if grep -q "localhost:${port}" "$FAKE_OPEN_DIR/opened.log" 2>/dev/null; then
+      return 0
+    fi
+    tries=$((tries + 1))
+    sleep 0.5
+  done
+  return 1
+}
 
 INSTALLED_BIN="$CONSUMER/node_modules/@jenga-ai/agent/bin/jenga.js"
 if [ -f "$INSTALLED_BIN" ]; then
@@ -398,34 +420,51 @@ if [ -f "$INSTALLED_BIN" ]; then
   fi
   stop_server "$CONSUMER/node_modules/@jenga-ai/agent/project/app/ui/scripts/dashboard-start.cjs"
 
-  # `jenga dashboard start --serve-app` — confirms the served UI is the installed tarball's own
-  # pre-built dist/ (E47_S01_T02's prepack step), reached through the CLI wrapper.
+  # `jenga dashboard start` — confirms the served UI is the installed tarball's own pre-built
+  # dist/ (E47_S01_T02's prepack step), reached through the CLI wrapper with no extra flag.
   if [ -d "$INSTALLED_DIST" ]; then
     PORT_E2=41008
-    ( cd "$CONSUMER" && node "$INSTALLED_BIN" dashboard start --port "$PORT_E2" --serve-app >"$SCRATCH/server-e2.log" 2>&1 & )
+    ( cd "$CONSUMER" && node "$INSTALLED_BIN" dashboard start --port "$PORT_E2" >"$SCRATCH/server-e2.log" 2>&1 & )
     if wait_for_health "$PORT_E2"; then
       ROOT_STATUS_E2="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${PORT_E2}/")"
       if [ "$ROOT_STATUS_E2" = "200" ]; then
-        pass "installed CLI: 'jenga dashboard start --serve-app' serves the installed tarball's dist/"
+        pass "installed CLI: 'jenga dashboard start' serves the installed tarball's dist/"
       else
-        fail "installed CLI: 'jenga dashboard start --serve-app' GET / responded $ROOT_STATUS_E2, expected 200"
+        fail "installed CLI: 'jenga dashboard start' GET / responded $ROOT_STATUS_E2, expected 200"
       fi
     else
-      fail "installed CLI: 'jenga dashboard start --serve-app' never became healthy on port $PORT_E2 (see $SCRATCH/server-e2.log)"
+      fail "installed CLI: 'jenga dashboard start' never became healthy on port $PORT_E2 (see $SCRATCH/server-e2.log)"
     fi
     stop_server "$CONSUMER/node_modules/@jenga-ai/agent/project/app/ui/scripts/dashboard-start.cjs"
   else
-    fail "installed CLI: 'jenga dashboard start --serve-app' skipped — no installed dist/ (see Scenario C above)"
+    fail "installed CLI: 'jenga dashboard start' skipped — no installed dist/ (see Scenario C above)"
   fi
 
-  # `jenga dashboard open` always exits 0 by design — run it against nothing listening so it
-  # takes the "not healthy" branch and never actually invokes the OS 'open'/'xdg-open' command,
-  # which would pop a real browser window in this harness.
-  if ( cd "$CONSUMER" && node "$INSTALLED_BIN" dashboard open --port 41009 >"$SCRATCH/open-e.log" 2>&1 ); then
-    pass "installed CLI: 'jenga dashboard open' runs without error"
+  # `jenga dashboard start --api-only` — the API must answer while the UI stays unserved.
+  PORT_E4=41010
+  ( cd "$CONSUMER" && node "$INSTALLED_BIN" dashboard start --port "$PORT_E4" --api-only >"$SCRATCH/server-e4.log" 2>&1 & )
+  if wait_for_health "$PORT_E4"; then
+    ROOT_STATUS_E4="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${PORT_E4}/")"
+    if [ "$ROOT_STATUS_E4" != "200" ]; then
+      pass "installed CLI: 'jenga dashboard start --api-only' does not serve the UI (GET / is $ROOT_STATUS_E4)"
+    else
+      fail "installed CLI: 'jenga dashboard start --api-only' served the UI (GET / responded 200)"
+    fi
   else
-    fail "installed CLI: 'jenga dashboard open' exited non-zero (see $SCRATCH/open-e.log)"
+    fail "installed CLI: 'jenga dashboard start --api-only' never became healthy on port $PORT_E4 (see $SCRATCH/server-e4.log)"
   fi
+  stop_server "$CONSUMER/node_modules/@jenga-ai/agent/project/app/ui/scripts/dashboard-start.cjs"
+
+  # `jenga dashboard open` — starts the API and UI and launches the browser at the served URL.
+  PORT_E3=41009
+  : > "$FAKE_OPEN_DIR/opened.log"
+  ( cd "$CONSUMER" && PATH="$FAKE_OPEN_DIR:$PATH" node "$INSTALLED_BIN" dashboard open --port "$PORT_E3" >"$SCRATCH/open-e.log" 2>&1 & )
+  if wait_for_health "$PORT_E3" && wait_for_opened "$PORT_E3"; then
+    pass "installed CLI: 'jenga dashboard open' starts the dashboard and opens the browser"
+  else
+    fail "installed CLI: 'jenga dashboard open' did not start and open the dashboard (see $SCRATCH/open-e.log)"
+  fi
+  stop_server "$CONSUMER/node_modules/@jenga-ai/agent/project/app/ui/scripts/dashboard-start.cjs"
 else
   fail "installed CLI: bin/jenga.js not found in installed tarball at $INSTALLED_BIN (see Scenario C above)"
 fi
@@ -447,14 +486,17 @@ fi
 # this is unambiguous in practice.
 stop_server "dashboard-start.cjs"
 
-# dashboard:open always exits 0 by design (see project/app/ui/scripts/dashboard-open.cjs) — run
-# it with nothing listening on its default port so it takes the "not healthy" branch and never
-# actually invokes the OS 'open'/'xdg-open' command, which would pop a real browser window.
-if ( cd "$REPO_ROOT" && JENGA_API_PORT=41006 npm run dashboard:open >"$SCRATCH/open-f.log" 2>&1 ); then
-  pass "this repo: 'npm run dashboard:open' runs without error"
+# dashboard:open starts the API and UI and launches the browser; the fake opener keeps it from
+# popping a real browser window.
+PORT_F2=41006
+: > "$FAKE_OPEN_DIR/opened.log"
+( cd "$REPO_ROOT" && PATH="$FAKE_OPEN_DIR:$PATH" JENGA_API_PORT="$PORT_F2" npm run dashboard:open >"$SCRATCH/open-f.log" 2>&1 & )
+if wait_for_health "$PORT_F2" && wait_for_opened "$PORT_F2"; then
+  pass "this repo: 'npm run dashboard:open' starts the dashboard and opens the browser"
 else
-  fail "this repo: 'npm run dashboard:open' exited non-zero (see $SCRATCH/open-f.log)"
+  fail "this repo: 'npm run dashboard:open' did not start and open the dashboard (see $SCRATCH/open-f.log)"
 fi
+stop_server "dashboard-start.cjs"
 
 if ( cd "$REPO_ROOT" && npm run ui:build >"$SCRATCH/ui-build-f.log" 2>&1 ); then
   pass "this repo: 'npm run ui:build' runs without error"

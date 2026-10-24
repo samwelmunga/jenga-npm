@@ -24,6 +24,9 @@
 #   3. `metadata.prefered_agent`, when set, names a real <root>/agents/<x>.md.
 #   4. Every shell script SKILL.md references exists and passes `bash -n`.
 #   5. Every asset/template path SKILL.md references exists.
+#   6. SKILL.md and the skill's scripts/ do not reach into a skill that never
+#      ships to the public mirror (see project/documentation/public-mirror-content-parity.md).
+#      A path into one is critical; a bare name is minor.
 #
 # `index` is the fourth permanent exception and is NOT a skill: it has no
 # SKILL.md by design and is not part of routing. It is covered (counted and
@@ -50,6 +53,7 @@
 #                           resolves nowhere
 #   script-syntax           a referenced, resolved script fails `bash -n`
 #   asset-missing           an assets/ or templates/ reference resolves nowhere
+#   never-public-path       a path into a never-shipped skill directory
 #
 # A finding is `minor` when the skill still works but is degraded or untidy:
 #
@@ -60,6 +64,9 @@
 #                           a BARE `name.sh` in prose that resolves nowhere.
 #                           Prose can name a script of the user's project or an
 #                           external tool, so it is not evidence of breakage.
+#   never-public-mention    a `/name`, `j.name` or `j-name` reference to a skill
+#                           that never ships. A prose mention is stale; a step
+#                           that invokes it fails in a consumer install.
 #
 # Only `critical` findings feed the Feature | Error | Consequences table
 # (E64_S01_T02). Nothing else is ever promoted to critical by volume.
@@ -410,9 +417,67 @@ check_skill() {
   done < <(extract_refs "$skill_md" | sort -u)
 }
 
+# The never-public rule (name set, regexes, classification) lives in one shared script so check 6 and the
+# mirror-time guard cannot disagree. Located in the repo (<root>/scripts), an installed .claude/.agents tree
+# (sibling scripts/) or an npm install (node_modules/@jenga-ai/agent/scripts).
+NEVER_PUBLIC_LIB=""
+for _cand in "$SELF_DIR/../../../scripts/never-public-refs.sh" "$ROOT/scripts/never-public-refs.sh" \
+             "$SELF_DIR/../../../node_modules/@jenga-ai/agent/scripts/never-public-refs.sh" \
+             "$ROOT/node_modules/@jenga-ai/agent/scripts/never-public-refs.sh"; do
+  if [ -f "$_cand" ]; then NEVER_PUBLIC_LIB="$_cand"; break; fi
+done
+if [ -z "$NEVER_PUBLIC_LIB" ]; then
+  echo "smoke-test-skills: scripts/never-public-refs.sh not found" >&2
+  exit 2
+fi
+# shellcheck source=/dev/null
+. "$NEVER_PUBLIC_LIB"
+never_public_load "$ROOT/.publicignore" "$ROOT/scripts/never-public-exemptions.conf"
+# Fail closed on a malformed exemption file (E28_S21_T03), naming the entry.
+if [ -n "$NEVER_PUBLIC_EXEMPT_ERROR" ]; then
+  echo "smoke-test-skills: $NEVER_PUBLIC_EXEMPT_ERROR" >&2
+  exit 2
+fi
+
+# Check 6. A skill that never ships is absent from every consumer install, so a
+# shipped skill must not depend on one. Its own directory is not judged: it never
+# ships, so nothing it says reaches a consumer.
+check_never_public_refs() {
+  local dir="$1" sdir="$ROOT/skills/$1" f rel hit lineno own_md
+  [ -n "$NEVER_PUBLIC_NAMES" ] || return 0
+  never_public_skill "$dir" && return 0
+  while IFS= read -r f; do
+    rel="${f#"$ROOT"/}"
+    while IFS= read -r hit; do
+      lineno="${hit%%:*}" text="${hit#*:}"
+      # A declared exemption (scripts/never-public-exemptions.conf) silences a path hit only; the name loop below
+      # is untouched.
+      never_public_path_exempt "$rel" "$text" && continue
+      own_md=0
+      [ "$f" = "$sdir/SKILL.md" ] && own_md=1
+      if [ "$(never_public_severity path "$text" "$own_md")" = minor ]; then
+        emit minor never-public-mention "$dir" "$dir: never-public reference ($rel:$lineno)" \
+          "$rel:$lineno is a comment that points into a skill directory that is never shipped" \
+          "Comments do not run, so nothing breaks; the reference is stale documentation."
+      else
+        emit critical never-public-path "$dir" "$dir: never-public reference ($rel:$lineno)" \
+          "$rel:$lineno points into a skill directory that is never shipped" \
+          "The path does not exist in a consumer install, so any step that uses it fails."
+      fi
+    done < <(grep -InE "$NEVER_PUBLIC_PATH_RE" "$f" 2>/dev/null)
+    while IFS= read -r hit; do
+      lineno="${hit%%:*}"
+      emit minor never-public-mention "$dir" "$dir: never-public reference ($rel:$lineno)" \
+        "$rel:$lineno names a skill that is never shipped" \
+        "A consumer has no such skill: a step that invokes it fails, while a prose mention is only stale."
+    done < <(grep -InE "$NEVER_PUBLIC_NAME_RE" "$f" 2>/dev/null)
+  done < <({ [ -f "$sdir/SKILL.md" ] && printf '%s\n' "$sdir/SKILL.md"; find "$sdir/scripts" -type f 2>/dev/null; })
+}
+
 for d in "$ROOT"/skills/*/; do
   [ -d "$d" ] || continue
   check_skill "$(basename "$d")"
+  check_never_public_refs "$(basename "$d")"
 done
 
 RESULT="PASS"

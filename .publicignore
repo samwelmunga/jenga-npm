@@ -38,6 +38,13 @@ project/queue/
 + project/logs/publish-history.json
 - project/logs/**
 
+# --- E73_S01 spike harness and its raw hook-payload logs ---
+# Throwaway research tooling. The raw logs can contain prompt text, so they are named explicitly even
+# though `- project/logs/**` above already covers them (belt and braces: a later change to that rule
+# must not silently expose them).
+project/logs/spike-hook-payloads/
+project/spikes/E73_S01/
+
 # --- Problem / security / conflict rapports ---
 project/rapports/
 
@@ -276,11 +283,37 @@ tests/mirror-permission-level-invariant.bats
 # same commit that creates this file (E28_S16_T02), so the guard's own regression suite never
 # reproduces, on its first run, the exact defect it exists to prevent.
 tests/mirror-test-subject-invariant.bats
+# tests/external-refs-absent-safe.bats and tests/perceived-branch.bats: both fail in the mirror-shaped tree
+# (and on a clean foreground run), so they cannot ship until fixed. external-refs-absent-safe.bats test 11
+# (check-privatized.sh carry-vs-plain, line 458) and perceived-branch.bats tests 20 and 24 (the SessionEnd
+# hook leaves project/logs/events.json empty, line 492 and 544). Blocklisted 2026-10-23 on the user's
+# decision so the v4.4.0 release is not blocked by the test-subject invariant; remove each entry when its
+# defect is fixed. Proven failing on the v4.3.0 baseline for external-refs-absent-safe test 11 by the
+# E41_S03 tester (rapport E41_S03-story-scope-gate-failed.md).
+tests/external-refs-absent-safe.bats
+tests/perceived-branch.bats
 # tests/mirror-staging-branch-push.bats: runs skills/j-mirror-public/scripts/mirror.sh (MIRROR_SH,
 # invoked by every @test case), which lives under the fully-private skills/j-mirror-public/
 # blocklisted above (both naming forms) -- same reasoning as the two entries directly above. Added
 # in the same commit that creates this file (E28_S17_T02), for the same reason.
 tests/mirror-staging-branch-push.bats
+# tests/mirror-never-public-refs.bats: its setup() (lines 40-42) copies skills/j-mirror-public/scripts/*.sh
+# and assets/* out of the fully-private skills/j-mirror-public/ blocklisted above (both naming forms), and
+# setup() runs before every one of its 14 @test cases, so the file has no publicly-meaningful subset --
+# same reasoning as the three entries directly above. Its header notes that the blocked skill NAMES are
+# synthesised at run time, which is true and is why the never-public reference guard does not flag it; the
+# dependency is on the skills/j-mirror-public/ DIRECTORY it copies from, which is a separate axis. Missed
+# when E28_S19_T03 added the file -- the only mirror-*.bats without an entry here -- and caught by the
+# E28_S20 verification pass on 2026-10-21, after the E28_S19 chain had already been merged to main.
+tests/mirror-never-public-refs.bats
+# tests/mirror-release-prep.bats: lines 35-36 resolve skills/j-mirror-public/scripts/release-prep.sh
+# and .../mirror.sh out of the fully-private skills/j-mirror-public/ blocklisted above (both naming
+# forms). RP and MIRROR_SH are used by every one of its 37 @test cases, so the file has no
+# publicly-meaningful subset -- same reasoning as the entries directly above. Without this entry the
+# file ships while its subject does not: reproduced in a mirror-shaped tree, 34 of 37 cases fail on
+# exit 127 and bats exits 1, which check_test_subject_invariant keys on, refusing the next real push.
+# Caught by the E28_S20 verification pass on 2026-10-21 (E28_S20_T05 rework).
+tests/mirror-release-prep.bats
 # tests/train-cli-root-climb.bats: every one of its 4 @test cases calls install_script_at, which
 # copies skills/j-train/train_cli.py out of the fully-private skills/j-train/ blocklisted above (all
 # three naming forms). In the mirror that source file does not exist, so the cp fails and every case
@@ -300,6 +333,19 @@ tests/checklist-gating.bats
 # tests/mark-publicized.bats: copies skills/j-mirror-public/scripts/mark-publicized.sh in setup(), and
 # skills/j-mirror-public is never shipped, so every case in the file fails there. Follows its private subject.
 tests/mark-publicized.bats
+# tests/e73-spike-harness.bats and tests/e73-spike-interactive-shapes.bats: drive the scripts and fixtures under
+# project/spikes/E73_S01/, which is blocklisted above (the E73_S01 spike harness section). In the mirror
+# that subject does not exist, so cases 1 of both files fail ("enable adds the five hook entries ...",
+# "fixture run writes the output file ...") and the files fail the test-subject invariant, which refuses the
+# push. Same reasoning as the entries above: the tests follow their private subject.
+tests/e73-spike-harness.bats
+tests/e73-spike-interactive-shapes.bats
+# tests/workflow-run-gitignore.bats: asserts that project/data/workflow-runs/.gitkeep exists, but
+# project/data/workflow-runs/ is blocklisted above (E80_S02_T02), so case 3 ("the runs directory .gitkeep
+# exists, is empty, and git add -n accepts it") fails in the mirror. Every other case audits this repo's own
+# private .gitignore/.publicignore hygiene, so the file has no publicly-meaningful subset; it follows its
+# private subject. Found by E51_S03_T05 via the real-push baseline.
+tests/workflow-run-gitignore.bats
 
 # --- Private-tooling playbooks and their tests (E50_S13, user decision 2026-09-10) ---
 # brainstorm-to-mirror terminates in `mirror-public`, a deliberately private skill blocklisted
@@ -358,3 +404,5 @@ Thumbs.db
 .git/
 .jenga-permission-level.json
 jenga.html
+# tests/mirror-publicize-wiring.bats: clones the private repo and runs the blocklisted skills/j-mirror-public/ scripts end to end; it cannot run in the public mirror.
+tests/mirror-publicize-wiring.bats

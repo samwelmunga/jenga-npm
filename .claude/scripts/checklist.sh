@@ -333,9 +333,15 @@
 #   tick_scope does not invalidate a tick.
 #
 # CORRUPTION
-#   An unreadable, non-JSON or wrongly shaped state file is read as "unticked" with a warning. The next tick of
-#   that file moves it aside to <name>.corrupt (one file, overwritten each time, so it cannot accumulate) and
-#   starts a fresh one. Nothing here ever makes a corrupt file pass an item.
+#   An unreadable, non-JSON or wrongly shaped state file is read as "unticked" with a warning. Nothing here ever
+#   makes a corrupt file pass an item.
+#   Writing draws a line reading does not. A file whose bytes WERE read and are not a usable store is
+#   genuinely corrupt: the next tick moves it aside to <name>.corrupt (one file, overwritten each time, so it
+#   cannot accumulate) and starts a fresh one. A file whose bytes could NOT be read at all (EIO, EACCES, ENOMEM,
+#   a vanished mount) is not evidence of corruption -- the store is probably intact and holding other writers'
+#   ticks -- so tick refuses: it leaves the file untouched and exits 8. Conflating the two is a silent
+#   data-loss bug: one transient read error would discard every tick in the file and still exit 0, which looks
+#   exactly like a lost update under a broken lock.
 #
 # BOUNDING THE ACCUMULATION OF RUN FILES
 #   Every successful tick prunes: a run file whose last write is older than RUN_STATE_TTL_MINUTES is deleted,
@@ -365,7 +371,8 @@
 #   6   tick: <id> is not an item of the selected registry (or there is no registry)
 #   7   tick: the item is run-scoped and no run id was given
 #   8   tick: the tick was NOT recorded because the state directory could not be created, its lock could not be
-#       acquired, or the write failed (--clear: the tick was not removed)
+#       acquired, the write failed, or the existing store could not be read and so was left untouched rather
+#       than overwritten (see CORRUPTION) (--clear: the tick was not removed)
 #       (70, "tick not yet implemented", is retired: tick is implemented)
 #   20  suggest: --evidence missing or empty (nothing written)
 #   21  suggest: origin recurrence with no --incident (nothing written)
@@ -485,7 +492,8 @@ USAGE
 #   clear    <file> <id>                       remove a tick: prints "cleared" or "none"   (run under the lock)
 #   stale    <state_dir> <ttl_minutes>         remove stale temp files and lock dirs, print stale run files
 #   rm-stale <file> <ttl_minutes>              delete <file> if it is still stale   (run under the lock)
-# Exit codes inside the program: 0 ok, 30 unknown id. It never exits 2, because with-lock.sh uses 2 for
+# Exit codes inside the program: 0 ok, 30 unknown id, 31 the store could not be read so it was left untouched
+# (write/clear; see EXIT_STORE_UNREADABLE). It never exits 2, because with-lock.sh uses 2 for
 # "lock not acquired" and the caller must be able to tell the two apart.
 # ---------------------------------------------------------------------------
 IFS= read -r -d '' TICK_PY <<'PY'
@@ -499,6 +507,9 @@ import time
 
 STATE_VERSION = 1
 PERSISTENT_NAME = "persistent.json"
+# A write/clear that refused to touch a store it could not read. Deliberately not 2 (with-lock.sh's
+# "lock not acquired") and not 3 (the catch-all bug handler); cmd_tick maps any of them to exit 8.
+EXIT_STORE_UNREADABLE = 31
 
 
 def warn(message):
@@ -530,21 +541,29 @@ def run_file(state_dir, run_id):
 
 
 def load_store(path):
-    """Returns (document, None), ({fresh document}, None) when the file is absent, or (None, why) when unusable."""
+    """Returns (document, why, kind): (doc, None, None) for a usable store, ({fresh document}, None, None) when
+    the file is absent, or (None, why, kind) when it could not be turned into one.
+
+    kind separates the two cases a writer MUST NOT conflate:
+      "unreadable"  the file exists but its bytes could not be read (a transient OS error: EIO, EACCES, ENOMEM,
+                    a vanished mount). This is NO evidence that the store is bad -- it is very likely intact and
+                    holding other writers' ticks. A writer that treats it as corrupt destroys all of them.
+      "corrupt"     the bytes WERE read and are genuinely not a usable store (not JSON, wrong shape).
+    """
     try:
         with open(path, "rb") as fh:
             raw = fh.read()
     except FileNotFoundError:
-        return {"version": STATE_VERSION, "ticks": {}}, None
+        return {"version": STATE_VERSION, "ticks": {}}, None, None
     except OSError as exc:
-        return None, "cannot be read (%s)" % exc
+        return None, "cannot be read (%s)" % exc, "unreadable"
     try:
         doc = json.loads(raw.decode("utf-8"))
     except (ValueError, UnicodeDecodeError) as exc:
-        return None, "is not valid JSON (%s)" % exc
+        return None, "is not valid JSON (%s)" % exc, "corrupt"
     if not isinstance(doc, dict) or not isinstance(doc.get("ticks"), dict):
-        return None, "does not have the expected structure"
-    return doc, None
+        return None, "does not have the expected structure", "corrupt"
+    return doc, None, None
 
 
 def atomic_write(path, doc):
@@ -617,8 +636,10 @@ def mode_read(args):
             return 0
     else:
         path = os.path.join(state_dir, PERSISTENT_NAME)
-    doc, why = load_store(path)
+    doc, why, _kind = load_store(path)
     if doc is None:
+        # Reading degrades to "unticked" for BOTH kinds on purpose: the cost is a re-verification, never a
+        # skipped check. Only writers have to tell the two apart (see load_store and mode_write).
         warn("tick store %s %s; treating its items as unticked" % (path, why))
         sys.stdout.write(unticked)
         return 0
@@ -641,7 +662,16 @@ def mode_read(args):
 def mode_write(args):
     path, item_id, item_hash, scope, actor, note, run_id = args
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    doc, why = load_store(path)
+    doc, why, kind = load_store(path)
+    if doc is None and kind == "unreadable":
+        # Failing to READ the store is not a licence to replace it. The aside-and-start-fresh branch below
+        # discards every tick already in the file, and until E77 it ran on this path too -- so one transient
+        # read error silently wiped a concurrent writer's landed tick and still exited 0, which is
+        # indistinguishable in the caller's eyes from a lost update under a broken lock. Refuse instead: the
+        # tick is not recorded, cmd_tick turns this into exit 8, and the store is left exactly as it was.
+        sys.stderr.write("checklist.sh: tick store %s %s; refusing to overwrite a store that may be intact "
+                         "-- the tick for \"%s\" was NOT recorded\n" % (path, why, item_id))
+        return EXIT_STORE_UNREADABLE
     if doc is None:
         aside = path + ".corrupt"
         warn("tick store %s %s; moving it to %s and starting a fresh one" % (path, why, aside))
@@ -664,7 +694,13 @@ def mode_write(args):
 
 def mode_clear(args):
     path, item_id = args
-    doc, why = load_store(path)
+    doc, why, kind = load_store(path)
+    if doc is None and kind == "unreadable":
+        # "no tick recorded" would be a guess, not an answer: the tick may be sitting in a store we simply
+        # could not read. Report the failure so the caller knows the removal did not happen (exit 8).
+        sys.stderr.write("checklist.sh: tick store %s %s; the tick for \"%s\" was NOT removed\n"
+                         % (path, why, item_id))
+        return EXIT_STORE_UNREADABLE
     if doc is None:
         warn("tick store %s %s; nothing to clear (it already reads as unticked)" % (path, why))
         sys.stdout.write("none\n")

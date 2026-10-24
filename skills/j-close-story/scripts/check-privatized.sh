@@ -63,7 +63,7 @@
 # templates/SCRUM_BOARD_SCHEMA.md's "Publicized / Privatized / Deployed
 # Lifecycle Relationship" section), but the contradiction is logged to
 # project/logs/events.json as `event: publicized_privatized_mismatch` (same
-# array-of-objects convention already used by session_start/etc., and the
+# JSONL convention already used by session_start/etc., and the
 # same event name E51_S03_T02's own task description documents for the
 # reverse-direction mismatch) so it's flagged for investigation rather than
 # silently resolved. The read-modify-write against events.json is wrapped in
@@ -145,7 +145,11 @@ WITH_LOCK_SCRIPT="$REPO_ROOT/scripts/with-lock.sh"
 UPDATE_FRONTMATTER_SCRIPT="$REPO_ROOT/skills/j-close-story/scripts/update-task-frontmatter.sh"
 EVENTS_FILE="$REPO_ROOT/project/logs/events.json"
 
+EVENTS_APPEND_SCRIPT="$REPO_ROOT/scripts/events-append.sh"
+[ -f "$EVENTS_APPEND_SCRIPT" ] || EVENTS_APPEND_SCRIPT="$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/events-append.sh"
+
 [ -f "$WITH_LOCK_SCRIPT" ] || die "expected script not found: $WITH_LOCK_SCRIPT"
+[ -f "$EVENTS_APPEND_SCRIPT" ] || die "expected script not found: scripts/events-append.sh"
 [ -f "$UPDATE_FRONTMATTER_SCRIPT" ] || die "expected script not found: $UPDATE_FRONTMATTER_SCRIPT"
 
 # -----------------------------------------------------------------------------
@@ -308,29 +312,10 @@ if [ "$CURRENT_STATUS" = "Publicized" ]; then
     "$ID" "$BOARD_FILE" "$TOUCHED_JSON_LIST" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
 
   if [ -f "$EVENTS_FILE" ]; then
-    "$WITH_LOCK_SCRIPT" "$EVENTS_FILE" -- bash -c '
-      set -euo pipefail
-      events_file="$1"
-      new_event="$2"
-      tmp="$(mktemp)"
-      if command -v python3 >/dev/null 2>&1; then
-        python3 -c "
-import json, sys
-path = sys.argv[1]
-new_event = json.loads(sys.argv[2])
-with open(path) as f:
-    data = json.load(f)
-data.append(new_event)
-with open(path, \"w\") as f:
-    json.dump(data, f, indent=2)
-    f.write(\"\n\")
-" "$events_file" "$new_event"
-      else
-        echo "check-privatized.sh: python3 not available -- could not append mismatch event" >&2
-        rm -f "$tmp"
-        exit 1
-      fi
-    ' _ "$EVENTS_FILE" "$MISMATCH_EVENT" || log "WARNING: failed to log publicized_privatized_mismatch event for $ID (continuing with status overwrite)"
+    # events.json is JSONL; the shared helper validates the record and appends one line under lock,
+    # and refuses a legacy array-shaped file (E75_S01).
+    bash "$EVENTS_APPEND_SCRIPT" --file "$EVENTS_FILE" "$MISMATCH_EVENT" \
+      || log "WARNING: failed to log publicized_privatized_mismatch event for $ID (continuing with status overwrite)"
   else
     log "WARNING: $EVENTS_FILE not found -- could not log publicized_privatized_mismatch event"
   fi

@@ -9,7 +9,7 @@
 #   skills/j-<name>/ (directory) <-> name: j.<name> (frontmatter) <-> <name> (allow-listed
 #   identifier)
 #
-# for every skill except the three permanent exceptions (jenga, jenga-permission-level, index),
+# for every skill except the four permanent exceptions (jenga, jenga-permission-level, jenga-config, index),
 # which skip the j- prefix on all three legs. No prior test asserted this as a genuine bijection —
 # tests/generate-j-alias.bats only covers extractName's prefix-stripping in isolation. This file
 # closes that gap.

@@ -76,10 +76,20 @@ and shared with everyone on the project. There is no local override layer and no
 ### What is editable
 
 Editable: the integer settings of `scope-thresholds.json` (every key except `threshold_version`), of
-`playbook-config.json` (`max_composition_depth`), and the two string settings of `test-config.json` that control the
+`playbook-config.json` (`max_composition_depth`), and the string settings of `test-config.json`: the two that control the
 commit-time test prompt (`commit_prompt_default`: empty, `skip`, `scoped` or `full`, empty meaning always prompt;
-`commit_scope_map_file`: a relative `.json` path, default `templates/test-scope-map.json`). Everything else is shown
-read-only, with a pointer to where to change it:
+`commit_scope_map_file`: a relative `.json` path, default `templates/test-scope-map.json`) and the three that set which
+test run must pass before a board scope is closed (the scope test policy, see the "Scope test policy" section of
+`project/documentation/test-runner.md`):
+
+| Editable key | Default | Allowed values |
+|--------------|---------|----------------|
+| `test_run_task` | `none` | `none`, `scoped`, `full` |
+| `test_run_story` | `scoped` | `none`, `scoped`, `full` |
+| `test_run_epic` | `full` | `none`, `scoped`, `full` |
+
+An absent key reads as its default, and a present-but-invalid value reads as the default with a warning on stderr.
+Everything else is shown read-only, with a pointer to where to change it:
 
 | Read-only key | Why, and where to edit instead |
 |---------------|--------------------------------|
@@ -119,8 +129,8 @@ Runtime threshold values used by `/jenga` and `/do` to determine execution scope
 | `inline_max_lines` | integer | 75 | Maximum total lines changed for a task to qualify for `inline` execution scope. Raised from 20 to 75 alongside `inline_max_files` for the same reason — a small `SKILL.md` + script pair routinely exceeds 20 lines. |
 | `story_max_files` | integer | 5 | Maximum number of files a task may touch to qualify for `story` scope bundling (multiple tasks executed in one developer context). |
 | `bundle_lock_ttl_minutes` | integer | 30 | Time-to-live in minutes for a story-scope bundle lock. A lock older than this value is considered stale and may be reclaimed. |
-| `max_concurrent_developers` | integer | 3 | Maximum number of developer subagents (including story-bundle dispatches, one slot per bundle) a single orchestrating session may run at once. Enforced by `scripts/acquire-concurrency-slot.sh`/`release-concurrency-slot.sh` against that session's `project/queue/concurrency-slots-<session_id>.json`. Added in `threshold_version: 3` (`E32_S15`). |
-| `max_concurrent_testers` | integer | 3 | Maximum number of in-session tester invocations a single orchestrating session may run at once. On a full cap, the developer agent falls back to the existing `project/queue/handoffs/` mechanism instead of waiting. Added in `threshold_version: 3` (`E32_S15`). |
+| `max_concurrent_developers` | integer | 4 | Maximum number of developer subagents (including story-bundle dispatches, one slot per bundle) a single orchestrating session may run at once. Enforced by `scripts/acquire-concurrency-slot.sh`/`release-concurrency-slot.sh` against that session's `project/queue/concurrency-slots-<session_id>.json`. Added in `threshold_version: 3` (`E32_S15`). |
+| `max_concurrent_testers` | integer | 4 | Maximum number of in-session tester invocations a single orchestrating session may run at once. On a full cap, the developer agent falls back to the existing `project/queue/handoffs/` mechanism instead of waiting. Added in `threshold_version: 3` (`E32_S15`). |
 | `slot_ttl_minutes` | integer | 45 | Time-to-live in minutes for a held concurrency slot (developer or tester). A holder entry older than this value is considered stale and is reclaimed before the next cap check — this guards against a crashed subagent leaking its slot, not against cross-session contention (the counter file itself has no cross-session lifecycle). Added in `threshold_version: 3` (`E32_S15`). |
 | `marker_ttl_minutes` | integer | 60 | Time-to-live in minutes for a pre-flight **situation marker** frame (`scripts/checklist-marker.sh`, the "which lifecycle phase is this session in" value the enforcing hook reads). A frame older than this is treated as **absent**, so a session that died mid-phase cannot wedge every later session in the repo. A judgement, not a measurement: longer than `slot_ttl_minutes` (45, which guards a single dispatch) and far shorter than the tick store's 1440-minute idle TTL (which bounds a whole orchestrated run); a phase that legitimately runs longer calls `checklist-marker.sh refresh --token <t>`, which extends its own frame's expiry in place (a repeated `write` is **not** a refresh: it pushes a second frame). Added in `threshold_version: 4` (`E67_S04`); full reasoning in `project/documentation/preflight-checklists.md` section 9, "Situation marker". |
 

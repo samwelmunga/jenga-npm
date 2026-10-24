@@ -46,8 +46,8 @@
 # Delete-set computation — never hardcoded
 # ------------------------------------------
 # Computed fresh from disk on every invocation: every directory directly under
-# skills/ that (a) is not itself "j-"-prefixed, (b) is not one of the three
-# permanent exceptions (jenga, jenga-permission-level, index — E50_S06/E50), and
+# skills/ that (a) is not itself "j-"-prefixed, (b) is not one of the four
+# permanent exceptions (jenga, jenga-permission-level, jenga-config, index — E50_S06/E50/E68_S04), and
 # (c) has a matching skills/j-<name>/ twin on disk. E50_S15_T01 already showed the
 # live tree can drift from the story's authoring-time snapshot (6 orphan
 # j-<name>-only directories were added after the story was written) — a hardcoded

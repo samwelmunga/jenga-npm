@@ -230,6 +230,199 @@ runs the real suite instead — but it closes the same gap this audit command ex
 and does so automatically on every real push. This audit command remains useful as a targeted,
 faster manual spot-check; it is no longer the only thing standing between a violation and a push.
 
+**Non-test audit.** `scripts/check-public-references.sh` covers the shipped skill definitions and scripts
+(`skills/*/SKILL.md`, `skills/*/scripts/`, `scripts/`, `hooks/`). It keeps only the files that
+`scripts/check-publicignore-match.sh` classifies `PUBLIC`, then reports every line that names or paths into
+a never-public subject, and exits 1 when there is any. It is report-only and not wired into a gate.
+
+Since `E28_S19_T06` it derives nothing itself: the set, the three regexes and the severity all come from
+[`scripts/never-public-refs.sh`](../../scripts/never-public-refs.sh), called with `strict=1` so its verdict
+matches what a real push would refuse rather than check 6's consumer-side view. As of 2026-10-21 it reported
+**42 critical and 48 minor across 260 public files**; after `E28_S21_T01` widened the comment rule (see "What
+counts as a comment line" below) it reports **40 critical and 50 minor across 262 public files**. That supersedes the 59 lines reported on 2026-10-17,
+when it still used a hardcoded five-name list: the set is now six names, so `j-dev-done` is audited for the
+first time (20 hits), and bare `j-<name>` tokens are matched as the push gate matches them. The new output is
+a strict superset of the old — 65 distinct `file:line` before, 90 after, with none lost.
+
+Most minors are comments. Some hits are deliberate maintainer-only paths, such as
+`scripts/compute-deploy-reconcile.sh` reading the mirror config, which is absent in a consumer install and
+skipped there. Each hit still needs a triage decision before the audit can be a gate. `mcp/router/` is
+audited too, by a pattern kept deliberately separate from the shared skill set, because it is blocklisted
+private tooling and not a skill. The consumer-side equivalent is check 6 of
+`skills/j-smoke-test/scripts/smoke-test-skills.sh`, which judges only what a consumer install receives.
+
+## Rule: a shipped file may not reference a skill that stays private
+
+**The sibling of the rule above (`E28_S19`).** A test may not outlive its subject; likewise no file
+that ships may point at a skill that `.publicignore` keeps private. A consumer who receives such a
+file gets an instruction (`/j-mirror-public`, `skills/j-mirror-public/...`) that resolves to nothing
+in their install.
+
+**What is "never-public".** A skill whose canonical `skills/j-<name>/` directory is blocked by a
+`^skills/j-<name>/$` line in `.publicignore`. The set is read from `.publicignore` at run time, never
+hardcoded, so unblocking a skill there removes it from the rule automatically.
+
+**What is scanned (narrowed by `E28_S19_T07`).** The mirror guard scans **instruction files only** —
+the files a consumer would actually follow: `skills/*/SKILL.md`, `agents/*.md`, `.github/agents/*.md`,
+`hooks/*`, and the `.claude/` and `.agents/` mirrors of those. Docs, tests, data files, `site/` and
+`project/` are shipped but **not** scanned, and a reference in them is not reported.
+
+**Failing versus reported.** The classification is recorded in the header of
+[`scripts/never-public-refs.sh`](../../scripts/never-public-refs.sh). The mirror guard calls it with
+`strict=0` for markdown and `strict=1` for everything else:
+
+| File kind | path hit | name / bare `j-<name>` hit, non-comment | comment line (`#`, `//`, `/*`, `*`) |
+|---|---|---|---|
+| markdown (`*.md`) | **critical, fails the run** | minor, reported only | n/a — a leading `#` is a heading |
+| anything else | **critical, fails the run** | **critical, fails the run** | minor, reported only |
+
+A path stays critical in markdown because `never_public_severity` short-circuits on the hit kind before
+it consults `strict`. In check 6 of `j.smoke-test` (always non-strict) every name hit is minor and bare
+`j-<name>` tokens are not scanned; that mode is kept so name-hit severity does not change.
+`.publicignore` itself defines the set and so necessarily names every member; how that is handled is
+stated once, under "Declared exemptions" below.
+
+**What counts as a comment line (widened by `E28_S21_T01`).** A line whose first non-blank characters are
+`#`, `//`, `/*` or `*` (the last also covers `*/`, so a ` * text` JSDoc or C-style block-comment continuation
+line is a comment). Only a *leading* marker counts: a `*` elsewhere on the line, such as the glob in
+`skills/*/SKILL.md`, does not make it one. The test is lexical and does not track whether a `/*` block is open,
+so a code line that merely begins with `*` (a shell case arm such as `*.md)`) is also read as a comment; a
+path hit on such a line would be reported minor instead of critical. Markdown stays exempt (`own_md=1`): there
+a leading `#` is a heading and a leading `*` is a bullet, so no markdown line is a comment.
+
+*Why it was widened.* The old `#`/`//` rule classified a path inside a JSDoc block as executable
+(critical), and `E28_S19`'s verification then described `lib/generate-skill-allow-list.js:41`, a JSDoc
+continuation line, as "executable logic composing a path". The measured scale of the gap: 12 path-hit
+lines across the public set are block-comment continuations, which is 4 distinct lines in `lib/` repeated
+across the root, `.claude/` and `.agents/` copies. **None of them is in scope of any of the three
+consumers** (`lib/` is outside the mirror guard's instruction-file scope, check 6's `SKILL.md` +
+`scripts/` scope, and `check-public-references.sh`'s scope), so the change moves no existing verdict for
+those 12.
+
+*Measured effect on the three consumers* (committed `HEAD` `fb722671`, before versus after):
+
+| Consumer | Before | After | Hits reclassified critical to minor |
+|---|---|---|---|
+| Check 6 of `j.smoke-test` | 0 critical, 37 minor | 0 critical, 37 minor, output byte-identical | **0** |
+| Mirror guard (`check_never_public_refs_invariant`) | 0 critical, 70 minor | 0 critical, 70 minor, same lines | **0** |
+| `scripts/check-public-references.sh` | 42 critical, 48 minor | 40 critical, 50 minor | **2** |
+
+The two reclassified lines are `scripts/postinstall.js:26` (a name hit for `j-self-sync` in the JSDoc line "single source of truth shared with the in-repo
+`/self-sync` skill") and `skills/jenga/scripts/load-nl-catalog.js:85`
+(an `mcp/router/` path hit in a JSDoc continuation). Both are genuine block-comment continuation lines. The
+full before/after listings are in `project/documentation/summaries/E28_S21_T01-findings-delta.txt`.
+`E28_S19_T01`'s freeze of check 6's findings is amended to record this change; check 6's actual findings did
+not change.
+
+**Why markdown name hits do not fail.** The shared rule's own header states the limit: "a name mention
+cannot be told from prose by a regex." `E28_S19_T02` shipped `strict=1` over the whole ship set, which
+measured **598 critical hits across 131 shipped files** and so refused *every* real push — a gate that
+is permanently red enforces nothing, and no board item tracked the remediation. All 67 in-scope name
+hits turned out to be prose: a quoted ticket title, a described condition, a list of sibling skills. Not
+one was an instruction. Remeasured under the matrix above, this scope yields **0 critical**.
+
+This also brings the code into line with story `E28_S19`'s own AC4 — "prose and comment references are
+reported without failing the run, matching check 6" — which `strict=1` contradicted.
+
+**Accepted weakening, recorded so nobody has to rediscover it:** a genuine `/j-mirror-public`
+*invocation* in a shipped `SKILL.md` is now advisory rather than blocking. The path form
+(`skills/j-mirror-public/...`), which is what actually dangles in a consumer install, stays critical
+everywhere.
+
+### Declared exemptions (`E28_S21_T03`)
+
+A few files legitimately name a blocked skill's path **as their purpose**. They are declared in
+[`scripts/never-public-exemptions.conf`](../../scripts/never-public-exemptions.conf) and honoured by the one shared
+rule, so the three consumers cannot disagree.
+
+**Format** (line based; nothing else is accepted):
+
+```
+[lib/legacy-shipped-paths.json]      one entry per file, keyed on the ROOT path
+reason = <one self-contained line>   mandatory
+match = <literal substring>          optional: only a hit on a line containing it is exempt
+```
+
+- **Granularity is per file.** A leading `.claude/` or `.agents/` is folded off before the lookup, so one root
+  key covers a file and both generated copies of it. A key written with that prefix is rejected.
+- **Path hits only.** `never_public_path_exempt` is called for path hits and nothing else. A line that still carries
+  a name or bare `j-<name>` hit once its path hits are blanked is **not** exempt (it stays reported; it is then
+  classified as a path hit, which is the stricter reading). The router MCP directory, which
+  `scripts/check-public-references.sh` audits as private tooling, is never exempted.
+- **Narrowing** is a literal substring (no pattern language). It is used on the three single-hit files, so a later
+  second reference to a blocked skill in the same file is not silently inherited. A narrowed entry can also cover a
+  comment line carrying the same text: `scripts/compute-deploy-reconcile.sh:18` (a minor hit) is covered by the
+  same `/assets/config.json` narrowing as line 146.
+- **No** glob, directory or per-line entries.
+- **Fail closed.** A missing or empty `reason`, an empty `match`, a duplicate entry or field, a glob, directory,
+  absolute or prefixed key, an unknown field, or any unparseable line makes the file malformed. The loader then
+  loads *nothing* and sets `NEVER_PUBLIC_EXEMPT_ERROR`, a message naming the entry (and line where there is one); the
+  mirror guard dies before any rsync write, commit or push, check 6 exits 2, and the reference audit exits 2. An
+  **absent** file means no exemptions, which is the stricter reading.
+- **Visible at push time.** The mirror guard logs every exemption it applies, with its reason
+  (`never-public-refs-invariant: exempt (path) <file>:<line> ... - <reason>`), and the OK line carries the count.
+  The reference audit prints the count on stderr and leaves its last line unchanged.
+
+**The bar for an entry.** *Naming the path is the file's purpose*: a registry of paths that really shipped, a
+tool that rewrites those paths, a permission rule for a maintainer-only command. A reference a consumer would
+follow to a path that does not exist is a **defect to reword** (`E28_S21_T04`), never an entry. The file is a
+security-relevant allow list: review the entries and their reasons, not only the diff. Every entry must still
+name an existing file (a bats case guards against a typo that would exempt nothing).
+
+**Seed entries (6, provisional on the maintainer for five of them).** Hit counts are root hits from the
+`E28_S21_T02` triage (`project/documentation/path-reference-triage-E28_S21.md`), which cover 44 of the 49
+npm-reachable path hits (132 of 147 counting the mirror copies):
+
+| Entry | Hits | Narrowing | Why |
+|---|---|---|---|
+| `lib/legacy-shipped-paths.json` | 28 | none | Generated registry of paths that shipped in earlier npm versions; the strings are the data |
+| `scripts/compute-deploy-reconcile.sh` | 1 | `/assets/config.json` | Reads the mirror skill's maintainer-only config |
+| `scripts/repoint-dead-bare-path-prose.py` | 3 | none | Spent `E50_S22_T03` migration tool; the paths are its targets |
+| `scripts/rewrite-stale-skill-preambles.py` | 10 | none | Spent `E50_S22_T02` migration tool; the paths are its data |
+| `templates/permission-levels/level-4-elevated.json` | 1 | `/scripts/mirror.sh*)` | Allow rule for the mirror script; functional for the maintainer, inert in a consumer install |
+| `templates/permission-levels/level-5-unrestricted.json` | 1 | `/scripts/mirror.sh*)` | As level 4 |
+
+The two migration scripts, `compute-deploy-reconcile.sh` and the two level files are judgement calls (the triage
+marked them ambiguous). **Open question for the maintainer:** retire the two spent migration tools instead of
+exempting them? That would leave 4 entries and exempt 13 fewer root hits (39 with mirrors). Nothing was deleted here.
+
+**The file adds no hits of its own.** A wide scan (the audit with its scope filter set to the whole tree) reports 225
+critical skill-path hits with the file in the tree, the same total as the `E28_S21_T02` baseline without it; the
+file itself contributes 0 path hits and 0 name hits (reasons and narrowing texts refer to a skill's directory in
+words, never as a path). With the exemptions applied the same scan reports 93 critical path hits (135 exempted:
+132 critical plus the 3 minor `compute-deploy-reconcile.sh:18` copies); the 5 defect lines in two templates
+remain. **It does ship to npm**: `scripts/` is in the `files` whitelist and `npm pack --dry-run` lists
+`scripts/never-public-exemptions.conf` (as it lists `scripts/never-public-refs.sh`, which check 6 needs in an
+install).
+
+**`.publicignore`: left outside the mechanism.** The files `npm pack` lists (the widest scope `E28_S21_T05` plans)
+do not include `.publicignore` (verified with `npm pack --dry-run --json`: 483 files, none of them it). It is
+therefore unreachable and gets no exemption entry. The existing handling stands: the mirror guard's scope
+excludes repo-root files (`b62e3e14` removed the explicit exemption as dead), and
+`scripts/check-public-references.sh` skips it by name. If a future scope reaches it, express the handling as an
+entry here rather than a second ad-hoc check. The bats case for the audit's skip runs the audit widened to the
+repo root with and without the skip line, so deleting the handling turns it red.
+
+**Where it runs.**
+
+1. `check_never_public_refs_invariant` in [`skills/j-mirror-public/scripts/mirror.sh`](../../skills/j-mirror-public/scripts/mirror.sh)
+   scans the instruction files within the computed ship set before any rsync write, commit or push, and
+   also under `--dry-run`,
+   so a dry run reports the verdict a real push would. Under bats it is skipped unless
+   `MIRROR_NEVER_PUBLIC_REFS_GATE=1` is set.
+2. Check 6 of `j.smoke-test` ([`skills/j-smoke-test/scripts/smoke-test-skills.sh`](../../skills/j-smoke-test/scripts/smoke-test-skills.sh)).
+3. `scripts/check-public-references.sh` (maintainer-side audit, report only).
+
+All three source the one shared rule, [`scripts/never-public-refs.sh`](../../scripts/never-public-refs.sh).
+Do not duplicate its regexes or severity logic anywhere else.
+
+**Fixing a hit.** Either remove or reword the reference so the shipped file no longer names the private
+skill, or stop blocking the skill in `.publicignore` (a deliberate publishing decision, never a way to
+silence the guard). Do not exempt a file from the scan, except through a declared entry that meets the bar
+under "Declared exemptions" above.
+
+---
+
 ## Permanently private *by policy*: `brainstorm-to-mirror`
 
 Every other exclusion recorded in this document is **mechanical**: a thing is out of the mirror

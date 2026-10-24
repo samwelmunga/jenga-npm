@@ -58,8 +58,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install bats-core
-        run: sudo apt-get update && sudo apt-get install -y bats
+      # python3-yaml is PyYAML, which scripts/validate-board.sh needs for its strict-YAML gate.
+      # Without it that gate is SKIPPED: the validator warns on stderr and still exits 0, so an
+      # unquoted ':' in a scalar and a value merely starting with a quote are not rejected -- two
+      # of the three shapes that let 36 malformed board files accumulate. The runner image has
+      # happened to ship PyYAML, so the check has been real by luck rather than by declaration;
+      # one image change would have hollowed it out silently. Declared here so it cannot.
+      - name: Install bats-core and PyYAML
+        run: sudo apt-get update && sudo apt-get install -y bats python3-yaml
 
       - name: Run test suite (bats)
         run: npm test

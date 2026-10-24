@@ -108,7 +108,7 @@ natively for the same skill via root `CLAUDE.md`'s "Skill Frontmatter" section.
 CLI flag and the interactive `/agent [name]` command both load a custom agent-definition file
 discovered from `.github/agents/*.md` or `.claude/agents/*.md`, keyed by that file's frontmatter
 `name:` field — not its filename. Jenga's `agents/*.md` personas are mirrored into both of those
-paths by `/self-sync` (`skills/self-sync/scripts/run.js`); cite `.github/agents/` as the
+paths by the self-sync skill; cite `.github/agents/` as the
 canonical path for this purpose, parallel to how "How Jenga Works" above cites `.agents/skills/`
 as canonical for skills. `.agents/agents/` is also mirrored (for reasons unrelated to Copilot)
 but is a **confirmed Copilot-discovery dead-end** — the native agent loader does not read it;

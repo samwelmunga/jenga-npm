@@ -16,7 +16,7 @@
     "ui:dev": "npm run dev --workspace=ui",
     "ui:build": "npm run build --workspace=ui",
     "dashboard:start": "node ui/scripts/dashboard-start.cjs",
-    "dashboard:open": "node ui/scripts/dashboard-open.cjs"
+    "dashboard:open": "node ui/scripts/dashboard-start.cjs --open"
   },
   "allowScripts": {
     "esbuild@0.21.5": true,

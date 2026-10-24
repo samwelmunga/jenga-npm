@@ -219,10 +219,19 @@ run_hook_bash() {
 }
 
 @test "scripts/checklist.sh and hooks/on_preflight_check.sh are not modified by this task (out of scope for the epic)" {
-  # this task's whole contribution is evidence and data; the two scripts stay as they were on main
-  base="$(git -C "$REPO_ROOT" merge-base HEAD main 2>/dev/null || true)"
-  if [ -z "$base" ]; then skip "no main to compare against"; fi
-  run git -C "$REPO_ROOT" diff --stat "$base" -- scripts/checklist.sh hooks/on_preflight_check.sh
+  # This task's whole contribution is evidence and data; it touched neither script. That claim is about ONE
+  # commit, so it is pinned to that commit and stays true forever.
+  #
+  # It was originally written as "no diff between merge-base(HEAD, main) and HEAD", which asserts something
+  # much stronger and unintended: that no LATER commit may ever touch either file. That froze both of them.
+  # A fix for a silent data-loss bug in checklist.sh's tick store -- entirely unrelated to this task's
+  # scope -- was the first legitimate change to trip it. Narrowing the range preserves the real assertion
+  # without making the files permanently untouchable.
+  local task_commit=ad7ff923  # task(E69_S05_T05): record that pre-commit cannot see the commit message
+  if ! git -C "$REPO_ROOT" cat-file -e "${task_commit}^{commit}" 2>/dev/null; then
+    skip "commit $task_commit is not in this tree's history (the public mirror squashes each run into one commit)"
+  fi
+  run git -C "$REPO_ROOT" diff --stat "${task_commit}^" "$task_commit" -- scripts/checklist.sh hooks/on_preflight_check.sh
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }

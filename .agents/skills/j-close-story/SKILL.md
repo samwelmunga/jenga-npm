@@ -137,7 +137,7 @@ For **each task ID** listed in the story's `tasks:` frontmatter array:
      blocklist — the script has already written `status: Privatized` to the
      task's frontmatter (superseding whatever status was there, including a
      contradictory `Publicized`, in which case the script also logs a
-     `publicized_privatized_mismatch` event to `project/logs/events.json`).
+     `publicized_privatized_mismatch` event to `project/logs/events.json` as a single appended JSONL line, never a rewrite; manual writes use the dual-path form of `scripts/events-append.sh`).
    - Prints `UNCHANGED` if the task has zero matched commits, only partial
      blocklist coverage, or is already `Privatized` — no error, no board
      write.

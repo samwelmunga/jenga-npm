@@ -138,11 +138,11 @@ make_fixture_descriptors() {
   [ "$(ls "$CFG" | wc -l | tr -d ' ')" -eq 5 ]
 }
 
-@test "the editable keys are the integer settings of scope-thresholds and playbook-config plus test-config's two commit_* strings; checklists and workflow have none" {
+@test "the editable keys are the integer settings of scope-thresholds and playbook-config plus test-config's two commit_* and three test_run_* strings; checklists and workflow have none" {
   run editable_keys "$DESCRIPTORS"
   [ "$status" -eq 0 ]
   [ "$(echo "$output" | cut -d' ' -f1 | sort -u | tr '\n' ' ')" = "playbook-config scope-thresholds test-config " ]
-  [ "$(echo "$output" | grep '^test-config ' | cut -d' ' -f2 | sort | tr '\n' ' ')" = "commit_prompt_default commit_scope_map_file " ]
+  [ "$(echo "$output" | grep '^test-config ' | cut -d' ' -f2 | sort | tr '\n' ' ')" = "commit_prompt_default commit_scope_map_file test_run_epic test_run_story test_run_task " ]
   for f in checklists workflow; do
     [ "$(jq '[.keys[] | select(.editable)] | length' "$DESCRIPTORS/$f.json")" -eq 0 ]
     # and no bump rule is declared anywhere in a file with no editable key (checklist_version is pinned to 1)
@@ -429,7 +429,7 @@ make_fixture_descriptors() {
   # only that key moved: tools and the other string key are as they were, and no counter appeared
   jq -e --argjson was "$(cat "$BATS_TEST_TMPDIR/snap/test-config.json")" \
     'del(.commit_prompt_default) == ($was | del(.commit_prompt_default))' "$CFG/test-config.json" >/dev/null
-  [ "$(jq -r 'keys | join(",")' "$CFG/test-config.json")" = "commit_prompt_default,commit_scope_map_file,tools" ]
+  [ "$(jq -r 'keys | join(",")' "$CFG/test-config.json")" = "commit_prompt_default,commit_scope_map_file,test_run_epic,test_run_story,test_run_task,tools" ]
   local other
   for other in $CONFIG_FILES; do
     if [ "$other" != "test-config" ]; then unchanged "$other"; fi
@@ -493,6 +493,74 @@ make_fixture_descriptors() {
   [ "$status" -eq 0 ]
   [ "$(cfgval test-config commit_prompt_default)" = "full" ]
   [ "$(jq '.tools | length' "$CFG/test-config.json")" -eq "$(jq '.tools | length' "$REPO_ROOT/project/configs/test-config.json")" ]
+}
+
+# ================================================================================================================
+# test-config.json's per-scope test-run policy keys (E72_S06_T01): three flat enum strings, no version counter
+# ================================================================================================================
+
+@test "test-config test_run_* keys: get reads the defaults (none, scoped, full)" {
+  jc get test-config.test_run_task
+  [ "$status" -eq 0 ]
+  [ "$output" = "none" ]
+  jc get test-config.test_run_story
+  [ "$status" -eq 0 ]
+  [ "$output" = "scoped" ]
+  jc get test-config.test_run_epic
+  [ "$status" -eq 0 ]
+  [ "$output" = "full" ]
+}
+
+@test "test-config test_run_story: set full succeeds without bumping anything, reads back full, and only that key moved" {
+  snap
+  jc set test-config.test_run_story full
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+  [ "$output" = 'test-config.test_run_story = "full"' ]
+  jc get test-config.test_run_story
+  [ "$status" -eq 0 ]
+  [ "$output" = "full" ]
+  jq -e --argjson was "$(cat "$BATS_TEST_TMPDIR/snap/test-config.json")" \
+    'del(.test_run_story) == ($was | del(.test_run_story))' "$CFG/test-config.json" >/dev/null
+  local other
+  for other in $CONFIG_FILES; do
+    if [ "$other" != "test-config" ]; then unchanged "$other"; fi
+  done
+}
+
+@test "test-config test_run_*: each of the three keys accepts none, scoped and full" {
+  local key v
+  for key in test_run_task test_run_story test_run_epic; do
+    for v in none scoped full; do
+      jc set "test-config.$key" "$v"
+      [ "$status" -eq 0 ]
+      [ "$(cfgval test-config "$key")" = "$v" ]
+    done
+  done
+}
+
+@test "test-config test_run_story: banana is rejected with exit 4 and the file is left byte-identical" {
+  snap
+  jc set test-config.test_run_story banana
+  [ "$status" -eq 4 ]
+  assert_contains "$stderr" "test_run_story"
+  [ -z "$output" ]
+  all_unchanged
+  cmp "$CFG/test-config.json" "$BATS_TEST_TMPDIR/snap/test-config.json"
+}
+
+@test "test-config test_run_*: values outside allowed (case variants, padding, empty, skip) exit 4 on every key and change nothing" {
+  local key v
+  snap
+  for key in test_run_task test_run_story test_run_epic; do
+    for v in Scoped FULL "none " "" skip yes 1; do
+      jc set "test-config.$key" "$v"
+      [ "$status" -eq 4 ]
+      assert_contains "$stderr" "$key"
+      [ -z "$output" ]
+      all_unchanged
+    done
+  done
 }
 
 @test "the version counters themselves are read-only: a user cannot set threshold_version or config_version, so a bump never stacks on a hand-set value" {

@@ -143,8 +143,8 @@
 # and events.json (see hooks/on_session_end.sh and
 # templates/SCRUM_BOARD_SCHEMA.md's File Locking section), not a new
 # concurrency mechanism. The write itself is atomic (temp file in the same
-# directory, then `mv`), matching the pattern in hooks/on_session_end.sh's
-# own events.json append.
+# directory, then `mv`). (events.json itself is JSONL and is appended to through
+# scripts/events-append.sh, not rewritten.)
 #
 # ---------------------------------------------------------------------------
 # EXIT CODES
@@ -371,8 +371,7 @@ fi
 # The update logic is captured as a standalone python3 script and run via
 # `python3 -c` with every value passed as a positional argv entry (never
 # interpolated into the script text), mirroring the same avoid-fragile-
-# quoting convention hooks/on_session_end.sh already uses for its own
-# events.json read-modify-write.
+# quoting convention scripts/events-append.sh uses for its events.json append.
 UPDATE_SCRIPT=$(cat <<'PYEOF'
 import json, os, sys, tempfile, datetime
 

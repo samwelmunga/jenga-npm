@@ -444,7 +444,7 @@ exit `10` or `11` outcome **defers** the unit instead:
   `In Progress`, revert it to `Pending` with `### 4.4` step 1a's locking protocol.
 - Append `{"event": "preflight_deferred", "agent": "orchestrator", "session_id": "<orchestrator_session_id>",
   "item_id": "<id>", "phase": "pre-task", "run_id": "<RUN_ID>", "items": ["<checklist item ids>"], "date":
-  "<ISO 8601 UTC>"}` to `project/logs/events.json`. Never write `capacity_blocked`; this is a different cause.
+  "<ISO 8601 UTC>"}` to `project/logs/events.json` (via `scripts/events-append.sh`, dual-path form as above). Never write `capacity_blocked`; this is a different cause.
 - Report "deferred: pre-flight checklist needs a user decision (`<ids>`: `<reasons>`)", never "failed".
 
 **Mark the situation.** Immediately after minting the run id and **before** the first `check`, write
@@ -653,7 +653,7 @@ Detecting which case applies is mechanical: if the dispatch context already cont
      a. Revert the item's board status to `Pending`, using the same file-locking protocol already used elsewhere in this skill for status writes.
      b. Read the current holders snapshot for the `developer` role from `project/queue/concurrency-slots-<orchestrator_session_id>.json` (`.developer.holders`). If the file does not exist yet, treat the snapshot as `{}`. Note this snapshot may still include not-yet-reclaimed stale (TTL-expired) entries, since a blocked acquire call never mutates the counter file — it is a best-effort audit snapshot, not a guaranteed-fresh one.
      c. Read/update the per-item consecutive-block counter per step 3 below, and use the resulting count as this event's `wave` value.
-     d. Append one entry to `project/logs/events.json` (read the file's existing entries first to match its established array-of-objects shape):
+     d. Append one entry to `project/logs/events.json` with `bash "$([ -f scripts/events-append.sh ] && echo scripts/events-append.sh || echo node_modules/@jenga-ai/agent/scripts/events-append.sh)" '<json-record>'` (JSONL, append only; never rewrite the file):
         ```json
         {
           "event": "capacity_blocked",
@@ -715,7 +715,7 @@ On a successful acquire, invoke the developer Agent tool with the following para
 - A "Pre-flight reminders" block with the `text` of each `pre-task` item whose `action` was `remind` (omit when there are none)
 
 The developer agent will:
-- Log the incoming sender object to `project/logs/events.json`
+- Log the incoming sender object to `project/logs/events.json` (via `scripts/events-append.sh`)
 - Create a worktree named `<E##_S##_T##-short-slug>`
 - Implement, commit at milestones, and invoke the tester agent
 - Return when the tester has verified the work

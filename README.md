@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="project/documentation/assets/jenga-logo-readme.png" alt="Jenga AI" width="480">
+</p>
+
 # Jenga AI
 ### The AI-driven development framework for large, long-lived codebases.
 
@@ -261,6 +265,25 @@ Jenga ships a small generic default at `templates/checklists.json`. Authoring yo
 Enforcement doesn't rest on an agent cooperating: a `PreToolUse` hook (`hooks/on_preflight_check.sh`) refuses the active phase's own irreversible command — `git commit` during `pre-commit` — while a `block` item fails, and asks when a `confirm` item fails. Agents can *suggest* items, but a suggestion is only a rapport: nothing reaches your checklist without your confirmation.
 
 > 📖 **Authoring reference:** [Docs site](https://samwelmunga.github.io/jenga-npm/preflight-checklists.html) — mirrored at [project/.wiki/preflight-checklists.md](project/.wiki/preflight-checklists.md)
+
+---
+
+## Verifying a Staged Release Against a Consumer Project
+
+Before a release goes live, `j.publish` stages it on npm. A staged version can be tested in a real consumer project first. The process below was run against ST-Test, a test environment that borrows the Skolkartan project as its base. Skolkartan is a research tool that aggregates public school data for a set of Swedish municipalities into one comparable dataset with full provenance, built as a Next.js application.
+
+1. **Log in to npm.** `npm whoami` must print your username. If it fails with `E401`, run `npm login`.
+2. **Download the staged tarball** into a temporary directory, not the consumer repo: `npm stage download <stage-id>`. List stage IDs with `npm stage list @jenga-ai/agent`.
+3. **Check the checksum.** The `shasum` from `npm stage view <stage-id>` must match the tarball's `shasum -a 1`.
+4. **Install the tarball** in the consumer: `npm install /path/to/jenga-ai-agent-<version>-<stage-id>.tgz`. This points the dependency at a `file:` path, so restore the registry version after the release.
+5. **Approve and run the postinstall.** npm does not run install scripts that are not approved: `npm approve-scripts @jenga-ai/agent`, then `npm rebuild @jenga-ai/agent`. `.jenga-version` must then match the package version.
+6. **Run the skill smoke test** against the package root, not against `.claude/`, which holds only `skills/` and `agents/`:
+   ```sh
+   bash node_modules/@jenga-ai/agent/skills/j-smoke-test/scripts/smoke-test-skills.sh --root node_modules/@jenga-ai/agent
+   ```
+   Exit `0` means no critical finding; exit `1` lists them. The check covers structure (frontmatter, names, referenced scripts and assets), not behaviour.
+7. **Run the package's own tests:** `node node_modules/@jenga-ai/agent/scripts/populate-knowledge-graph.entity-resolution.test.js` and `node node_modules/@jenga-ai/agent/scripts/populate-knowledge-graph.staleness.test.js`.
+8. **Run the consumer's own checks** (for example `npm test`). Suites that read project data fail when that data is absent.
 
 ---
 

@@ -522,3 +522,53 @@ light file I/O (writing this document, the plan, and the board items) and a hand
 and `grep` queries; one `bats tests/checklist-gating.bats` run and two `bats -j` smoke runs (each a few
 seconds) overlapped the harness and are the only non-trivial concurrent work. Section 6's headline
 549 s figure was taken **before** anything else was started, on a fully idle machine.
+
+---
+
+## Addendum (E51_S03_T05, 2026-10-21): the same cause, a different culprit
+
+**Verdict: pre-existing class, not a regression from E51_S03_T04 (`f92e6cc5`).** Tests 5, 6 and 7 of
+`tests/mirror-test-subject-invariant.bats` were red again for the reason this document already
+established: the gate correctly refused a push because shipping tests were red. The culprits changed;
+`tests/checklist-gating.bats` is no longer one of them (it was blocklisted since).
+
+Baseline: `run_real_push`'s command run directly (outside bats, SIGINT left at its default, local bare
+remote, `MIRROR_TEST_SUBJECT_GATE=1`, `MIRROR_WORKTREE_PATH_OVERRIDE` to a scratch dir) in detached
+worktrees:
+
+| Checkout | Shipping files | Exit | Result |
+|---|---|---|---|
+| `76bad01c` (first parent of the `f92e6cc5` merge) | 130 | 0 | all pass, `mirror-staging` pushed |
+| main `469c36c0` | 151 | 1 | 3 files fail, no push |
+| `bef54952` (this task's fix) | 148 | 0 | all pass, `refs/heads/mirror-staging` on the bare remote |
+
+Verbatim failure lines at `469c36c0`:
+
+```
+mirror.sh: test-subject-invariant: FAIL tests/e73-spike-harness.bats — not ok 1 enable adds the five hook entries and keeps the permissions block
+mirror.sh: test-subject-invariant: FAIL tests/e73-spike-interactive-shapes.bats — not ok 1 fixture run writes the output file with every documented observation key
+mirror.sh: test-subject-invariant: FAIL tests/workflow-run-gitignore.bats — not ok 3 the runs directory .gitkeep exists, is empty, and git add -n accepts it
+```
+
+All three are stranded shipping tests (class 2 of the original diagnosis): the E73 pair drive
+`project/spikes/E73_S01/` and the E80 test asserts `project/data/workflow-runs/.gitkeep`, both
+blocklisted in `.publicignore`. Neither the files nor their blocklist entries predate `76bad01c`, so
+they cannot have been red there. `E51_S03_T04`'s Publicized pass runs after the staging push and is
+skipped under bats (`BATS_TEST_FILENAME` set, unless `MIRROR_PUBLICIZE_IN_TESTS=1`), so it plays no part.
+
+**Fix:** the three files were added to `.publicignore`'s "Private-tooling tests" block (the remedy the
+gate's own error message prescribes). No test was deleted, weakened or skipped.
+
+**Measurement pitfall worth knowing:** a baseline launched as a background job from a non-interactive
+shell inherits SIGINT as ignored, which makes `tests/commit-test-gate-run.bats` case 31 ("interrupt:
+SIGINT ...") fail and adds a fourth, spurious red file. Reset SIGINT to default (e.g. via
+`perl -e '$SIG{INT}="DEFAULT"; exec ...'`) when running the gate outside bats.
+
+**Why this recurs:** a new test whose subject is blocklisted goes unnoticed until the 9+ minute gate run.
+Attribution output (E28_S18_T05) and an earlier cheap check were never built. Relationship to
+`E77_S02_T07`: that task marks the file manual-only (controls when it runs); this addendum explains why it
+was red. Neither duplicates the other.
+
+**Residual:** `mirror.sh` run directly (not under bats) executes the Publicized pass against the real
+board of whichever checkout it is run from, even with `MIRROR_PUBLIC_URL_OVERRIDE` pointing at a local bare
+remote; it rewrote 76 board files in the scratch worktree during the verification run (reverted).

@@ -22,11 +22,11 @@ Usage:
   jenga doctor    Scan .agents/ and .claude/ for orphaned package files and clean up
                   interactively (alias: jenga clean). Add --dry-run to preview only.
   jenga config    List and edit Jenga settings (also: config get|set <file>.<key> [value])
-  jenga dashboard start [--port <n>] [--serve-app]
-                  Start the project dashboard API server (and optionally serve the
-                  built UI). Port defaults to 3001, or JENGA_API_PORT if set.
+  jenga dashboard start [--port <n>] [--api-only]
+                  Start the project dashboard API and UI (--api-only serves the API
+                  without the UI). Port defaults to 3001, or JENGA_API_PORT if set.
   jenga dashboard open [--port <n>]
-                  Health-check the dashboard and open it in your browser.
+                  Start the project dashboard API and UI, then open it in your browser.
 
 Options:
   --version, -v   Print version

@@ -8,7 +8,7 @@
 }
 
 .arch-empty {
-  color: #9ca3af;
+  color: var(--color-text-muted);
   font-style: italic;
 }
 
@@ -19,9 +19,9 @@
 .arch-section h3 {
   font-size: 1rem;
   font-weight: 600;
-  color: #374151;
+  color: var(--color-text);
   margin-bottom: 0.75rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--color-border);
   padding-bottom: 0.35rem;
 }
 
@@ -33,25 +33,25 @@
 }
 
 .tech-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 0.85rem 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px var(--color-shadow-soft);
 }
 
 .tech-name {
   font-weight: 600;
   font-size: 0.9rem;
-  color: #1f2937;
+  color: var(--color-text);
 }
 
 .tech-description {
   font-size: 0.78rem;
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 /* ── Dependency Table ─────────────────────────────────────────────────────── */
@@ -64,20 +64,20 @@
 .dep-table th {
   text-align: left;
   padding: 0.5rem 0.75rem;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
   font-weight: 600;
-  color: #374151;
+  color: var(--color-text);
 }
 
 .dep-table td {
   padding: 0.45rem 0.75rem;
-  border: 1px solid #f3f4f6;
-  color: #1f2937;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
 }
 
 .dep-table tr:hover td {
-  background: #f9fafb;
+  background: var(--color-surface-alt);
 }
 
 .dep-name {
@@ -85,7 +85,7 @@
 }
 
 .dep-version {
-  color: #6b7280;
+  color: var(--color-text-muted);
   font-family: monospace;
 }
 
@@ -99,13 +99,13 @@
 }
 
 .dep-runtime {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .dep-dev {
-  background: #f3f4f6;
-  color: #4b5563;
+  background: var(--color-surface-alt);
+  color: var(--color-text-muted);
 }
 
 .dep-table-wrap {
@@ -122,15 +122,15 @@
 }
 
 .sad-type-chip {
-  --chip-color: #94a3b8;
+  --chip-color: var(--color-chart-default);
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #374151;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 999px;
   padding: 0.25rem 0.65rem;
   cursor: pointer;
@@ -138,7 +138,7 @@
 }
 
 .sad-type-chip.is-collapsed {
-  background: #f3f4f6;
+  background: var(--color-surface-alt);
   border-color: var(--chip-color);
 }
 
@@ -153,9 +153,9 @@
 .sad-reset-view-btn {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #374151;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 0.25rem 0.65rem;
   cursor: pointer;
@@ -167,9 +167,9 @@
   min-height: 320px;
   overflow: hidden;
   -webkit-overflow-scrolling: touch;
-  border: 1px solid var(--border, #e2e8f0);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: var(--bg-secondary, #f8fafc);
+  background: var(--color-surface-alt);
 }
 
 .sad-map-svg {
@@ -183,29 +183,29 @@
 }
 
 .sad-empty {
-  color: var(--text-muted, #94a3b8);
+  color: var(--color-text-muted);
   font-style: italic;
 }
 
 /* E20_S10_T02: coverage indicator + honest empty state */
 .sad-coverage-indicator {
   font-size: 0.78rem;
-  color: #6b7280;
+  color: var(--color-text-muted);
   margin: 0 0 0.5rem;
 }
 
 .sad-coverage-shown {
   font-weight: 600;
-  color: #374151;
+  color: var(--color-text);
 }
 
 .sad-coverage-hidden {
-  color: #9ca3af;
+  color: var(--color-text-muted);
 }
 
 /* E20_S10_T05: staleness/revalidation badge, surfaced through the same coverage indicator */
 .sad-coverage-stale {
-  color: #b45309;
+  color: var(--color-warning);
   font-weight: 600;
 }
 
@@ -217,12 +217,12 @@
 
 .sad-empty-detail {
   font-size: 0.8rem;
-  color: #9ca3af;
+  color: var(--color-text-muted);
   margin: 0;
 }
 
 .sad-empty-detail code {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--color-shadow-soft);
   padding: 0.1rem 0.3rem;
   border-radius: 3px;
 }
@@ -233,7 +233,7 @@
   align-items: center;
   gap: 0.4rem;
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--color-text-muted);
   margin: 0 0 0.6rem;
 }
 
@@ -243,9 +243,9 @@
   height: 12px;
   flex-shrink: 0;
   border-radius: 3px;
-  background: #94a3b8;
+  background: var(--color-chart-default);
   opacity: 0.4;
-  border: 1.5px dashed #1f2937;
+  border: 1.5px dashed var(--color-chart-outline);
 }
 
 /* ── Mobile (<= 480px, matches tokens.css --breakpoint-mobile) ───────────────── */

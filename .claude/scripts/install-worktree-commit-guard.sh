@@ -15,6 +15,14 @@
 # underlying change landing), so this is a real guard, not just a documented
 # rule.
 #
+# Base-branch independence (E78_S03): the guard checks the worktree's OWN task
+# branch only, never the branch that worktree was cut from. A task branch cut
+# from a session's perceived branch (scripts/create-task-worktree.sh, E78_S02)
+# is therefore accepted exactly like one cut from HEAD, so a perceived base
+# needs no special handling here. Wrong-branch commits (main, the perceived
+# branch, any other branch, a detached HEAD) are still blocked. Covered by
+# tests/worktree-commit-guard-perceived-base.bats.
+#
 # IMPORTANT — why this does NOT just write to `git rev-parse --git-path
 # hooks`: that path resolves to the *shared* `hooks` directory common to the
 # main repository and every one of its linked worktrees (verified against

@@ -12,7 +12,8 @@
 #
 # Usage:
 #   map-scope.sh [--root <dir>] [--map <file>] [--suites <file|->]
-#                [--rev <commit> | --range <a..b> | --staged | --working]
+#                [--rev <commit> | --range <a..b> | --staged | --working
+#                 | --files-from <file>]
 #   map-scope.sh --help
 #
 #   --root <dir>      project root; every git call runs against it. Default: the
@@ -32,6 +33,13 @@
 #   --staged          the index against HEAD
 #   --working         everything differing from HEAD: staged, unstaged and
 #                     untracked-not-ignored files
+#   --files-from <f>  (E72_S06_T03) the changed files are exactly the names listed
+#                     in <f>: one root-relative path per line, blank lines ignored,
+#                     no git diff is run. For callers that already derived a file
+#                     list from several commits (scope-test-gate.sh unions the
+#                     commits of a story or an epic). Names are used verbatim; a
+#                     missing or unreadable <f> is exit 3. An empty list is the
+#                     `No changed files` result, as for any other empty source.
 #   In a repository with no commit yet, --staged and --working diff against the
 #   empty tree. Names come from `git diff --name-only -z --no-renames` (a rename
 #   is a delete plus an add, so both names count) with core.quotepath=off. Paths
@@ -162,8 +170,8 @@
 #      or produced unusable output, root unresolvable)
 #   2  usage error (unknown flag, missing argument, more than one change source,
 #      non-directory --root)
-#   3  a mapping file, its configured path, or the --suites input is missing,
-#      unreadable or invalid (stdout empty, a clear stderr message)
+#   3  a mapping file, its configured path, the --suites input or the --files-from
+#      file is missing, unreadable or invalid (stdout empty, a clear stderr message)
 #   4  not a git repository, or an unknown revision
 #   Callers treat any non-zero exit as "offer the full suite".
 #
@@ -192,7 +200,8 @@ die() { local code="$1"; shift; err "$*"; exit "$code"; }
 usage() {
   cat <<'EOF'
 Usage: map-scope.sh [--root <dir>] [--map <file>] [--suites <file|->]
-                    [--rev <commit> | --range <a..b> | --staged | --working]
+                    [--rev <commit> | --range <a..b> | --staged | --working
+                     | --files-from <file>]
        map-scope.sh --help
 
 Map the files changed in a commit, range, the index or the working tree to the
@@ -206,6 +215,8 @@ discovered test suites that cover them, using a scope-map file.
   --range <a..b>    a revision range (a..b or a...b)
   --staged          the index against HEAD
   --working         staged, unstaged and untracked files (default)
+  --files-from <f>  the changed files are the root-relative paths listed in <f>,
+                    one per line (no git diff is run)
   --help            show this help and exit 0
 
 Output: {"mapped_suites":[],"mapped_tests":{},"unmapped_files":[],"warnings":[]}
@@ -530,6 +541,12 @@ acquire_changes() {
         CHANGED_TAGGED="$(diff_z --cached "$empty" | emit_tagged C)" || die 1 "git diff --cached failed"
       fi
       ;;
+    files)
+      [ -f "$FILES_FROM" ] && [ -r "$FILES_FROM" ] \
+        || die 3 "--files-from: $FILES_FROM is missing or unreadable"
+      CHANGED_TAGGED="$(sed -e 's/\r$//' -e '/^$/d' "$FILES_FROM" | tr '\n' '\0' | emit_tagged C)" \
+        || die 3 "--files-from: $FILES_FROM is unreadable"
+      ;;
     working)
       prepare_scratch_index
       if head_exists; then
@@ -696,12 +713,15 @@ main() {
         MODE="range"; RANGE="$2"; sources=$((sources + 1)); shift 2 ;;
       --staged) MODE="staged"; sources=$((sources + 1)); shift ;;
       --working) MODE="working"; sources=$((sources + 1)); shift ;;
+      --files-from)
+        [ "$#" -ge 2 ] && [ -n "$2" ] || { err "--files-from requires a file argument"; usage >&2; exit 2; }
+        MODE="files"; FILES_FROM="$2"; sources=$((sources + 1)); shift 2 ;;
       -h|--help|help) usage; exit 0 ;;
       *) err "unknown argument: $1"; usage >&2; exit 2 ;;
     esac
   done
   if [ "$sources" -gt 1 ]; then
-    err "at most one of --rev, --range, --staged, --working may be given"
+    err "at most one of --rev, --range, --staged, --working, --files-from may be given"
     usage >&2
     exit 2
   fi
@@ -771,6 +791,7 @@ RESOLVER=""
 MODE=""
 REV=""
 RANGE=""
+FILES_FROM=""
 MAP_ARG=""
 MAP_FILE=""
 MAP_DISPLAY=""

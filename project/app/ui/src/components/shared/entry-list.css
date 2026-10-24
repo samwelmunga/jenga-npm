@@ -13,7 +13,7 @@
  */
 
 .entry-list-empty {
-  color: #888;
+  color: var(--color-text-muted);
   padding: 2rem;
   text-align: center;
 }
@@ -22,7 +22,7 @@
   list-style: none;
   padding: 0;
   margin: 0;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -33,7 +33,7 @@
   gap: 0.75rem;
   padding: 0.65rem 1rem;
   cursor: pointer;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--color-border);
   transition: background 0.12s;
 }
 
@@ -43,12 +43,12 @@
 
 .entry-list-item:hover,
 .entry-list-item:focus {
-  background: #f0f7ff;
+  background: var(--color-accent-bg);
   outline: none;
 }
 
 .entry-list-item.selected {
-  background: #dbeafe;
+  background: var(--color-info-bg);
 }
 
 .entry-badge {
@@ -59,8 +59,8 @@
   border-radius: 999px;
   white-space: nowrap;
   text-transform: capitalize;
-  background: #ede9fe;
-  color: #6d28d9;
+  background: var(--color-purple-bg);
+  color: var(--color-purple);
 }
 
 .entry-title {
@@ -69,13 +69,13 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #1f2937;
+  color: var(--color-text);
 }
 
 .entry-date {
   flex-shrink: 0;
   font-size: 0.78rem;
-  color: #9ca3af;
+  color: var(--color-text-muted);
 }
 
 /* ── Mobile (<= 480px, matches tokens.css --breakpoint-mobile) ────────────────── */

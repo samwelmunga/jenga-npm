@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jenga AI Dashboard</title>
+    <script>
+      // E47_S07: resolve the stored theme before first paint (no flash). Classic inline
+      // script, no network access. Stored values: "light" | "dark"; anything else = follow OS.
+      (function () {
+        try {
+          var t = window.localStorage.getItem('jenga-dashboard-theme');
+          if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+        } catch (e) { /* storage can throw under file:// */ }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

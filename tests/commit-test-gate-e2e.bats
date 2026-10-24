@@ -250,9 +250,10 @@ json_check() {
   fi
 }
 
-# event_check <jq expression>: events.json must satisfy it.
+# event_check <jq expression>: events.json must satisfy it. events.json is JSONL, so the expression is evaluated
+# against the slurped array of records (`jq -s`): `.[-1]` is the last record and `length` is the record count.
 event_check() {
-  if ! jq -e "$1" "$EVENTS" > /dev/null; then
+  if ! jq -e -s "$1" "$EVENTS" > /dev/null; then
     printf 'events check failed: %s\n--- events.json ---\n%s\n-------------------\n' "$1" "$(cat "$EVENTS" 2>&1)" >&2
     return 1
   fi
@@ -969,10 +970,10 @@ noninteractive_gate() {
 # Audit trail
 # ================================================================================================================
 
-@test "audit trail: a scenario that skips, fails and overrides leaves its commit_test_gate events in order in a valid array" {
+@test "audit trail: a scenario that skips, fails and overrides leaves its commit_test_gate events in order as valid JSONL" {
   cfg ""
   mkdir -p "$PROJ/project/logs"
-  printf '%s\n' '[{"event":"session_start","agent":"developer","session_id":"earlier","date":"2026-10-14T00:00:00Z"}]' > "$EVENTS"
+  printf '%s\n' '{"event":"session_start","agent":"developer","session_id":"earlier","date":"2026-10-14T00:00:00Z"}' > "$EVENTS"
 
   # Commit 1: the user skips.
   stage_edit src/alpha.sh

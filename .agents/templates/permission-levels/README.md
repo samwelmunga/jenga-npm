@@ -1,6 +1,6 @@
 # Permission Level Templates
 
-> **Distribution note:** This directory is mirrored automatically — no additional wiring is needed. `/self-sync` (`skills/self-sync/scripts/run.js`, `COPY_SET`) and `/distribute` (`distribute.config.json`, `distribute.include`) both already list `templates` as a top-level entry, and both copy that directory recursively, so `templates/permission-levels/` (including this README and all five level JSON files) rides along automatically with every sync/distribute run.
+> **Distribution note:** This directory is mirrored automatically — no additional wiring is needed. The self-sync skill (its script's `COPY_SET`) and the distribute flow (`distribute.config.json`, `distribute.include`) both already list `templates` as a top-level entry, and both copy that directory recursively, so `templates/permission-levels/` (including this README and all five level JSON files) rides along automatically with every sync/distribute run.
 
 This directory holds the five canonical `settings.json` permission templates that back the `/jenga-permission-level` session-switchable permission system: **Locked (1)**, **Guarded (2)**, **Standard (3)**, **Elevated (4)**, and **Unrestricted (5)**.
 
@@ -25,12 +25,12 @@ Each level is a full `settings.json` file — `level-1-locked.json` through `lev
 | 1 · Locked | `$defaults` |
 | 2 · Guarded | `$defaults` |
 | 3 · Standard | `$defaults` |
-| 4 · Elevated | `$defaults`<br>`Bash(bash skills/mirror-public/scripts/mirror.sh*)` |
-| 5 · Unrestricted | `$defaults`<br>`Bash(bash skills/mirror-public/scripts/mirror.sh*)` |
+| 4 · Elevated | `$defaults`<br>plus one entry that auto-approves running the mirror script (the entry is in the level's JSON file) |
+| 5 · Unrestricted | `$defaults`<br>plus the same one entry that auto-approves running the mirror script |
 
 ### Why mirror.sh is gated to level 4+
 
-`permissions.deny` matches the command string the agent invokes — it does **not** see what that command spawns in a subprocess. `skills/mirror-public/scripts/mirror.sh` internally runs `git reset --hard origin/<branch>` and `git push origin <branch>` against the public repo. Auto-approving the script by name therefore grants an unprompted push of repository content to a **public** repo that the deny list cannot intercept. (The push itself is a plain fast-forward `git push` — the script's `--force` flag only overrides a pre-flight safety abort, it does not force-push. The risk here is disclosure, not history loss.)
+`permissions.deny` matches the command string the agent invokes — it does **not** see what that command spawns in a subprocess. The mirror script (`mirror.sh`) internally runs `git reset --hard origin/<branch>` and `git push origin <branch>` against the public repo. Auto-approving the script by name therefore grants an unprompted push of repository content to a **public** repo that the deny list cannot intercept. (The push itself is a plain fast-forward `git push` — the script's `--force` flag only overrides a pre-flight safety abort, it does not force-push. The risk here is disclosure, not history loss.)
 
 Levels 1–3 deny `git push *` and `git reset --hard *`. Auto-approving `mirror.sh` at those levels would silently defeat that intent. Level 4 (Elevated) is the first tier where `git push *` and `git reset --hard *` are permitted directly, so it is the first tier where auto-approving a script that performs them is consistent.
 

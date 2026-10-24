@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "dashboard:start": "node scripts/dashboard-start.cjs",
-    "dashboard:open": "node scripts/dashboard-open.cjs"
+    "dashboard:open": "node scripts/dashboard-start.cjs --open"
   },
   "dependencies": {
     "dagre": "^0.8.5",

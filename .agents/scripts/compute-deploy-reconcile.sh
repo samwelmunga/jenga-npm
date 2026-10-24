@@ -144,7 +144,10 @@ REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)
 [ -n "$REPO_ROOT" ] || die "could not locate repo root (git rev-parse failed from $SCRIPT_DIR)"
 
 CONFIG_FILE="$REPO_ROOT/skills/j-mirror-public/assets/config.json"
-[ -f "$CONFIG_FILE" ] || die "config not found: $CONFIG_FILE"
+if [ ! -f "$CONFIG_FILE" ]; then
+  warn "config not found: $CONFIG_FILE -- no public mirror is configured here, nothing to reconcile"
+  exit 0
+fi
 
 WITH_LOCK_SCRIPT="$REPO_ROOT/scripts/with-lock.sh"
 [ -f "$WITH_LOCK_SCRIPT" ] || die "expected script not found: $WITH_LOCK_SCRIPT"

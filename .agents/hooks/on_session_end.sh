@@ -11,6 +11,8 @@
 #      routing each one's assignment to the correct next agent queue, then
 #      deleting that individual file immediately after it is routed — so a
 #      problem with one file never blocks or loses any of the others
+#   4b. Remove this session's perceived-branch state file (E78_S01_T03), keyed
+#      by the harness session id (env, then stdin payload), never SESSION_ID
 #
 # Pipeline routing (section 4):
 #   scrum-master  planning_complete       → developer_triggers.jsonl
@@ -48,6 +50,30 @@ AGENT="${JENGA_AGENT_TYPE:-unknown}"
 SESSION_ID="${JENGA_SESSION_ID:-}"
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+# Key of the perceived-branch state file this session may have written
+# (E78_S01_T03; section 4b below removes it). Deliberately NOT derived from
+# SESSION_ID above: at SessionEnd lib/resolve-project-dir.sh invents a fresh
+# uuid for JENGA_SESSION_ID, so that value never matches the key the state
+# file was written under (project/documentation/perceived-branch-session-id.md).
+# The key comes from the harness instead: the environment first, then the
+# stdin payload's session_id. Resolved here, early and once, so nothing below
+# can consume the payload first (the hook reads no other stdin). Empty means
+# "no key could be determined" and section 4b then skips silently.
+PERCEIVED_KEY="${JENGA_CHECKLIST_SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-}}"
+if [ -z "$PERCEIVED_KEY" ] && [ ! -t 0 ]; then
+  # The 1-second timeout keeps an idle, never-closed pipe from blocking the
+  # hook (read -t with an integer works on stock macOS bash 3.2); a timeout
+  # leaves whatever was read in the variable, which the jq below rejects if
+  # it is not a complete JSON object.
+  HOOK_STDIN=""
+  IFS= read -r -t 1 -d '' HOOK_STDIN 2>/dev/null || true
+  if [ -n "$HOOK_STDIN" ]; then
+    PERCEIVED_KEY=$(printf '%s' "$HOOK_STDIN" \
+      | jq -r 'if (.session_id | type) == "string" then .session_id else empty end' 2>/dev/null) || PERCEIVED_KEY=""
+  fi
+  unset HOOK_STDIN
+fi
+
 mkdir -p "$PROJECT_DIR/project/logs" "$QUEUE_DIR" "$HANDOFF_DIR"
 
 # --- 1. Log sender object ---
@@ -69,41 +95,19 @@ SENDER=$(jq -n \
     }
   }')
 
-# The read-modify-write below is wrapped in scripts/with-lock.sh (E37_S01_T03)
-# so concurrent on_session_end.sh invocations never interleave their read and
-# write of $EVENTS_LOG — see E37_S01_T04 and the two rapports it links
-# (project/rapports/problems/E37_S01-concurrent-session-end-race-verification-gap.md,
-# project/rapports/problems/E39_S03_T05-events-json-concurrent-write-corruption.md)
-# for the concurrent-invocation data loss (events.json truncated to 0 bytes)
-# this replaces. The temp file used for the atomic `mv` is created via
-# `mktemp` in the SAME directory as $EVENTS_LOG (not a shared
-# /tmp/events_tmp.json path) so it is (a) unique per invocation — no two
-# concurrent processes can ever collide on the same temp filename — and
-# (b) on the same filesystem as the destination, so the final `mv` stays an
-# atomic rename rather than a cross-filesystem copy. The update logic is
-# captured as a standalone script string (via a quoted heredoc, so jq's own
-# `$entry` and quoting pass through untouched by this outer shell) and run
-# through `bash -c` with $EVENTS_LOG/$SENDER passed as positional args
-# rather than interpolated into the script text, avoiding fragile
-# nested-quote escaping while keeping this fix self-contained in this file.
-APPEND_EVENT_SCRIPT=$(cat <<'EOS'
-events_log="$1"
-sender_json="$2"
-tmp_file=$(mktemp "$(dirname "$events_log")/events_tmp.XXXXXX") || exit 1
-if [ -s "$events_log" ]; then
-  jq --argjson entry "$sender_json" '. += [$entry]' "$events_log" > "$tmp_file" \
-    && mv "$tmp_file" "$events_log"
+# events.json is JSONL (one record per line; project/documentation/event-log-merge-strategy.md).
+# The sender event is appended through the shared helper scripts/events-append.sh (E75_S01),
+# which validates the record, appends ONE compact line under scripts/with-lock.sh and refuses a
+# legacy array-shaped file. Nothing already in the file is read back or rewritten.
+EVENTS_APPEND=""
+for _c in "$PROJECT_DIR/scripts/events-append.sh" "$PROJECT_DIR/node_modules/@jenga-ai/agent/scripts/events-append.sh"; do
+  [ -f "$_c" ] && { EVENTS_APPEND="$_c"; break; }
+done
+if [ -n "$EVENTS_APPEND" ]; then
+  bash "$EVENTS_APPEND" --file "$EVENTS_LOG" "$SENDER"
 else
-  printf '[%s]' "$sender_json" > "$tmp_file" \
-    && mv "$tmp_file" "$events_log"
+  echo "on_session_end.sh: scripts/events-append.sh not found; sender event not logged" >&2
 fi
-rc=$?
-[ -f "$tmp_file" ] && rm -f "$tmp_file"
-exit "$rc"
-EOS
-)
-
-"$PROJECT_DIR/scripts/with-lock.sh" "$EVENTS_LOG" -- bash -c "$APPEND_EVENT_SCRIPT" _ "$EVENTS_LOG" "$SENDER"
 
 # --- 2. Manifest-based rapport detection ---
 # Use a JSON array of known filenames instead of a mtime sentinel file.
@@ -409,6 +413,21 @@ for HANDOFF_FILE in "$HANDOFF_DIR"/*.json; do
   # cause an earlier, already-routed file to be left unconsumed or vice versa.
   rm -f "$HANDOFF_FILE"
 done
+
+# --- 4b. Perceived-branch state cleanup (E78_S01_T03) ---
+# Remove this session's perceived-branch state file (epic E78, decision 3) so a
+# stale file can never leak into a later session. All path and filename logic
+# stays in scripts/perceived-branch.sh; this hook only hands it the explicit key
+# resolved near the top (PERCEIVED_KEY), so the script's own env probe never
+# runs inside this hook's polluted environment. Removal is by exact key, so
+# another session's state file is never touched. Best-effort like the rest of
+# the hook: no key means skip silently, and a missing or failing script is
+# ignored. It sits before section 5 (which has no early exit either) so the
+# hook's final command, and therefore its exit status, is the same as before.
+# The subshell cd makes the script resolve the same project the hook uses.
+if [ -n "$PERCEIVED_KEY" ] && [ -f "$PROJECT_DIR/scripts/perceived-branch.sh" ]; then
+  ( cd "$PROJECT_DIR" && bash scripts/perceived-branch.sh clear --session "$PERCEIVED_KEY" ) >/dev/null 2>&1 || true
+fi
 
 # --- 5. Todo cleanup ---
 # Remove project/todo.md if it is effectively empty (only blanks, # Todo, and HTML comments).

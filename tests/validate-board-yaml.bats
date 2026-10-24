@@ -25,6 +25,16 @@ setup() {
   mkdir -p "$FIXTURE_DIR"
 }
 
+# Call from any test that pins a rejection only PyYAML can make. validate-board.sh's strict-YAML
+# gate is skipped when PyYAML is absent (it warns on stderr and exits 0), so without it these
+# shapes are genuinely not rejected. Reporting that as a FAILURE is misleading -- the validator is
+# behaving exactly as designed in a degraded environment -- so the honest result is a skip naming
+# the missing dependency. Of the three shapes this suite pins, only the duplicated key survives
+# without PyYAML, which is why that test does not call this.
+require_pyyaml() {
+  python3 -c 'import yaml' 2>/dev/null || skip "PyYAML is not installed: validate-board.sh's strict-YAML gate is skipped, so this shape is not rejected (install python3-yaml / PyYAML)"
+}
+
 # Writes a story fixture whose frontmatter body is supplied verbatim, so each
 # test states exactly the shape it is pinning.
 write_story() {
@@ -55,6 +65,7 @@ tasks:
 
 # Observed in 22 files, e.g. `title: Adopt j: prefix for skill invocation`.
 @test "rejects an unquoted colon in a scalar value" {
+  require_pyyaml
   write_story "E99_S02_colon.md" "id: E99_S02
 epic_id: E99
 title: Adopt j: prefix for skill invocation
@@ -71,6 +82,7 @@ tasks:
 # Observed in 4 files, e.g. `title: "Merged" Status via /self-sync` -- the value
 # starts with a quote but is not a quoted scalar, which YAML rejects outright.
 @test "rejects a value that merely starts with a double quote" {
+  require_pyyaml
   write_story "E99_S03_quote.md" 'id: E99_S03
 epic_id: E99
 title: "Merged" Status via /self-sync
@@ -88,6 +100,7 @@ tasks:
 # the way to record multiple reopen cycles, so every file that followed the
 # schema became unparseable.
 @test "rejects comma-separated quoted strings in reopened_reason" {
+  require_pyyaml
   write_story "E99_S04_reasons.md" 'id: E99_S04
 epic_id: E99
 title: Reopened twice
@@ -137,6 +150,7 @@ tasks:
 }
 
 @test "the error message points at the schema section that explains the fix" {
+  require_pyyaml
   write_story "E99_S07_msg.md" "id: E99_S07
 epic_id: E99
 title: Broken: here

@@ -16,6 +16,24 @@ import re
 import sys
 from pathlib import Path
 
+# The strict-YAML gate (assert_parses_as_yaml) needs PyYAML, which is not guaranteed present.
+# Imported ONCE here, rather than per file, so the warning below is emitted once per run instead
+# of once per board file.
+#
+# When it is missing this validator still exits 0 on frontmatter it has NOT fully checked, so the
+# absence must be audible. Silence would be a validator that reports a clean board while skipping
+# the very shapes it exists to catch -- which is how 36 malformed files accumulated in the first
+# place (see assert_parses_as_yaml). The warning goes to stderr so stdout stays a clean report.
+try:
+    import yaml as _yaml
+except ImportError:
+    _yaml = None
+    sys.stderr.write(
+        "validate-board.sh: warning: PyYAML is not installed, so the strict-YAML check is SKIPPED. "
+        "An unquoted ':' in a scalar and a value merely starting with a quote will NOT be rejected "
+        "(duplicate keys still are). A pass from this run is weaker than a normal pass. "
+        "Install it (apt: python3-yaml, pip: PyYAML) to get the full check.\n")
+
 STATUS_VALUES = {
     "Pending",
     "In Progress",
@@ -368,15 +386,16 @@ def assert_parses_as_yaml(lines: list[str], source: Path) -> None:
     and a duplicated key.
 
     PyYAML is stdlib-adjacent but not guaranteed present on every consumer, so a
-    missing import degrades to a skip rather than a hard failure -- the targeted
-    checks below still run either way.
+    missing import degrades to a skip rather than a hard failure. Be precise about
+    what that costs: of the three shapes above, only the duplicated key is covered
+    by the targeted checks below. The unquoted colon and the leading-quote value
+    are caught by PyYAML and by nothing else, so without it this function's main
+    purpose is not served. The import is attempted once at module level, which
+    warns loudly on stderr -- the skip is never silent.
     """
     body = "\n".join(lines)
-    try:
-        import yaml
-    except ImportError:
-        pass
-    else:
+    yaml = _yaml
+    if yaml is not None:
         try:
             yaml.safe_load(body)
         except yaml.YAMLError as exc:

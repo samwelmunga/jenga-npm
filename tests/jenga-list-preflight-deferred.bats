@@ -6,6 +6,10 @@
 # Fixture, not the live repo: every test points the script at its own events file through the
 # JENGA_PREFLIGHT_EVENTS_FILE seam (or a synthetic project root), never this repository's own
 # project/logs/events.json.
+#
+# The events file is JSONL (one record per line, project/documentation/event-log-merge-strategy.md).
+# Fixtures below are written one record per line. A file still in the legacy JSON-array shape is
+# refused with exit 1 and a migrator hint, and that is tested too.
 
 load helpers/assertions
 
@@ -28,14 +32,14 @@ ev() {
 }
 
 @test "prints the item_id of a matching event and nothing else" {
-  printf '[%s]\n' "$(ev "$SID" E67_S03_T06)" > "$EVENTS"
+  printf '%s\n' "$(ev "$SID" E67_S03_T06)" > "$EVENTS"
   run "$SCRIPT" "$SID"
   [ "$status" -eq 0 ]
   [ "$output" = "E67_S03_T06" ]
 }
 
 @test "prints several distinct ids one per line in first-seen order" {
-  printf '[%s,%s,%s]\n' "$(ev "$SID" E67_S03_T02)" "$(ev "$SID" E67_S04)" "$(ev "$SID" E67_S03_T01)" > "$EVENTS"
+  printf '%s\n%s\n%s\n' "$(ev "$SID" E67_S03_T02)" "$(ev "$SID" E67_S04)" "$(ev "$SID" E67_S03_T01)" > "$EVENTS"
   run "$SCRIPT" "$SID"
   [ "$status" -eq 0 ]
   [ "${lines[0]}" = "E67_S03_T02" ]
@@ -45,7 +49,7 @@ ev() {
 }
 
 @test "de-duplicates an id deferred more than once" {
-  printf '[%s,%s,%s]\n' "$(ev "$SID" E67_S03_T02)" "$(ev "$SID" E67_S03_T05)" "$(ev "$SID" E67_S03_T02)" > "$EVENTS"
+  printf '%s\n%s\n%s\n' "$(ev "$SID" E67_S03_T02)" "$(ev "$SID" E67_S03_T05)" "$(ev "$SID" E67_S03_T02)" > "$EVENTS"
   run "$SCRIPT" "$SID"
   [ "$status" -eq 0 ]
   [ "${#lines[@]}" -eq 2 ]
@@ -54,14 +58,14 @@ ev() {
 }
 
 @test "never returns another session's deferrals" {
-  printf '[%s,%s]\n' "$(ev other-session E67_S01_T01)" "$(ev "$SID" E67_S02_T02)" > "$EVENTS"
+  printf '%s\n%s\n' "$(ev other-session E67_S01_T01)" "$(ev "$SID" E67_S02_T02)" > "$EVENTS"
   run "$SCRIPT" "$SID"
   [ "$status" -eq 0 ]
   [ "$output" = "E67_S02_T02" ]
 }
 
 @test "session id is matched exactly, not as a prefix or substring" {
-  printf '[%s,%s]\n' "$(ev "${SID}-2" E67_S01_T01)" "$(ev "x${SID}" E67_S01_T02)" > "$EVENTS"
+  printf '%s\n%s\n' "$(ev "${SID}-2" E67_S01_T01)" "$(ev "x${SID}" E67_S01_T02)" > "$EVENTS"
   run "$SCRIPT" "$SID"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
@@ -69,12 +73,10 @@ ev() {
 
 @test "never returns other event types, including capacity_blocked" {
   cat > "$EVENTS" <<JSON
-[
-  {"event":"capacity_blocked","agent":"orchestrator","session_id":"$SID","item_id":"E67_S01_T01"},
-  {"event":"session_start","agent":"developer","session_id":"$SID","item_id":"E67_S01_T02"},
-  {"event":"preflight_deferred_other","session_id":"$SID","item_id":"E67_S01_T03"},
-  $(ev "$SID" E67_S01_T04)
-]
+{"event":"capacity_blocked","agent":"orchestrator","session_id":"$SID","item_id":"E67_S01_T01"}
+{"event":"session_start","agent":"developer","session_id":"$SID","item_id":"E67_S01_T02"}
+{"event":"preflight_deferred_other","session_id":"$SID","item_id":"E67_S01_T03"}
+$(ev "$SID" E67_S01_T04)
 JSON
   run "$SCRIPT" "$SID"
   [ "$status" -eq 0 ]
@@ -82,7 +84,7 @@ JSON
 }
 
 @test "interleaved noise (other sessions, other types) around matches is filtered correctly" {
-  printf '[{"event":"x"},%s,{"sender":{"agent":"a"}},%s,{"event":"capacity_blocked","session_id":"%s","item_id":"E1_S1_T1"},%s]\n' \
+  printf '{"event":"x"}\n%s\n{"sender":{"agent":"a"}}\n%s\n{"event":"capacity_blocked","session_id":"%s","item_id":"E1_S1_T1"}\n%s\n' \
     "$(ev "$SID" E67_S03_T02)" "$(ev other E67_S09_T09)" "$SID" "$(ev "$SID" E67_S03_T02)" > "$EVENTS"
   run "$SCRIPT" "$SID"
   [ "$status" -eq 0 ]
@@ -90,14 +92,14 @@ JSON
 }
 
 @test "no matching events prints nothing and exits 0" {
-  printf '[%s]\n' "$(ev other E67_S01_T01)" > "$EVENTS"
+  printf '%s\n' "$(ev other E67_S01_T01)" > "$EVENTS"
   run "$SCRIPT" "$SID"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
 
-@test "an empty array prints nothing and exits 0" {
-  printf '[]\n' > "$EVENTS"
+@test "an empty events file prints nothing and exits 0" {
+  : > "$EVENTS"
   run "$SCRIPT" "$SID"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
@@ -121,20 +123,29 @@ JSON
   [ -z "$output" ]
 }
 
-@test "malformed JSON exits non-zero with a specific message and no traceback" {
-  printf '[{"event": "preflight_deferred", ' > "$EVENTS"
+@test "a malformed line in the middle exits non-zero, names the line, and has no traceback" {
+  printf '{"event": "preflight_deferred", \n%s\n' "$(ev "$SID" E67_S03_T06)" > "$EVENTS"
   run "$SCRIPT" "$SID"
   [ "$status" -eq 1 ]
   assert_output_contains "malformed"
+  assert_output_contains "line 1"
   assert_output_contains "$EVENTS"
   assert_output_not_contains "Traceback"
 }
 
-@test "valid JSON that is not an array exits non-zero with a specific message" {
-  printf '{"event":"preflight_deferred","session_id":"%s","item_id":"E1_S1_T1"}\n' "$SID" > "$EVENTS"
+@test "an unterminated final line (a writer mid-append) is ignored, not reported as malformed" {
+  printf '%s\n{"event": "preflight_deferred", "session_id"' "$(ev "$SID" E67_S03_T06)" > "$EVENTS"
+  run "$SCRIPT" "$SID"
+  [ "$status" -eq 0 ]
+  [ "$output" = "E67_S03_T06" ]
+}
+
+@test "a legacy JSON-array file is refused with the migrator hint (exit 1), not guessed at" {
+  printf '[%s]\n' "$(ev "$SID" E67_S03_T06)" > "$EVENTS"
   run "$SCRIPT" "$SID"
   [ "$status" -eq 1 ]
-  assert_output_contains "expected a JSON array"
+  assert_output_contains "legacy JSON-array shape"
+  assert_output_contains "scripts/events-log-migrate.sh"
   assert_output_not_contains "Traceback"
 }
 
@@ -155,8 +166,8 @@ JSON
   assert_output_not_contains "Traceback"
 }
 
-@test "tolerates non-object entries and events missing fields" {
-  printf '[1,"str",null,[],{"event":"preflight_deferred"},{"event":"preflight_deferred","session_id":"%s"},{"event":"preflight_deferred","session_id":"%s","item_id":null},{"event":"preflight_deferred","session_id":"%s","item_id":42},%s]\n' \
+@test "tolerates non-object records and records missing fields" {
+  printf '1\n"str"\nnull\n[]\n{"event":"preflight_deferred"}\n{"event":"preflight_deferred","session_id":"%s"}\n{"event":"preflight_deferred","session_id":"%s","item_id":null}\n{"event":"preflight_deferred","session_id":"%s","item_id":42}\n%s\n' \
     "$SID" "$SID" "$SID" "$(ev "$SID" E67_S03_T06)" > "$EVENTS"
   run "$SCRIPT" "$SID"
   [ "$status" -eq 0 ]
@@ -165,12 +176,10 @@ JSON
 
 @test "an item_id that is not a plain id cannot inject extra output lines" {
   cat > "$EVENTS" <<JSON
-[
-  {"event":"preflight_deferred","session_id":"$SID","item_id":"E1_S1_T1\nE9_S9_T9"},
-  {"event":"preflight_deferred","session_id":"$SID","item_id":"has space"},
-  {"event":"preflight_deferred","session_id":"$SID","item_id":""},
-  $(ev "$SID" E67_S03_T06)
-]
+{"event":"preflight_deferred","session_id":"$SID","item_id":"E1_S1_T1\nE9_S9_T9"}
+{"event":"preflight_deferred","session_id":"$SID","item_id":"has space"}
+{"event":"preflight_deferred","session_id":"$SID","item_id":""}
+$(ev "$SID" E67_S03_T06)
 JSON
   run "$SCRIPT" "$SID"
   [ "$status" -eq 0 ]
@@ -187,7 +196,9 @@ for i in range(60000):
 events.insert(30000, {"event": "preflight_deferred", "session_id": sid, "item_id": "E67_S03_T06"})
 events.append({"event": "preflight_deferred", "session_id": sid, "item_id": "E67_S03_T06"})
 events.append({"event": "preflight_deferred", "session_id": sid, "item_id": "E67_S04"})
-json.dump(events, open(path, "w"))
+with open(path, "w") as fh:
+    for e in events:
+        fh.write(json.dumps(e) + "\n")
 PY
   run "$SCRIPT" "$SID"
   [ "$status" -eq 0 ]
@@ -223,7 +234,7 @@ d = json.load(open(sys.argv[1]))
 d["paths"]["logs"] = "custom-logs"
 json.dump(d, open(sys.argv[2], "w"))
 PY
-  printf '[%s]\n' "$(ev "$SID" E67_S03_T06)" > "$root/custom-logs/events.json"
+  printf '%s\n' "$(ev "$SID" E67_S03_T06)" > "$root/custom-logs/events.json"
   export JENGA_PROJECT_ROOT="$root"
   run "$SCRIPT" "$SID"
   [ "$status" -eq 0 ]
