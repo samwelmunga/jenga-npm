@@ -12,3 +12,6 @@ Desktop.ini
 node_modules/
 vendor/
 .venv/
+# Dependency-audit opt-in notice marker (Jenga, per-user state)
+project/data/audit-notice-shown
+project/data/audit-notice-shown.*

@@ -384,6 +384,12 @@
           "minLength": 1,
           "default": ".github/workflows/npm-publish.yml"
         },
+        "audit_level": {
+          "description": "Dependency audit threshold for the CI workflows generated for an npm-ci target: `npm audit --audit-level=<value>` in the `audit` job that `publish` and `stage` depend on, and in the scheduled dependency-audit.yml. Defaults to `high`. `off` omits the audit job and the scheduled workflow, and the generator prints a warning.",
+          "type": "string",
+          "enum": ["low", "moderate", "high", "critical", "off"],
+          "default": "high"
+        },
         "notes": {
           "type": "string"
         }

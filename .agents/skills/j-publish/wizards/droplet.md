@@ -164,7 +164,7 @@ repository secret** in the GitHub UI, or use the `gh` CLI as shown below.
 
 | Secret name           | What it holds                                                    |
 |-----------------------|------------------------------------------------------------------|
-| `DROPLET_SSH_KEY`     | Contents of the SSH private key file (e.g. `~/.ssh/id_deploy`)  |
+| `DROPLET_SSH_KEY`     | Contents of your SSH deploy private key file                    |
 | `DROPLET_SSH_HOST`    | IP address or FQDN of the target host                            |
 | `DROPLET_SSH_USER`    | SSH username on the target host                                  |
 | `DROPLET_SSH_PORT`    | SSH port (typically `22`)                                        |
@@ -173,8 +173,9 @@ repository secret** in the GitHub UI, or use the `gh` CLI as shown below.
 ### How to add secrets via `gh` CLI
 
 ```bash
-# Private key — reads from file
-gh secret set DROPLET_SSH_KEY < ~/.ssh/id_deploy
+# Private key — you run this yourself; replace the placeholder with the path to
+# your own deploy key file (the skill never reads that file)
+gh secret set DROPLET_SSH_KEY < "<path-to-your-deploy-key>"
 
 # Host and connection details
 gh secret set DROPLET_SSH_HOST --body "your.host.ip.or.fqdn"

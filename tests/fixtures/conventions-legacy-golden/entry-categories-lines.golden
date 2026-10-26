@@ -1,0 +1,14 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh categories
+--- stdout
+commit-format	Commit format
+branching	Branching
+naming	Naming
+code-comments	Code comments and docs-in-code
+formatting-linting	Formatting and linting
+testing	Testing expectations
+file-layout	File and directory layout
+language-tooling	Language and tooling
+documentation-placement	Documentation placement
+--- stderr
+--- exit
+0

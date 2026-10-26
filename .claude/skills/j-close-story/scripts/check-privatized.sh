@@ -16,24 +16,25 @@
 # Usage: check-privatized.sh <id> <board-file-path>
 #
 #   <id>               EST ticket id -- a task id (E##_S##_T##) or a story id
-#                       (E##_S##). The anchored-grep commit matching (below)
-#                       is what keeps a story id from over-matching its own
+#                       (E##_S##). The anchored commit matching (the shared
+#                       resolver, below) is what keeps a story id from over-matching its own
 #                       children's commits, so the same script handles both
 #                       granularities with no separate code path.
 #   <board-file-path>   Path to the ticket's own board markdown file (task or
 #                       story), used to read its current `status:` and as the
 #                       write target.
 #
-# Touched-file derivation -- IDENTICAL technique to
-# skills/j-self-sync/scripts/mark-merged.sh (reused, not reinvented, per this
-# task's own description):
-#   1. git log --all --no-merges --extended-regexp \
-#        --grep="<id>([^0-9_]|$)" --pretty=format:'%H'
-#      The anchored pattern (not a plain substring grep) is required so a
-#      story id like "E51_S03" does not over-match every one of its own
-#      child tasks' commits -- the character immediately following a story
-#      id in a child task's commit message is "_", which the anchor
-#      excludes.
+# Touched-file derivation -- the same technique as
+# skills/j-self-sync/scripts/mark-merged.sh:
+#   1. scripts/commits-for-item.sh <id> --repo <repo root> (E79_S02_T07; the
+#      shared commit resolver, which replaced the private copy of
+#      `git log --all --no-merges --extended-regexp --grep="<id>([^0-9_]|$)"`
+#      this script used to carry). The resolver keeps the anchored match (not
+#      a plain substring grep): a story id like "E51_S03" does not
+#      over-match every one of its own child tasks' commits, because the
+#      character immediately following a story id in a child task's commit
+#      message is "_", which the anchor excludes. For EST-only history its
+#      output is the same commit set, in the same order, as that grep.
 #   2. Per matched commit: `git diff --name-only <sha>~1..<sha>`, falling
 #      back to `git diff-tree --no-commit-id --name-only -r <sha>` for a
 #      root commit with no parent.
@@ -148,7 +149,12 @@ EVENTS_FILE="$REPO_ROOT/project/logs/events.json"
 EVENTS_APPEND_SCRIPT="$REPO_ROOT/scripts/events-append.sh"
 [ -f "$EVENTS_APPEND_SCRIPT" ] || EVENTS_APPEND_SCRIPT="$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/events-append.sh"
 
+# The shared commit resolver (E79_S02_T07). Same lookup order as the helpers above.
+COMMITS_FOR_ITEM_SCRIPT="$SCRIPT_DIR/../../../scripts/commits-for-item.sh"
+[ -f "$COMMITS_FOR_ITEM_SCRIPT" ] || COMMITS_FOR_ITEM_SCRIPT="$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/commits-for-item.sh"
+
 [ -f "$WITH_LOCK_SCRIPT" ] || die "expected script not found: $WITH_LOCK_SCRIPT"
+[ -f "$COMMITS_FOR_ITEM_SCRIPT" ] || die "expected script not found: scripts/commits-for-item.sh"
 [ -f "$EVENTS_APPEND_SCRIPT" ] || die "expected script not found: scripts/events-append.sh"
 [ -f "$UPDATE_FRONTMATTER_SCRIPT" ] || die "expected script not found: $UPDATE_FRONTMATTER_SCRIPT"
 
@@ -191,10 +197,11 @@ fi
 # Touched-file derivation -- identical technique to mark-merged.sh.
 # -----------------------------------------------------------------------------
 
+# Prints the ticket's commit SHAs, one per line (newest first). No --require-nonempty: an
+# empty result stays "zero matched commits" (E79_S06 decides that for the opted-in path).
 commits_for_ticket() {
   local id="$1"
-  git -C "$REPO_ROOT" log --all --no-merges --extended-regexp \
-    --grep="${id}([^0-9_]|\$)" --pretty=format:'%H' 2>/dev/null || true
+  bash "$COMMITS_FOR_ITEM_SCRIPT" "$id" --repo "$REPO_ROOT" || true
 }
 
 commit_files() {

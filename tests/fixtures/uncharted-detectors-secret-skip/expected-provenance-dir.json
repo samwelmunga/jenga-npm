@@ -1,0 +1,55 @@
+{
+  "script": "inspect-provenance.sh",
+  "version": 1,
+  "target": "@TARGET@",
+  "files_scanned": 11,
+  "files_truncated": false,
+  "symlinked_files_excluded": 0,
+  "license": {
+    "found": true,
+    "files": [
+      {
+        "path": "LICENSE",
+        "type": "MIT"
+      }
+    ],
+    "message": null
+  },
+  "spdx_identifiers": {
+    "found": true,
+    "identifiers": [
+      {
+        "id": "MIT",
+        "occurrences": 1,
+        "sources": [
+          "src/main.py"
+        ]
+      }
+    ],
+    "message": null
+  },
+  "copyright": {
+    "found": true,
+    "lines": [
+      {
+        "text": "Copyright (c) 2026 Fixture Authors",
+        "source": "LICENSE"
+      },
+      {
+        "text": "Copyright (c) 2026 Fixture Authors",
+        "source": "src/main.py"
+      }
+    ],
+    "message": null
+  },
+  "git_origin": {
+    "applicable": false,
+    "origin": null,
+    "nested_repos": [],
+    "message": "no git origin information is available -- either the source was not git-acquired, or no --origin-* flags were passed and no nested .git directory was found in the staged tree"
+  },
+  "overall": {
+    "any_signal_found": true,
+    "message": null
+  }
+}

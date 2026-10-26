@@ -111,6 +111,22 @@ validation, registration or reporting logic of its own, and no service names or 
    is done is never evidence of success. If the last line is `NOT VERIFIED`, report that, quote the step it
    names, and offer to re-run step 4 or stop.
 
+## What this skill touches
+
+- **Commands it runs.** `list-services.sh` and `detect-platform.sh` (read-only); `run-descriptor.sh`, which runs
+  the descriptor's CLI detection command, the CLI install through a package manager only after the user picked
+  "install it now" (`--allow-install`), the descriptor's authentication check, the MCP registration script, and
+  the descriptor's independent verification command; and `summarize-run.sh`, which only formats results.
+- **No secret values.** It never reads, prints, stores or passes a secret value. Environment variables are
+  referred to by name only, and it holds no credential of its own.
+- **Authentication is yours to perform.** Where a service needs you to authenticate, the skill tells you to run
+  the service's own login command in your own terminal, waits for you to say you are done, and then checks only
+  the exit status of the descriptor's check command (its output is discarded). It never runs the login itself.
+- **Paths it writes.** Only inside the project root: the MCP registration file `.mcp.json`, plus, for a service
+  that needs a token variable, a `NAME=` placeholder line (the name, never a value) in the descriptor's env
+  file after that file has been made git-ignored. Nothing under `~`. The package manager the user approved
+  writes wherever it normally does; the skill writes nothing there itself.
+
 ## No session-end behaviour
 
 This skill performs no session-end work: no handoff file, no queue write, no board or status update.

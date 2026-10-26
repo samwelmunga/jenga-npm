@@ -5,7 +5,7 @@
  * E47_S04_T02 — capture step for `j.dashboard --snapshot`.
  *
  * Calls the dashboard API's `/v1/board`, `/v1/history`, `/v1/architecture`, `/v1/health`,
- * `/v1/documentation`, `/v1/rapports`, and `/v1/todo-warnings` routes exactly once each and writes
+ * `/v1/documentation`, `/v1/rapports`, `/v1/todo-warnings`, `/v1/ideas`, and `/v1/security` routes exactly once each and writes
  * their combined JSON to a single artifact, consumable by the
  * bundling/inlining step in `E47_S04_T03` (implemented) and, for `/v1/health` specifically, by
  * `E47_S06_T02`'s snapshot `<title>` rewrite in `../../ui/scripts/build-snapshot-html.cjs`, which
@@ -52,7 +52,8 @@
  *     "documentation": <full API envelope from GET /v1/documentation, i.e. { data, meta, error }>,
  *     "rapports":      <full API envelope from GET /v1/rapports,      i.e. { data, meta, error }>,
  *     "todoWarnings":  <full API envelope from GET /v1/todo-warnings, i.e. { data, meta, error }>,
- *     "ideas":         <full API envelope from GET /v1/ideas,         i.e. { data, meta, error }>
+ *     "ideas":         <full API envelope from GET /v1/ideas,         i.e. { data, meta, error }>,
+ *     "security":      <full API envelope from GET /v1/security,      i.e. { data, meta, error }>
  *   }
  * }
  * Each `routes.<name>` value is the *full* envelope exactly as the route returned it (see
@@ -97,7 +98,7 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 
-const ROUTES = ['/v1/board', '/v1/history', '/v1/architecture', '/v1/health', '/v1/documentation', '/v1/rapports', '/v1/todo-warnings', '/v1/ideas'];
+const ROUTES = ['/v1/board', '/v1/history', '/v1/architecture', '/v1/health', '/v1/documentation', '/v1/rapports', '/v1/todo-warnings', '/v1/ideas', '/v1/security'];
 const ROUTE_KEYS = {
   '/v1/board': 'board',
   '/v1/history': 'history',
@@ -107,6 +108,7 @@ const ROUTE_KEYS = {
   '/v1/rapports': 'rapports',
   '/v1/todo-warnings': 'todoWarnings',
   '/v1/ideas': 'ideas',
+  '/v1/security': 'security',
 };
 
 function printUsage() {

@@ -1,0 +1,22 @@
+{
+  "id": "all-step-types",
+  "name": "All step types",
+  "description": "Test fixture: one workflow that uses every step type (compute twice, skill, confirm, playbook, render), one data output and one artifact output.",
+  "inputs": [
+    {"name": "scope", "description": "Free text carried into the report.", "default": "E80_S06"}
+  ],
+  "steps": [
+    {"id": "prep", "type": "compute", "command": "project/.workflows/scripts/count-run.sh", "args": ["prep"],
+     "checkpoint": true,
+     "outputs": [{"name": "ids", "kind": "data", "type": "id_list"}]},
+    {"id": "ask_skill", "type": "skill", "skill": "j.stub-step",
+     "args": {"scope": "${inputs.scope}", "ids": "${steps.prep.outputs.ids}"}},
+    {"id": "gate", "type": "confirm", "prompt": "Publish the report for ${inputs.scope}?", "options": ["Publish", "Stop"]},
+    {"id": "run_playbook", "type": "playbook", "playbook": "stub-playbook", "args": {"scope": "${inputs.scope}"}},
+    {"id": "derive", "type": "compute", "command": "project/.workflows/scripts/count-run.sh",
+     "args": ["derive", "${steps.prep.outputs.ids}"]},
+    {"id": "publish", "type": "render", "template": "project/.workflows/templates/stub-report.md",
+     "inputs": {"scope": "${inputs.scope}", "ids": "${steps.prep.outputs.ids}"},
+     "outputs": [{"name": "report", "kind": "artifact", "type": "text"}]}
+  ]
+}

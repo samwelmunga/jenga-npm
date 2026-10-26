@@ -174,7 +174,11 @@ For every task recorded in Phase 1 (i.e. every task on the board when unscoped, 
 in-scope tasks when scoped) whose status is completed-or-beyond (a `completed` or `ladder` status; see
 Section 0):
 
-1. **Search git history** — run `git log --all --oneline --grep="<task_id>"` (e.g. `E01_S01_T01`). A matching commit is strong evidence of implementation.
+1. **Search git history** — run `bash skills/j-reconcile/scripts/commit-evidence.sh <task_id>` (e.g. `E01_S01_T01`; in a consumer project use `node_modules/@jenga-ai/agent/skills/j-reconcile/scripts/commit-evidence.sh`). It resolves the task's commits through the shared resolver `scripts/commits-for-item.sh` (EST subject, any message naming the id, or a `Jenga-Task:` trailer) and prints `status: found`, `status: none` or `status: unavailable` on its first line; act on that line, not on the exit code.
+   - `status: found` — a matching commit is strong evidence of implementation.
+   - `status: none` — no evidence from git history; carry on with steps 2 and 3, exactly as before. An empty result is a legitimate answer here, not an error.
+   - `status: unavailable` — the repository is a shallow clone, so the commit may exist but not be present. This is **not** "no evidence": continue with steps 2 and 3, but if implementation then still cannot be confirmed, **do not demote** (see the shallow-clone rule below).
+   - A non-zero exit means the lookup itself could not run; treat it like `unavailable`.
 2. **Check documentation artefacts** — look for a plan or summary file under `project/documentation/plans/` or `project/documentation/summaries/` whose name contains the task ID.
 3. **Read the task's acceptance criteria** and spot-check the codebase for the key deliverables described (e.g. if the task says "create `scripts/foo.sh`", verify the file exists).
 
@@ -188,6 +192,10 @@ If implementation **cannot be confirmed**:
    - After a successful merge, the task stays at its completed status.
    - If the merge has conflicts, alert the user and **do not** change the status — leave it for manual resolution.
 3. If **no** matching branch or worktree exists:
+   - **If step 1 reported `status: unavailable` (or its exit was non-zero)**: change **nothing** — no
+     status, no `date_started`, no `date_completed`. A missing commit in a shallow clone is not proof the
+     work was never done. Report it under "HISTORY UNAVAILABLE — UNVERIFIED, LEFT UNCHANGED" (see
+     `assets/report_format.md`) and move on. This applies to both the `completed` and `ladder` classes.
    - **If the task's status is a `completed` status** (the `completed` class, not `ladder`):
      - Change the task's status to **Pending** in its board file.
      - Clear `date_started` and `date_completed`.
@@ -204,7 +212,10 @@ status (Pending, In Progress, Running, Blocked, etc.; see Section 0). A task in 
 candidate here: it is not promoted to `Passed`, its status is not rewritten, and its `date_completed` is not
 stamped or changed.
 
-1. **Search git history** for commits referencing the task ID.
+1. **Search git history** for commits referencing the task ID — the same call as phase 2 step 1
+   (`bash skills/j-reconcile/scripts/commit-evidence.sh <task_id>`, which resolves through
+   `scripts/commits-for-item.sh`). Only `status: found` counts as a matching commit; `status: none` and
+   `status: unavailable` both mean "not confirmed by git history" and, as before, are not grounds to promote.
 2. **Check documentation artefacts** as in phase 2.
 3. **Spot-check acceptance criteria** against the codebase.
 

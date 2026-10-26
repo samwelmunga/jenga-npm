@@ -1,0 +1,17 @@
+$ env bash @REPO@/scripts/conventions-digest.sh --agent commit
+--- stdout
+Project conventions (9 recorded; explicit, set through j.conventions):
+commit-format: Conventional Commits [style=conventional-commits; message_regex=^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?: .+] (checklist item conv-commit-format)
+branching: Trunk-based [model=trunk-based] (checklist item conv-branching)
+naming: kebab-case files, camelCase identifiers [identifier_case=camelCase; file_case=kebab-case] (checklist item conv-naming)
+code-comments: Comment the why, not the what [policy=comment-why-not-what] (checklist item conv-code-comments)
+formatting-linting: Formatter and linter enforced [approach=formatter-and-linter] (checklist item conv-formatting-linting)
+testing: Tests for every change [expectation=tests-for-every-change] (checklist item conv-testing)
+file-layout: src/ plus tests/ [layout=src-and-tests; source_dir=src; test_dir=tests] (checklist item conv-file-layout)
+language-tooling: Pinned runtime and committed lockfile [version_policy=pinned-runtime-and-lockfile; lockfile_committed=true] (checklist item conv-language-tooling)
+documentation-placement: Published docs in docs/ [policy=published-docs-in-docs-internal-elsewhere; public_docs_dir=docs] (checklist item conv-documentation-placement)
+Precedence: the conventions above are explicit and beat inference from the codebase; infer only for categories not listed.
+EST: board commits keep the mandatory task(E##_S##_T##): / story(...) / epic(...) naming; a recorded commit-format convention applies to non-board commits only.
+--- stderr
+--- exit
+0

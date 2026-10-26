@@ -5,7 +5,7 @@
 }
 
 .epic-card {
-  background: white;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 1rem;
@@ -71,7 +71,7 @@
 }
 
 .task-card {
-  background: white;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 3px;
   padding: 0.5rem 0.75rem;

@@ -345,3 +345,38 @@ in a temporary directory, with `JENGA_PROJECT_ROOT` pointing at it), never the l
 output are in `project/documentation/summaries/E71_S04_T03-summary.md`. To repeat it, copy
 `project/configs/workflow.json` and one file from each of `epics/`, `stories/` and `tasks/` into a temporary
 directory laid out like `project/`, export `JENGA_PROJECT_ROOT` as that directory, and run the script.
+
+### Reader script
+
+`scripts/read-external-refs.sh` (added by `E79_S04_T04`) is the **read-only** counterpart of the link script. It prints
+the Jira `key` of each matching `external_refs` entry of one epic, story or task, one per line in file order. It is
+what the commit-ref resolution chain of epic `E79` reads, and the schema allows the developer and tester agents to
+read `external_refs` (never write it).
+
+```
+read-external-refs.sh <item-id> [--system jira|confluence|bitbucket] [--kind <kind>]
+```
+
+- **Same lookup as the writer.** `<item-id>` is `E##`, `E##_S##` or `E##_S##_T##`; the board directory comes from
+  `scripts/resolve-root.sh get epics|stories|tasks`, so `JENGA_PROJECT_ROOT` redirects it to a scratch board; the file
+  is the unique `<dir>/<id>_*.md` or `<dir>/<id>.md`.
+- **One level only, no inheritance.** It reads exactly the item it is given. A Jira key identifies one imported board
+  item at any level (decision 7 of `E79`), so several tasks can share one key by inheriting it from their story or
+  epic; walking task, story, epic is the resolver's job. The `Jenga-Task` id stays the trace key.
+- **Frontmatter only, text-level.** It reads the lines between the first two `---` lines, never the body, so a body line
+  that looks like frontmatter is ignored. It reads the block list of mappings the validator accepts, `external_refs: []`
+  and an absent field. `external_refs_declined*` markers are not entries and print nothing.
+- **Untrusted data.** No `eval`, no shell interpolation of a value, no network, no lock, no write. Only values matching
+  `[A-Z][A-Z0-9]+-[0-9]+` are printed (checked twice). An entry with a `url` and no `key` is skipped silently; a
+  malformed key is skipped with a stderr notice that never echoes the value.
+- **Defaults.** `--system` defaults to `jira`; only Jira entries carry a `key`, so `confluence` and `bitbucket` print
+  nothing. `--kind` adds a filter on the entry's `kind`.
+
+| Exit | Meaning |
+|---|---|
+| `0` | Keys printed, or none found (printing nothing is a normal answer) |
+| `2` | Usage error: missing or invalid id, unknown option, bad `--system` or `--kind` |
+| `3` | The item file is missing or ambiguous, or the board directory cannot be resolved; never read as "no refs" |
+| `4` | The file has no readable frontmatter (no opening or closing `---`) or repeats `external_refs:` |
+
+On any non-zero exit stdout is empty. Tests: `tests/read-external-refs.bats`.

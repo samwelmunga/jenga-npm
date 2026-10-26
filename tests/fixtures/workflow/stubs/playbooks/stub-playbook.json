@@ -1,0 +1,8 @@
+{
+  "id": "stub-playbook",
+  "name": "Stub playbook",
+  "description": "Test fixture: a one-step project-local playbook for the workflow harness.",
+  "keywords": ["stub playbook"],
+  "examples": ["run the stub playbook fixture"],
+  "steps": ["j-stub-step"]
+}

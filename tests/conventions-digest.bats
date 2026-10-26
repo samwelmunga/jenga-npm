@@ -352,3 +352,228 @@ JSON
   run bash -c 'printf "%s\n" "task(E01_S01_T01): x" | grep -Eq "$1"' _ "$rx"
   [ "$status" -ne 0 ]
 }
+
+# --- opt-in commit settings -------------------------------------------------------------------------------------
+#
+# A project that opted in to a commit-format template for board commits gets two extra lines after the EST line.
+# Whether a project is opted in, and every effective value, come from scripts/commit-settings.sh; a project that
+# is not opted in gets exactly the output it always had (byte-for-byte proof: tests/conventions-legacy-regression.bats).
+
+OPT_COMMIT_LINE="Commit format (opt-in): "
+OPT_EST_LINE="EST override: this project opted in (commit-format.apply_to_board_commits=true); the EST line above applies to projects without the opt-in."
+
+# opt_in <jq filter>: all_nine, then the filter applied to the file (set up the opt-in shape under test).
+opt_in() {
+  all_nine
+  jq "$1" "$CONV" > "$CONV.tmp" && mv "$CONV.tmp" "$CONV"
+}
+
+OPTED_IN='.categories["commit-format"].values = {"style":"ref-first","template":"{ref} {summary}","apply_to_board_commits":true}'
+TEMPLATE_NO_FLAG='.categories["commit-format"].values = {"style":"ref-first","template":"{ref} {summary}"}'
+TEMPLATE_FLAG_FALSE='.categories["commit-format"].values = {"style":"ref-first","template":"{ref} {summary}","apply_to_board_commits":false}'
+TRACE_ONLY='.categories["commit-trace"] = {"source":"custom","summary":"trailer","values":{"mode":"trailer","trailer_key":"Jenga-Task"}}'
+
+@test "opt-in: an opted-in project prints the commit settings and the EST override after the EST line, for every --agent" {
+  opt_in "$OPTED_IN"
+  for a in developer tester scrum-master commit; do
+    digest --agent "$a"
+    [ "$status" -eq 0 ]
+    [ -z "$stderr" ]
+    assert_output_contains "$OPT_COMMIT_LINE"
+    assert_output_contains "template '{ref} {summary}'"
+    assert_output_contains "on_unresolved fail; board commits follow the template; trace: trailer via 'Jenga-Task'"
+    assert_output_contains "$OPT_EST_LINE"
+    # the two added lines are the last two lines, directly after the unchanged EST line
+    [ "$(printf '%s\n' "$output" | tail -n 1)" = "$OPT_EST_LINE" ]
+    [ "$(printf '%s\n' "$output" | tail -n 2 | head -n 1 | cut -c1-24)" = "$OPT_COMMIT_LINE" ]
+    [ "$(printf '%s\n' "$output" | tail -n 3 | head -n 1 | cut -c1-4)" = "EST:" ]
+  done
+}
+
+@test "opt-in: it also prints with no --agent, and the lines are the same for every --agent value" {
+  opt_in "$OPTED_IN"
+  digest
+  [ "$status" -eq 0 ]
+  base="$(printf '%s\n' "$output" | tail -n 2)"
+  for a in developer tester scrum-master commit; do
+    digest --agent "$a"
+    [ "$(printf '%s\n' "$output" | tail -n 2)" = "$base" ]
+  done
+}
+
+@test "opt-in: an opted-in project with no commit-trace entry shows the trailer mode and the Jenga-Task key" {
+  opt_in "$OPTED_IN"
+  [ "$(jq -r '.categories | has("commit-trace")' "$CONV")" = "false" ]
+  for a in developer tester scrum-master commit; do
+    digest --agent "$a"
+    assert_output_contains "trace: trailer via 'Jenga-Task'"
+    assert_output_contains "ref_pattern [A-Z][A-Z0-9]+-[0-9]+"
+  done
+}
+
+@test "opt-in: a recorded commit-trace entry on an opted-in project gives the same trace wording" {
+  opt_in "$OPTED_IN | $TRACE_ONLY"
+  digest --agent developer
+  [ "$status" -eq 0 ]
+  assert_output_contains "trace: trailer via 'Jenga-Task'"
+}
+
+@test "opt-in: a recorded ref_pattern wins over the default" {
+  opt_in "$OPTED_IN | .categories[\"commit-format\"].values.ref_pattern = \"ASD-[0-9]+\""
+  digest --agent commit
+  assert_output_contains "ref_pattern ASD-[0-9]+,"
+  assert_output_not_contains "ref_pattern [A-Z][A-Z0-9]+-[0-9]+"
+}
+
+@test "opt-in: a template without the flag adds no line" {
+  opt_in "$TEMPLATE_NO_FLAG"
+  for a in developer tester scrum-master commit; do
+    digest --agent "$a"
+    [ "$status" -eq 0 ]
+    assert_output_not_contains "Commit format (opt-in)"
+    assert_output_not_contains "EST override"
+    [ "$(printf '%s\n' "$output" | tail -n 2 | head -n 1 | cut -c1-11)" = "Precedence:" ]
+    [ "$(printf '%s\n' "$output" | tail -n 1 | cut -c1-4)" = "EST:" ]
+    [ "$(line_count "$output")" -eq 12 ]
+  done
+}
+
+@test "opt-in: a template with apply_to_board_commits false adds no line" {
+  opt_in "$TEMPLATE_FLAG_FALSE"
+  digest --agent developer
+  [ "$status" -eq 0 ]
+  assert_output_not_contains "Commit format (opt-in)"
+  assert_output_not_contains "EST override"
+  [ "$(line_count "$output")" -eq 12 ]
+}
+
+@test "opt-in: a project with only a commit-trace entry adds no line" {
+  all_nine
+  jq "$TRACE_ONLY" "$CONV" > "$CONV.tmp" && mv "$CONV.tmp" "$CONV"
+  digest --agent developer
+  [ "$status" -eq 0 ]
+  assert_output_not_contains "Commit format (opt-in)"
+  assert_output_not_contains "EST override"
+  [ "$(printf '%s\n' "$output" | tail -n 1 | cut -c1-4)" = "EST:" ]
+}
+
+@test "opt-in: the fixed Precedence and EST lines are the same text with and without the opt-in" {
+  all_nine
+  digest --agent developer
+  plain_prec="$(printf '%s\n' "$output" | grep '^Precedence:')"
+  plain_est="$(printf '%s\n' "$output" | grep '^EST:')"
+  opt_in "$OPTED_IN"
+  digest --agent developer
+  [ "$(printf '%s\n' "$output" | grep '^Precedence:')" = "$plain_prec" ]
+  [ "$(printf '%s\n' "$output" | grep '^EST:')" = "$plain_est" ]
+}
+
+@test "opt-in: all 9 categories plus the opt-in lines stay within 30 lines and drop nothing" {
+  opt_in "$OPTED_IN"
+  digest --agent developer
+  [ "$status" -eq 0 ]
+  [ "$(line_count "$output")" -eq 14 ]
+  [ "$(line_count "$output")" -le 30 ]
+  assert_output_not_contains "omitted"
+}
+
+@test "opt-in: a lowered cap counts the two lines, keeps them, and reports the omission correctly" {
+  opt_in "$OPTED_IN"
+  JENGA_CONVENTIONS_DIGEST_MAX_LINES=8 digest --agent developer
+  [ "$status" -eq 0 ]
+  [ "$(line_count "$output")" -eq 8 ]
+  assert_output_contains "$OPT_COMMIT_LINE"
+  assert_output_contains "$OPT_EST_LINE"
+  [ "$(printf '%s\n' "$output" | tail -n 1)" = "... 7 more categories omitted" ]
+  # header + 2 category lines + Precedence + EST + 2 opt-in lines + the omission note
+  assert_output_contains "Project conventions (9 recorded"
+}
+
+@test "opt-in: a cap of 4 is raised to 7 for an opted-in project so the added lines are never dropped" {
+  opt_in "$OPTED_IN"
+  JENGA_CONVENTIONS_DIGEST_MAX_LINES=4 digest --agent developer
+  [ "$status" -eq 0 ]
+  [ "$(line_count "$output")" -eq 7 ]
+  assert_output_contains "$OPT_COMMIT_LINE"
+  assert_output_contains "$OPT_EST_LINE"
+  [ "$(printf '%s\n' "$output" | tail -n 1)" = "... 8 more categories omitted" ]
+}
+
+@test "opt-in: a cap that fits everything prints no omission note" {
+  opt_in "$OPTED_IN"
+  JENGA_CONVENTIONS_DIGEST_MAX_LINES=14 digest --agent developer
+  [ "$(line_count "$output")" -eq 14 ]
+  assert_output_not_contains "omitted"
+}
+
+@test "opt-in: an added line longer than 220 characters is clipped and ends in ..." {
+  long="$(printf 'A%.0s' $(seq 1 99))"
+  opt_in "$OPTED_IN | .categories[\"commit-format\"].values.ref_pattern = \"${long}\""
+  digest --agent developer
+  [ "$status" -eq 0 ]
+  line="$(printf '%s\n' "$output" | grep '^Commit format (opt-in)')"
+  [ "${#line}" -eq 220 ]
+  [ "${line: -3}" = "..." ]
+  while IFS= read -r l; do [ "${#l}" -le 220 ]; done <<<"$output"
+}
+
+@test "opt-in: values are printed as data, nothing is evaluated" {
+  cd "$BATS_TEST_TMPDIR"
+  opt_in "$OPTED_IN | .categories[\"commit-format\"].values.ref_pattern = \"\$(touch m)\`touch m\`\""
+  digest --agent developer
+  [ "$status" -eq 0 ]
+  [ ! -e "$BATS_TEST_TMPDIR/m" ]
+  assert_output_contains "ref_pattern \$(touch m)\`touch m\`,"
+}
+
+@test "opt-in: an unresolvable setting exits 3 with nothing on stdout" {
+  opt_in "$OPTED_IN"
+  jq 'del(.categories["commit-format"].values.ref_pattern.default)' "$REPO_ROOT/templates/conventions-schema.json" > "$BATS_TEST_TMPDIR/schema.json"
+  JENGA_CONVENTIONS_SCHEMA="$BATS_TEST_TMPDIR/schema.json" digest --agent developer
+  [ "$status" -eq 3 ]
+  [ -z "$output" ]
+  [[ "$stderr" == *"ref_pattern"* ]]
+}
+
+@test "opt-in: the opted-in output is deterministic and the script still writes no file" {
+  opt_in "$OPTED_IN"
+  before="$(find "$PROJ" -type f -exec cksum {} + | sort | cksum)"
+  digest --agent commit
+  first="$output"
+  digest --agent commit
+  [ "$output" = "$first" ]
+  [ "$(find "$PROJ" -type f -exec cksum {} + | sort | cksum)" = "$before" ]
+}
+
+@test "opt-in: the digest asks commit-settings.sh and keeps no copy of the opt-in rule or the defaults" {
+  grep -q 'commit-settings\.sh' "$DIGEST"
+  # no default value, no trailer mode or key, and no reading of the template or flag out of the file
+  grep -v '^[[:space:]]*#' "$DIGEST" > "$BATS_TEST_TMPDIR/code.sh"
+  run grep -nE 'Jenga-Task|\[A-Z\]\[A-Z0-9\]|"trailer"|\.categories\[|== true|has\("template"\)' "$BATS_TEST_TMPDIR/code.sh"
+  [ "$status" -ne 0 ]
+}
+
+@test "opt-in: the digest script parses and uses no bash 4 feature" {
+  run bash -n "$DIGEST"
+  [ "$status" -eq 0 ]
+  grep -v '^[[:space:]]*#' "$DIGEST" > "$BATS_TEST_TMPDIR/code.sh"
+  run grep -nE 'declare -A|mapfile|readarray|\$\{[A-Za-z_]+(,,|\^\^)\}|\|&' "$BATS_TEST_TMPDIR/code.sh"
+  [ "$status" -ne 0 ]
+}
+
+@test "opt-in: a partial copy without commit-settings.sh behaves as before, and a full package prints the opt-in lines" {
+  all_nine
+  pkg="$BATS_TEST_TMPDIR/consumer/node_modules/@jenga-ai/agent"
+  mkdir -p "$pkg/scripts" "$pkg/templates"
+  cp "$REPO_ROOT"/scripts/conventions-digest.sh "$REPO_ROOT"/scripts/validate-conventions.sh "$REPO_ROOT"/scripts/resolve-root.sh "$pkg/scripts/"
+  cp "$REPO_ROOT"/templates/conventions-schema.json "$pkg/templates/"
+  run --separate-stderr bash "$pkg/scripts/conventions-digest.sh" --agent tester
+  [ "$status" -eq 0 ]
+  assert_output_not_contains "Commit format (opt-in)"
+  opt_in "$OPTED_IN"
+  cp "$REPO_ROOT"/scripts/commit-settings.sh "$REPO_ROOT"/scripts/commit-template.sh "$pkg/scripts/"
+  run --separate-stderr bash "$pkg/scripts/conventions-digest.sh" --agent tester
+  [ "$status" -eq 0 ]
+  assert_output_contains "$OPT_COMMIT_LINE"
+  assert_output_contains "$OPT_EST_LINE"
+}

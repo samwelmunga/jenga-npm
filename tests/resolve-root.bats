@@ -36,7 +36,10 @@ configs|project/configs
 documentation|project/documentation
 documentation_plans|project/documentation/plans
 documentation_summaries|project/documentation/summaries
-strategy|project/documentation/STRATEGY.md"
+strategy|project/documentation/STRATEGY.md
+workflows|project/.workflows
+workflow_runs|project/data/workflow-runs
+workflow_artifacts|project/data/workflow-artifacts"
 
 setup() {
   unset JENGA_PROJECT_ROOT JENGA_RESOLVE_STRICT
@@ -61,7 +64,7 @@ EOF
   return 1
 }
 
-# registry_json <tree>: a full 18-key registry, session_handoff stored with a trailing slash as in
+# registry_json <tree>: a full 21-key registry, session_handoff stored with a trailing slash as in
 # the real registry, plus a same-named key outside `paths` that a naive grep fallback would pick up.
 registry_json() {
   local k v body="" sep=""
@@ -137,7 +140,7 @@ anchor_of() {
   done
 }
 
-@test "conventional tree: get resolves all 18 keys to absolute paths, from the anchor and a nested subdirectory" {
+@test "conventional tree: get resolves all 21 keys to absolute paths, from the anchor and a nested subdirectory" {
   make_tree "$CONV" project
   local anchor k v
   anchor=$(anchor_of "$CONV")
@@ -164,7 +167,7 @@ $DEFAULTS
 EOF
 }
 
-@test "conventional tree: list prints 18 key=path lines in the documented order" {
+@test "conventional tree: list prints 21 key=path lines in the documented order" {
   make_tree "$CONV" project
   local anchor k v expected=""
   anchor=$(anchor_of "$CONV")
@@ -175,7 +178,7 @@ $DEFAULTS
 EOF
   run resolve "$CONV/sub" list
   [ "$status" -eq 0 ]
-  [ "${#lines[@]}" -eq 18 ]
+  [ "${#lines[@]}" -eq 21 ]
   [ "$output" = "${expected%$'\n'}" ]
 }
 
@@ -198,7 +201,7 @@ EOF
   done
 }
 
-@test "relocated tree: all 18 keys resolve under .project/ and nothing touches ./project/" {
+@test "relocated tree: all 21 keys resolve under .project/ and nothing touches ./project/" {
   make_tree "$REL" .project
   local anchor k v want
   anchor=$(anchor_of "$REL")
@@ -214,7 +217,7 @@ EOF
   done
   run resolve "$REL" list
   [ "$status" -eq 0 ]
-  [ "${#lines[@]}" -eq 18 ]
+  [ "${#lines[@]}" -eq 21 ]
   assert_output_contains "queue=$anchor/.project/queue"
   assert_output_not_contains "$anchor/project/"
   # Read-only: resolving must not have created the conventional tree beside the real one.
@@ -232,6 +235,40 @@ EOF
   [ "$output" = ".project/logs" ]
   run resolve "$REL" get strategy --relative
   [ "$output" = ".project/documentation/STRATEGY.md" ]
+  [ ! -e "$REL/project" ]
+}
+
+# E80_S02_T01 / E80_S04_T01: the workflows, workflow_runs and workflow_artifacts keys follow the same leading-project/ rewrite as every other key.
+@test "relocated tree: workflows, workflow_runs and workflow_artifacts resolve under .project/ and never under ./project/" {
+  make_tree "$REL" .project
+  local anchor
+  anchor=$(anchor_of "$REL")
+  run resolve "$REL" get workflows
+  [ "$status" -eq 0 ]
+  [ "$output" = "$anchor/.project/.workflows" ]
+  run resolve "$REL" get workflow_runs
+  [ "$status" -eq 0 ]
+  [ "$output" = "$anchor/.project/data/workflow-runs" ]
+  run resolve "$REL" get workflows --relative
+  [ "$output" = ".project/.workflows" ]
+  run resolve "$REL" get workflow_runs --relative
+  [ "$output" = ".project/data/workflow-runs" ]
+  run resolve "$REL" get workflow_artifacts
+  [ "$status" -eq 0 ]
+  [ "$output" = "$anchor/.project/data/workflow-artifacts" ]
+  run resolve "$REL" get workflow_artifacts --relative
+  [ "$output" = ".project/data/workflow-artifacts" ]
+  # A partial registry that lacks both keys still resolves them from the defaults, under .project/.
+  write_registry "$REL" .project '{"paths": {"queue": ".project/custom-queue"}}'
+  run resolve "$REL" get workflows
+  [ "$output" = "$anchor/.project/.workflows" ]
+  run resolve "$REL" get workflow_runs
+  [ "$output" = "$anchor/.project/data/workflow-runs" ]
+  run resolve "$REL" get workflow_artifacts
+  [ "$output" = "$anchor/.project/data/workflow-artifacts" ]
+  run resolve "$REL" list
+  [ "$status" -eq 0 ]
+  assert_output_not_contains "$anchor/project/"
   [ ! -e "$REL/project" ]
 }
 
@@ -324,7 +361,7 @@ EOF
   [ "$status" -eq 0 ]
   [ "$output" = "$anchor/project/queue" ]
   run resolve "$EMPTY" list
-  [ "${#lines[@]}" -eq 18 ]
+  [ "${#lines[@]}" -eq 21 ]
   [ -z "$(ls -A "$EMPTY")" ]
 }
 
@@ -352,7 +389,7 @@ EOF
 
 # --- per-key behaviour ---------------------------------------------------------------------------
 
-@test "a partial registry falls back to defaults for absent keys and list still prints 18 lines" {
+@test "a partial registry falls back to defaults for absent keys and list still prints 21 lines" {
   write_registry "$CONV" project '{"paths": {"queue": "project/custom-queue"}}'
   run resolve "$CONV" get queue --relative
   [ "$output" = "project/custom-queue" ]
@@ -361,7 +398,7 @@ EOF
   [ "$output" = "project/board" ]
   run resolve "$CONV" list
   [ "$status" -eq 0 ]
-  [ "${#lines[@]}" -eq 18 ]
+  [ "${#lines[@]}" -eq 21 ]
 }
 
 @test "a registry with no paths object falls back to defaults" {
@@ -440,7 +477,7 @@ EOF
     [ "$status" -eq 0 ]
     without_jq="$output"
     [ "$with_jq" = "$without_jq" ]
-    [ "${#lines[@]}" -eq 18 ]
+    [ "${#lines[@]}" -eq 21 ]
   done
 }
 
@@ -458,14 +495,14 @@ EOF
 
 # The key sets (and conventional values) in the script's defaults, the schema doc's "Working-File
 # Path Resolution" key table, and this repo's workflow.json must be one and the same.
-@test "script defaults, schema doc key table and workflow.json carry the same 18 keys" {
+@test "script defaults, schema doc key table and workflow.json carry the same 21 keys" {
   local script_pairs doc_pairs
   script_pairs=$(cd "$EMPTY" && bash "$RESOLVER" list --relative)
   doc_pairs=$(awk '/^## Working-File Path Resolution/{f=1;next} /^## /{f=0} f' "$SCHEMA_DOC" \
     | grep -E '^\| `[a-z_]+` \| `' \
     | sed -E 's/^\| `([a-z_]+)` \| `([^`]*)` \|.*/\1=\2/')
-  [ "$(printf '%s\n' "$script_pairs" | wc -l | tr -d ' ')" -eq 18 ]
-  [ "$(printf '%s\n' "$doc_pairs" | wc -l | tr -d ' ')" -eq 18 ]
+  [ "$(printf '%s\n' "$script_pairs" | wc -l | tr -d ' ')" -eq 21 ]
+  [ "$(printf '%s\n' "$doc_pairs" | wc -l | tr -d ' ')" -eq 21 ]
   [ "$script_pairs" = "$doc_pairs" ]
   # The test's own fixture table agrees too.
   local fixture_pairs
@@ -509,7 +546,7 @@ EOF
   run bash -uc '. "$1"; jenga_resolve_root' _ "$RESOLVER"
   [ "$output" = "$anchor" ]
   run bash -uc '. "$1"; jenga_resolve_list' _ "$RESOLVER"
-  [ "${#lines[@]}" -eq 18 ]
+  [ "${#lines[@]}" -eq 21 ]
 }
 
 @test "sourced: an unresolvable call returns non-zero without killing the caller" {

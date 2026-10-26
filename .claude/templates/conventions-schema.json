@@ -1,5 +1,5 @@
 {
-  "_comment": "Machine-readable contract for a project's conventions.json and for the general-standard preset catalog (E69_S01_T01). scripts/validate-conventions.sh reads THIS file as its single source for the top-level keys, the category ids, each category's values fields and the allowed source and strength values; the preset catalog (templates/conventions-presets.json), the detector, the wizard and the checklist generator read the same category list, so no consumer keeps a second copy. Human guide: project/documentation/project-conventions.md (section Schema). -- FIELD SPEC VOCABULARY for the values fields: 'type' is string | boolean | integer | string_array; 'required' is true when the field must be present in a category entry's values; 'single_line' forbids newline characters (a value flows into checklist item text and possibly a verify command line, so newlines are rejected); 'non_empty' forbids an empty or whitespace-only string (and an empty array for string_array). -- Adding a field type here without teaching the validator is rejected by the validator at load time, never silently ignored. -- 'block' is never legal for conventions (epic E69, Decision 4): it is forbidden under any strength or enforcement key anywhere in a file.",
+  "_comment": "Machine-readable contract for a project's conventions.json and for the general-standard preset catalog (E69_S01_T01). scripts/validate-conventions.sh reads THIS file as its single source for the top-level keys, the category ids, each category's values fields and the allowed source and strength values; the preset catalog (templates/conventions-presets.json), the detector, the wizard and the checklist generator read the same category list, so no consumer keeps a second copy. Human guide: project/documentation/project-conventions.md (section Schema). -- FIELD SPEC VOCABULARY for the values fields: 'type' is string | boolean | integer | string_array; 'required' is true when the field must be present in a category entry's values; 'single_line' forbids newline characters (a value flows into checklist item text and possibly a verify command line, so newlines are rejected); 'non_empty' forbids an empty or whitespace-only string (and an empty array for string_array). -- OPTIONAL FIELD PROPERTIES (string fields; E79_S03): 'enum' (allowed values), 'reserved' (an object mapping a value to a note: accepted by the vocabulary but rejected at write time with that note, e.g. 'reserved for E79_S08'), 'max_length', 'pattern' (the WHOLE value must match) and 'default' (the value an absent field takes; the validator never writes defaults into a file, consumers read them). A 'note' property is documentation only and is ignored by the validator. -- OPT-IN CATEGORIES (E79_S03): the top-level 'opt_in_categories' object has the same shape as 'categories' but holds categories that a project may record in its conventions.json under categories.<id> and that are NOT part of the core set: they are absent from the wizard's list, the presets catalog (no presets are required, the 2-3 rule does not apply), the detector, the generator order and the digest order, so everything that enumerates 'categories' is unchanged. Currently 'commit-trace' (mode, trailer_key); 'mode' is a setting whose default is 'trailer', and the id-free modes are reserved for E79_S08. -- Adding a field type here without teaching the validator is rejected by the validator at load time, never silently ignored. -- 'block' is never legal for conventions (epic E69, Decision 4): it is forbidden under any strength or enforcement key anywhere in a file.",
   "schema_version": 1,
   "conventions_version": 1,
   "top_level_keys": ["conventions_version", "categories"],
@@ -37,7 +37,12 @@
       "values": {
         "style": { "type": "string", "required": true, "single_line": true, "non_empty": true },
         "message_regex": { "type": "string", "required": false, "single_line": true, "non_empty": true },
-        "subject_max_length": { "type": "integer", "required": false }
+        "subject_max_length": { "type": "integer", "required": false },
+        "template": { "type": "string", "required": false, "single_line": true, "non_empty": true, "max_length": 80 },
+        "ref_source": { "type": "string", "required": false, "single_line": true, "non_empty": true, "enum": ["chain", "external_refs", "perceived_branch"], "default": "chain", "reserved": { "prompt": "reserved for a later phase" } },
+        "ref_pattern": { "type": "string", "required": false, "single_line": true, "non_empty": true, "max_length": 100, "default": "[A-Z][A-Z0-9]+-[0-9]+" },
+        "on_unresolved": { "type": "string", "required": false, "single_line": true, "non_empty": true, "enum": ["fail"], "default": "fail", "note": "Phase 1 (E79_S03): only fail is accepted; any other policy is rejected, naming this phase" },
+        "apply_to_board_commits": { "type": "boolean", "required": false, "default": false }
       }
     },
     "branching": {
@@ -104,6 +109,15 @@
         "policy": { "type": "string", "required": true, "single_line": true, "non_empty": true },
         "public_docs_dir": { "type": "string", "required": false, "single_line": true, "non_empty": true },
         "internal_docs_dir": { "type": "string", "required": false, "single_line": true, "non_empty": true }
+      }
+    }
+  },
+  "opt_in_categories": {
+    "commit-trace": {
+      "label": "Commit traceability",
+      "values": {
+        "mode": { "type": "string", "required": false, "single_line": true, "non_empty": true, "enum": ["trailer"], "default": "trailer", "reserved": { "external-key": "reserved for a later phase", "topology": "reserved for a later phase", "ledger": "reserved for a later phase" } },
+        "trailer_key": { "type": "string", "required": false, "single_line": true, "non_empty": true, "enum": ["Jenga-Task"], "default": "Jenga-Task", "note": "Phase 1 (E79_S03): only Jenga-Task, because the shared commit resolver (E79_S02) and est_provenance (E79_S06) read exactly that key" }
       }
     }
   }

@@ -1,0 +1,7 @@
+[
+  {"id": "E90_S01_T01", "title": "Rotate the signing key", "priority": "high"},
+  {"id": "E90_S01_T02", "title": "Tidy the changelog headings", "priority": "low"},
+  {"id": "E90_S02_T01", "title": "Fix the login redirect loop", "priority": "high"},
+  {"id": "E90_S02_T02", "title": "Rename the settings screen", "priority": "medium"},
+  {"id": "E90_S03_T01", "title": "Patch the export timeout", "priority": "high"}
+]

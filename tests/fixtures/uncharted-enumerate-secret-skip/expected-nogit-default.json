@@ -1,0 +1,163 @@
+{
+  "target": "@TARGET@",
+  "target_type": "directory",
+  "base_dir": "@TARGET@",
+  "listing_source": "find",
+  "gitignore_respected": false,
+  "ignored_target": false,
+  "max_depth": 3,
+  "total_files": 6,
+  "total_lines": 7,
+  "total_bytes": 135,
+  "binary_files": 0,
+  "extensions": [
+    {
+      "extension": "(none)",
+      "files": 1,
+      "lines": 1
+    },
+    {
+      "extension": ".example",
+      "files": 1,
+      "lines": 1
+    },
+    {
+      "extension": ".js",
+      "files": 1,
+      "lines": 1
+    },
+    {
+      "extension": ".md",
+      "files": 1,
+      "lines": 1
+    },
+    {
+      "extension": ".py",
+      "files": 1,
+      "lines": 2
+    },
+    {
+      "extension": ".txt",
+      "files": 1,
+      "lines": 1
+    }
+  ],
+  "tree": [
+    {
+      "path": ".env.example",
+      "type": "file",
+      "depth": 1,
+      "lines": 1,
+      "bytes": 21,
+      "binary": false
+    },
+    {
+      "path": ".gitignore",
+      "type": "file",
+      "depth": 1,
+      "lines": 1,
+      "bytes": 9,
+      "binary": false
+    },
+    {
+      "path": "docs",
+      "type": "directory",
+      "depth": 1,
+      "file_count": 1,
+      "truncated": false
+    },
+    {
+      "path": "docs/README.md",
+      "type": "file",
+      "depth": 2,
+      "lines": 1,
+      "bytes": 21,
+      "binary": false
+    },
+    {
+      "path": "ignored",
+      "type": "directory",
+      "depth": 1,
+      "file_count": 1,
+      "truncated": false
+    },
+    {
+      "path": "ignored/skipme.txt",
+      "type": "file",
+      "depth": 2,
+      "lines": 1,
+      "bytes": 21,
+      "binary": false
+    },
+    {
+      "path": "src",
+      "type": "directory",
+      "depth": 1,
+      "file_count": 2,
+      "truncated": false
+    },
+    {
+      "path": "src/lib",
+      "type": "directory",
+      "depth": 2,
+      "file_count": 1,
+      "truncated": false
+    },
+    {
+      "path": "src/lib/util.js",
+      "type": "file",
+      "depth": 3,
+      "lines": 1,
+      "bytes": 21,
+      "binary": false
+    },
+    {
+      "path": "src/main.py",
+      "type": "file",
+      "depth": 2,
+      "lines": 2,
+      "bytes": 42,
+      "binary": false
+    }
+  ],
+  "tree_truncated": false,
+  "largest_files": [
+    {
+      "path": "src/main.py",
+      "lines": 2,
+      "bytes": 42,
+      "binary": false
+    },
+    {
+      "path": ".env.example",
+      "lines": 1,
+      "bytes": 21,
+      "binary": false
+    },
+    {
+      "path": ".gitignore",
+      "lines": 1,
+      "bytes": 9,
+      "binary": false
+    },
+    {
+      "path": "docs/README.md",
+      "lines": 1,
+      "bytes": 21,
+      "binary": false
+    },
+    {
+      "path": "ignored/skipme.txt",
+      "lines": 1,
+      "bytes": 21,
+      "binary": false
+    },
+    {
+      "path": "src/lib/util.js",
+      "lines": 1,
+      "bytes": 21,
+      "binary": false
+    }
+  ],
+  "skipped": {}
+}

@@ -1,0 +1,7 @@
+$ bash @REPO@/scripts/validate-conventions.sh project/configs/conventions.json
+--- stdout
+FAIL project/configs/conventions.json
+--- stderr
+project/configs/conventions.json: cannot read file: No such file or directory
+--- exit
+1

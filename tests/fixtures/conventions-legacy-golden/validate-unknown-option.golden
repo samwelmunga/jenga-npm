@@ -1,0 +1,7 @@
+$ bash @REPO@/scripts/validate-conventions.sh --bogus
+--- stdout
+--- stderr
+validate-conventions.sh: unknown option: --bogus
+usage: validate-conventions.sh [--presets] <file> [more-files...]
+--- exit
+2

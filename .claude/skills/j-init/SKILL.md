@@ -194,6 +194,10 @@ This script handles all scaffolding in one step:
 14. Applies the chosen scaffold visibility mode via `scripts/apply-scaffold-visibility.sh`, which records it as `scaffold_visibility` in `jenga.config.json` and, when `ignored`, adds `.claude/` and `.agents/` to `.gitignore`
 15. Stages and commits all files with the message `init: scaffold project structure and workflow config`
 
+After it writes `project/configs/audit-config.json`, the script prints a one-time dependency-audit
+opt-in notice (sourced from `scripts/audit-notice.sh`, which decides whether it is due). Relay it as
+printed; it never fails the scaffold.
+
 Both visibility modes are validated before any scaffolding happens, so an invalid
 value fails fast and leaves nothing behind. Both are applied before the commit, so
 any resulting `.gitignore` entries are captured in the initial commit — this is what

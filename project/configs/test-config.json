@@ -21,9 +21,9 @@
       "comment": "Static analysis for all shell scripts under skills/, scripts/, hooks/"
     },
     {
-      "tool_name": "-",
+      "tool_name": "scripts/audit-deps.sh",
       "type": "vulnerability",
-      "comment": "No dependency/package surface beyond a small package.json; not currently in scope"
+      "comment": "Opt-in and consent-gated: runs only after user approval (or audit-config.json mode: on); records audit_consent and audit_result events"
     },
     {
       "tool_name": "-",

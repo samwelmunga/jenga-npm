@@ -17,7 +17,81 @@ permissions:
   contents: write
 
 jobs:
+  # Dependency audit gate for the live publish (epic E85, task E85_S04_T01). Added by hand after this file was
+  # generated, so regenerating it through /j-publish would replace this job (see
+  # project/rapports/problems/E85_S04_T01-npm-publish-generator-drift.md).
+  #
+  # The publish job below declares needs: audit, so a failing audit stops the release before anything reaches
+  # the registry. It carries the same if: as publish, so a stage-mode dispatch does not run it; in publish mode
+  # publish starts only once this job has succeeded. The stage job is deliberately not gated.
+  #
+  # It audits the two package directories the publish job installs and ships: "." (the published package) and
+  # project/app. Each runs scripts/audit-deps.sh with --ci (a committed workflow is the standing consent) and
+  # --json; the failing threshold is severity_threshold in project/configs/audit-config.json, not set here. The
+  # step fails on any non-zero exit (1 findings, 2 usage or config, 3 unavailable, 4 not permitted) and also when
+  # the JSON status is unavailable or disabled or the JSON is missing or unreadable: with offline_behavior warn
+  # the script exits 0 on an unreachable registry, and that must never read as a passing audit. Both
+  # directories are always audited, so one failure does not hide the other's result.
+  #
+  # Least privilege: contents: read only (narrows the workflow-level grant, so no id-token and no write), no
+  # secrets, no NODE_AUTH_TOKEN and no setup-node registry-url (that step writes an .npmrc expecting a token).
+  # Third-party actions are pinned to a full commit SHA, the same SHAs as .github/workflows/dependency-audit.yml.
+  # Node, npm and jq come with the ubuntu-latest runner image, so no setup-node step is needed.
+  audit:
+    if: ${{ github.event.inputs.mode == 'publish' || github.event.inputs.mode == '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Audit dependencies
+        shell: bash
+        run: |
+          set -o pipefail
+          failed=0
+          for target in ".:root" "project/app:project-app"; do
+            dir="${target%%:*}"
+            out="audit-${target##*:}.json"
+            code=0
+            bash scripts/audit-deps.sh --dir "$dir" --ci --json > "$out" || code=$?
+            status=""
+            if [ -s "$out" ]; then
+              status="$(jq -r '.status // empty' "$out")" || status=""
+              jq -r '"status: \(.status)  threshold: \(.threshold)", (.findings[]? | "\(.severity)\t\(.name)\t\(.range)")' "$out" || true
+            fi
+            if [ "$code" -ne 0 ]; then
+              echo "::error::audit of $dir failed (scripts/audit-deps.sh exit $code)"
+              failed=1
+            fi
+            case "$status" in
+              clean|findings) ;;
+              unavailable|disabled)
+                echo "::error::audit of $dir did not run (status: $status); an unaudited tree must not be published"
+                failed=1
+                ;;
+              *)
+                echo "::error::audit of $dir produced no usable result (status: '${status}')"
+                failed=1
+                ;;
+            esac
+          done
+          exit "$failed"
+
+      - name: Upload audit JSON
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: audit-npm-publish
+          path: |
+            audit-root.json
+            audit-project-app.json
+          if-no-files-found: warn
+          retention-days: 30
+
   publish:
+    needs: audit
     if: ${{ github.event.inputs.mode == 'publish' || github.event.inputs.mode == '' }}
     runs-on: ubuntu-latest
     steps:

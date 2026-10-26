@@ -1,0 +1,6 @@
+$ bash @REPO@/skills/j-commit/scripts/commit-subject-check.sh add retry
+--- stdout
+kind=non-board; violates the commit-format convention: does not match the recorded message_regex
+--- stderr
+--- exit
+1

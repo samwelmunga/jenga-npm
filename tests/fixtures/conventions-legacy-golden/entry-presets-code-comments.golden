@@ -1,0 +1,36 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh presets code-comments
+--- stdout
+[
+  {
+    "id": "comment-the-why",
+    "label": "Comment the why, not the what",
+    "description": "Comments explain intent and constraints, not what the code plainly does.",
+    "values": {
+      "policy": "comment-why-not-what"
+    },
+    "placeholder_fields": []
+  },
+  {
+    "id": "public-api-doc-comments",
+    "label": "Doc-comments on public API",
+    "description": "Every public function, type and module carries a doc-comment.",
+    "values": {
+      "policy": "public-api-doc-comments-required",
+      "public_api_docs_required": true
+    },
+    "placeholder_fields": []
+  },
+  {
+    "id": "minimal-comments",
+    "label": "Minimal comments",
+    "description": "Prefer self-explanatory code and comment only the non-obvious.",
+    "values": {
+      "policy": "minimal-comments",
+      "public_api_docs_required": false
+    },
+    "placeholder_fields": []
+  }
+]
+--- stderr
+--- exit
+0

@@ -9,7 +9,14 @@
 # unchanged target produce byte-identical output and can be diffed directly.
 #
 # The script has NO side effects. It writes nothing to disk, creates no temp files, and invokes
-# only read-only git plumbing (rev-parse, ls-files).
+# only read-only git plumbing (rev-parse, check-ignore, ls-files).
+#
+# SECRET-LOOKING FILES (E85_S04_T06). A file whose NAME matches the shared list in secret-files.sh
+# (environment files, auth files, private keys; see that file for the list and its tradeoffs) is
+# never opened, counted, listed or reported as a path to read. The decision is made from the name
+# alone, in this script, before the python aggregator below sees the file list, so a skipped file
+# is not even stat'ed. Behaviour for every other file is unchanged: with no secret-looking file in
+# the target the stdout is byte-identical to what this script printed before the skip existed.
 #
 # ---------------------------------------------------------------------------------------------
 # USAGE
@@ -70,6 +77,14 @@
 # excluded from the counts and reported under the "skipped" key rather than aborting the run.
 # Empty directories are not represented: both discovery mechanisms enumerate files, not dirs.
 #
+# SECRET-LOOKING FILES. The shared list (secret-files.sh, sourced from this script's own directory)
+# is applied to the NUL-separated listing of every discovery path above: git-ls-files, find,
+# find under --no-gitignore, the ignored-target fallback, and the single-file case (a target that
+# IS a secret-looking file enumerates nothing: total_files 0). Matching is on the base name only.
+# The shared list's exempt template names are not secret-looking and are still enumerated. Skipped files are
+# counted in neither "skipped" nor any total; they are reported separately, see below. An
+# all-secret directory is a normal result with zero files and a "secret_files_skipped" count.
+#
 # ---------------------------------------------------------------------------------------------
 # OUTPUT CONTRACT (stdout, JSON)
 # ---------------------------------------------------------------------------------------------
@@ -97,7 +112,16 @@
 #     "tree_truncated":      true when at least one tree entry was truncated by the depth bound
 #     "largest_files":       [ { "path", "lines", "bytes", "binary" } ] sorted by lines desc, then path
 #     "skipped":             { "<reason>": { "count", "paths" } }  paths capped at 25 per reason
+#     "secret_files_skipped": { "count", "paths" }  OPTIONAL, present ONLY when count > 0. Secret-
+#                            looking files (by name) that were left out and never opened; paths are
+#                            relative, sorted, capped at 25. Absent when there were none, so the
+#                            output for a tree without such files is exactly the pre-existing contract.
 #   }
+#
+# stderr. When at least one secret-looking file was skipped the script prints one notice line:
+#   "N secret-looking file(s) skipped (names listed, contents never read): a, b, ..."
+# (secret_files_notice from secret-files.sh; names beyond SECRET_FILES_NOTICE_CAP become "... and M
+# more"). Nothing is printed on stderr for a tree without such files. stdout stays machine-readable.
 #
 # Tree entries are one of:
 #   { "path", "type": "directory", "depth", "file_count", "truncated" }
@@ -119,6 +143,11 @@
 # jq is NOT required -- JSON is emitted by python3.
 
 set -euo pipefail
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+# The one shared list of secret-looking file names; sourcing it has no side effects.
+# shellcheck source=secret-files.sh
+. "$SCRIPT_DIR/secret-files.sh"
 
 MAX_DEPTH=3
 TOP=10
@@ -308,6 +337,30 @@ else
   list_files() { find_list; }
 fi
 
+# --- secret-looking file filter ------------------------------------------------------------------
+# Applied to whichever list_files was chosen above, BEFORE the aggregator runs. Only names are
+# compared (secret_files_is_secret never opens or stats a file), so a skipped file is never read.
+# The loop runs in this shell (process substitution, not a pipe) so the skipped names survive for
+# the notice; bash 3.2 compatible (no mapfile, no associative arrays). The listing is sorted for
+# git and de-duplicated by the aggregator, so adjacent duplicates are the only ones to collapse.
+KEPT=()
+SECRET_SKIPPED=()
+SECRET_COUNT=0
+LAST_SECRET=""
+while IFS= read -r -d '' ENTRY; do
+  if secret_files_is_secret "$ENTRY"; then
+    REL_NAME="$ENTRY"
+    while [ "${REL_NAME#./}" != "$REL_NAME" ]; do REL_NAME="${REL_NAME#./}"; done
+    if [ "$REL_NAME" != "$LAST_SECRET" ]; then
+      SECRET_SKIPPED+=("$REL_NAME")
+      SECRET_COUNT=$((SECRET_COUNT + 1))
+      LAST_SECRET="$REL_NAME"
+    fi
+  else
+    KEPT+=("$ENTRY")
+  fi
+done < <(list_files)
+
 # --- aggregation and JSON emission ---------------------------------------------------------------
 # The aggregator is held in a variable and handed to `python3 -c` rather than piped in on stdin:
 # `python3 -` would consume stdin as the program text, leaving nothing for the file list to arrive on.
@@ -318,7 +371,7 @@ import sys
 from collections import defaultdict
 
 (base_dir, target, target_type, listing_source,
- max_depth_s, top_s, gitignore_s, ignored_target_s) = sys.argv[1:9]
+ max_depth_s, top_s, gitignore_s, ignored_target_s, secret_count_s) = sys.argv[1:10]
 max_depth = int(max_depth_s)
 top = int(top_s)
 gitignore_respected = gitignore_s == "1"
@@ -339,6 +392,13 @@ def normalise(raw):
 
 data = sys.stdin.buffer.read()
 rel_paths = sorted({normalise(p) for p in data.split(b"\0") if p})
+
+# Names of secret-looking files the shell already filtered out of the list above. They arrive on
+# fd 3 (names only) so they can be reported; they are never opened or stat'ed here.
+secret_skipped = []
+if int(secret_count_s) > 0:
+    with open(3, "rb", closefd=False) as sfh:
+        secret_skipped = sorted({normalise(p) for p in sfh.read().split(b"\0") if p})
 
 files = []
 skipped = defaultdict(list)
@@ -460,11 +520,24 @@ summary = {
     },
 }
 
+if secret_skipped:
+    summary["secret_files_skipped"] = {
+        "count": len(secret_skipped),
+        "paths": secret_skipped[:SKIP_CAP],
+    }
+
 json.dump(summary, sys.stdout, indent=2, ensure_ascii=False)
 sys.stdout.write("\n")
 PY
 )
 
-list_files | python3 -c "$PY_SRC" \
+# ${arr[@]+"${arr[@]}"} keeps an empty array safe under `set -u` on bash 3.2.
+printf '%s\0' ${KEPT[@]+"${KEPT[@]}"} | python3 -c "$PY_SRC" \
   "$BASE_DIR" "$RESOLVED" "$TARGET_TYPE" "$LISTING_SOURCE" \
-  "$MAX_DEPTH" "$TOP" "$GITIGNORE_RESPECTED" "$IGNORED_TARGET"
+  "$MAX_DEPTH" "$TOP" "$GITIGNORE_RESPECTED" "$IGNORED_TARGET" "$SECRET_COUNT" \
+  3< <(printf '%s\0' ${SECRET_SKIPPED[@]+"${SECRET_SKIPPED[@]}"})
+
+# One line on stderr, only when something was skipped (names only, never contents).
+if [ "$SECRET_COUNT" -gt 0 ]; then
+  secret_files_notice "$SECRET_COUNT" "${SECRET_SKIPPED[@]}"
+fi

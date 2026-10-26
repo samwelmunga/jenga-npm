@@ -62,7 +62,16 @@ directly rather than adding a third skill-local wrapper script:
    the first couple of lines) into the summary. Report only, same as `/j-reconcile`: never edit
    `project/todo.md` here.
 
-7. **Print the summary** following the layout and icon conventions in `assets/output_format.md`.
+6.8. **Collect the dependency-audit status** — invoke
+   ```
+   bash "$([ -f scripts/audit-status.sh ] && echo scripts/audit-status.sh || echo node_modules/@jenga-ai/agent/scripts/audit-status.sh)"
+   ```
+   It is read-only (no audit is run, no npm call, no file written) and always exits `0`; capture its
+   stdout verbatim for step 7 and add nothing to it. Do not parse or reinterpret its output here.
+
+7. **Print the summary** following the layout and icon conventions in `assets/output_format.md`. After the
+   queue section, add a `Dependency audit` heading (same banner style as the other sections) and print step
+   6.8's output under it unchanged.
 
 8. If no epics exist, print: `No board items found. Run /pi-plan to define epics or /todo to add items.`
 

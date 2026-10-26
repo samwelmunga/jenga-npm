@@ -1,0 +1,274 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh categories --format json
+--- stdout
+[
+  {
+    "id": "commit-format",
+    "label": "Commit format",
+    "applies_to": "non-board commits only: EST naming (task(E##_S##_T##):, story(...), epic(...)) stays mandatory for board commits",
+    "values": {
+      "style": {
+        "type": "string",
+        "required": true,
+        "single_line": true,
+        "non_empty": true
+      },
+      "message_regex": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true
+      },
+      "subject_max_length": {
+        "type": "integer",
+        "required": false
+      },
+      "template": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true,
+        "max_length": 80
+      },
+      "ref_source": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true,
+        "enum": [
+          "chain",
+          "external_refs",
+          "perceived_branch"
+        ],
+        "default": "chain",
+        "reserved": {
+          "prompt": "reserved for a later phase"
+        }
+      },
+      "ref_pattern": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true,
+        "max_length": 100,
+        "default": "[A-Z][A-Z0-9]+-[0-9]+"
+      },
+      "on_unresolved": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true,
+        "enum": [
+          "fail"
+        ],
+        "default": "fail",
+        "note": "Phase 1 (E79_S03): only fail is accepted; any other policy is rejected, naming this phase"
+      },
+      "apply_to_board_commits": {
+        "type": "boolean",
+        "required": false,
+        "default": false
+      }
+    }
+  },
+  {
+    "id": "branching",
+    "label": "Branching",
+    "values": {
+      "model": {
+        "type": "string",
+        "required": true,
+        "single_line": true,
+        "non_empty": true
+      },
+      "branch_pattern": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true
+      },
+      "default_branch": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true
+      }
+    }
+  },
+  {
+    "id": "naming",
+    "label": "Naming",
+    "values": {
+      "identifier_case": {
+        "type": "string",
+        "required": true,
+        "single_line": true,
+        "non_empty": true
+      },
+      "file_case": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true
+      },
+      "type_case": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true
+      }
+    }
+  },
+  {
+    "id": "code-comments",
+    "label": "Code comments and docs-in-code",
+    "values": {
+      "policy": {
+        "type": "string",
+        "required": true,
+        "single_line": true,
+        "non_empty": true
+      },
+      "public_api_docs_required": {
+        "type": "boolean",
+        "required": false
+      },
+      "doc_comment_style": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true
+      }
+    }
+  },
+  {
+    "id": "formatting-linting",
+    "label": "Formatting and linting",
+    "values": {
+      "approach": {
+        "type": "string",
+        "required": true,
+        "single_line": true,
+        "non_empty": true
+      },
+      "format_command": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true
+      },
+      "lint_command": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true
+      },
+      "editorconfig": {
+        "type": "boolean",
+        "required": false
+      }
+    }
+  },
+  {
+    "id": "testing",
+    "label": "Testing expectations",
+    "values": {
+      "expectation": {
+        "type": "string",
+        "required": true,
+        "single_line": true,
+        "non_empty": true
+      },
+      "test_command": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true
+      },
+      "test_dir": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true
+      }
+    }
+  },
+  {
+    "id": "file-layout",
+    "label": "File and directory layout",
+    "values": {
+      "layout": {
+        "type": "string",
+        "required": true,
+        "single_line": true,
+        "non_empty": true
+      },
+      "source_dir": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true
+      },
+      "test_dir": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true
+      }
+    }
+  },
+  {
+    "id": "language-tooling",
+    "label": "Language and tooling",
+    "values": {
+      "version_policy": {
+        "type": "string",
+        "required": true,
+        "single_line": true,
+        "non_empty": true
+      },
+      "runtime": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true
+      },
+      "package_manager": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true
+      },
+      "lockfile_committed": {
+        "type": "boolean",
+        "required": false
+      }
+    }
+  },
+  {
+    "id": "documentation-placement",
+    "label": "Documentation placement",
+    "values": {
+      "policy": {
+        "type": "string",
+        "required": true,
+        "single_line": true,
+        "non_empty": true
+      },
+      "public_docs_dir": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true
+      },
+      "internal_docs_dir": {
+        "type": "string",
+        "required": false,
+        "single_line": true,
+        "non_empty": true
+      }
+    }
+  }
+]
+--- stderr
+--- exit
+0

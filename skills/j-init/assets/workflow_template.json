@@ -19,7 +19,10 @@
     "documentation": "project/documentation",
     "documentation_plans": "project/documentation/plans",
     "documentation_summaries": "project/documentation/summaries",
-    "strategy": "project/documentation/STRATEGY.md"
+    "strategy": "project/documentation/STRATEGY.md",
+    "workflows": "project/.workflows",
+    "workflow_runs": "project/data/workflow-runs",
+    "workflow_artifacts": "project/data/workflow-artifacts"
   },
   "agents": ["developer", "tester", "scrum-master"],
   "pipeline": [

@@ -1,0 +1,6 @@
+$ bash @REPO@/scripts/validate-conventions.sh project/configs/conventions.json
+--- stdout
+PASS project/configs/conventions.json
+--- stderr
+--- exit
+0

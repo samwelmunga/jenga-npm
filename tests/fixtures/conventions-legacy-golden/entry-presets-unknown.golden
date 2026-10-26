@@ -1,0 +1,6 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh presets not-a-category
+--- stdout
+--- stderr
+conventions-entry.sh: unknown category: not-a-category (allowed: commit-format, branching, naming, code-comments, formatting-linting, testing, file-layout, language-tooling, documentation-placement, commit-trace)
+--- exit
+1

@@ -65,9 +65,11 @@ For **each task ID** listed in the story's `tasks:` frontmatter array:
 
 2. **Extract commit SHA(s)** for this task:
    ```bash
-   git log --all --no-merges --grep="<task-id>" --pretty=format:"%H" 2>/dev/null
+   bash "$([ -f scripts/commits-for-item.sh ] && echo scripts/commits-for-item.sh || echo node_modules/@jenga-ai/agent/scripts/commits-for-item.sh)" <task-id>
    ```
-   This matches commits whose message contains the EST task identifier (e.g. `E32_S06_T01`).
+   This is the shared resolver. It prints one SHA per line for the commits that belong to the task: those whose
+   message names the EST task identifier (e.g. `E32_S06_T01`, not followed by a digit or underscore) or that carry a
+   `Jenga-Task: <task-id>` trailer. No output means no commit was found (exit 0).
 
 3. **Run per-task diff stat extraction:**
    ```bash
@@ -151,7 +153,7 @@ For **each task ID** listed in the story's `tasks:` frontmatter array:
 A **bundle task** is one where a single commit message contains multiple task
 IDs (e.g. `task(E32_S06_T01, E32_S06_T02): ...`). In this case:
 
-- Each task matched by `git log --grep` will independently resolve to the same
+- Each task matched by `scripts/commits-for-item.sh` will independently resolve to the same
   commit SHA, and each will receive the **full bundle stats** as its
   `actual_files_changed` and `actual_lines_delta` values.
 - This is the **"full credit"** attribution model: each task is credited with
@@ -274,8 +276,8 @@ Scope Divergence: skipped (scope-thresholds.json missing or malformed)
 | Script | Purpose |
 |--------|---------|
 | `scripts/check-story-closeable.sh <story-id>` | Guard: verify all tasks in terminal state |
-| `scripts/extract-diff-stats.sh <story-id>` | Story-level aggregate diff stats (for story frontmatter) |
-| `scripts/extract-task-diff-stats.sh <task-id>` | Per-task diff stats from EST-tagged commits |
+| `scripts/extract-diff-stats.sh <story-id>` | Story-level aggregate diff stats (for story frontmatter): the story's own commits plus its tasks' commits, via `scripts/commits-for-item.sh` |
+| `scripts/extract-task-diff-stats.sh <task-id>` | Per-task diff stats from the task's commits, resolved by `scripts/commits-for-item.sh` |
 | `scripts/update-task-frontmatter.sh <file> <key> <value>` | Write/update a YAML field in task or story frontmatter |
 | `scripts/compute-scope-divergence.sh <execution_scope> <actual_files_changed> <actual_lines_delta>` | Compute scope divergence flag: prints `true` or `false` |
 | `scripts/check-privatized.sh <id> <board-file-path>` | Static `.publicignore` membership check (task or story); prints `PRIVATIZED` (status written) or `UNCHANGED` — no `/mirror-public` run required |

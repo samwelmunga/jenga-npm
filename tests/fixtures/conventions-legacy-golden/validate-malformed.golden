@@ -1,0 +1,7 @@
+$ bash @REPO@/scripts/validate-conventions.sh project/configs/conventions.json
+--- stdout
+FAIL project/configs/conventions.json
+--- stderr
+project/configs/conventions.json: malformed JSON: Expecting value: line 2 column 1 (char 43)
+--- exit
+1

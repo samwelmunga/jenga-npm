@@ -1,0 +1,5 @@
+$ env bash @REPO@/scripts/conventions-digest.sh --agent developer
+--- stdout
+--- stderr
+--- exit
+0

@@ -1,0 +1,6 @@
+$ bash @REPO@/skills/j-commit/scripts/commit-subject-check.sh add retry
+--- stdout
+kind=non-board; no commit-format convention recorded
+--- stderr
+--- exit
+0

@@ -15,6 +15,9 @@ Scope: <resolved scope — see forms below>
 🔒 LADDER STATUS — UNVERIFIED, LEFT UNCHANGED (script-set status, implementation not confirmed — status and dates untouched)
    🔧 E##_S##_T## · <Task Title>  — status <ladder status>; no commits, artefacts, branch or worktree found
 
+🕳️  HISTORY UNAVAILABLE — UNVERIFIED, LEFT UNCHANGED (shallow clone: the commit evidence cannot be checked — status and dates untouched)
+   🔧 E##_S##_T## · <Task Title>  — status <status>; no commit found in a shallow clone, no branch or worktree found
+
 🔀 MERGED (worktree branch merged)
    🔧 E##_S##_T## · <Task Title>  — merged branch <branch-name>
 
@@ -66,6 +69,11 @@ Scope: <resolved scope — see forms below>
   (see `/reconcile` Section 0) that Phase 2 could not confirm and found no branch for. Unlike a `completed`
   task in the same position it is **not** demoted — its status and dates are left exactly as they were. It is
   never listed under DEMOTED.
+- The HISTORY UNAVAILABLE — UNVERIFIED section is report-only too: it lists a task that Phase 2 could not
+  confirm because `skills/j-reconcile/scripts/commit-evidence.sh` reported `status: unavailable` (no commit
+  found, and the repository is a shallow clone, so the history that would hold it may be missing) and no
+  branch or worktree was found. It is never demoted and never listed under DEMOTED or LADDER STATUS. Omit the
+  section when no task was in this position.
 - The IN-FLIGHT — SKIPPED section is distinct from both PROMOTED and the ordinary "implementation
   not confirmed, no action" case (which is never reported at all): it means Phase 3 found a
   matching commit (implementation confirmed) but withheld promotion because an active

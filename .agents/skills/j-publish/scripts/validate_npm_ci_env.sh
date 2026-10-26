@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXIT_ENV_INVALID=4
 
 # Usage: validate_npm_ci_env.sh <publish_json_path> <target_name>
@@ -13,11 +14,17 @@ fail() {
   exit "$EXIT_ENV_INVALID"
 }
 
+# Sign-in probe: exit status only. The probe's own output is discarded, so nothing it prints (and no token) is read,
+# captured or logged here; the status alone decides whether validation continues.
+gh_is_signed_in() {
+  gh auth status >/dev/null 2>&1
+}
+
 # ── runtime dependency checks ──────────────────────────────────────────────────
 
 command -v gh >/dev/null 2>&1 || fail "gh CLI is required but not found on PATH. Install it from https://cli.github.com/ and re-run."
 
-gh auth status >/dev/null 2>&1 || fail "gh CLI is not authenticated. Run 'gh auth login' and re-run."
+gh_is_signed_in || fail "gh CLI is not authenticated. Run 'gh auth login' and re-run."
 
 command -v jq >/dev/null 2>&1 || fail "jq is required but not found on PATH. Install it from https://stedolan.github.io/jq/ and re-run."
 
@@ -68,4 +75,8 @@ fi
 # ── all checks passed ──────────────────────────────────────────────────────────
 
 printf '[validate] environment OK\n'
+
+# One-time dependency-audit opt-in notice (E85_S04_T04). Best effort: the hook always exits 0.
+[ -f "$SCRIPT_DIR/audit_notice_hook.sh" ] && bash "$SCRIPT_DIR/audit_notice_hook.sh" || true
+
 exit 0

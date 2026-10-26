@@ -1,0 +1,74 @@
+$ bash @REPO@/skills/j-conventions/scripts/detect-conventions.sh
+--- stdout
+{
+  "detect_version": 1,
+  "categories": {
+    "commit-format": {
+      "detected": null,
+      "preset_match": null,
+      "evidence": "",
+      "confidence": "none",
+      "preset_only": false
+    },
+    "branching": {
+      "detected": null,
+      "preset_match": null,
+      "evidence": "",
+      "confidence": "none",
+      "preset_only": false
+    },
+    "naming": {
+      "detected": null,
+      "preset_match": null,
+      "evidence": "",
+      "confidence": "none",
+      "preset_only": false
+    },
+    "code-comments": {
+      "detected": null,
+      "preset_match": null,
+      "evidence": "",
+      "confidence": "none",
+      "preset_only": true
+    },
+    "formatting-linting": {
+      "detected": null,
+      "preset_match": null,
+      "evidence": "",
+      "confidence": "none",
+      "preset_only": false
+    },
+    "testing": {
+      "detected": null,
+      "preset_match": null,
+      "evidence": "",
+      "confidence": "none",
+      "preset_only": false
+    },
+    "file-layout": {
+      "detected": null,
+      "preset_match": null,
+      "evidence": "",
+      "confidence": "none",
+      "preset_only": false
+    },
+    "language-tooling": {
+      "detected": null,
+      "preset_match": null,
+      "evidence": "",
+      "confidence": "none",
+      "preset_only": false
+    },
+    "documentation-placement": {
+      "detected": null,
+      "preset_match": null,
+      "evidence": "",
+      "confidence": "none",
+      "preset_only": false
+    }
+  },
+  "warnings": []
+}
+--- stderr
+--- exit
+0

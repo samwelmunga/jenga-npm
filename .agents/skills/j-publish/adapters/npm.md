@@ -51,6 +51,19 @@ Run the adapter phases in this exact order:
 
 Quality gates run inside the `gates` phase and must include `npm test`. If the consumer `package.json` declares a `build` script, `npm run build` also runs as a gate. Once control enters the adapter, external publish-side commands are restricted to direct `npm` and `git` invocations.
 
+### Dependency audit gate
+
+`run_gates.sh pre` (reached by `deploy`, `deploy --dry-run` and `stage`) also runs a built-in `audit` gate after `test`/`build`/`lint`, the last point at which a vulnerable dependency can be stopped before publish. It audits `$REPO_ROOT` (the directory holding the `package.json` this adapter publishes) with `scripts/audit-deps.sh --dir <dir> --json`, adding `--ci` only on a genuine CI signal (`run_gates.sh`'s own `--ci` argument, or `CI=true` / `GITHUB_ACTIONS=true` in the environment) and never `--approved`. `--non-interactive`, and therefore `deploy --yes`, only turns prompts off; it is not audit consent, so a `--yes` run under `mode: ask` skips the audit unless the environment carries a CI signal. The outcome is recorded with `scripts/audit-record.sh result`. Outcomes:
+
+| `audit-deps.sh` exit | Gate result |
+|---|---|
+| `0` | passed (an `unavailable` result under `offline_behavior: warn` passes with a visible warning) |
+| `1` findings at or above the threshold | failed, exit `2` naming the `audit` gate; interactively it asks "[p] Proceed anyway / [s] Stop" instead |
+| `2` config error, `3` unavailable under `offline_behavior: fail` | failed, exit `2` |
+| `4` no consent (`mode: ask` without a CI signal, or `mode: off`) | **skipped** with a "no consent" notice that says how to opt in (`mode: on` in `project/configs/audit-config.json`, or run the audit explicitly); never passed, never failed, because consent is the user's call |
+
+Configuration lives in `project/configs/audit-config.json`. For `npm-ci` targets the generated CI workflow also gets its own `audit` job and a scheduled `dependency-audit.yml`, with the threshold from the target's `audit_level` key; see "Dependency audit in the generated workflows" in `skills/j-publish/adapters/npm-ci.md`.
+
 ## State Machine
 
 The adapter records these transitions in `project/logs/publish-history.json`:

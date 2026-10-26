@@ -1,0 +1,6 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh path
+--- stdout
+@PROJ@/project/configs/conventions.json
+--- stderr
+--- exit
+0

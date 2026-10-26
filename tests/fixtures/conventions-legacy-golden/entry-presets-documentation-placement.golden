@@ -1,0 +1,37 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh presets documentation-placement
+--- stdout
+[
+  {
+    "id": "published-docs-in-docs",
+    "label": "Published docs in docs/",
+    "description": "Content for readers goes in docs/ and internal notes are kept elsewhere.",
+    "values": {
+      "policy": "published-docs-in-docs-internal-elsewhere",
+      "public_docs_dir": "docs"
+    },
+    "placeholder_fields": []
+  },
+  {
+    "id": "everything-in-docs",
+    "label": "Everything in docs/",
+    "description": "All documentation, public and internal, lives in docs/.",
+    "values": {
+      "policy": "everything-in-docs",
+      "public_docs_dir": "docs",
+      "internal_docs_dir": "docs"
+    },
+    "placeholder_fields": []
+  },
+  {
+    "id": "readme-only",
+    "label": "README only",
+    "description": "Documentation lives in the README with no docs directory.",
+    "values": {
+      "policy": "readme-only"
+    },
+    "placeholder_fields": []
+  }
+]
+--- stderr
+--- exit
+0

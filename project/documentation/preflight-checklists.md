@@ -475,7 +475,8 @@ extension mechanism (section 4), so the base vocabulary is unchanged.
 
 **Extension phases must be declared.** `pre-publish` and `pre-mirror` are valid only in a file whose own
 `situations` array lists them; this project's `project/configs/checklists.json` does. The shipped default
-`templates/checklists.json` declares neither because it has no items for them. A registry that omits the
+`templates/checklists.json` declares `pre-publish` (its `dependency-audit-before-release` item names it, see
+"Dependency-audit items" below) and not `pre-mirror`, because it has no item for that one. A registry that omits the
 declaration answers `checklist.sh check pre-publish` with exit `3` (unknown situation).
 
 A skill therefore treats exit `3` from its **second, skill-specific** phase as "no items for this phase" and
@@ -1465,3 +1466,17 @@ A valid file exercising an extended situation, both kinds, and all three enforce
   ]
 }
 ```
+
+### Dependency-audit items (`E85_S01_T06`)
+
+Two items make the dependency audit (`scripts/audit-deps.sh`, config in `audit-config.json`) a standing pre-flight
+consideration. Both are in `templates/checklists.json` and `project/configs/checklists.json`, identical in `id`,
+`text`, `situations`, `kind` and `enforcement`, because the checker selects one whole file and never merges.
+
+- `dependency-audit-before-release`: `machine`, `pre-release` and `pre-publish`, `confirm`, `run`. Its `verify` is
+  consent-aware: exit `0` passes; exit `4` (mode `off`, or `ask` with no approval) prints `audit not run: no
+  consent` and fails; findings (`1`) and an unavailable audit under `offline_behavior: fail` (`3`) also fail. A
+  project with no root `package.json` passes. It is `confirm`, never `block`, so the user sees the reason and
+  decides. It never opts the user in: the `verify` passes neither `--approved` nor `--ci`.
+- `dependency-audit-reviewed`: `judgment`, `pre-commit`, `advisory`, `run`. A reminder for commits that touch
+  `package.json` or a lockfile.

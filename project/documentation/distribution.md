@@ -179,6 +179,16 @@ job (a `prepack` build step). Verified end to end in this worktree: after runnin
 `npm run ui:build --prefix project/app --` once, `npm pack --dry-run` correctly lists
 `project/app/ui/dist/index.html` and its built assets.
 
+### Workflow skill packaging decision (`j.workflow`) — E80_S05_T07
+
+Decided 2026-10-25: `j.workflow` ships, to the npm package and to the public mirror alike. It is a
+framework-generic runner (the counterpart of `j.playbook`), so `skills/j-workflow/`, `scripts/workflow/`
+and the `templates/workflows/` builtins carry no ignore entry, and the npm `files` array already covers
+all three roots. Only the per-project `project/.workflows/` source is blocklisted, mirroring
+`project/.playbooks/`. A stranded-skill check found nothing to ignore: every skill the runner names and
+every script and template the shipped example uses classify PUBLIC. The reasoning is recorded beside the
+`project/.workflows/` entry in `.publicignore` and asserted by `tests/workflow-skill-registration.bats`.
+
 ---
 
 ## 2. The install path

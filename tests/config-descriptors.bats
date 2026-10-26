@@ -102,19 +102,19 @@ EOF
 # Validator: shipped descriptors
 # ================================================================================================================
 
-@test "the six shipped descriptors validate against scratch copies of the real configs" {
+@test "the seven shipped descriptors validate against scratch copies of the real configs" {
   run bash "$VALIDATE" --all
   [ "$status" -eq 0 ]
   assert_output_not_contains "FAIL"
-  [ "$(printf '%s\n' "$output" | grep -c '^PASS ')" -eq 6 ]
-  for f in workflow scope-thresholds test-config playbook-config checklists conventions; do
+  [ "$(printf '%s\n' "$output" | grep -c '^PASS ')" -eq 7 ]
+  for f in audit-config workflow scope-thresholds test-config playbook-config checklists conventions; do
     assert_output_contains "PASS $SHIPPED/$f.json"
   done
 }
 
 @test "every key of every real config file is covered by exactly one editable-or-read-only entry" {
   local f key n
-  for f in workflow scope-thresholds test-config playbook-config checklists; do
+  for f in audit-config workflow scope-thresholds test-config playbook-config checklists; do
     for key in $(jq -r 'keys[]' "$REPO_ROOT/project/configs/$f.json"); do
       n="$(jq --arg k "$key" '[.keys[] | select(.key == $k)] | length' "$SHIPPED/$f.json")"
       [ "$n" -eq 1 ] || { echo "$f.json key $key has $n descriptor entries" >&2; return 1; }
@@ -125,10 +125,10 @@ EOF
 @test "only scalar keys are editable in the shipped descriptors" {
   run jq -s '[.[].keys[] | select(.editable == true) | .type] | unique' "$SHIPPED"/*.json
   [ "$status" -eq 0 ]
-  # integer: the scope-thresholds and playbook-config settings; string: test-config's two commit_* keys (E72_S01_T04) and three test_run_* keys (E72_S06_T01)
-  [ "$(printf '%s' "$output" | jq -c .)" = '["integer","string"]' ]
+  # boolean: audit-config production_only; integer: the scope-thresholds and playbook-config settings; string: audit-config mode, severity_threshold and offline_behavior, test-config's two commit_* keys (E72_S01_T04) and three test_run_* keys (E72_S06_T01)
+  [ "$(printf '%s' "$output" | jq -c .)" = '["boolean","integer","string"]' ]
   run jq -s '[.[].keys[] | select(.editable == true and .type == "string") | .key] | sort' "$SHIPPED"/*.json
-  [ "$(printf '%s' "$output" | jq -c .)" = '["commit_prompt_default","commit_scope_map_file","test_run_epic","test_run_story","test_run_task"]' ]
+  [ "$(printf '%s' "$output" | jq -c .)" = '["commit_prompt_default","commit_scope_map_file","mode","offline_behavior","severity_threshold","test_run_epic","test_run_story","test_run_task"]' ]
   run jq -s '[.[].keys[] | select(.type == "array" or .type == "object") | .editable] | unique' "$SHIPPED"/*.json
   [ "$(printf '%s' "$output" | jq -c .)" = '[false]' ]
 }
@@ -248,11 +248,14 @@ EOF
   run jq -r '.keys[] | select(.key == "threshold_version" or .key == "config_version" or .key == "checklist_version") | .editable' \
     "$SHIPPED/scope-thresholds.json" "$SHIPPED/playbook-config.json" "$SHIPPED/checklists.json"
   [ "$output" = "$(printf 'false\nfalse\nfalse')" ]
-  local f key
-  for f in scope-thresholds playbook-config; do
+  local f key src
+  for f in scope-thresholds playbook-config audit-config; do
     for key in $(jq -r '.keys[] | select(.editable == true) | .key' "$SHIPPED/$f.json"); do
+      # audit-config is compared against the shipped init template: this repository's own copy may be stricter
+      src="$REPO_ROOT/project/configs/$f.json"
+      [ "$f" = audit-config ] && src="$REPO_ROOT/skills/j-init/assets/audit-config_template.json"
       [ "$(jq --arg k "$key" '.keys[] | select(.key == $k) | .default' "$SHIPPED/$f.json")" = \
-        "$(jq --arg k "$key" '.[$k]' "$REPO_ROOT/project/configs/$f.json")" ] \
+        "$(jq --arg k "$key" '.[$k]' "$src")" ] \
         || { echo "$f.json $key default differs from the config value" >&2; return 1; }
     done
   done
@@ -489,7 +492,7 @@ EOF
   assert_output_contains "node_modules/@jenga-ai/agent/templates/config-descriptors/scope-thresholds.json"
   run --separate-stderr bash "$pkg/scripts/render-config-list.sh"
   [ "$status" -eq 0 ]
-  assert_ranked_list 6
+  assert_ranked_list 7
 }
 
 @test "lib/config has no project/ path literal outside comments, no post-Node-14 API and no non-built-in import" {
@@ -524,18 +527,20 @@ EOF
   run --separate-stderr bash "$RENDER"
   [ "$status" -eq 0 ]
   [ -z "$stderr" ]
-  assert_ranked_list 6
-  assert_starts_with "$output" "1. checklists — "
-  assert_starts_with "$(printf '%s\n' "$output" | sed -n 2p)" "2. conventions — "
-  assert_output_contains "4. scope-thresholds — "
+  assert_ranked_list 7
+  assert_starts_with "$output" "1. audit-config — "
+  assert_starts_with "$(printf '%s\n' "$output" | sed -n 2p)" "2. checklists — "
+  assert_starts_with "$(printf '%s\n' "$output" | sed -n 3p)" "3. conventions — "
+  assert_output_contains "5. scope-thresholds — "
   assert_output_contains "(8 editable keys)"
+  assert_output_contains "(4 editable keys)"
   assert_output_contains "(1 editable key)"
   assert_output_contains "(0 editable keys)"
 }
 
 @test "each file's key list is a ranked_list with one line per descriptor key, in descriptor order" {
   local f n
-  for f in workflow scope-thresholds test-config playbook-config checklists; do
+  for f in audit-config workflow scope-thresholds test-config playbook-config checklists; do
     n="$(jq '.keys | length' "$SHIPPED/$f.json")"
     run --separate-stderr bash "$RENDER" "$f"
     [ "$status" -eq 0 ]
@@ -560,7 +565,7 @@ EOF
 
 @test "nested keys render read-only with their pointer and a summarised value; editable keys show the current value" {
   local f key ptr editable
-  for f in workflow scope-thresholds test-config playbook-config checklists; do
+  for f in audit-config workflow scope-thresholds test-config playbook-config checklists; do
     run --separate-stderr bash "$RENDER" "$f"
     [ "$status" -eq 0 ]
     for key in $(jq -r '.keys[].key' "$SHIPPED/$f.json"); do
@@ -574,7 +579,7 @@ EOF
   done
   run --separate-stderr bash "$RENDER" workflow
   assert_output_contains "Statuses: 14 items [read-only; see "
-  assert_output_contains "Paths: 18 keys [read-only; see scripts/resolve-root.sh]"
+  assert_output_contains "Paths: 21 keys [read-only; see scripts/resolve-root.sh]"
   run --separate-stderr bash "$RENDER" scope-thresholds
   assert_output_contains "inline_max_files — Inline max files: 3 (integer, 1 to 50)"
   assert_output_contains "Threshold version: $(jq .threshold_version "$REPO_ROOT/project/configs/scope-thresholds.json") [read-only"
@@ -613,20 +618,20 @@ EOF
   printf '{bad' > "$PROJ/project/configs/playbook-config.json"
   run --separate-stderr bash "$RENDER"
   [ "$status" -eq 0 ]
-  assert_ranked_list 6
+  assert_ranked_list 7
   # test-config (removed here) and conventions (no instance in this repo) are both not present
   [ "$(printf '%s\n' "$output" | grep -c '\[not present\]$')" -eq 2 ]
   [ "$(printf '%s\n' "$output" | grep -c '\[unreadable\]$')" -eq 1 ]
-  assert_contains "$(printf '%s\n' "$output" | grep '^5\. ')" "[not present]"
-  assert_contains "$(printf '%s\n' "$output" | grep '^3\. ')" "[unreadable]"
+  assert_contains "$(printf '%s\n' "$output" | grep '^6\. ')" "[not present]"
+  assert_contains "$(printf '%s\n' "$output" | grep '^4\. ')" "[unreadable]"
 }
 
 @test "conventions.json is listed read-only with both keys non-editable, no bump rule, and [not present] when the project has no instance" {
   [ ! -e "$PROJ/project/configs/conventions.json" ]
   run --separate-stderr bash "$RENDER"
   [ "$status" -eq 0 ]
-  assert_contains "$(printf '%s\n' "$output" | grep '^2\. ')" "conventions — "
-  assert_contains "$(printf '%s\n' "$output" | grep '^2\. ')" "(0 editable keys) [not present]"
+  assert_contains "$(printf '%s\n' "$output" | grep '^3\. ')" "conventions — "
+  assert_contains "$(printf '%s\n' "$output" | grep '^3\. ')" "(0 editable keys) [not present]"
   [ "$(jq '[.keys[].key] | sort | join(",")' "$SHIPPED/conventions.json")" = '"categories,conventions_version"' ]
   [ "$(jq '[.keys[] | select(.editable == true)] | length' "$SHIPPED/conventions.json")" -eq 0 ]
   [ "$(jq '[.keys[] | select(has("bump_on_change"))] | length' "$SHIPPED/conventions.json")" -eq 0 ]
@@ -649,7 +654,7 @@ EOF
 @test "an unknown file id exits 3 and names the known ids; surplus arguments or flags exit 2" {
   run --separate-stderr bash "$RENDER" nope
   [ "$status" -eq 3 ]
-  assert_contains "$stderr" 'unknown config file "nope"; known: checklists, conventions, playbook-config, scope-thresholds, test-config, workflow'
+  assert_contains "$stderr" 'unknown config file "nope"; known: audit-config, checklists, conventions, playbook-config, scope-thresholds, test-config, workflow'
   run --separate-stderr bash "$RENDER" a b
   [ "$status" -eq 2 ]
   run --separate-stderr bash "$RENDER" --bogus

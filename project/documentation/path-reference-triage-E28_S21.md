@@ -320,6 +320,12 @@ Its dependency order stands: T03 and T04 first.
 
 All scratch files go outside the repository. Run from the repository (or a worktree of it) at the scanned commit.
 
+*Update (`E28_S21_T05`).* The recipe below describes the audit script as it was at the scanned base. Since `T05` the
+script takes its path-hit scan set from the npm-reach list and has a `--scope all` flag, so the `sed` of steps 1 and 2
+is no longer needed: `bash scripts/check-public-references.sh --scope all` re-derives the whole-tree inventory (name
+and path hits over every public tracked file) without editing the script. Step 0 now reports the npm-reach path
+scope instead of the old narrow one.
+
 ```bash
 # 0. As committed: the audit script's own narrow scope
 bash scripts/check-public-references.sh > /tmp/asis.out 2> /tmp/asis.err; tail -1 /tmp/asis.err

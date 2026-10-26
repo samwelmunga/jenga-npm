@@ -262,10 +262,17 @@ in their install.
 `^skills/j-<name>/$` line in `.publicignore`. The set is read from `.publicignore` at run time, never
 hardcoded, so unblocking a skill there removes it from the rule automatically.
 
-**What is scanned (narrowed by `E28_S19_T07`).** The mirror guard scans **instruction files only** —
-the files a consumer would actually follow: `skills/*/SKILL.md`, `agents/*.md`, `.github/agents/*.md`,
-`hooks/*`, and the `.claude/` and `.agents/` mirrors of those. Docs, tests, data files, `site/` and
-`project/` are shipped but **not** scanned, and a reference in them is not reported.
+**What is scanned (name scope narrowed by `E28_S19_T07`, path scope widened by `E28_S21_T05`).** Two scopes,
+deliberately asymmetric; the full statement and the reasons are under "Final scope" below.
+
+- **Name hits** (`/j-<name>`, `j.<name>`, bare `j-<name>`): **instruction files only**, the files a consumer would
+  actually follow: `skills/*/SKILL.md`, `agents/*.md`, `.github/agents/*.md`, `hooks/*`, and the `.claude/` and
+  `.agents/` mirrors of those (`scope_re` in the guard).
+- **Path hits** (`skills/j-<name>/...`): **every shipped file an npm consumer receives**, that is the computed ship
+  set intersected with `scripts/npm-reach-files.sh` (`npm pack --dry-run`). `scope_re` does not gate them.
+
+Shipped files that never reach npm (`tests/`, `project/`, the `.claude/` and `.agents/` trees) are not path-scanned,
+and a reference in them is not reported.
 
 **Failing versus reported.** The classification is recorded in the header of
 [`scripts/never-public-refs.sh`](../../scripts/never-public-refs.sh). The mirror guard calls it with
@@ -328,6 +335,53 @@ reported without failing the run, matching check 6" — which `strict=1` contrad
 *invocation* in a shipped `SKILL.md` is now advisory rather than blocking. The path form
 (`skills/j-mirror-public/...`), which is what actually dangles in a consumer install, stays critical
 everywhere.
+
+### Final scope (`E28_S21_T05`)
+
+| Hit kind | Scanned in | Gated by | Severity |
+|---|---|---|---|
+| **path** | every file in the ship set that is also in the npm-reach list (all file kinds) | `scripts/npm-reach-files.sh` | critical on a non-comment line, minor on a comment line (markdown has no comment lines) |
+| **name** and bare `j-<name>` | instruction files only (list above) | `scope_re` in the guard | markdown: minor (`strict=0`); anything else: critical on a non-comment line |
+
+*The asymmetry.* A path hit carries none of the prose-versus-invocation ambiguity that made whole-tree name scanning
+unenforceable (`E28_S19_T02` measured 598 criticals and refused every push). A path either exists in a consumer
+install or it does not. A name mention cannot be told from prose by a regex, so name hits stay where a consumer
+follows them. The code states the asymmetry where it is applied: `scope_re` in `check_never_public_refs_invariant`
+gates name hits only, and `SCOPE_RE` in `scripts/check-public-references.sh` is kept for name hits only.
+
+*How reach is computed.* `scripts/npm-reach-files.sh` runs `npm pack --dry-run --json --ignore-scripts` and prints the
+file list root-relative and sorted under `LC_ALL=C`, so the same tree always gives byte-identical output.
+`package.json` `files` and `.npmignore` stay the single source of truth: there is no second list to drift, and a
+directory added to `files` is scanned automatically. It **fails closed**: if `npm` or `node` is missing, the JSON does
+not parse, `npm pack` fails, or the list is empty, it exits non-zero with a message on stderr and nothing on stdout,
+and both consumers (the mirror guard and `scripts/check-public-references.sh`) then stop rather than treat the
+failure as an empty, green scan. The list is the private repository's, so it slightly over-states what ships (the
+mirror strips blocked files); intersecting with the ship set removes those, and any over-statement errs toward
+scanning more. The `.claude/` and `.agents/` trees never reach npm (`.npmignore`), so they fall out by construction;
+their copies are covered through the root file they are generated from.
+
+*Measured* (base `23bef16d`, this repository): the reach list is 485 files; the guard path-scans 442 of them and
+name-scans 192 instruction files; 45 path hits are exempted by `scripts/never-public-exemptions.conf`; **0 critical**,
+and a `--dry-run` against a local bare remote exits 0. Runtime: `npm pack --dry-run` alone about 0.6 s; the whole
+`--dry-run` takes about 4.0 s against about 5.4 s on the pre-change tree, because the per-file scope test that used
+to fork a `grep` for every one of ~1700 ship-set files is now one `awk` pass. The broadened scan did not slow the
+mirror run.
+
+*The accepted limit.* Files that never reach an npm consumer are not path-scanned: `project/` and `tests/` in the
+mirrored tree, and therefore what a reader of the public GitHub repository sees there. If the maintainers later decide
+those readers count as consumers, the answer is a directory-level exemption design (option (b) below), as a new story,
+not an extension of this one. `tests/` is additionally covered by the behavioural `check_test_subject_invariant`.
+The `.claude/` and `.agents/` mirrors are no longer path-scanned directly (they are still name-scanned), which is
+sound only while they are generated from the root files that are scanned.
+
+*Option (b), the whole public ship set for path hits: considered and not chosen.* `E28_S19`'s tester proposed it. It
+would have added `project/` (15 files, 59 hits) and `tests/` (5 files, 19 hits). The `E28_S21_T02` triage found 210 of
+the 225 path hits (**93 percent**) legitimate by purpose, so under that scope the exemption file would carry the gate:
+the scan would meaningfully test 7 percent of what it reads, and both directories would need directory-level
+exemption entries (every new design note naming the mirror skill would otherwise break the gate). Under npm reach, 6
+exemption entries cover the legitimate hits and the 5 defect lines (reworded by `E28_S21_T04`) are the live signal,
+which is a proportionate gate. The exemption file therefore holds no entry for `project/` or `tests/`, and a test
+asserts it. User decision, 2026-10-22.
 
 ### Declared exemptions (`E28_S21_T03`)
 
@@ -395,10 +449,10 @@ remain. **It does ship to npm**: `scripts/` is in the `files` whitelist and `npm
 `scripts/never-public-exemptions.conf` (as it lists `scripts/never-public-refs.sh`, which check 6 needs in an
 install).
 
-**`.publicignore`: left outside the mechanism.** The files `npm pack` lists (the widest scope `E28_S21_T05` plans)
+**`.publicignore`: left outside the mechanism.** The files `npm pack` lists (the path scope `E28_S21_T05` implemented)
 do not include `.publicignore` (verified with `npm pack --dry-run --json`: 483 files, none of them it). It is
-therefore unreachable and gets no exemption entry. The existing handling stands: the mirror guard's scope
-excludes repo-root files (`b62e3e14` removed the explicit exemption as dead), and
+therefore unreachable and gets no exemption entry. The existing handling stands: neither of the mirror guard's
+scopes reaches it (`b62e3e14` removed the explicit exemption as dead), and
 `scripts/check-public-references.sh` skips it by name. If a future scope reaches it, express the handling as an
 entry here rather than a second ad-hoc check. The bats case for the audit's skip runs the audit widened to the
 repo root with and without the skip line, so deleting the handling turns it red.
@@ -509,6 +563,41 @@ classifies BLOCKED and is counted as private/skipped — the expected steady sta
 if anyone unblocks the directory later, the guard covers it automatically rather than the invariant
 resting on the blocklist staying as it is. A missing `project/.playbooks/` is a no-op there too,
 matching the loader.
+
+## Project-local workflows are private: `project/.workflows/` (`E80_S01`)
+
+Workflow definitions follow the same two-source shape as playbooks (`E80_S01`): the framework-owned
+BUILTIN source `templates/workflows/`, and the project-owned PROJECT source `project/.workflows/`.
+Only the first is framework content. Exactly as for `project/.playbooks/` above, the second is
+blocklisted in full (`E80_S01_T08`):
+
+```
+project/.workflows/
+```
+
+**Why.** Project-local workflows are per-project by definition. Ours are not framework content, and a
+consumer's are not ours to overwrite. Shipping our own would push private workflow tooling downstream
+as though it were part of the framework, and would land in the same directory a consumer uses for
+their own workflows.
+
+**What still ships.** The `templates/workflows/` builtins DO ship. They are framework content, the
+workflow counterpart of `skills/jenga/playbooks/`, and the blocklist entry deliberately names only the
+project-local directory so it cannot catch them.
+
+**This is an exclusion, not a deletion.** Anything in `project/.workflows/` stays on disk and keeps
+working in the private repo; it simply stops shipping.
+
+**No test is stranded by it** (per the "a test may never outlive its subject" rule above):
+`load-workflows.sh` treats a missing `project/.workflows/` as a **silent no-op** (no warning, no
+error), so the mirror simply has no PROJECT workflow source. The entry needs neither of the rule's two
+sanctioned mitigations.
+
+**No `.claude/` or `.agents/` parallel lines.** Like the `project/.playbooks/` entry, and unlike the
+private-tooling playbook entries, the blocklist line is a single root-relative path; the generated
+mirrors do not carry the project-local directory.
+
+`tests/workflow-publicignore.bats` asserts the exact `.publicignore` line and that this document
+mentions `project/.workflows/`.
 
 ## Retired: the twin-parity gate
 

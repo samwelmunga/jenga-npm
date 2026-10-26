@@ -6,34 +6,49 @@
  *   node scripts/dashboard-start.js [--port <number>] [--api-only] [--open]
  *
  * Starts the Jenga AI API server and serves the built UI from dashboard/dist/. Accepts:
- *   --port <number>   Port to listen on (default: 3001). Also respects
- *                     JENGA_API_PORT env var. CLI flag takes precedence.
+ *   --port <number>   Port to listen on. Also respects JENGA_API_PORT env var; the CLI flag takes
+ *                     precedence. An explicit port that is busy is an error (exit 1), never replaced.
+ *                     Without either, the first verified-free port from 3001 is bound and its URL printed
+ *                     (E47_S08_T03); it is recorded in project/queue/dashboard-port.json for
+ *                     `dashboard open`.
  *   --api-only        Serve the API without the UI.
  *   --open            Open the dashboard in the default browser once listening.
- *                     Implies serving the UI.
+ *                     Implies serving the UI. If this project's dashboard is already running, that one
+ *                     is opened instead of starting a second.
  */
 
 'use strict';
 
 const path = require('path');
 const fs   = require('fs');
+const http = require('http');
 const { execFile } = require('child_process');
+
+// Shared, dependency-free helpers (root scripts/ ships in the package; same relative depth in the monorepo
+// and in node_modules/@jenga-ai/agent/).
+const PKG_SCRIPTS = path.resolve(__dirname, '../../../../scripts');
+const { listenOnFreePort } = require(path.join(PKG_SCRIPTS, 'find-free-port.cjs'));
+const portState = require(path.join(PKG_SCRIPTS, 'dashboard-port-state.cjs'));
 
 // ── Parse CLI flags ───────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
 
-let port = parseInt(process.env.JENGA_API_PORT || '3001', 10);
+// `explicitPort` stays null unless the user asked for a port (--port or JENGA_API_PORT).
+function parsePort(raw, label) {
+  const p = Number(raw);
+  if (!Number.isInteger(p) || p < 1 || p > 65535) {
+    console.error(`Error: ${label} must be a valid port number (1-65535), got: ${raw}`);
+    process.exit(1);
+  }
+  return p;
+}
+let explicitPort = process.env.JENGA_API_PORT ? parsePort(process.env.JENGA_API_PORT, 'JENGA_API_PORT') : null;
 let apiOnly = false;
 let openInBrowser = false;
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--port' && args[i + 1]) {
-    const p = parseInt(args[++i], 10);
-    if (isNaN(p) || p < 1 || p > 65535) {
-      console.error(`Error: --port must be a valid port number (1-65535), got: ${args[i]}`);
-      process.exit(1);
-    }
-    port = p;
+    explicitPort = parsePort(args[++i], '--port');
   } else if (args[i] === '--api-only') {
     apiOnly = true;
   } else if (args[i] === '--open') {
@@ -48,8 +63,23 @@ if (apiOnly && openInBrowser) {
 
 const serveApp = !apiOnly;
 
-// Pass port to the server via env var before requiring it
-process.env.JENGA_API_PORT = String(port);
+// The invoking project's root, where the running dashboard's port is recorded. Null outside a Jenga
+// project: the dashboard still starts, it just cannot be found again without a flag.
+let projectRoot = null;
+try {
+  projectRoot = require(path.resolve(__dirname, '../../api/lib/resolve-project-root.js')).resolveProjectRoot();
+} catch { /* not inside a Jenga project */ }
+
+function healthy(port, timeoutMs = 2000) {
+  return new Promise(resolve => {
+    const req = http.get(`http://localhost:${port}/v1/health`, res => {
+      res.resume();
+      resolve(res.statusCode >= 200 && res.statusCode < 300);
+    });
+    req.setTimeout(timeoutMs, () => { req.destroy(); resolve(false); });
+    req.on('error', () => resolve(false));
+  });
+}
 
 // ── Optionally patch the app to serve static files ────────────────────────────
 const APP_ROOT    = path.resolve(__dirname, '../..');
@@ -102,15 +132,45 @@ function launchBrowser(url) {
   });
 }
 
-const server = app.listen(port, () => {
+(async () => {
+  // --open on a project whose dashboard is already up: open that one rather than starting a second.
+  if (openInBrowser && projectRoot) {
+    const running = portState.readState(projectRoot);
+    if (running && await healthy(running.port)) {
+      console.log(`Dashboard already running at ${running.url}`);
+      launchBrowser(running.url);
+      return;
+    }
+  }
+
+  let server, port;
+  try {
+    ({ server, port } = await listenOnFreePort(app, { explicit: explicitPort, start: portState.DEFAULT_PORT }));
+  } catch (err) {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Error: port ${explicitPort} is already in use. Stop whatever is using it, or choose another with --port (or omit --port to pick a free one).`);
+    } else {
+      console.error(`Error: could not start the dashboard: ${err.message}`);
+    }
+    process.exit(1);
+  }
+
+  process.env.JENGA_API_PORT = String(port); // for anything this process spawns
   const url = `http://localhost:${port}`;
   console.log(`Dashboard API running at ${url}`);
   if (serveApp) {
     console.log(`Dashboard app  running at ${url}`);
   }
+  if (explicitPort === null && port !== portState.DEFAULT_PORT) {
+    console.log(`(port ${portState.DEFAULT_PORT} was busy; using ${port})`);
+  }
+  if (projectRoot) {
+    portState.writeState(projectRoot, { port });
+    process.on('exit', () => portState.clearState(projectRoot));
+  }
   if (openInBrowser) {
     launchBrowser(url);
   }
-});
 
-registerShutdownHandlers(server);
+  registerShutdownHandlers(server);
+})();

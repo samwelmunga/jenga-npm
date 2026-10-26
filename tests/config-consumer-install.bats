@@ -101,8 +101,8 @@ shipped_paths() {
   [ -z "$missing" ] || { echo "missing from the tarball:$missing"; false; }
 }
 
-@test "the tarball holds all six descriptors, and as many lib/config modules as the checkout has" {
-  [ "$(grep -c '^templates/config-descriptors/.*\.json$' "$BATS_FILE_TMPDIR/tarball-files.txt")" -eq 6 ]
+@test "the tarball holds all seven descriptors, and as many lib/config modules as the checkout has" {
+  [ "$(grep -c '^templates/config-descriptors/.*\.json$' "$BATS_FILE_TMPDIR/tarball-files.txt")" -eq 7 ]
   [ "$(grep -c '^lib/config/.*\.js$' "$BATS_FILE_TMPDIR/tarball-files.txt")" -eq "$(ls "$REPO_ROOT"/lib/config/*.js | wc -l | tr -d ' ')" ]
 }
 

@@ -15,7 +15,7 @@
       "key": "categories",
       "label": "Convention categories",
       "type": "object",
-      "description": "The recorded convention per category (commit format, branching, naming and so on); written by the j.conventions wizard, never by jenga config.",
+      "description": "The recorded convention per category (commit format, branching, naming and so on), including the commit-format template fields and the opt-in commit-trace category; written only through skills/j-conventions/scripts/conventions-entry.sh by the j.conventions wizard, never by jenga config.",
       "editable": false,
       "pointer": "scripts/validate-conventions.sh"
     }

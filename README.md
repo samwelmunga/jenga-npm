@@ -235,6 +235,8 @@ See [Getting Started](https://samwelmunga.github.io/jenga-npm/getting-started.ht
 
 Want your own recurring chain? `j.playbook-new` walks you through authoring one — id, name, description, keywords, examples, and an ordered list of skills — writes it to `project/.playbooks/<id>.json` alongside the built-in ones, and self-validates the result before reporting success.
 
+Need a chain with durable state, user gates and computed steps? `j.workflow` runs declarative multi-step workflows defined in `project/.workflows/<id>.json`. Bare `j.workflow` lists the available workflows as a numbered picker; the sub-commands are `run`, `status`, `resume`, `pause`, `cancel` and `list`. Run state is persisted, so a paused or interrupted run can be resumed in a later session. See [workflows](project/documentation/workflows.md) for the definition format.
+
 ---
 
 ## The `jenga` CLI
@@ -247,7 +249,7 @@ Not every step needs a model. The `jenga` binary installed with the package (`je
 | `jenga attach` | Write the MCP config for this project so new sessions route through Jenga. |
 | `jenga status` | Show router status and the active skill session. |
 | `jenga config` | List and edit `project/configs/*.json` — interactively, or `jenga config get\|set <file-id>.<key> [value]`. A successful `set` bumps that file's version counter. |
-| `jenga dashboard start\|open` | Start the dashboard API (`--port <n>`, default 3001 or `JENGA_API_PORT`; `--serve-app` also serves the built UI), or health-check it and open it in your browser. |
+| `jenga dashboard start\|open` | Start the dashboard API (`--port <n>` or `JENGA_API_PORT`, a busy explicit port fails; otherwise the first free port from 3001 is bound and printed; `--serve-app` also serves the built UI), or health-check it and open it in your browser. |
 | `jenga doctor` (alias: `jenga clean`) | Scan `.agents/` and `.claude/` for orphaned package-owned files left behind by an upgrade, preview them, and delete only on confirmation. `--dry-run` previews only. |
 
 Same principle that pushes skill logic into scripts rather than prompts: editing a config key is a fixed sequence with one correct answer. `jenga config set` validates and writes through code, so a settings change can't be left half-applied — which is why it's a command, not a `j.<name>` skill.

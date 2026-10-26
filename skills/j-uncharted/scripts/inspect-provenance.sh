@@ -89,8 +89,21 @@
 #       "nested_repos": [ { "path": "<relative>", "remote_url": ...|null, "head_sha": ...|null } ],
 #       "message": "<set iff there is nothing git-related to report>"
 #     },
-#     "overall": { "any_signal_found": bool, "message": "<set iff false>" }
+#     "overall": { "any_signal_found": bool, "message": "<set iff false>" },
+#     "secret_files_skipped": { "count": N, "paths": [ "<relative name>", ... ] }  // OPTIONAL, see below
 #   }
+#
+# Secret-looking files (E85_S04_T07): a file whose base name matches the shared list in
+# secret-files.sh (environment files, auth files, private keys) is never opened, never counted in
+# files_scanned, never classified as a license and never listed as a copyright or SPDX source. The
+# list is read ONCE at start-up from `secret-files.sh patterns` and `secret-files.sh templates`;
+# there is no second copy of the patterns here. Skips are reported by the OPTIONAL top-level
+# "secret_files_skipped" key (count plus up to 25 sorted relative names; present ONLY when something
+# was skipped, so the report for a tree without such files is byte-identical to before; it is also
+# written to --json-out) and by one line on stderr from secret-files.sh ("N secret-looking file(s)
+# skipped (names listed, contents never read): ..."), printed once per run and only when N > 0.
+# A target that is itself a single secret-looking file is still rejected with exit 2 (this script only
+# takes a directory), with that same one-line notice printed first; the file is not read.
 #
 # Exit codes:
 #   0  report generated (regardless of whether any provenance signal was
@@ -99,6 +112,7 @@
 #   2  target does not exist or is not a directory
 #   3  python3 unavailable, or the python3 content scan itself failed
 #   4  --json-out could not be written
+#   5  the shared secret-file list (secret-files.sh) could not be loaded (fails closed)
 #
 # Requires: bash, git (only used for read-only plumbing against any nested
 # .git found), python3. jq is NOT required -- JSON is emitted by python3,
@@ -110,6 +124,10 @@
 set -euo pipefail
 
 SELF="$(basename "$0")"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+# The one shared list of secret-looking file names; sourcing it has no side effects.
+# shellcheck source=secret-files.sh
+. "$SCRIPT_DIR/secret-files.sh"
 
 die() {
   local code="$1"; shift
@@ -192,6 +210,10 @@ fi
 command -v python3 >/dev/null 2>&1 || die 3 "python3 is required but was not found on PATH"
 
 [ -e "$TARGET" ] || die 2 "target does not exist: $TARGET"
+if [ -f "$TARGET" ] && secret_files_is_secret "$TARGET"; then
+  # A single secret-looking file is never read; say so before the unchanged "not a directory" rejection.
+  secret_files_notice 1 "$(basename -- "$TARGET")"
+fi
 [ -d "$TARGET" ] || die 2 "target is not a directory: $TARGET (inspect the acquired content_path, not a single file)"
 
 TARGET_ABS="$(cd -- "$TARGET" && pwd -P)"
@@ -257,13 +279,15 @@ done < <(find "$TARGET_ABS" \( "${PRUNE_EXPR[@]}" \) -prune -o -type d -name .gi
 # directly. This script follows the same convention for the same reason.
 # ---------------------------------------------------------------------------
 
-python3 - "$TARGET_ABS" "$ORIGIN_SOURCE" "$ORIGIN_TYPE" "$ORIGIN_REF" "$MAX_FILES" "$NESTED_REPORT_FILE" "$JSON_OUT" <<'PY'
+python3 - "$TARGET_ABS" "$ORIGIN_SOURCE" "$ORIGIN_TYPE" "$ORIGIN_REF" "$MAX_FILES" "$NESTED_REPORT_FILE" "$JSON_OUT" "$SCRIPT_DIR/secret-files.sh" <<'PY'
+import fnmatch
 import json
 import os
 import re
+import subprocess
 import sys
 
-TARGET, ORIGIN_SOURCE, ORIGIN_TYPE, ORIGIN_REF, MAX_FILES_S, NESTED_REPORT_FILE, JSON_OUT = sys.argv[1:8]
+TARGET, ORIGIN_SOURCE, ORIGIN_TYPE, ORIGIN_REF, MAX_FILES_S, NESTED_REPORT_FILE, JSON_OUT, SECRET_FILES_SH = sys.argv[1:9]
 MAX_FILES = int(MAX_FILES_S)
 MAX_BYTES = 262144  # 256KB -- generous for a license file, a hard stop for anything else
 COPYRIGHT_HEAD_LINES = 25
@@ -312,7 +336,39 @@ def rel(path):
     return r.replace(os.sep, "/") if r != "." else os.path.basename(path) or "."
 
 
+# ---------------------------------------------------------------------------
+# Secret-looking files (E85_S04_T07). The one list lives in secret-files.sh; it is read here once and
+# applied to base names only, so a matching file is never opened, counted or listed.
+# ---------------------------------------------------------------------------
+
+
+def _secret_files_list(what):
+    try:
+        res = subprocess.run(["bash", SECRET_FILES_SH, what], stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, universal_newlines=True, check=True)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        sys.stderr.write("inspect-provenance.sh: error: cannot load the secret-file list from %s: %s\n"
+                          % (SECRET_FILES_SH, exc))
+        sys.exit(5)
+    return [line for line in res.stdout.split("\n") if line]
+
+
+SECRET_PATTERNS = _secret_files_list("patterns")
+SECRET_TEMPLATES = _secret_files_list("templates")
+secret_skipped = set()
+
+
+def is_secret_name(name):
+    """Same rule as secret-files.sh: lower-cased base name, not a template, matches some pattern."""
+    name = os.path.basename(name.rstrip("/")).lower()
+    if not name or name in SECRET_TEMPLATES:
+        return False
+    return any(fnmatch.fnmatchcase(name, g) for g in SECRET_PATTERNS)
+
+
 def is_probably_binary(path):
+    if is_secret_name(path):  # defence in depth: the walk already filters these out
+        return True
     try:
         with open(path, "rb") as fh:
             chunk = fh.read(1024)
@@ -322,6 +378,8 @@ def is_probably_binary(path):
 
 
 def read_text(path, max_bytes=MAX_BYTES):
+    if is_secret_name(path):  # defence in depth: the walk already filters these out
+        return None
     try:
         if os.path.getsize(path) > max_bytes * 8:
             # Absurdly large for a source file we'd scan headers of -- skip outright.
@@ -347,6 +405,10 @@ def walk_files(root):
         dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS)
         for fn in sorted(filenames):
             fpath = os.path.join(dirpath, fn)
+            if is_secret_name(fn):
+                # By name only: never opened, never stat'ed for type, not counted against the cap.
+                secret_skipped.add(rel(fpath))
+                continue
             if os.path.islink(fpath):
                 symlinks.append(fpath)
                 continue
@@ -555,6 +617,12 @@ result = {
     "overall": overall,
 }
 
+if secret_skipped:
+    result["secret_files_skipped"] = {
+        "count": len(secret_skipped),
+        "paths": sorted(secret_skipped)[:25],
+    }
+
 rendered = json.dumps(result, indent=2, ensure_ascii=False) + "\n"
 
 if JSON_OUT:
@@ -570,4 +638,10 @@ sys.stdout.write(rendered)
 
 for n in notices:
     sys.stderr.write("Notice: %s\n" % n)
+
+# One shared notice line on stderr, once per run, only when something was skipped (names only).
+if secret_skipped:
+    sys.stderr.flush()
+    subprocess.call(["bash", SECRET_FILES_SH, "notice", str(len(secret_skipped))]
+                    + sorted(secret_skipped)[:1000])
 PY

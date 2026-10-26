@@ -10,6 +10,25 @@ fail() {
   exit "$EXIT_ENV_INVALID"
 }
 
+# Presence test only (E85_S02_T03). Succeeds when $1 names an exported variable that has a non-empty value; the value
+# itself is never assigned to a variable, printed, logged or passed to another command. It reproduces the contract of
+# the earlier value-capturing check exactly:
+#   - set but empty counts as missing (a bare existence test of the variable would succeed for an empty value);
+#   - a name that is not a valid shell identifier counts as missing and never aborts the script (the names come from
+#     publish.json strings), which is why the identifier test runs before any indirect expansion;
+#   - only exported variables count (the case statement matches the NAME list from compgen -e, so a
+#     script-internal shell variable of the same name is not mistaken for the user's environment);
+#   - a value made up only of newlines counts as empty, as it did when it was captured with command substitution.
+env_var_has_value() {
+  [[ "${1:-}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || return 1
+  case $'\n'"$(compgen -e)"$'\n' in
+    *$'\n'"$1"$'\n'*) ;;
+    *) return 1 ;;
+  esac
+  [[ -n "${!1:-}" ]] || return 1
+  [[ -n "${!1//$'\n'/}" ]]
+}
+
 [[ -n "$CONFIG_PATH" ]] || fail "missing publish.json path argument"
 [[ -f "$CONFIG_PATH" ]] || fail "publish config not found at '$CONFIG_PATH'"
 command -v jq >/dev/null 2>&1 || fail "jq is required"
@@ -54,8 +73,7 @@ fi
 
 MISSING_VARS=()
 for var_name in "${REQUIRED_VARS[@]}"; do
-  value="$(printenv "$var_name" 2>/dev/null || true)"
-  if [[ -z "$value" ]]; then
+  if ! env_var_has_value "$var_name"; then
     MISSING_VARS+=("$var_name")
   fi
 done

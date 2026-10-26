@@ -1,0 +1,7 @@
+{
+  "config_version": 1,
+  "mode": "ask",
+  "severity_threshold": "high",
+  "offline_behavior": "warn",
+  "production_only": false
+}

@@ -1,0 +1,53 @@
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+    "left-padder": {
+      "name": "left-padder",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        {
+          "source": 1000001,
+          "name": "left-padder",
+          "dependency": "left-padder",
+          "title": "Prototype pollution in left-padder",
+          "url": "https://example.invalid/advisories/1000001",
+          "severity": "high",
+          "cwe": ["CWE-1321"],
+          "cvss": { "score": 7.5, "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H" },
+          "range": "<2.0.0"
+        }
+      ],
+      "effects": [],
+      "range": "<2.0.0",
+      "nodes": ["node_modules/left-padder"],
+      "fixAvailable": true
+    },
+    "tiny-logger": {
+      "name": "tiny-logger",
+      "severity": "low",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1000002,
+          "name": "tiny-logger",
+          "dependency": "tiny-logger",
+          "title": "Log injection in tiny-logger",
+          "url": "https://example.invalid/advisories/1000002",
+          "severity": "low",
+          "cwe": ["CWE-117"],
+          "cvss": { "score": 3.1, "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:N/I:L/A:N" },
+          "range": "<1.4.2"
+        }
+      ],
+      "effects": [],
+      "range": "<1.4.2",
+      "nodes": ["node_modules/tiny-logger"],
+      "fixAvailable": false
+    }
+  },
+  "metadata": {
+    "vulnerabilities": { "info": 0, "low": 1, "moderate": 0, "high": 1, "critical": 0, "total": 2 },
+    "dependencies": { "prod": 2, "dev": 0, "optional": 0, "peer": 0, "peerOptional": 0, "total": 2 }
+  }
+}

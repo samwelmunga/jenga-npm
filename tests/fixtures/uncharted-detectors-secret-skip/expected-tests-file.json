@@ -1,0 +1,27 @@
+{
+  "script": "detect-tests.sh",
+  "version": 1,
+  "target": "app.js",
+  "target_absolute": "@TARGET@/src/app.js",
+  "target_type": "file",
+  "repo_root": "@TARGET@/src",
+  "coverage_status": "no_tests_in_repo",
+  "coverage_summary": "No test files were found anywhere in the repository, so no coverage exists for 'app.js'.",
+  "repo_has_tests": false,
+  "target_test_files": [],
+  "referencing_test_files": [],
+  "test_directories": [],
+  "test_runner_configs": [],
+  "reference_names": [
+    "app.js"
+  ],
+  "repo_test_file_count": 0,
+  "repo_test_files_read": 0,
+  "target_files_considered": 1,
+  "files_walked": 4,
+  "walk_truncated": false,
+  "notices": [
+    "Target is not inside a git repository; repo root fell back to '@TARGET@/src'. The repo-wide test sweep is limited to that directory.",
+    "No files matched any test-file or test-directory convention in this repository. This is reported as an explicit empty result, not an error \u2014 the project may use an unrecognised testing convention, or may have no tests at all."
+  ]
+}

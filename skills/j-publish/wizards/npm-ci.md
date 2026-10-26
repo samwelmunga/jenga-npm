@@ -21,8 +21,9 @@ generated for this target type — there is no secret to configure. See the
 
 Before running this wizard, confirm that all of the following are in place:
 
-- **`gh` CLI installed and authenticated**: run `gh auth status` to verify.
-  If not authenticated, run `gh auth login` first.
+- **`gh` CLI installed and authenticated**: check this yourself by running
+  `gh auth status` (it should exit 0). If you are not signed in, run
+  `gh auth login` yourself first; the wizard does not run either command.
 - **GitHub Actions enabled** on the target repository. Actions must be enabled
   under the repository's Settings → Actions → General page.
 - **The package must already exist on npmjs.com**, or be publishable under

@@ -175,6 +175,7 @@ Skills live in `skills/j-<name>/SKILL.md` — the root-canonical location; `.age
 - `project/configs/workflow.json`
 - `project/queue/`, `project/logs/`, `project/rapports/`, `project/documentation/`
 - Initial `.gitignore` and first git commit
+- `project/configs/audit-config.json`, followed by a one-time dependency-audit opt-in notice
 
 **Example:**
 ```
@@ -643,6 +644,7 @@ You: "Oh, we should also think about caching strategy"
 - `import` — acquires an external source (git URL, out-of-repo path, or pasted snippet) into the repo, then hands off to `segment`
 - `onboard` — analyses a whole codebase and writes board-only, `[ARCH]`-tagged or backfilled epics — it never touches application code
 - `refresh` — incremental re-scan of an already-onboarded codebase since its last baseline, skipping unchanged subsystems
+- Secret-looking files (`.env` variants, `.npmrc`, private keys and similar) are skipped by name and never opened; each skip is announced with a count and the file names
 
 **Example:**
 ```
@@ -673,6 +675,32 @@ You: "Oh, we should also think about caching strategy"
 | `/j-break hard` | Persists until explicitly cleared; every subsequent task boundary halts. |
 | `/j-break clear` | Clears a hard break. |
 | `/j-break status` | Adds a progress rapport for the current scope of execution. |
+
+---
+
+#### `/j-workflow`
+
+**Description:** Run, inspect, pause, resume and cancel declarative multi-step workflows defined in `project/.workflows/<id>.json`.
+
+**Output type:** `any`
+
+**Invokes:** the skills and playbooks named by each workflow step
+
+**When to use:** When a chain of skills needs durable state, user gates or computed steps that a playbook can't express, and should survive a paused or interrupted session.
+
+**What it does:**
+- Bare `/j-workflow` lists the available workflow definitions as a numbered picker
+- `run`, `status`, `list`, `resume`, `pause`, `cancel` — drive one run through its ordered steps (`skill`, `playbook`, `confirm`, `compute`, `render`)
+- Run state is persisted, so a paused or interrupted run resumes in a later session
+
+**Example:**
+```
+/j-workflow run sprint
+→ Step 1/4 (skill) ✅   Step 2/4 (confirm) → waiting for your answer
+/j-workflow resume
+```
+
+See [workflows](project/documentation/workflows.md) for the definition format and run-state contract.
 
 ---
 
@@ -840,6 +868,7 @@ Queue depth: 2 triggers pending
 - `start` / `open` / `both` — launches the API + UI dashboard via `project/app`'s own npm scripts
 - `--snapshot [--out <path>]` — bundles a point-in-time snapshot into one self-contained HTML file
 - `--data-url` — additionally base64-encodes the snapshot into a `data:text/html;base64,...` URI for remote delivery
+- A **Security** tab shows credential-access findings and dependency-audit results (read-only; also captured by `--snapshot`, so it renders offline)
 
 **Example:**
 ```
@@ -1457,6 +1486,7 @@ Name: shellcheck   Category: lint   Enforcement: 1. required
 - `deploy` — full gated deploy pipeline (pre/post-deploy quality gates, changelog update, semver bump, adapter dispatch, ledger entry); `--dry-run` rehearses end-to-end with no real publish
 - `stage` — npm/npm-ci only: stage, smoke-test, and approve/reject a release before it goes live
 - `history` / `release-notes` — read the publish ledger / merge new entries into `CHANGELOG.md`
+- `npm` / `npm-ci` deploys run a dependency-audit gate before publishing; it is opt-in via `project/configs/audit-config.json`, and without consent it is skipped with a notice rather than passed
 
 **Example:**
 ```

@@ -1,0 +1,34 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh presets testing
+--- stdout
+[
+  {
+    "id": "tests-for-every-change",
+    "label": "Tests for every change",
+    "description": "Every code change ships with a test that covers it.",
+    "values": {
+      "expectation": "tests-for-every-change"
+    },
+    "placeholder_fields": []
+  },
+  {
+    "id": "tests-for-fixes-and-public-behaviour",
+    "label": "Tests for bug fixes and public behaviour",
+    "description": "Bug fixes and public behaviour need a test; internal refactors do not.",
+    "values": {
+      "expectation": "tests-for-fixes-and-public-behaviour"
+    },
+    "placeholder_fields": []
+  },
+  {
+    "id": "no-standing-expectation",
+    "label": "No standing expectation",
+    "description": "Testing is decided case by case.",
+    "values": {
+      "expectation": "no-standing-expectation"
+    },
+    "placeholder_fields": []
+  }
+]
+--- stderr
+--- exit
+0

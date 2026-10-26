@@ -96,7 +96,7 @@ while callers that have not migrated keep the backward-compatible default.
 
 ### Keys and conventional defaults
 
-All 18 keys in `workflow.json`'s `paths` map. A key absent from a given registry (or an absent registry in
+All 21 keys in `workflow.json`'s `paths` map. A key absent from a given registry (or an absent registry in
 default mode) falls back to the default below, so a partially populated registry still works. When the matched
 tree is `.project`, a default's leading `project/` is rewritten to `.project/`, so a partial registry in a
 relocated tree never points back at `./project/`. `strategy` was added by E34_S06; since E34_S07 it defaults to `project/documentation/STRATEGY.md`, so the relocated-tree rewrite applies to it like every other default.
@@ -121,6 +121,13 @@ relocated tree never points back at `./project/`. `strategy` was added by E34_S0
 | `documentation_plans` | `project/documentation/plans` |
 | `documentation_summaries` | `project/documentation/summaries` |
 | `strategy` | `project/documentation/STRATEGY.md` |
+| `workflows` | `project/.workflows` |
+| `workflow_runs` | `project/data/workflow-runs` |
+| `workflow_artifacts` | `project/data/workflow-artifacts` |
+
+`workflows` holds project-local workflow definitions (E80_S01). `workflow_runs` is private operational state (run records), git-ignored by default (E80_S02_T02), so it is never committed or mirrored.
+
+`workflow_artifacts` is where workflow runs write their output artifacts (E80_S04); this key only registers the location, its git treatment is `E80_S04_T11`.
 
 ### Output contract
 
@@ -156,7 +163,7 @@ scripts/resolve-root.sh source                  # env | search | default
 scripts/resolve-root.sh tree                    # project | .project
 scripts/resolve-root.sh get queue               # absolute path
 scripts/resolve-root.sh get queue --relative    # project/queue
-scripts/resolve-root.sh list                    # key=path, all 18 keys
+scripts/resolve-root.sh list                    # key=path, all 21 keys
 scripts/resolve-root.sh --strict get board      # exit 3 rather than use the default
 ```
 
@@ -392,6 +399,29 @@ These five fields are **not authored by hand**. They are appended to a task's fr
 | `date_deployed_prod` | `scripts/mark-deployed.sh` | ISO 8601 date (e.g. `2026-09-12`) written in the same locked write window a ticket is set to `status: Deployed to Prod`. Never written on a `Deployed to Stage`-only write. |
 
 All five are advisory and non-blocking — they record evidence for later review and never change a task's Passed/Failed outcome. `date_deployed_prod` is allow-listed in `scripts/validate-board.sh`'s `ALLOWED_KEYS` for `epic`, `story`, and `task` (a new `DEPLOY_KEYS` group), even though in practice only tasks (and occasionally stories) are expected to ever carry it — `mark-deployed.sh` only ever writes it to a task/story board file, never to an epic.
+
+### Usage fields (per-task token accounting)
+
+Eight further task fields record how many tokens the task consumed. Like the runtime-written fields above they are **never authored by hand**: they are written by `/close-story` and by `scripts/task-usage.sh --persist`, and they are task-only (`scripts/validate-board.sh` allow-lists them in a `USAGE_KEYS` group for tasks, not for epics or stories). All token values are non-negative integers written as plain decimal digits, with no separators.
+
+| Field | Type | Written by | Meaning |
+|---|---|---|---|
+| `usage_input_tokens` | integer | `/close-story`, `task-usage.sh --persist` | Fresh input tokens (`input_tokens`), summed over every transcript attributed to the task |
+| `usage_output_tokens` | integer | same | Output tokens (`output_tokens`), summed; see the thinking-token note below |
+| `usage_cache_write_tokens` | integer | same | `cache_creation_input_tokens`, summed. The 1h/5m cache split is collapsed into this one number |
+| `usage_cache_read_tokens` | integer | same | `cache_read_input_tokens`, summed |
+| `usage_total_tokens` | integer | same | Defined as the **sum of the four fields above**, nothing else |
+| `usage_transcripts` | integer | same | Count of distinct transcripts that were summed (rework transcripts for the same task each count once) |
+| `usage_measured_on` | ISO 8601 date, e.g. `2026-10-25` | same | Date of the latest write of these fields |
+| `usage_possibly_incomplete` | the literal `true` only | `task-usage.sh --persist` | Set when the transcripts that were summed looked partly pruned, so the numbers are a **lower bound**. Absent means no known gap; it is never written as `false` |
+
+Rules:
+
+- **Absence means "not measured", not zero.** A task without these fields has not been measured (or its transcripts were gone); readers must never display a missing field as `0`. An explicit `0` means a measured zero.
+- **Advisory.** The fields record evidence for budgeting and never change a task's Passed/Failed outcome.
+- **Thinking tokens** are counted only to the extent they appear in `output_tokens`. Verified 2026-10-25 against 16,239 real `message.usage` objects from Claude Code subagent transcripts that carried `output_tokens_details.thinking_tokens`: in every one, `thinking_tokens <= output_tokens`, so thinking is a **subset of** `output_tokens` and is already inside `usage_output_tokens`. It is not a separate field and must not be added on top. Thinking tokens are not broken out into a field of their own: many usage lines (more than half in a 400-transcript sample) carry no `output_tokens_details` at all, so no reliable separate thinking figure exists.
+- **1h/5m cache split.** In the same sample, `cache_creation.ephemeral_1h_input_tokens + cache_creation.ephemeral_5m_input_tokens` equalled `cache_creation_input_tokens` on every line (36,711 of 36,711), which is why summing `cache_creation_input_tokens` alone loses nothing.
+- **No cost or price field exists.** The fields are token counts only; no pricing table is kept and no dollar figure is derived or stored.
 
 > `task_changed_files` is **not** a frontmatter field despite the similar name. It lives in the bundle manifest at `project/queue/bundle-<E##_S##>.json`, keyed by task ID.
 
@@ -658,7 +688,7 @@ external_refs:
 
 *Parser constraint and why this shape.* `scripts/validate-board.sh`'s hand-rolled `parse_frontmatter()` understands only scalar values, `[a, b]` flow lists and `  - item` lists of plain strings. It cannot read a block list of mappings, and without a change it would report `system`, `kind`, `key`, `url` and `linked_on` lines as unknown top-level keys. The block list of mappings is nonetheless the chosen shape: it is the form humans expect to read and edit as YAML, it is parsed correctly by PyYAML (which `assert_parses_as_yaml` in the same script already uses as its real-YAML check), and it keeps each entry self-describing. The alternative, a flow mapping per line (`  - {system: jira, kind: issue, key: PROJ-123, linked_on: 2026-10-06}`), would have slipped past the existing string-list branch of `parse_frontmatter()` but was rejected: it would be read as one opaque string, so no per-entry check (missing `system`, both or neither of `key` / `url`, non-date `linked_on`) could run, and it wraps badly for long URLs. `E71_S03_T02` therefore extends the validator to read the block-list-of-mappings shape and to enforce the entry rules above; until that task lands, the validator does not yet know the field.
 
-**Ownership.** Only the **scrum-master** writes `external_refs` (and the skip marker below), and only through the link script delivered by `E71_S04`, so every write goes through the same lock and validation path as other board writes. The **developer** and **tester** agents may read `external_refs` and surface it in their context (for example to name the Jira key a task belongs to), but never write, add, edit or remove it.
+**Ownership.** Only the **scrum-master** writes `external_refs` (and the skip marker below), and only through the link script delivered by `E71_S04`, so every write goes through the same lock and validation path as other board writes. The **developer** and **tester** agents may read `external_refs` and surface it in their context (for example to name the Jira key a task belongs to), but never write, add, edit or remove it. The read-only reader is `scripts/read-external-refs.sh <item-id> [--system jira] [--kind issue]` (it prints the validated Jira `key` of each matching entry, one per line, and never writes).
 
 **Scope: epics, stories and tasks.** Unlike the Crucial Flag Fields, epics carry these fields too.
 

@@ -1,0 +1,6 @@
+$ bash @REPO@/scripts/generate-convention-checklist.sh --print
+--- stdout
+[]
+--- stderr
+--- exit
+0

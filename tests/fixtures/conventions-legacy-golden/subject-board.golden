@@ -1,0 +1,6 @@
+$ bash @REPO@/skills/j-commit/scripts/commit-subject-check.sh task(E79_S03_T01): pin legacy behaviour
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+--- exit
+0

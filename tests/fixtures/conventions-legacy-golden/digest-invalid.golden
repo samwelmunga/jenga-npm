@@ -1,0 +1,13 @@
+$ env bash @REPO@/scripts/conventions-digest.sh --agent developer
+--- stdout
+--- stderr
+@PROJ@/project/configs/conventions.json: unknown top-level key: extra_key (allowed: conventions_version, categories)
+@PROJ@/project/configs/conventions.json: unknown category: categories.not-a-category (allowed: commit-format, branching, naming, code-comments, formatting-linting, testing, file-layout, language-tooling, documentation-placement, commit-trace)
+@PROJ@/project/configs/conventions.json: unknown key in values: categories.commit-format.values.colour (allowed for commit-format: style, message_regex, subject_max_length, template, ref_source, ref_pattern, on_unresolved, apply_to_board_commits)
+@PROJ@/project/configs/conventions.json: wrong type: categories.commit-format.values.subject_max_length must be an integer (got string)
+@PROJ@/project/configs/conventions.json: bad source: categories.naming.source is "bogus" (must be one of: detected, preset, custom)
+@PROJ@/project/configs/conventions.json: wrong type: categories.testing must be an object (got string)
+@PROJ@/project/configs/conventions.json: block strength: categories.commit-format.strength is "block" - strength "block" is not allowed for conventions (use "advisory" or "confirm")
+conventions-digest.sh: conventions file is invalid, no digest produced: @PROJ@/project/configs/conventions.json
+--- exit
+1

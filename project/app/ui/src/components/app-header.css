@@ -1,0 +1,56 @@
+/* E47_S09_T02 - colour tokens only (check-theme-contrast.cjs rejects colour literals). */
+.app-title-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  min-width: 0;
+  padding: var(--space-sm) 0;
+}
+
+.app-logo-btn {
+  flex: 0 0 auto;
+  padding: var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-logo-plate);
+  cursor: pointer;
+  line-height: 0;
+}
+
+.app-logo-btn:hover {
+  border-color: var(--color-accent);
+}
+
+.app-logo-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.app-logo {
+  display: block;
+  height: 32px;
+  width: auto;
+}
+
+.app-title {
+  margin: 0;
+  min-width: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .app-title-bar {
+    gap: var(--space-sm);
+  }
+
+  .app-logo {
+    height: 26px;
+  }
+
+  .app-title {
+    font-size: 1rem;
+  }
+}

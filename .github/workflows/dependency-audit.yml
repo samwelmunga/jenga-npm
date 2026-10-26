@@ -1,0 +1,95 @@
+# Scheduled dependency audit for Jenga's own packages (epic E85, task E85_S01_T08).
+#
+# Purpose: monitoring. A newly published advisory against a Jenga dependency should be noticed within days, not
+# at the next release. Every package directory below is audited once a week, on demand, and whenever a pull
+# request touches a manifest or lockfile.
+#
+# Each leg runs the single audit entry point, scripts/audit-deps.sh, with --ci (a committed workflow is the
+# standing consent for the audit, so a project audit-config.json in mode "ask" does not refuse it) and --json
+# (stdout is only the JSON object). The JSON is written to a file and uploaded as a build artifact. The leg fails
+# on ANY non-zero exit of the script: 1 (findings at or above the threshold), 3 (audit unavailable under
+# offline_behavior fail) and also 2 (usage or config error), so a broken audit is visible and never silently green.
+# Redirecting stdout to a file does not mask the exit code, and nothing is piped, so the step's status is the
+# script's.
+#
+# Mirror context: .github/workflows/ is mirrored to the public jenga-npm repository and this workflow runs there.
+# Everything it needs ships: this file, scripts/audit-deps.sh, project/configs/audit-config.json (.publicignore
+# blocklists none of them). Should audit-config.json ever stop shipping, audit-deps.sh falls back to its
+# documented defaults (mode ask, threshold high), which is fine because --ci grants consent.
+#
+# Least privilege: contents: read only, no secrets, no OIDC token. Third-party actions are pinned to a full commit
+# SHA (the trailing comment names the release). Node, npm and jq come with the ubuntu-latest runner image, so no
+# setup-node step is needed.
+
+name: "Dependency audit"
+
+on:
+  schedule:
+    # Mondays 05:23 UTC; one entry, deliberately off the top of the hour.
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "**/package.json"
+      - "**/package-lock.json"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: "Audit ${{ matrix.dir }}"
+    runs-on: ubuntu-latest
+    strategy:
+      # One failing package must not hide the result of the others.
+      fail-fast: false
+      matrix:
+        # Every package directory that has a package-lock.json and is not blocklisted in .publicignore.
+        # Not listed on purpose:
+        #   mcp/router            private tooling, blocklisted in .publicignore (absent from the mirror)
+        #   .claude/, .agents/    generated copies of the root directories (CLAUDE.md), not sources
+        # tests/dependency-audit-workflow.bats keeps this list complete.
+        include:
+          - dir: "."
+            slug: "root"
+          - dir: "project/app"
+            slug: "project-app"
+          - dir: "project/app/api"
+            slug: "project-app-api"
+          - dir: "project/app/ui"
+            slug: "project-app-ui"
+          - dir: "mcp/training_runner"
+            slug: "mcp-training-runner"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Audit dependencies
+        shell: bash
+        env:
+          AUDIT_DIR: ${{ matrix.dir }}
+          AUDIT_OUT: audit-${{ matrix.slug }}.json
+        run: |
+          set -o pipefail
+          bash scripts/audit-deps.sh --dir "$AUDIT_DIR" --ci --json > "$AUDIT_OUT"
+
+      - name: Show findings
+        if: always()
+        shell: bash
+        env:
+          AUDIT_OUT: audit-${{ matrix.slug }}.json
+        run: |
+          if [ -s "$AUDIT_OUT" ]; then
+            jq -r '"status: \(.status)  threshold: \(.threshold)", (.findings[]? | "\(.severity)\t\(.name)\t\(.range)")' "$AUDIT_OUT" || true
+          else
+            echo "no audit JSON was produced for ${{ matrix.dir }}"
+          fi
+
+      - name: Upload audit JSON
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: audit-${{ matrix.slug }}
+          path: audit-${{ matrix.slug }}.json
+          if-no-files-found: warn
+          retention-days: 30

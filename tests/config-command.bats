@@ -307,9 +307,9 @@ value() {
 
 @test "interactive: files list, pick a file by number, then a key by number, then back out with q at every level" {
   snap
-  interactive $'4\n2\nq\nq\nq'
+  interactive $'5\n2\nq\nq\nq'
   [ "$status" -eq 0 ]
-  assert_contains "$output" "4. scope-thresholds — "
+  assert_contains "$output" "5. scope-thresholds — "
   assert_contains "$output" "2. inline_max_files — Inline max files: "
   assert_contains "$output" "Select a key in scope-thresholds"
   assert_contains "$output" "New value for inline_max_files"

@@ -120,6 +120,28 @@
       "verify": "bash skills/j-check-in/scripts/checkin-gate.sh",
       "enforcement": "confirm",
       "tick_scope": "run"
+    },
+    {
+      "id": "dependency-audit-before-release",
+      "text": "The dependency audit (scripts/audit-deps.sh) was run for this release and found nothing at or above the severity threshold, or the user chose to proceed without it.",
+      "situations": [
+        "pre-release",
+        "pre-publish"
+      ],
+      "kind": "machine",
+      "verify": "[ -f package.json ] || exit 0; S=\"$([ -f scripts/audit-deps.sh ] && echo scripts/audit-deps.sh || echo node_modules/@jenga-ai/agent/scripts/audit-deps.sh)\"; bash \"$S\" --dir . --json; rc=$?; case \"$rc\" in 0) exit 0;; 4) echo \"audit not run: no consent (audit-config.json mode is off or ask)\" >&2; exit 4;; 1) echo \"audit found vulnerabilities at or above the severity threshold\" >&2; exit 1;; *) echo \"audit could not complete (exit $rc)\" >&2; exit \"$rc\";; esac",
+      "enforcement": "confirm",
+      "tick_scope": "run"
+    },
+    {
+      "id": "dependency-audit-reviewed",
+      "text": "If package.json or a lockfile changed, the dependency audit was run or the user declined it.",
+      "situations": [
+        "pre-commit"
+      ],
+      "kind": "judgment",
+      "enforcement": "advisory",
+      "tick_scope": "run"
     }
   ]
 }

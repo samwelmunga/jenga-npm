@@ -1,0 +1,6 @@
+$ bash @REPO@/skills/j-commit/scripts/commit-subject-check.sh ASD-001 add retry to the client with a rather long explanation
+--- stdout
+kind=non-board; violates the commit-format convention: subject is 62 characters, over the recorded subject_max_length of 50
+--- stderr
+--- exit
+1

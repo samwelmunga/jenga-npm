@@ -1,0 +1,37 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh presets naming
+--- stdout
+[
+  {
+    "id": "kebab-files-camel-identifiers",
+    "label": "kebab-case files, camelCase identifiers",
+    "description": "File names are kebab-case and variables and functions are camelCase.",
+    "values": {
+      "identifier_case": "camelCase",
+      "file_case": "kebab-case"
+    },
+    "placeholder_fields": []
+  },
+  {
+    "id": "snake-case-throughout",
+    "label": "snake_case throughout",
+    "description": "File names and identifiers are all snake_case.",
+    "values": {
+      "identifier_case": "snake_case",
+      "file_case": "snake_case"
+    },
+    "placeholder_fields": []
+  },
+  {
+    "id": "pascal-types-camel-values",
+    "label": "PascalCase types, camelCase values",
+    "description": "Types and classes are PascalCase and variables and functions are camelCase.",
+    "values": {
+      "identifier_case": "camelCase",
+      "type_case": "PascalCase"
+    },
+    "placeholder_fields": []
+  }
+]
+--- stderr
+--- exit
+0

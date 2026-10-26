@@ -415,6 +415,16 @@ When the user grants approval to run SAST, vulnerability scanning, or performanc
 
 This creates an auditable record of every approval.
 
+#### Dependency audit (the `vulnerability` executor for npm projects)
+
+The `vulnerability` executor for npm projects is `scripts/audit-deps.sh` (resolve it as `$([ -f scripts/audit-deps.sh ] && echo scripts/audit-deps.sh || echo node_modules/@jenga-ai/agent/scripts/audit-deps.sh)`; `scripts/audit-record.sh` resolves the same way). It is opt-in like every other tool in this section:
+
+- **Offer, never start.** A run whose task diff touches `package.json`, `package-lock.json` or `npm-shrinkwrap.json` **offers** the audit to the user. That manifest-change trigger only offers: it never starts an audit unprompted. A run whose diff touches none of these files does not mention the audit at all.
+- **Before the first run**, once the user approves: log the `tool_approval` event above (`tool_type: vulnerability`), and also record the consent with `bash "$([ -f scripts/audit-record.sh ] && echo scripts/audit-record.sh || echo node_modules/@jenga-ai/agent/scripts/audit-record.sh)" consent --dir <dir> --session-id <session_id> --agent tester`. Both come before the audit runs.
+- **Run it** with `bash "$([ -f scripts/audit-deps.sh ] && echo scripts/audit-deps.sh || echo node_modules/@jenga-ai/agent/scripts/audit-deps.sh)" --dir <dir> --approved --json > <audit.json>`, then record the output with `scripts/audit-record.sh result --file <audit.json> --session-id <session_id> --agent tester`, and report the status and the counts.
+- **Standing opt-in.** The audit never runs unprompted unless `audit-config.json` has `mode: on`, which is the user's standing opt-in: with it no per-run prompt is needed, but the run is still recorded. Every run's result is recorded with `audit-record.sh result`, whatever the status (`clean`, `findings`, `unavailable`); `unavailable` is never reported as clean. `mode: off` always refuses.
+- **Judging a result.** The audit also finds risk that predates the task, and failing every unrelated task on it would wedge the board. So the recommendation is that a `findings` result at or above the threshold is reported as `Passed with remarks` evidence, and treated as a blocker only when the task or story names the vulnerability check in its acceptance criteria. This is guidance for your judgment, not an automatic status write.
+
 ---
 
 ## Status Management

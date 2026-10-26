@@ -22,6 +22,12 @@
 #     working tree, so acquired source can never be committed by accident.
 #   * Source arguments are validated against path traversal and against being
 #     reinterpreted as command options.
+#   * A local-path import never copies a secret-looking file (E85_S04_T08). A
+#     file whose NAME matches the shared list in secret-files.sh (environment
+#     files, auth files, private keys) is left out of a directory copy, never
+#     opened and never present in staging, and a single-file source with such a
+#     name is refused. The decision is made from the name alone, before anything
+#     is copied. `git` sources are cloned whole and are NOT filtered.
 #
 # Usage:
 #   import-source.sh [options] <source>
@@ -43,13 +49,23 @@
 # JSON summary fields:
 #   source_type, source, staging_path, content_path,
 #   file_count, total_size_bytes, total_size_human, symlink_count, git_ref
+#   secret_files_skipped   OPTIONAL, present ONLY when at least one secret-looking
+#                          file was left out of a directory copy: {count, paths}
+#                          (relative names, sorted, at most 25). Absent otherwise, so
+#                          the summary for a source without such files is unchanged.
+#                          file_count counts staged files only, so it excludes them.
+#
+# stderr: when files were skipped, one notice line from secret-files.sh,
+#   "N secret-looking file(s) skipped (names listed, contents never read): ..."
+#   Nothing extra is printed when none were skipped.
 #
 # Exit codes:
 #   0  source acquired and staged
 #   1  usage error (bad flag, missing argument, invalid --name/--type)
 #   2  environment error (git unavailable, cannot create staging dir)
 #   3  git clone failed (network, auth, bad URL, missing ref)
-#   4  source unreadable, missing, empty, or refused (in-repo path, traversal)
+#   4  source unreadable, missing, empty, or refused (in-repo path, traversal,
+#      or a single file whose name looks like a secret)
 #   5  empty snippet input
 #   6  staging directory refused (non-empty, not a directory, or inside the repo)
 # ---------------------------------------------------------------------------
@@ -57,6 +73,14 @@
 set -euo pipefail
 
 SELF="$(basename "$0")"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+# The one shared list of secret-looking file names; sourcing it has no side effects.
+# shellcheck source=secret-files.sh
+. "$SCRIPT_DIR/secret-files.sh"
+
+# Secret-looking files left out of a local-path directory copy (relative names).
+SECRET_COUNT=0
+SECRET_SKIPPED=()
 
 die() {
   local code="$1"; shift
@@ -261,6 +285,65 @@ json_escape() {
     -e 's/\t/\\t/g' -e 's/\r/\\r/g' | awk 'BEGIN{ORS=""} {print sep $0; sep="\\n"}'
 }
 
+# Copy the CONTENTS of directory $1 into existing directory $2 (E85_S04_T08).
+#
+# Pass 1 lists the non-directory entries of the source (files, symlinks, anything
+# else; a symlink to a directory is a link here, never followed) and tests each
+# NAME against the shared secret-looking list. Nothing is opened, so a secret
+# file need not even be readable. When no name matches, the original single
+# `cp -R src/. dest/` runs, so the result is exactly what it always was.
+#
+# When at least one name matches, the same tree is built entry by entry and the
+# matching entries are simply never copied: directories first (parents before
+# children, empty ones included), then every non-matching non-directory entry
+# with `cp -R -P` (a symlink stays a symlink; mode bits as `cp -R` leaves them),
+# then each directory gets the mode `cp -R` would have given it (source mode
+# minus the umask). A directory is traversed whatever it is called; only
+# non-directory entries are tested. Returns non-zero on any failure; the caller
+# turns that into exit 4.
+copy_source_directory() {
+  local src="$1" dest="$2" base entries dirs p rel dmode um mode
+  base="${src%/}"
+  entries="$STAGING_ROOT/.path-entries.list"
+  dirs="$STAGING_ROOT/.path-dirs.list"
+
+  find "$src" -mindepth 1 ! -type d -print0 >"$entries" || return 1
+  SECRET_COUNT=0
+  SECRET_SKIPPED=()
+  while IFS= read -r -d '' p; do
+    rel="${p#"$base"/}"
+    if secret_files_is_secret "$rel"; then
+      SECRET_COUNT=$((SECRET_COUNT + 1))
+      SECRET_SKIPPED[${#SECRET_SKIPPED[@]}]="$(printf '%s' "$rel" | LC_ALL=C tr '\000-\037\177' '?')"
+    fi
+  done <"$entries"
+
+  if [ "$SECRET_COUNT" -eq 0 ]; then
+    cp -R "$src/." "$dest/" || return 1
+    return 0
+  fi
+
+  # --- begin filtered copy: no entry is created and later removed; a skipped name is never touched ---
+  find "$src" -mindepth 1 -type d -print0 >"$dirs" || return 1
+  while IFS= read -r -d '' p; do
+    mkdir "$dest/${p#"$base"/}" || return 1
+  done <"$dirs"
+  while IFS= read -r -d '' p; do
+    rel="${p#"$base"/}"
+    if secret_files_is_secret "$rel"; then continue; fi
+    cp -R -P "$p" "$dest/$rel" || return 1
+  done <"$entries"
+  find "$src" -mindepth 1 -depth -type d -print0 >"$dirs" || return 1
+  um="$(umask)"
+  while IFS= read -r -d '' p; do
+    if stat --version >/dev/null 2>&1; then dmode="$(stat -c %a "$p")"; else dmode="$(stat -f %Lp "$p")"; fi
+    mode="$(printf '%o' $(( 8#$dmode & ~8#$um & 8#777 )))"
+    chmod "$mode" "$dest/${p#"$base"/}" || return 1
+  done <"$dirs"
+  # --- end filtered copy ---
+  return 0
+}
+
 # ---------------------------------------------------------------------------
 # Resolve type
 # ---------------------------------------------------------------------------
@@ -306,6 +389,12 @@ case "$SOURCE_TYPE" in
     fi
     if [ -d "$ABS_SOURCE" ] && [ -z "$(ls -A "$ABS_SOURCE" 2>/dev/null)" ]; then
       die 4 "source directory is empty: $SOURCE"
+    fi
+    # A single file whose NAME looks like a secret is refused before anything is
+    # created or opened. Both the name as given and the resolved name are tested,
+    # since a link and its target are the same content to `cp`.
+    if [ ! -d "$ABS_SOURCE" ] && { secret_files_is_secret "$ABS_SOURCE" || secret_files_is_secret "$SOURCE"; }; then
+      die 4 "refusing '$SOURCE': the file name looks like a secret, so it is not imported (matched by name on the shared list in secret-files.sh, contents never read)"
     fi
     if [ -f "$ABS_SOURCE" ] && [ ! -s "$ABS_SOURCE" ]; then
       die 4 "source file is empty: $SOURCE"
@@ -406,9 +495,13 @@ case "$SOURCE_TYPE" in
   path)
     mkdir -p "$CONTENT_DIR" || die 2 "could not create staging content directory: $CONTENT_DIR"
     if [ -d "$ABS_SOURCE" ]; then
-      # Copy the directory's CONTENTS (not the directory itself) into staging.
-      # `cp -R src/. dest/` is the portable form that includes dotfiles.
-      cp -R "$ABS_SOURCE/." "$CONTENT_DIR/" || die 4 "failed to copy source directory: $SOURCE"
+      # Copy the directory's CONTENTS (not the directory itself) into staging,
+      # dotfiles included, leaving out secret-looking file names (see
+      # copy_source_directory above).
+      copy_source_directory "$ABS_SOURCE" "$CONTENT_DIR" || die 4 "failed to copy source directory: $SOURCE"
+      rm -f "$STAGING_ROOT/.path-entries.list" "$STAGING_ROOT/.path-dirs.list"
+      # Reported before the "no content" check below, so an all-secret source says why it is empty.
+      if [ "$SECRET_COUNT" -gt 0 ]; then secret_files_notice "$SECRET_COUNT" "${SECRET_SKIPPED[@]}"; fi
     else
       cp "$ABS_SOURCE" "$CONTENT_DIR/$(basename "$ABS_SOURCE")" || die 4 "failed to copy source file: $SOURCE"
     fi
@@ -472,6 +565,19 @@ SYMLINK_COUNT="$(find "$CONTENT_DIR" -type l 2>/dev/null | wc -l | tr -d ' ')"
 
 trap - EXIT
 
+# Optional additive summary key, only when something was skipped (E85_S04_T08).
+SECRET_PATHS_JSON="[]"
+SECRET_JSON_FRAG=""
+if [ "$SECRET_COUNT" -gt 0 ]; then
+  SECRET_SORTED="$(printf '%s\n' "${SECRET_SKIPPED[@]}" | LC_ALL=C sort -u | awk 'NR <= 25')"
+  SECRET_PATHS_JSON=""
+  while IFS= read -r SECRET_NAME; do
+    SECRET_PATHS_JSON="${SECRET_PATHS_JSON:+$SECRET_PATHS_JSON,}\"$(json_escape "$SECRET_NAME")\""
+  done <<< "$SECRET_SORTED"
+  SECRET_PATHS_JSON="[$SECRET_PATHS_JSON]"
+  SECRET_JSON_FRAG=",\"secret_files_skipped\":{\"count\":$SECRET_COUNT,\"paths\":$SECRET_PATHS_JSON}"
+fi
+
 if [ "$JSON_ONLY" -eq 0 ]; then
   printf '%s\n' "$STAGING_ROOT"
 fi
@@ -487,6 +593,8 @@ if command -v jq >/dev/null 2>&1; then
     --arg total_size_human "$TOTAL_HUMAN" \
     --argjson symlink_count "$SYMLINK_COUNT" \
     --arg git_ref "$GIT_REF" \
+    --argjson secret_count "$SECRET_COUNT" \
+    --argjson secret_paths "$SECRET_PATHS_JSON" \
     '{source_type: $source_type,
       source: $source,
       staging_path: $staging_path,
@@ -495,14 +603,17 @@ if command -v jq >/dev/null 2>&1; then
       total_size_bytes: $total_size_bytes,
       total_size_human: $total_size_human,
       symlink_count: $symlink_count,
-      git_ref: (if $git_ref == "" then null else $git_ref end)}'
+      git_ref: (if $git_ref == "" then null else $git_ref end)}
+     + (if $secret_count > 0
+        then {secret_files_skipped: {count: $secret_count, paths: $secret_paths}}
+        else {} end)'
 else
   if [ -n "$GIT_REF" ]; then
     GIT_REF_JSON="\"$(json_escape "$GIT_REF")\""
   else
     GIT_REF_JSON="null"
   fi
-  printf '{"source_type":"%s","source":"%s","staging_path":"%s","content_path":"%s","file_count":%s,"total_size_bytes":%s,"total_size_human":"%s","symlink_count":%s,"git_ref":%s}\n' \
+  printf '{"source_type":"%s","source":"%s","staging_path":"%s","content_path":"%s","file_count":%s,"total_size_bytes":%s,"total_size_human":"%s","symlink_count":%s,"git_ref":%s%s}\n' \
     "$(json_escape "$SOURCE_TYPE")" \
     "$(json_escape "$SOURCE")" \
     "$(json_escape "$STAGING_ROOT")" \
@@ -511,7 +622,8 @@ else
     "$TOTAL_BYTES" \
     "$(json_escape "$TOTAL_HUMAN")" \
     "$SYMLINK_COUNT" \
-    "$GIT_REF_JSON"
+    "$GIT_REF_JSON" \
+    "$SECRET_JSON_FRAG"
 fi
 
 exit 0

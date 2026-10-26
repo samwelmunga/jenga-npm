@@ -11,9 +11,12 @@
 #      Done, Passed, etc. directly (per E51's own DoD: "only Publicized
 #      tickets are eligible for Deployed to Stage -> Deployed to Prod").
 #   2. Derives each eligible ticket's matched EST-tagged commit SHAs (and,
-#      for parity/logging, their unioned touched-file list) using the
-#      identical anchored-grep + union technique
-#      skills/j-self-sync/scripts/mark-merged.sh already implements.
+#      for parity/logging, their unioned touched-file list) through the shared
+#      commit resolver scripts/commits-for-item.sh (E79_S02_T07; it replaced
+#      this script's private copy of the anchored grep
+#      `git log --all --no-merges --extended-regexp --grep="<id>([^0-9_]|$)"`),
+#      then the same union technique
+#      skills/j-self-sync/scripts/mark-merged.sh implements.
 #   3. Checks ANCESTRY, not diff-membership: a ticket is "covered" by a tag
 #      only when EVERY one of its matched commits is an ancestor of that
 #      tag's resolved_private_sha (git merge-base --is-ancestor). A tag
@@ -182,11 +185,15 @@ REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)
 [ -n "$REPO_ROOT" ] || die "could not locate repo root (git rev-parse failed from $SCRIPT_DIR)"
 
 COMPUTE_SCRIPT="$SCRIPT_DIR/compute-deploy-reconcile.sh"
-WITH_LOCK_SCRIPT="$REPO_ROOT/scripts/with-lock.sh"
-UPDATE_FRONTMATTER_SCRIPT="$REPO_ROOT/skills/j-close-story/scripts/update-task-frontmatter.sh"
+# Helper scripts resolve relative to this script (the package), never REPO_ROOT: in a consumer the
+# package sits under node_modules/ and REPO_ROOT is the consumer's own repo, which need not ship them.
+WITH_LOCK_SCRIPT="$SCRIPT_DIR/with-lock.sh"
+COMMITS_FOR_ITEM_SCRIPT="$SCRIPT_DIR/commits-for-item.sh"
+UPDATE_FRONTMATTER_SCRIPT="$SCRIPT_DIR/../skills/j-close-story/scripts/update-task-frontmatter.sh"
 MARKER_FILE="$REPO_ROOT/project/data/deploy-reconcile-marker.json"
 
 [ -f "$WITH_LOCK_SCRIPT" ] || die "expected script not found: $WITH_LOCK_SCRIPT"
+[ -f "$COMMITS_FOR_ITEM_SCRIPT" ] || die "expected script not found: $COMMITS_FOR_ITEM_SCRIPT"
 [ -f "$UPDATE_FRONTMATTER_SCRIPT" ] || die "expected script not found: $UPDATE_FRONTMATTER_SCRIPT"
 command -v python3 >/dev/null 2>&1 || die "python3 not installed (required to read/write $MARKER_FILE)"
 
@@ -287,14 +294,13 @@ trim() {
 # Commit-matching + ancestry check
 # -----------------------------------------------------------------------------
 
-# Prints newline-separated matched EST-tagged commit SHAs for a ticket id
-# (anchored grep, identical to mark-merged.sh -- guards against a story id
-# being a literal string prefix of its own tasks' ids). Empty output means
-# zero matched commits.
+# Prints newline-separated matched commit SHAs for a ticket id, through the shared resolver
+# (anchored match -- guards against a story id being a literal string prefix of its own tasks'
+# ids; E79_S02_T07). Empty output means zero matched commits. No --require-nonempty: E79_S06
+# decides that for the opted-in path.
 commits_for_ticket() {
   local id="$1"
-  git -C "$REPO_ROOT" log --all --no-merges --extended-regexp \
-    --grep="${id}([^0-9_]|\$)" --pretty=format:'%H' 2>/dev/null || true
+  bash "$COMMITS_FOR_ITEM_SCRIPT" "$id" --repo "$REPO_ROOT" || true
 }
 
 commit_files() {

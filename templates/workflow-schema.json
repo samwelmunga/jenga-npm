@@ -1,0 +1,63 @@
+{
+  "_comment": "Canonical v1 workflow definition contract (Epic E80, E80_S01_T01). A workflow is a declarative, linear, validated definition file: builtin ones live in templates/workflows/*.json, project-local ones in project/.workflows/<id>.json (parallel to project/.playbooks/). This file is the single machine-readable source of the format; the validator (E80_S01_T03/T04) reads its per-type rules from here instead of hard-coding them, so a new step type later is a schema edit. -- KEYS: 'schema_version' is the integer format version. 'top_level' = {required, optional, id_pattern}: the keys a definition file may carry and the rule its 'id' must match. 'inputs' = {required, optional, name_pattern}: the shape of one entry of the definition's 'inputs' array (named run parameters). 'step_common' = {required, optional}: keys every step carries whatever its type. 'step_types' maps each of exactly five type names (skill, playbook, confirm, compute, render) to {required, optional, field_types}: the extra keys that type needs beyond step_common, and the JSON kind of each field (string, string_array, string_map). 'outputs' = {entry_required, kind_values, type_registry, name_pattern}: the shape of one declared output {name, kind, type}. 'substitution' = {syntax, pattern, pattern_flavor, namespaces, substitutable_fields, rule}: the reference syntax usable inside step string fields, its regular expression, and the earlier-steps-only rule. 'non_goals_v1' lists capabilities deliberately absent from v1. 'step_id_pattern' under step_common and every 'name_pattern' use the same identifier rule so a dotted reference path is unambiguous. -- OUTPUT TYPES: this file lists NO output type names. An output 'type' is a type name from the registry named by outputs.type_registry (templates/playbook-types.json); the validator resolves it there, so there is no second type system. -- REGULAR EXPRESSIONS are POSIX ERE, not PCRE, because the consuming validator is a shell script (the same convention as templates/playbook-types.json). -- ID RULE: top_level.id_pattern is the slug rule that skills/j-playbook-new/scripts/playbook-new.sh applies to playbook ids (lowercase letters, digits and single hyphens), and the definition's filename without '.json' must equal its id, as for playbooks. -- This file carries no commentary outside '_comment'.",
+  "schema_version": 1,
+  "top_level": {
+    "required": ["id", "name", "description", "steps"],
+    "optional": ["keywords", "examples", "inputs"],
+    "id_pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+  },
+  "inputs": {
+    "required": ["name"],
+    "optional": ["description", "default"],
+    "name_pattern": "^[a-z][a-z0-9_]*$"
+  },
+  "step_common": {
+    "required": ["id", "type"],
+    "optional": ["checkpoint", "outputs"],
+    "step_id_pattern": "^[a-z][a-z0-9_]*$",
+    "step_id_unique_within_file": true,
+    "checkpoint_type": "boolean"
+  },
+  "step_types": {
+    "skill": {
+      "required": ["skill"],
+      "optional": ["args"],
+      "field_types": { "skill": "string", "args": "string_map" }
+    },
+    "playbook": {
+      "required": ["playbook"],
+      "optional": ["args"],
+      "field_types": { "playbook": "string", "args": "string_map" }
+    },
+    "confirm": {
+      "required": ["prompt", "options"],
+      "optional": [],
+      "field_types": { "prompt": "string", "options": "string_array" }
+    },
+    "compute": {
+      "required": ["command"],
+      "optional": ["args"],
+      "field_types": { "command": "string", "args": "string_array" }
+    },
+    "render": {
+      "required": ["template"],
+      "optional": ["inputs"],
+      "field_types": { "template": "string", "inputs": "string_map" }
+    }
+  },
+  "outputs": {
+    "entry_required": ["name", "kind", "type"],
+    "kind_values": ["artifact", "data"],
+    "type_registry": "templates/playbook-types.json",
+    "name_pattern": "^[a-z][a-z0-9_]*$"
+  },
+  "substitution": {
+    "syntax": ["${inputs.<name>}", "${steps.<step_id>.outputs.<output_name>}"],
+    "pattern": "\\$\\{(inputs\\.[a-z][a-z0-9_]*|steps\\.[a-z][a-z0-9_]*\\.outputs\\.[a-z][a-z0-9_]*)\\}",
+    "pattern_flavor": "posix-ere",
+    "namespaces": ["inputs", "steps"],
+    "substitutable_fields": "Every string value inside a step except 'id', 'type', 'skill' and 'playbook' (this includes the strings in 'args', 'options', 'prompt', 'command', 'template' and a render step's 'inputs').",
+    "rule": "A step may only reference the run inputs declared in the definition's 'inputs' and the declared outputs of steps that appear EARLIER in 'steps'. A reference to the step itself, to a later step, to an undeclared input, or to an output the referenced step does not declare is invalid."
+  },
+  "non_goals_v1": ["branching", "parallel steps", "conditionals"]
+}

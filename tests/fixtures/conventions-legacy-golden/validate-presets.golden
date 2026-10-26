@@ -1,0 +1,6 @@
+$ bash @REPO@/scripts/validate-conventions.sh --presets @REPO@/templates/conventions-presets.json
+--- stdout
+PASS @REPO@/templates/conventions-presets.json
+--- stderr
+--- exit
+0

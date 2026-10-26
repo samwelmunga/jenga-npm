@@ -46,6 +46,19 @@
 # passed through on stderr.
 #
 # ---------------------------------------------------------------------------
+# COMMIT REF CAPTURE (opted-in projects only; E79_S04_T09)
+# ---------------------------------------------------------------------------
+# After cases 1 or 2 created the worktree, and only when "commit-settings.sh opted-in" exits 0, the script records the
+# ref found in the branch the user is working on: for a <name> that starts with a task id (E##_S##_T##), it asks
+# "perceived-branch.sh get" for that branch (perceived when set, else the real checked-out one) and runs
+# "task-commit-ref.sh capture-branch <task-id> --branch <branch>". The task branch itself never carries the key.
+# Capture is best effort: a missing script, a branch with a detached HEAD or a store that cannot be written is a notice
+# on stderr and never changes stdout, the exit status or the worktree; the task fails later, at resolution time.
+# A project that is not opted in (commit-settings.sh missing, "opted-in" exiting non-zero for any reason) takes the
+# unchanged path: the same stdout, stderr, exit status and git state, and nothing is created under the queue directory.
+# A <name> without a task id and the exit 4 / exit 5 cases capture nothing.
+#
+# ---------------------------------------------------------------------------
 # EXIT CODES
 # ---------------------------------------------------------------------------
 #   0  the worktree was created; <dir> is on stdout
@@ -177,6 +190,49 @@ if [ -n "$missing" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Commit ref capture (opted-in projects only; epic E79, task E79_S04_T09)
+#
+# Called once, after the worktree exists. It never changes stdout, the exit status or whether the worktree is created: every
+# failure is a stderr notice and the function returns. Everything it runs has stdin from /dev/null and stdout sent to
+# stderr, so the one-line stdout contract holds. The branch name is only ever an argv value (never a shell string).
+# ---------------------------------------------------------------------------
+
+capture_commit_ref() {
+  local settings="$SCRIPT_DIR/commit-settings.sh" store="$SCRIPT_DIR/task-commit-ref.sh" task_id branch
+  local -a get_args
+
+  # Default-off: nothing but the opt-in question is asked, and its output (including the validator's lines for an
+  # invalid conventions file, exit 3) is discarded, so a project that is not opted in sees no change at all.
+  [ -f "$settings" ] || return 0
+  bash "$settings" opted-in </dev/null >/dev/null 2>&1 || return 0
+
+  # Only a task worktree has a ref to capture; any other <name> is skipped silently.
+  [[ "$NAME" =~ ^(E[0-9]+_S[0-9]+_T[0-9]+) ]] || return 0
+  task_id="${BASH_REMATCH[1]}"
+
+  if [ ! -f "$store" ]; then
+    err "commit ref not captured: $store is missing"
+    return 0
+  fi
+
+  # The branch the user is working on: the perceived branch when set and existing, else the real checked-out branch.
+  get_args=(get)
+  if [ -n "$SESSION" ]; then
+    get_args+=(--session "$SESSION")
+  fi
+  branch="$(bash "$PERCEIVED_BRANCH" "${get_args[@]}" </dev/null)" || branch=""
+  if [ -z "$branch" ]; then
+    err "commit ref not captured: no working branch could be determined (detached HEAD?)"
+    return 0
+  fi
+
+  if ! bash "$store" capture-branch "$task_id" --branch "$branch" </dev/null >&2; then
+    err "commit ref not captured for $task_id (the task fails later, at resolution, naming the sources tried)"
+  fi
+  return 0
+}
+
+# ---------------------------------------------------------------------------
 # Create the worktree. Git's stdout goes to stderr so stdout stays "the path, on success, nothing otherwise".
 # ---------------------------------------------------------------------------
 
@@ -189,6 +245,8 @@ git_status=$?
 if [ "$git_status" -ne 0 ]; then
   exit "$git_status"
 fi
+
+capture_commit_ref
 
 printf '%s\n' "$DIR"
 exit 0

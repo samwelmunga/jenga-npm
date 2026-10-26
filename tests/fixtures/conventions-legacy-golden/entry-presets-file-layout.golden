@@ -1,0 +1,36 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh presets file-layout
+--- stdout
+[
+  {
+    "id": "src-and-tests",
+    "label": "src/ plus tests/",
+    "description": "Source lives under src/ and tests under tests/ at the top level.",
+    "values": {
+      "layout": "src-and-tests",
+      "source_dir": "src",
+      "test_dir": "tests"
+    },
+    "placeholder_fields": []
+  },
+  {
+    "id": "co-located-tests",
+    "label": "Co-located tests",
+    "description": "Each test file sits next to the module it covers.",
+    "values": {
+      "layout": "co-located-tests"
+    },
+    "placeholder_fields": []
+  },
+  {
+    "id": "flat-modules",
+    "label": "Flat top-level modules",
+    "description": "Modules live directly at the top level without a src/ wrapper.",
+    "values": {
+      "layout": "flat-top-level-modules"
+    },
+    "placeholder_fields": []
+  }
+]
+--- stderr
+--- exit
+0

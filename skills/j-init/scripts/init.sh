@@ -84,6 +84,30 @@ cp "$ASSETS_DIR/test-config_template.json" project/configs/test-config.json
 echo "→ Copying scope-thresholds.json from template..."
 cp "$ASSETS_DIR/scope-thresholds_template.json" project/configs/scope-thresholds.json
 
+# ─── 6.6. Create project/configs/audit-config.json ───────────────────────────
+# The dependency-audit policy (E85), scaffolded in its safe default (mode: ask)
+# so it is a visible file the user can read and change with `jenga config`,
+# not an undocumented default. Config only: the CI audit workflow ships with
+# /j-publish, since init has no package.json, repo host or publish target yet.
+echo "→ Copying audit-config.json from template..."
+cp "$ASSETS_DIR/audit-config_template.json" project/configs/audit-config.json
+
+# One-time opt-in notice (E85_S04_T03): mode ask means no audit runs until the user agrees, and nothing else
+# says so. The script decides (mode on/off prints nothing; a marker keeps it to once) and prints it; here we
+# only locate and call it. It must never fail the scaffold: a missing script is skipped with a stderr note,
+# any exit is swallowed, and exit 2 (malformed config) is surfaced as a warning.
+AUDIT_NOTICE_SCRIPT="$PKG_ROOT/scripts/audit-notice.sh"
+if [[ -f "$AUDIT_NOTICE_SCRIPT" ]]; then
+  # workflow.json already exists, so the resolver sees the project being scaffolded, not an ancestor's.
+  audit_notice_rc=0
+  JENGA_PROJECT_ROOT="$PWD" bash "$AUDIT_NOTICE_SCRIPT" show --context init || audit_notice_rc=$?
+  if [[ "$audit_notice_rc" -eq 2 ]]; then
+    echo "Warning: audit-notice.sh reported a malformed audit-config.json (exit 2); no audit opt-in notice shown." >&2
+  fi
+else
+  echo "Note: $AUDIT_NOTICE_SCRIPT not found; skipping the audit opt-in notice." >&2
+fi
+
 # ─── 7. Create project/data/baselines.json ───────────────────────────────────
 echo "→ Creating baselines.json..."
 echo '{}' > project/data/baselines.json

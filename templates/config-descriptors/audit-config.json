@@ -1,0 +1,54 @@
+{
+  "descriptor_version": 1,
+  "file": "audit-config.json",
+  "description": "Dependency-audit settings read by scripts/audit-deps.sh; every successful set also increments config_version.",
+  "keys": [
+    {
+      "key": "config_version",
+      "label": "Config version",
+      "type": "integer",
+      "description": "Version counter for this file; jenga config increments it on every successful set, so it is never set directly.",
+      "editable": false,
+      "pointer": "project/configs/README.md"
+    },
+    {
+      "key": "mode",
+      "label": "Audit mode",
+      "type": "string",
+      "description": "Whether the dependency audit may run: off never audits, ask never audits silently (it needs the user's approval each time), and on is your standing opt-in, made by setting it yourself.",
+      "editable": true,
+      "default": "ask",
+      "allowed": ["off", "ask", "on"],
+      "bump_on_change": "config_version"
+    },
+    {
+      "key": "severity_threshold",
+      "label": "Severity threshold",
+      "type": "string",
+      "description": "The lowest vulnerability severity that counts as a finding; anything below it is ignored.",
+      "editable": true,
+      "default": "high",
+      "allowed": ["low", "moderate", "high", "critical"],
+      "bump_on_change": "config_version"
+    },
+    {
+      "key": "offline_behavior",
+      "label": "Offline behavior",
+      "type": "string",
+      "description": "What happens when the audit cannot run (no npm, no lockfile, registry unreachable): warn exits 0 with an unavailable status, fail exits 3.",
+      "editable": true,
+      "default": "warn",
+      "allowed": ["warn", "fail"],
+      "bump_on_change": "config_version"
+    },
+    {
+      "key": "production_only",
+      "label": "Production dependencies only",
+      "type": "boolean",
+      "description": "When true, only production dependencies are audited (npm audit --omit=dev); when false, dev dependencies are audited too.",
+      "editable": true,
+      "default": false,
+      "bump_on_change": "config_version"
+    }
+  ]
+}

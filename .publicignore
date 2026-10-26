@@ -56,6 +56,9 @@ project/documentation/plans/
 project/documentation/summaries/
 project/instructions/
 
+# --- Unposted draft reply for the maintainer to post by hand on the public issue ---
+project/documentation/credential-access-issue-reply-draft.md
+
 # --- Project-local playbooks (E28_S14_T01, user decision 2026-09-17) ---
 # `project/.playbooks/` is per-project by definition — `load-playbooks.sh` scans it as the PROJECT
 # source alongside the framework-owned `skills/jenga/playbooks/` BUILTIN source (E53_S09_T01).
@@ -82,6 +85,54 @@ project/instructions/
 # repo, it simply stops shipping. rsync --delete purges the already-present mirror copy on the next
 # /j-mirror-public run (E28_S04).
 project/.playbooks/
+
+# --- Project-local workflows (E80_S01_T08) ---
+# `project/.workflows/` is per-project by definition -- it is the PROJECT source for workflow
+# definitions, alongside the framework-owned `templates/workflows/` BUILTIN source, which DOES ship.
+# Ours are not framework content, and a consumer's are not ours to overwrite: shipping our own would
+# push private workflow tooling downstream as if it were part of the framework, and would land in the
+# same directory a consumer uses for their own workflows. Same reasoning as `project/.playbooks/`
+# above.
+#
+# No test is stranded: `load-workflows.sh` treats a missing `project/.workflows/` as a SILENT no-op
+# (no warning, no error), so the mirror simply has no PROJECT workflow source. As with the playbook
+# entry, no `.claude/` or `.agents/` parallel lines are needed -- those mirrors are generated from the
+# root, and the project-local directory is not one of the root framework directories they receive.
+project/.workflows/
+#
+# --- Decision (E80_S05_T07, 2026-10-25): j.workflow SHIPS to the public mirror ---
+# The user did not ask to keep the skill private, and it is framework-generic: j.workflow is the runner
+# for the workflow engine (E80 Purpose), the same way j.playbook is the runner for playbooks. So there
+# is deliberately NO ignore entry for `skills/j-workflow/` or `scripts/workflow/`; both ship, as do the
+# framework-owned `templates/workflows/` builtins and `scripts/workflow/examples/`. Only the per-project
+# `project/.workflows/` source above is private. The npm `files` array already covers `skills/`,
+# `scripts/` and `templates/`, so the two channels agree (no npm/GitHub asymmetry).
+#
+# Stranded-check outcome (2026-10-25, via scripts/check-publicignore-match.sh, the same rsync matcher
+# /j-mirror-public uses): all 25 of skills/j-workflow/{SKILL.md,scripts/workflow-cli.sh}, every
+# scripts/workflow/*.sh, scripts/workflow/examples/*, templates/workflows/example-report.{json,md},
+# and the skills the skill text names (skills/j-playbook/SKILL.md, skills/jenga/SKILL.md) classify
+# PUBLIC. The only shipped example workflow (templates/workflows/example-report.json) uses compute and
+# render steps only, with no skill step, so it cannot reference a private-only skill. Every test that
+# touches project/.workflows/ builds it in a temp fixture root, so none is stranded by the entry above.
+# Nothing was ignored as a result. tests/workflow-skill-registration.bats asserts this decision.
+# Note: before changing this decision, re-run the check above and update that test.
+
+# --- Workflow run state (E80_S02_T02) ---
+# `project/data/workflow-runs/` holds the private, session-spanning state of workflow runs (state
+# files plus the lock and atomic-write leftovers beside them). It is git-ignored apart from its
+# `.gitkeep`, but that placeholder is tracked, so without this entry the directory would ship. The
+# mirror already blocks `project/queue/`, yet `project/data/` is not blocked (it holds shipped,
+# tracked files such as `baselines.json`), so only this subdirectory is listed, never `project/data/`.
+project/data/workflow-runs/
+
+# --- Workflow artifacts (E80_S04_T11) ---
+# `project/data/workflow-artifacts/` holds the published artifacts of workflow runs (sprint plans,
+# roadmaps). It is tracked in git on purpose, so a collaborator or the dashboard timeline can read it
+# after a fresh clone, but the content is project-specific planning, which must not leak downstream
+# (same reasoning as `project/board/`). `project/data/` is not blocked as a whole (it holds shipped,
+# tracked files such as `baselines.json`), so only this subdirectory is listed.
+project/data/workflow-artifacts/
 
 # --- Secrets / environment files ---
 .env
@@ -314,6 +365,18 @@ tests/mirror-never-public-refs.bats
 # exit 127 and bats exits 1, which check_test_subject_invariant keys on, refusing the next real push.
 # Caught by the E28_S20 verification pass on 2026-10-21 (E28_S20_T05 rework).
 tests/mirror-release-prep.bats
+# tests/mirror-nested-suite-flag.bats: runs skills/j-mirror-public/scripts/mirror.sh (a copy of it in a
+# scratch fixture repo, invoked by every @test case that exercises the flag), which lives under the
+# fully-private skills/j-mirror-public/ blocklisted above (both naming forms). The file has no
+# publicly-meaningful subset, so per project/documentation/public-mirror-content-parity.md's rule
+# section option 1 (blocklist) is correct rather than a visible skip, which would skip every case and
+# report nothing. Same reasoning as the three sibling tests/mirror-*.bats entries directly above. Added
+# in the same commit that creates this file (E77_S01_T03), so it never exists unblocklisted.
+tests/mirror-nested-suite-flag.bats
+# project/documentation/nested-suite-run-reachability.md (E77_S01_T01): internal finding about the
+# nested suite run inside skills/j-mirror-public/scripts/mirror.sh, which is itself blocklisted above;
+# project/documentation/ is not blanket-blocklisted, so this one internal document is listed by name.
+project/documentation/nested-suite-run-reachability.md
 # tests/train-cli-root-climb.bats: every one of its 4 @test cases calls install_script_at, which
 # copies skills/j-train/train_cli.py out of the fully-private skills/j-train/ blocklisted above (all
 # three naming forms). In the mirror that source file does not exist, so the cp fails and every case
@@ -333,6 +396,10 @@ tests/checklist-gating.bats
 # tests/mark-publicized.bats: copies skills/j-mirror-public/scripts/mark-publicized.sh in setup(), and
 # skills/j-mirror-public is never shipped, so every case in the file fails there. Follows its private subject.
 tests/mark-publicized.bats
+# tests/mark-merged-resolver.bats: runs skills/j-self-sync/scripts/mark-merged.sh (REAL_SCRIPT, every structure case), and
+# skills/j-self-sync/ is fully private (blocklisted above), so the file fails in the public mirror with its subject absent. Found by the
+# /mirror-public test gate on 2026-10-26 (case 1, bash -n on the missing script). Follows its private subject.
+tests/mark-merged-resolver.bats
 # tests/e73-spike-harness.bats and tests/e73-spike-interactive-shapes.bats: drive the scripts and fixtures under
 # project/spikes/E73_S01/, which is blocklisted above (the E73_S01 spike harness section). In the mirror
 # that subject does not exist, so cases 1 of both files fail ("enable adds the five hook entries ...",
@@ -346,6 +413,12 @@ tests/e73-spike-interactive-shapes.bats
 # private .gitignore/.publicignore hygiene, so the file has no publicly-meaningful subset; it follows its
 # private subject. Found by E51_S03_T05 via the real-push baseline.
 tests/workflow-run-gitignore.bats
+# tests/workflow-artifacts-gitignore.bats: asserts that project/data/workflow-artifacts/.gitkeep exists and that
+# the directory is blocked by this file, but project/data/workflow-artifacts/ is blocklisted above (E80_S04_T11),
+# so the .gitkeep case fails in the mirror. The file audits this repo's own private .gitignore/.publicignore
+# hygiene, so it has no publicly-meaningful subset; it follows its private subject. It also skips cleanly when
+# .publicignore is absent.
+tests/workflow-artifacts-gitignore.bats
 
 # --- Private-tooling playbooks and their tests (E50_S13, user decision 2026-09-10) ---
 # brainstorm-to-mirror terminates in `mirror-public`, a deliberately private skill blocklisted
@@ -406,3 +479,15 @@ Thumbs.db
 jenga.html
 # tests/mirror-publicize-wiring.bats: clones the private repo and runs the blocklisted skills/j-mirror-public/ scripts end to end; it cannot run in the public mirror.
 tests/mirror-publicize-wiring.bats
+# --- Long-running tests, kept private-side (see project/rapports/problems/E77-long-running-tests-in-the-shipping-suite.md) ---
+# Each file below took 50 seconds or more on its own (130, 99, 78, 73, 59, 58 and 52 seconds, measured one file at a time on a
+# quiet machine), and together they add about nine minutes to the test-subject-invariant gate that /mirror-public runs before
+# every real push. They are verified on the private side. This is a stop-gap list of the files measured so far, not a complete
+# one: the rest of the suite has not been timed.
+tests/workflow-render-artifact.bats
+tests/workflow-artifacts-e2e.bats
+tests/workflow-run-compute.bats
+tests/workflow-dispatch-compute-render.bats
+tests/workflow-outputs.bats
+tests/workflow-compute-registry.bats
+tests/workflow-pause-resume.bats

@@ -650,6 +650,287 @@ mutate_presets() {
 }
 
 # ================================================================================================================
+# Schema vocabulary: enum, reserved, default, max_length, pattern, opt_in_categories (E79_S03_T03)
+#
+# Every case builds a scratch schema from the shipped one with jq and points JENGA_CONVENTIONS_SCHEMA at it. The shipped
+# schema adopted these properties and an opt-in category in E79_S03_T04, so the few cases that need a schema with no
+# opt-in category use the frozen copy tests/fixtures/conventions-schema-no-opt-in.json (NO_OPT_IN_SCHEMA, below).
+# ================================================================================================================
+
+# trace_schema [<jq-filter>]: write a scratch schema to $SS with one opt-in category "commit-trace" whose "mode"
+# field carries enum, reserved, a valid default and max_length; the optional filter then mutates it.
+trace_schema() {
+  SS="$BATS_TEST_TMPDIR/scratch-schema.json"
+  jq '.opt_in_categories = {"commit-trace": {"label": "Commit trace", "values": {
+        "mode": {"type": "string", "required": false, "single_line": true, "non_empty": true,
+                 "enum": ["trailer", "subject"], "reserved": {"topology": "reserved for E79_S08"},
+                 "default": "trailer", "max_length": 20},
+        "trailer_key": {"type": "string", "required": false, "single_line": true, "non_empty": true,
+                        "pattern": "^[A-Z][A-Za-z]*-[A-Za-z]+$"}}}}' "$SCHEMA" > "$SS"
+  if [ "$#" -ge 1 ]; then
+    jq "$1" "$SS" > "$SS.new"
+    mv "$SS.new" "$SS"
+  fi
+}
+
+# trace_instance <jq-object-for-values> [<extra entry fields as a jq object>]: write an instance recording only
+# categories.commit-trace to $F.
+trace_instance() {
+  printf '{"conventions_version":1,"categories":{"commit-trace":{"source":"custom","summary":"Trace","values":%s}}}\n' "$1" > "$F"
+  if [ "$#" -ge 2 ]; then
+    jq ".categories[\"commit-trace\"] += $2" "$F" > "$F.new"
+    mv "$F.new" "$F"
+  fi
+}
+
+svalidate() { JENGA_CONVENTIONS_SCHEMA="$SS" validate "$@"; }
+
+# NO_OPT_IN_SCHEMA: a frozen copy of the schema as it was before commit-format gained its template fields and the
+# schema gained opt_in_categories (E79_S03_T04). Cases that pin "a schema with no opt-in category" run against it
+# because the shipped schema now declares one.
+NO_OPT_IN_SCHEMA="$REPO_ROOT/tests/fixtures/conventions-schema-no-opt-in.json"
+nvalidate() { JENGA_CONVENTIONS_SCHEMA="$NO_OPT_IN_SCHEMA" validate "$@"; }
+
+@test "vocab 1: a schema with no opt_in_categories declares none of the new spec properties (frozen pre-opt-in fixture)" {
+  [ "$(jq 'has("opt_in_categories")' "$NO_OPT_IN_SCHEMA")" = "false" ]
+  [ "$(jq '[.categories[].values[] | keys[] | select(. == "enum" or . == "reserved" or . == "default" or . == "max_length")] | length' "$NO_OPT_IN_SCHEMA")" -eq 0 ]
+}
+
+@test "vocab 2: enum accepts a listed value and rejects any other, naming the path and the allowed values" {
+  trace_schema
+  trace_instance '{"mode":"subject"}'
+  svalidate "$F"
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+  trace_instance '{"mode":"other"}'
+  svalidate "$F"
+  [ "$status" -eq 1 ]
+  assert_output_contains "FAIL $F"
+  assert_contains "$stderr" "$F: not an allowed value: categories.commit-trace.values.mode is \"other\" (allowed: trailer, subject)"
+}
+
+@test "vocab 3: a reserved value is rejected with its own note, and the message differs from the not-allowed one" {
+  trace_schema
+  trace_instance '{"mode":"topology"}'
+  svalidate "$F"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "$F: reserved value: categories.commit-trace.values.mode is \"topology\" - reserved for E79_S08"
+  assert_not_contains "$stderr" "not an allowed value"
+  # a value that is neither listed nor reserved gets the generic message, not the reserved one
+  trace_instance '{"mode":"other"}'
+  svalidate "$F"
+  assert_contains "$stderr" "not an allowed value"
+  assert_not_contains "$stderr" "reserved"
+}
+
+@test "vocab 4: max_length and pattern are enforced on a values field (whole-value match)" {
+  trace_schema
+  trace_instance '{"mode":"trailer","trailer_key":"Jenga-Task"}'
+  svalidate "$F"
+  [ "$status" -eq 0 ]
+  # a partial match is not enough: the whole value must match
+  trace_instance '{"trailer_key":"Jenga-Task extra"}'
+  svalidate "$F"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "bad format: categories.commit-trace.values.trailer_key \"Jenga-Task extra\" does not match the required pattern"
+  trace_schema '.opt_in_categories["commit-trace"].values.trailer_key.max_length = 5'
+  trace_instance '{"trailer_key":"Jenga-Task"}'
+  svalidate "$F"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "too long: categories.commit-trace.values.trailer_key is 10 characters (maximum 5)"
+}
+
+@test "vocab 5: a default that violates its own enum, pattern or max_length fails the schema load, naming the field" {
+  trace_schema '.opt_in_categories["commit-trace"].values.mode.default = "other"'
+  trace_instance '{"mode":"trailer"}'
+  svalidate "$F"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "$SS: schema opt-in category commit-trace field mode has an invalid default: not an allowed value"
+  trace_schema '.opt_in_categories["commit-trace"].values.trailer_key.default = "no_match"'
+  svalidate "$F"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "field trailer_key has an invalid default: bad format"
+  trace_schema '.opt_in_categories["commit-trace"].values.mode.default = "subject" | .opt_in_categories["commit-trace"].values.mode.max_length = 3'
+  svalidate "$F"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "field mode has an invalid default: too long"
+  # a reserved value is not a usable default either
+  trace_schema '.opt_in_categories["commit-trace"].values.mode.default = "topology"'
+  svalidate "$F"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "field mode has an invalid default: reserved value"
+  # a valid default is accepted, and the validator does not insert it into the file
+  trace_schema
+  trace_instance '{}'
+  svalidate "$F"
+  [ "$status" -eq 0 ]
+  [ "$(jq -c '.categories["commit-trace"].values' "$F")" = "{}" ]
+}
+
+@test "vocab 6: a default is checked in a core category too, and a wrongly typed default is rejected" {
+  trace_schema '.categories.branching.values.model.default = ""'
+  write_valid
+  svalidate "$F"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "schema category branching field model has an invalid default: empty value"
+  trace_schema '.categories.branching.values.model.default = 7'
+  svalidate "$F"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "field model has an invalid default: wrong type"
+}
+
+@test "vocab 7: malformed enum, reserved, max_length and pattern are rejected when the schema is loaded" {
+  local cases=(
+    '.opt_in_categories["commit-trace"].values.mode.enum = []@@enum must be a non-empty array'
+    '.opt_in_categories["commit-trace"].values.mode.enum = ["a","a"]@@enum must not repeat a value'
+    '.opt_in_categories["commit-trace"].values.mode.reserved = {"trailer":"note"}@@must not also be in enum'
+    '.opt_in_categories["commit-trace"].values.mode.reserved = {"x":""}@@needs a non-empty single-line note'
+    '.opt_in_categories["commit-trace"].values.mode.max_length = 0@@max_length must be a positive integer'
+    '.opt_in_categories["commit-trace"].values.mode.pattern = "("@@pattern does not compile'
+    '.categories.branching.values.default_branch.type = "boolean" | .categories.branching.values.default_branch.pattern = "x"@@pattern is only supported on string fields'
+  )
+  local c filter want
+  for c in "${cases[@]}"; do
+    filter="${c%%@@*}"
+    want="${c#*@@}"
+    trace_schema "$filter"
+    trace_instance '{"mode":"trailer"}'
+    svalidate "$F"
+    [ "$status" -eq 1 ] || { printf 'schema accepted: %s\n' "$filter" >&2; return 1; }
+    case "$stderr" in *"$want"*) ;; *) printf 'wanted [%s] in: %s\n' "$want" "$stderr" >&2; return 1 ;; esac
+    assert_contains "$stderr" "$SS: schema "
+  done
+}
+
+@test "vocab 8: an opt-in category recorded in an instance validates, and a bad value in it is rejected like a core one" {
+  trace_schema
+  trace_instance '{"mode":"trailer","trailer_key":"Jenga-Task"}'
+  svalidate "$F"
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+  # unknown key, missing source and a wrong-typed field are all reported through the same entry checks
+  trace_instance '{"mode":"trailer","extra":1}'
+  svalidate "$F"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "unknown key in values: categories.commit-trace.values.extra (allowed for commit-trace: mode, trailer_key)"
+  jq 'del(.categories["commit-trace"].source)' "$F" > "$F.new"
+  mv "$F.new" "$F"
+  svalidate "$F"
+  assert_contains "$stderr" "missing required field: categories.commit-trace.source"
+  # the same instance is rejected against a schema that declares no opt-in category
+  trace_instance '{"mode":"trailer"}'
+  nvalidate "$F"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "unknown category: categories.commit-trace"
+}
+
+@test "vocab 9: an unknown category is still rejected, and its message lists the core ids first, then the opt-in ones" {
+  trace_schema
+  printf '{"conventions_version":1,"categories":{"nope":{}}}\n' > "$F"
+  svalidate "$F"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "unknown category: categories.nope (allowed: $(jq -r '.categories | keys_unsorted | join(", ")' "$SCHEMA"), commit-trace)"
+  # with no opt-in category the text is exactly what it was before
+  nvalidate "$F"
+  assert_contains "$stderr" "unknown category: categories.nope (allowed: $(jq -r '.categories | keys_unsorted | join(", ")' "$SCHEMA"))"
+}
+
+@test "vocab 10: a block strength in an opt-in category entry is rejected exactly as for a core category" {
+  trace_schema
+  trace_instance '{"mode":"trailer"}' '{"strength":"block"}'
+  svalidate "$F"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "block strength: categories.commit-trace.strength is \"block\""
+  # at any depth: inside values, under an enforcement key
+  trace_instance '{"mode":"trailer"}' '{"strength":"advisory","values":{"mode":"trailer","enforcement":"block"}}'
+  svalidate "$F"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "block strength: categories.commit-trace.values.enforcement is \"block\""
+}
+
+@test "vocab 11: --presets does not require presets for an opt-in category, but still validates a catalog that has them" {
+  trace_schema
+  svalidate --presets "$PRESETS"
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+  # an empty list, one preset and four presets are all fine: no count bound applies
+  local n
+  for n in 0 1 4; do
+    jq --argjson n "$n" '.categories["commit-trace"] = [range($n) | {"id": ("p" + (. | tostring)), "label": "L", "description": "D", "values": {"mode": "trailer"}}]' "$PRESETS" > "$P"
+    svalidate --presets "$P"
+    [ "$status" -eq 0 ] || { printf 'count %s rejected: %s\n' "$n" "$stderr" >&2; return 1; }
+  done
+  # a preset it does provide is validated: bad value, duplicate id, block strength, non-array
+  jq '.categories["commit-trace"] = [{"id": "a", "label": "L", "description": "D", "values": {"mode": "topology"}}]' "$PRESETS" > "$P"
+  svalidate --presets "$P"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "reserved value: categories.commit-trace[0].values.mode is \"topology\""
+  jq '.categories["commit-trace"] = [{"id": "a", "label": "L", "description": "D", "values": {"mode": "trailer"}}, {"id": "a", "label": "L", "description": "D", "values": {"mode": "trailer"}, "strength": "block"}]' "$PRESETS" > "$P"
+  svalidate --presets "$P"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "duplicate preset id: categories.commit-trace[1].id"
+  assert_contains "$stderr" "block strength: categories.commit-trace[1].strength"
+  jq '.categories["commit-trace"] = "x"' "$PRESETS" > "$P"
+  svalidate --presets "$P"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "wrong type: categories.commit-trace must be an array of presets"
+}
+
+@test "vocab 12: the core presets rule is unchanged next to an opt-in category, and an unknown catalog category lists both groups" {
+  trace_schema
+  jq 'del(.categories.branching)' "$PRESETS" > "$P"
+  svalidate --presets "$P"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "category with no presets: categories.branching is absent (need 2 to 3 presets)"
+  jq '.categories.nope = []' "$PRESETS" > "$P"
+  svalidate --presets "$P"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" ", documentation-placement, commit-trace)"
+}
+
+@test "vocab 13: an id declared in both categories and opt_in_categories is rejected when the schema is loaded" {
+  trace_schema '.opt_in_categories.naming = .categories.naming'
+  write_valid
+  svalidate "$F"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "$SS: schema category naming is declared in both categories and opt_in_categories"
+  svalidate --presets "$PRESETS"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "declared in both categories and opt_in_categories"
+}
+
+@test "vocab 14: a malformed opt_in_categories is rejected when the schema is loaded" {
+  trace_schema '.opt_in_categories = []'
+  write_valid
+  svalidate "$F"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "$SS: schema opt_in_categories must be an object"
+  trace_schema '.opt_in_categories["commit-trace"].values.mode.type = "number"'
+  svalidate "$F"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "schema opt-in category commit-trace field mode has an unknown type"
+  trace_schema 'del(.opt_in_categories["commit-trace"].values)'
+  svalidate "$F"
+  [ "$status" -eq 1 ]
+  assert_contains "$stderr" "schema opt-in category commit-trace has no values field list"
+}
+
+@test "vocab 15: the whole instance still validates against a schema with opt-in categories (all 9 core categories unaffected)" {
+  trace_schema
+  write_valid
+  svalidate "$F"
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+}
+
+@test "vocab 16: the script passes bash -n and uses no bash 4 feature" {
+  bash -n "$VALIDATE"
+  local hits
+  hits="$(grep -vE '^[[:space:]]*#' "$VALIDATE" | grep -nE 'declare +-[A-Za-z]*A|mapfile|readarray|coproc|\$\{[A-Za-z_0-9]+(\^\^|,,)|&>>|\|&|;;?&|EPOCHREALTIME|BASHPID|\[\[ +-v ' || true)"
+  [ -z "$hits" ] || { printf 'bash 4 feature found:\n%s\n' "$hits" >&2; return 1; }
+}
+
+# ================================================================================================================
 # Isolation
 # ================================================================================================================
 

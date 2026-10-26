@@ -1,0 +1,6 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh show
+--- stdout
+{"conventions_version":1,"categories":{}}
+--- stderr
+--- exit
+0

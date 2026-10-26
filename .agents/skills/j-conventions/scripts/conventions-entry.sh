@@ -44,7 +44,8 @@
 # presets:    prints the category's presets from templates/conventions-presets.json as a JSON array, each preset
 #             with the catalog's own fields (id, label, description, values) plus `placeholder_fields`: the names of
 #             `values` fields that still hold an unreplaced placeholder such as "<lint command>". Exit 1 for an
-#             unknown category.
+#             unknown category. An opt-in category (see below) has no presets: it prints [] on stdout, a one-line note on
+#             stderr, and exits 0.
 # check:      validates ONE input with the real scripts/validate-conventions.sh (a one-category probe document is
 #             built and validated, so no rule is duplicated here) and prints {"valid": true} or
 #             {"valid": false, "reason": "<validator message>"}; the exit status is 0 for both. FIELD is a name from
@@ -89,6 +90,14 @@
 #             wizard can retry. If the lock cannot be acquired, nothing is written (exit 6). Never reports success on a
 #             failed validation. The registry is "<configs>/checklists.json"; generated items are advisory or confirm,
 #             never block.
+#
+# Opt-in categories: the schema may declare categories under a top-level `opt_in_categories` key (today
+# `commit-trace`). They are recorded at categories.<id> in conventions.json and are accepted by check, draft-set,
+# draft-skip, draft-show, draft-diff, commit and `show --category`, typed and validated exactly like a core category
+# (the real validator judges the whole document before anything is applied or written). `categories` (both formats)
+# lists only the core ids and `presets` for a core id is unchanged. In written files and in draft-diff the opt-in
+# categories follow the core ones, in schema order. The wizard asks nothing about them: it is told nothing in this
+# script's listings, so recording one is an explicit draft-set call (use --source custom with --summary).
 #
 # Placeholders: a `values` string that is entirely one `<...>` token (for example the preset value
 # "<lint command>") is a template the user has not filled in. It is refused here (`check` -> valid false with a reason
@@ -188,14 +197,19 @@ schema_readable() {
     die 1 "cannot read the category list from $SCHEMA"
 }
 
-# category_exists <id>: succeeds when the id is in the schema.
+# jq prelude: cat($c) is the schema definition of a category, whether it is a core one (`categories`) or an opt-in one
+# (`opt_in_categories`, absent from the listings). No category id is named in this script: both lists come from the schema.
+CAT_DEF='def cat($c): (.categories[$c] // .opt_in_categories[$c]);'
+
+# category_exists <id>: succeeds when the id is a core or an opt-in category of the schema.
 category_exists() {
   schema_readable
-  jq -e --arg c "$1" '.categories | has($c)' "$SCHEMA" >/dev/null 2>&1
+  jq -e --arg c "$1" "$CAT_DEF"' cat($c) != null' "$SCHEMA" >/dev/null 2>&1
 }
 
 unknown_category_message() {
-  printf 'unknown category: %s (allowed: %s)' "$1" "$(jq -r '.categories | keys_unsorted | join(", ")' "$SCHEMA")"
+  printf 'unknown category: %s (allowed: %s)' "$1" \
+    "$(jq -r '(.categories | keys_unsorted) + ((.opt_in_categories // {}) | keys_unsorted) | join(", ")' "$SCHEMA")"
 }
 
 # category_known <id>: exits 1 with the allowed list when the id is not in the schema.
@@ -207,7 +221,7 @@ category_known() {
 # does not fit the field's type is kept as a string so the real validator reports the wrong type.
 coerce_value() {
   local ftype
-  ftype="$(jq -r --arg c "$1" --arg f "$2" '.categories[$c].values[$f].type // "string"' "$SCHEMA")"
+  ftype="$(jq -r --arg c "$1" --arg f "$2" "$CAT_DEF"' cat($c).values[$f].type // "string"' "$SCHEMA")"
   case "$ftype" in
     boolean)
       case "$3" in
@@ -321,8 +335,15 @@ cmd_detect() {
 cmd_presets() {
   [ "$#" -eq 1 ] || die_usage "presets needs exactly one category id"
   category_known "$1"
-  jq -e --arg c "$1" '.categories[$c] | type == "array"' "$PRESETS" >/dev/null 2>&1 ||
+  if ! jq -e --arg c "$1" '.categories[$c] | type == "array"' "$PRESETS" >/dev/null 2>&1; then
+    # An opt-in category has no presets unless the catalog chooses to provide some: that is documented, not an error.
+    if jq -e --arg c "$1" '(.opt_in_categories // {}) | has($c)' "$SCHEMA" >/dev/null 2>&1; then
+      printf '%s: category "%s" is opt-in and has no presets; record it with draft-set --source custom\n' "$SELF" "$1" >&2
+      printf '[]\n'
+      return 0
+    fi
     die 1 "no presets for category \"$1\" in $PRESETS"
+  fi
   jq --arg c "$1" --arg re "$PLACEHOLDER_RE" \
     '.categories[$c] | map(. + {placeholder_fields: [.values | to_entries[]
         | select((.value | type) == "string" and (.value | test($re))) | .key]})' "$PRESETS"
@@ -349,7 +370,7 @@ cmd_check() {
     fi
   fi
 
-  probe_values="$(jq -c --arg c "$category" '.categories[$c].values | to_entries
+  probe_values="$(jq -c --arg c "$category" "$CAT_DEF"' cat($c).values | to_entries
       | map(select(.value.required == true)
             | {key, value: (if .value.type == "boolean" then true
                             elif .value.type == "integer" then 1
@@ -466,16 +487,17 @@ require_draft() {
 # reorders; validation has already happened or happens on the result.
 normalize_doc() {
   jq --slurpfile s "$SCHEMA" '
+    def cat($c): ($s[0].categories[$c] // $s[0].opt_in_categories[$c]);
     def order($keys): . as $o
       | (reduce $keys[] as $k ({}; if ($o | has($k)) then .[$k] = $o[$k] else . end))
         + ($o | with_entries(select(.key as $k | ($keys | index($k)) == null)));
-    ($s[0].categories | keys_unsorted) as $ids
+    (($s[0].categories | keys_unsorted) + (($s[0].opt_in_categories // {}) | keys_unsorted)) as $ids
     | ($s[0].entry_fields | keys_unsorted) as $efields
     | .categories |= (order($ids)
         | with_entries(.key as $id | .value |= (
             order($efields)
             | if (.values | type) == "object"
-              then .values |= order($s[0].categories[$id].values // {} | keys_unsorted)
+              then .values |= order(cat($id).values // {} | keys_unsorted)
               else . end)))
     | order(["conventions_version", "categories"])' "$1"
 }
@@ -683,7 +705,7 @@ cmd_draft_diff() {
     printf '%s\n' "$SKELETON" >"$live"
   fi
   jq -n -r --arg fmt "$FORMAT" --slurpfile live "$live" --slurpfile draft "$DRAFT" --slurpfile s "$SCHEMA" '
-    [ $s[0].categories | to_entries[]
+    [ ($s[0].categories + ($s[0].opt_in_categories // {})) | to_entries[]
       | .key as $id | .value.label as $label
       | ($live[0].categories[$id]) as $b | ($draft[0].categories[$id]) as $a
       | select($a != null or $b != null)

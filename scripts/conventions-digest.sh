@@ -22,6 +22,8 @@
 #   <category-id>: <summary> [<key>=<value>; ...] (checklist item conv-<category-id>)      one line per category
 #   Precedence: ...                                                                       fixed line
 #   EST: ...                                                                              fixed line
+#   Commit format (opt-in): ...                                                           only for an opted-in project
+#   EST override: ...                                                                     only for an opted-in project
 #   ... <N> more categories omitted                                                       only when truncated
 # --agent only chooses which categories come FIRST (the rest follow in schema order, none are dropped except by the
 # cap, which drops the lowest-priority ones and says so on the last line):
@@ -35,11 +37,23 @@
 # read from the file, so a custom commit-format convention can never remove or contradict them (epic E69, Decision
 # 2: EST naming for board commits is mandatory; a commit-format convention applies to non-board commits only).
 #
+# OPT-IN COMMIT SETTINGS: a project that opted in to a commit-format template for board commits gets two more lines
+# after the "EST:" line: the effective commit settings, and a line saying the "EST:" line above applies to projects
+# without the opt-in. Whether a project is opted in, and every effective value, come from scripts/commit-settings.sh
+# (called as `commit-settings.sh --conventions <file> show`); this script holds no copy of the opt-in rule or of any
+# default, and prints each value as data (nothing is evaluated). A project that is not opted in (no template, the
+# flag absent or false, or a trace entry on its own) gets exactly the output it always had, for every --agent value.
+# The two lines are budgeted like the fixed lines, so the cap and the omission note stay correct, and each is clipped
+# to the line limit like every other line. Because they must never be dropped, an opted-in project's cap has a
+# minimum of 7 lines (header, Precedence, EST, the two lines, at least one category line, the omission note); a
+# lower JENGA_CONVENTIONS_DIGEST_MAX_LINES is raised to 7 for that project only.
+#
 # A string value that is entirely one <...> token (the shipped preset's <lint command> shape) is treated as unset
 # and is never printed as a recorded value, exactly as scripts/generate-convention-checklist.sh treats it.
 #
 # Exit codes: 0 ok (including "nothing to say"); 1 the conventions file is invalid; 2 usage error; 3 jq or python3
-# (needed by the validator) is missing while there is a file to read.
+# (needed by the validator) is missing while there is a file to read, or the opted-in commit settings cannot be
+# resolved (commit-settings.sh reports why on stderr; nothing is printed on stdout).
 #
 # Environment (tests): JENGA_PROJECT_ROOT; JENGA_CONVENTIONS_SCHEMA (read here and by the validator);
 # JENGA_CONVENTIONS_DIGEST_MAX_LINES lowers the 30-line cap (minimum 4) so truncation can be exercised with the
@@ -145,11 +159,41 @@ lines="$(jq -r --argjson pref "$pref" --argjson schema "$schema_order" --argjson
 [ -n "$lines" ] || exit 0
 
 total="$(printf '%s\n' "$lines" | wc -l | tr -d ' ')"
-# Fixed budget: header + Precedence + EST. The omission note costs one more line only when something is dropped.
-slots=$((MAX_LINES - 3))
+
+# Opt-in commit settings. The opt-in rule and the defaults live in commit-settings.sh; empty output means "not opted
+# in" and leaves everything below exactly as it was. Resolved before anything is printed, so a failure prints no
+# partial digest.
+fixed=3
+opt_lines=""
+settings=""
+# A package that lacks commit-settings.sh (a partial copy) behaves exactly as it always did: no opt-in lines.
+if [ -f "$here/commit-settings.sh" ]; then
+  settings="$(bash "$here/commit-settings.sh" --conventions "$conv" show)"
+  src=$?
+  if [ "$src" -ne 0 ]; then
+    printf '%s: cannot resolve the commit settings, no digest produced: %s\n' "$SELF" "$conv" >&2
+    exit 3
+  fi
+fi
+if [ -n "$settings" ]; then
+  opt_lines="$(printf '%s\n' "$settings" | jq -Rrs --arg q "'" --argjson cap "$LINE_CHARS" '
+    def clip: if length > $cap then .[0:($cap - 3)] + "..." else . end;
+    (split("\n") | map(select(length > 0))
+      | map(. as $l | ($l | index("=")) as $i | select($i != null) | {key: $l[0:$i], value: $l[($i + 1):]})
+      | from_entries) as $s
+    | ("Commit format (opt-in): template \($q)\($s.template)\($q), ref_pattern \($s.ref_pattern), on_unresolved \($s.on_unresolved); board commits follow the template; trace: \($s.trace_mode) via \($q)\($s.trailer_key)\($q)" | clip),
+      ("EST override: this project opted in (commit-format.apply_to_board_commits=true); the EST line above applies to projects without the opt-in." | clip)
+  ')" || { printf '%s: could not format the commit settings\n' "$SELF" >&2; exit 3; }
+  fixed=5
+  [ "$MAX_LINES" -ge 7 ] || MAX_LINES=7
+fi
+
+# Fixed budget: header + Precedence + EST (+ the two opt-in lines). The omission note costs one more line only when
+# something is dropped.
+slots=$((MAX_LINES - fixed))
 omitted=0
 if [ "$total" -gt "$slots" ]; then
-  slots=$((MAX_LINES - 4))
+  slots=$((MAX_LINES - fixed - 1))
   omitted=$((total - slots))
 fi
 
@@ -157,6 +201,9 @@ printf 'Project conventions (%s recorded; explicit, set through j.conventions):\
 printf '%s\n' "$lines" | head -n "$slots"
 printf '%s\n' 'Precedence: the conventions above are explicit and beat inference from the codebase; infer only for categories not listed.'
 printf '%s\n' 'EST: board commits keep the mandatory task(E##_S##_T##): / story(...) / epic(...) naming; a recorded commit-format convention applies to non-board commits only.'
+if [ -n "$opt_lines" ]; then
+  printf '%s\n' "$opt_lines"
+fi
 if [ "$omitted" -gt 0 ]; then
   printf '... %s more categories omitted\n' "$omitted"
 fi

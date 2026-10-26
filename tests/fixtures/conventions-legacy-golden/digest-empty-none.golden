@@ -1,0 +1,5 @@
+$ env bash @REPO@/scripts/conventions-digest.sh
+--- stdout
+--- stderr
+--- exit
+0

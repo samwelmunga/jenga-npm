@@ -17,7 +17,7 @@
 #   resolve-root.sh [--strict] source    print env | search | default
 #   resolve-root.sh [--strict] tree      print project | .project
 #   resolve-root.sh [--strict] [--relative] get <key>   resolved path of one `paths` key
-#   resolve-root.sh [--strict] [--relative] list        key=path for all 18 keys
+#   resolve-root.sh [--strict] [--relative] list        key=path for all 21 keys
 #
 # Usage (sourced): `. resolve-root.sh` defines jenga_resolve_root, jenga_resolve_source,
 # jenga_resolve_tree, jenga_resolve_path <key> and jenga_resolve_list. Sourcing prints nothing,
@@ -136,8 +136,8 @@ jenga_resolve_tree() {
 
 # --- per-key resolution (E34_S01_T03) -------------------------------------------------------
 
-# The 18 keys of workflow.json's `paths` map, in the order the schema doc's key table lists them.
-_JENGA_KEYS="board epics stories tasks rapports_problems rapports_analysis queue scrum_triggers developer_triggers tester_triggers session_handoff logs data configs documentation documentation_plans documentation_summaries strategy"
+# The 21 keys of workflow.json's `paths` map, in the order the schema doc's key table lists them.
+_JENGA_KEYS="board epics stories tasks rapports_problems rapports_analysis queue scrum_triggers developer_triggers tester_triggers session_handoff logs data configs documentation documentation_plans documentation_summaries strategy workflows workflow_runs workflow_artifacts"
 
 # Prints the conventional default for key $1 (relative to the anchor); returns 1 for an unknown key.
 # A case statement, not an associative array, for bash 3.2.
@@ -161,6 +161,9 @@ _jenga_default_path() {
     documentation_plans) printf '%s' "project/documentation/plans" ;;
     documentation_summaries) printf '%s' "project/documentation/summaries" ;;
     strategy) printf '%s' "project/documentation/STRATEGY.md" ;;
+    workflows) printf '%s' "project/.workflows" ;;
+    workflow_runs) printf '%s' "project/data/workflow-runs" ;;
+    workflow_artifacts) printf '%s' "project/data/workflow-artifacts" ;;
     *) return 1 ;;
   esac
 }

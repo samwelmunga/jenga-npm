@@ -97,6 +97,17 @@ DEPLOY_KEYS = {
     "date_deployed_prod",
 }
 
+# E76_S01_T01 per-task token usage. Runtime-written, never authored by hand (by /close-story and
+# scripts/task-usage.sh --persist). TASK-ONLY: not allow-listed for epics or stories. Absence means
+# "not measured", not zero. Names are checked by exact spelling, so a misspelling such as
+# usage_tokens_in is still rejected as an unknown key. See "Usage fields" in
+# templates/SCRUM_BOARD_SCHEMA.md.
+USAGE_KEYS = {
+    "usage_input_tokens", "usage_output_tokens", "usage_cache_write_tokens",
+    "usage_cache_read_tokens", "usage_total_tokens", "usage_transcripts",
+    "usage_measured_on", "usage_possibly_incomplete",
+}
+
 # E39 tiered item-level caution/escalation fields. OPTIONAL and story/task-only — epics do not
 # carry these; an epic's risk gating is already handled by epic_scope_approval. See
 # templates/SCRUM_BOARD_SCHEMA.md.
@@ -151,7 +162,7 @@ ALLOWED_KEYS = {
         "id", "story_id", "epic_id", "title", "status", "date_created", "date_started", "date_completed",
         "dates_previously_completed", "reopened_on", "reopened_reason", "assigned_to", "docs",
         "depends_on",
-        *EXECUTION_SCOPE_KEYS, *CLOSE_STORY_KEYS, *CRUCIAL_KEYS, *DEPLOY_KEYS,
+        *EXECUTION_SCOPE_KEYS, *CLOSE_STORY_KEYS, *USAGE_KEYS, *CRUCIAL_KEYS, *DEPLOY_KEYS,
         *EXTERNAL_REFS_KEYS,
     },
 }

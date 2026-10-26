@@ -1,0 +1,57 @@
+{
+  "script": "detect-tests.sh",
+  "version": 1,
+  "target": ".",
+  "target_absolute": "@TARGET@",
+  "target_type": "directory",
+  "repo_root": "@TARGET@",
+  "coverage_status": "covered",
+  "coverage_summary": "Tests were found for this target: 1 test file(s) inside the target.",
+  "repo_has_tests": true,
+  "target_test_files": [
+    "tests/app.test.js"
+  ],
+  "referencing_test_files": [],
+  "test_directories": [
+    "tests"
+  ],
+  "test_runner_configs": [
+    {
+      "name": "package.json",
+      "path": "package.json",
+      "runner": "npm test",
+      "detail": "node tests/app.test.js"
+    }
+  ],
+  "reference_names": [
+    ".env",
+    ".env.example",
+    "LICENSE",
+    "README.md",
+    "app.js",
+    "app.test",
+    "app.test.js",
+    "docs/README.md",
+    "helper.sh",
+    "main.py",
+    "package.json",
+    "requirements",
+    "requirements.txt",
+    "run.sh",
+    "src/app.js",
+    "src/helper.sh",
+    "src/lib/util.js",
+    "src/main.py",
+    "tests/app.test.js",
+    "tree",
+    "util.js"
+  ],
+  "repo_test_file_count": 1,
+  "repo_test_files_read": 0,
+  "target_files_considered": 11,
+  "files_walked": 11,
+  "walk_truncated": false,
+  "notices": [
+    "Target is not inside a git repository; repo root fell back to '@TARGET@'. The repo-wide test sweep is limited to that directory."
+  ]
+}

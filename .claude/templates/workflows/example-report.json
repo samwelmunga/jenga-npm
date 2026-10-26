@@ -1,0 +1,40 @@
+{
+  "id": "example-report",
+  "name": "Example report",
+  "description": "Select the high-priority items of an items file, confirm the selection, summarise it and render a markdown report. Deterministic: no model call, no network.",
+  "keywords": ["example", "report", "high priority"],
+  "examples": ["run the example report workflow on an items file"],
+  "inputs": [
+    {"name": "source", "description": "Path of a JSON items file: an array of objects with the fields id, title and priority."}
+  ],
+  "steps": [
+    {
+      "id": "select",
+      "type": "compute",
+      "command": "scripts/workflow/examples/example-report-select.sh",
+      "args": ["${inputs.source}"],
+      "checkpoint": true,
+      "outputs": [{"name": "item_ids", "kind": "data", "type": "id_list"}]
+    },
+    {
+      "id": "approve",
+      "type": "confirm",
+      "prompt": "These items were selected from ${inputs.source}: ${steps.select.outputs.item_ids}. Proceed with the report?",
+      "options": ["Proceed", "Stop"]
+    },
+    {
+      "id": "summarise",
+      "type": "compute",
+      "command": "scripts/workflow/examples/example-report-summarize.sh",
+      "args": ["${steps.select.outputs.item_ids}"],
+      "outputs": [{"name": "summary", "kind": "data", "type": "text"}]
+    },
+    {
+      "id": "report",
+      "type": "render",
+      "renderer": "markdown",
+      "template": "templates/workflows/example-report.md",
+      "outputs": [{"name": "report", "kind": "artifact", "type": "text"}]
+    }
+  ]
+}

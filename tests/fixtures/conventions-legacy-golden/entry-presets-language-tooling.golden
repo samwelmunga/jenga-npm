@@ -1,0 +1,27 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh presets language-tooling
+--- stdout
+[
+  {
+    "id": "pinned-runtime-with-lockfile",
+    "label": "Pinned runtime and committed lockfile",
+    "description": "The runtime version is pinned and the dependency lockfile is committed.",
+    "values": {
+      "version_policy": "pinned-runtime-and-lockfile",
+      "lockfile_committed": true
+    },
+    "placeholder_fields": []
+  },
+  {
+    "id": "latest-stable",
+    "label": "Latest stable, no pinning",
+    "description": "Use the latest stable runtime and dependencies without pinning.",
+    "values": {
+      "version_policy": "latest-stable",
+      "lockfile_committed": false
+    },
+    "placeholder_fields": []
+  }
+]
+--- stderr
+--- exit
+0

@@ -1,4 +1,8 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001'
+// E47_S08_T03: the dashboard no longer owns a fixed port, so a page served over http(s) calls its own origin
+// (the API serves the built UI itself, and the Vite dev server proxies /v1 to the API). Only a page that has
+// no server of its own (file://, data:) falls back to the historical default port.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
+  ?? (typeof location !== 'undefined' && /^https?:$/.test(location.protocol) ? '' : 'http://localhost:3001')
 
 // E47_S04_T03 — embedded snapshot data support.
 //
@@ -23,6 +27,7 @@ const SNAPSHOT_ROUTE_KEYS = {
   '/v1/rapports': 'rapports',
   '/v1/todo-warnings': 'todoWarnings',
   '/v1/ideas': 'ideas',
+  '/v1/security': 'security',
 }
 
 let embeddedSnapshotLoaded = false

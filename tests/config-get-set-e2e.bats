@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# End-to-end get/set coverage for `jenga config` across all five project/configs files (E68_S03_T01).
+# End-to-end get/set coverage for `jenga config` across all six project/configs files (E68_S03_T01).
 #
 # tests/config-command.bats (E68_S02_T04) pins the command's mechanics with hand-picked keys. This file is the
 # story-level matrix: it is DATA-DRIVEN over the shipped descriptors (templates/config-descriptors/*.json, read with
@@ -9,14 +9,14 @@
 #
 # Contract under test: project/documentation/config-descriptors.md (exit codes 0/2/3/4/5/6, descriptor fields) and
 # the E68_S03 acceptance criteria:
-#   - get and set against a scratch copy of each of the five config files, asserting resulting file contents,
+#   - get and set against a scratch copy of each of the six config files, asserting resulting file contents,
 #     stdout, exit codes and version bumps
 #   - a failed validation (wrong type, below min, above max, outside allowed, failing pattern) leaves EVERY config
 #     file byte-identical (cmp)
 #   - read-only keys are rejected by set with exit 5 and no version counter changes anywhere
 #   - threshold_version / config_version move by exactly 1 per successful set, and not at all for an unchanged value
 #
-# Isolation. setup() builds a scratch project under $BATS_TEST_TMPDIR holding COPIES of this repo's five real config
+# Isolation. setup() builds a scratch project under $BATS_TEST_TMPDIR holding COPIES of this repo's six real config
 # files and points JENGA_PROJECT_ROOT at it (the same project-root override tests/config-command.bats uses, read by
 # scripts/resolve-root.sh). The repo's own project/configs/ is only ever READ; the last test checksums it around a
 # set/get session to prove it. The real binary (node bin/jenga.js config ...) runs every case: no model, no network,
@@ -34,13 +34,15 @@ load helpers/assertions
 REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd -P)"
 JENGA="$REPO_ROOT/bin/jenga.js"
 DESCRIPTORS="$REPO_ROOT/templates/config-descriptors"
-CONFIG_FILES="scope-thresholds playbook-config checklists workflow test-config"
+CONFIG_FILES="scope-thresholds playbook-config checklists workflow test-config audit-config"
 
 setup() {
   PROJ="$BATS_TEST_TMPDIR/proj"
   CFG="$PROJ/project/configs"
   mkdir -p "$CFG"
   cp "$REPO_ROOT"/project/configs/*.json "$CFG/"
+  # audit-config is exercised from the shipped template, so this repository's own (stricter) setting never shifts the expected values
+  cp "$REPO_ROOT/skills/j-init/assets/audit-config_template.json" "$CFG/audit-config.json"
   export JENGA_PROJECT_ROOT="$PROJ"
   unset JENGA_CONFIG_DESCRIPTORS_DIR
   # Safety net: nothing below may ever write to the repo's own configs.
@@ -126,22 +128,26 @@ make_fixture_descriptors() {
 # The matrix is real: the descriptors cover all five files, and the scratch copy is a copy
 # ================================================================================================================
 
-@test "the shipped descriptors cover the five config files that have an instance plus conventions, and the scratch project holds copies of the five" {
+@test "the shipped descriptors cover the six config files that have an instance plus conventions, and the scratch project holds copies of the six" {
   for f in $CONFIG_FILES; do
     [ -f "$DESCRIPTORS/$f.json" ]
-    cmp "$REPO_ROOT/project/configs/$f.json" "$CFG/$f.json"
+    if [ "$f" = audit-config ]; then
+      cmp "$REPO_ROOT/skills/j-init/assets/audit-config_template.json" "$CFG/$f.json"
+    else
+      cmp "$REPO_ROOT/project/configs/$f.json" "$CFG/$f.json"
+    fi
   done
   # conventions.json is described but has no instance in this repo, so it is not in the get/set matrix
   [ -f "$DESCRIPTORS/conventions.json" ]
   [ ! -e "$CFG/conventions.json" ]
-  [ "$(ls "$DESCRIPTORS" | grep -v '^_' | wc -l | tr -d ' ')" -eq 6 ]
-  [ "$(ls "$CFG" | wc -l | tr -d ' ')" -eq 5 ]
+  [ "$(ls "$DESCRIPTORS" | grep -v '^_' | wc -l | tr -d ' ')" -eq 7 ]
+  [ "$(ls "$CFG" | wc -l | tr -d ' ')" -eq 6 ]
 }
 
-@test "the editable keys are the integer settings of scope-thresholds and playbook-config plus test-config's two commit_* and three test_run_* strings; checklists and workflow have none" {
+@test "the editable keys are audit-config's mode, severity_threshold, offline_behavior and production_only, the integer settings of scope-thresholds and playbook-config plus test-config's two commit_* and three test_run_* strings; checklists and workflow have none" {
   run editable_keys "$DESCRIPTORS"
   [ "$status" -eq 0 ]
-  [ "$(echo "$output" | cut -d' ' -f1 | sort -u | tr '\n' ' ')" = "playbook-config scope-thresholds test-config " ]
+  [ "$(echo "$output" | cut -d' ' -f1 | sort -u | tr '\n' ' ')" = "audit-config playbook-config scope-thresholds test-config " ]
   [ "$(echo "$output" | grep '^test-config ' | cut -d' ' -f2 | sort | tr '\n' ' ')" = "commit_prompt_default commit_scope_map_file test_run_epic test_run_story test_run_task " ]
   for f in checklists workflow; do
     [ "$(jq '[.keys[] | select(.editable)] | length' "$DESCRIPTORS/$f.json")" -eq 0 ]
@@ -157,7 +163,7 @@ make_fixture_descriptors() {
 # get: every key of every file reads back what is in the file
 # ================================================================================================================
 
-@test "get prints the file's own value for every key of all five configs, exit 0, nothing on stderr" {
+@test "get prints the file's own value for every key of all six configs, exit 0, nothing on stderr" {
   local n=0 f key
   for f in $CONFIG_FILES; do
     for key in $(jq -r '.keys[].key' "$DESCRIPTORS/$f.json"); do
@@ -168,7 +174,7 @@ make_fixture_descriptors() {
       n=$((n + 1))
     done
   done
-  # 3 + 2 + 9 + 1 + 5 keys today; a descriptor key added later raises the floor, never lowers it
+  # 3 + 2 + 9 + 1 + 5 + 5 keys today; a descriptor key added later raises the floor, never lowers it
   [ "$n" -ge 20 ]
 }
 
@@ -290,7 +296,7 @@ make_fixture_descriptors() {
   jc set scope-thresholds.inline_max_files 0
   [ "$status" -eq 4 ]
   [ "$(find "$CFG" -name '*.tmp' -o -name '.*.tmp' | wc -l | tr -d ' ')" -eq 0 ]
-  [ "$(ls -A "$CFG" | wc -l | tr -d ' ')" -eq 5 ]
+  [ "$(ls -A "$CFG" | wc -l | tr -d ' ')" -eq 6 ]
   [ "$(cfgval scope-thresholds threshold_version)" = "$(jq -r '.threshold_version' "$BATS_TEST_TMPDIR/snap/scope-thresholds.json")" ]
 }
 
@@ -575,6 +581,54 @@ make_fixture_descriptors() {
 }
 
 # ================================================================================================================
+# audit-config (E85_S01_T01): string-enum and boolean keys, each bumping config_version
+# ================================================================================================================
+
+@test "audit-config: the shipped template holds exactly the five keys at their documented defaults" {
+  [ "$(jq -c . "$REPO_ROOT/skills/j-init/assets/audit-config_template.json")" = '{"config_version":1,"mode":"ask","severity_threshold":"high","offline_behavior":"warn","production_only":false}' ]
+  jc get audit-config.severity_threshold
+  [ "$status" -eq 0 ]
+  [ "$output" = "high" ]
+}
+
+@test "audit-config: a set of an allowed string value or the boolean writes it and bumps config_version by 1" {
+  jc set audit-config.severity_threshold critical
+  [ "$status" -eq 0 ]
+  [ "$(cfgval audit-config severity_threshold)" = "critical" ]
+  [ "$(cfgval audit-config config_version)" = "2" ]
+  jc set audit-config.mode on
+  [ "$status" -eq 0 ]
+  [ "$(cfgval audit-config mode)" = "on" ]
+  jc set audit-config.production_only true
+  [ "$status" -eq 0 ]
+  [ "$(cfgval audit-config production_only)" = "true" ]
+  jc set audit-config.offline_behavior fail
+  [ "$status" -eq 0 ]
+  [ "$(cfgval audit-config offline_behavior)" = "fail" ]
+  [ "$(cfgval audit-config config_version)" = "5" ]
+}
+
+@test "audit-config: a value outside the allowed list exits 4 and leaves the file byte-identical" {
+  snap
+  jc set audit-config.severity_threshold urgent
+  [ "$status" -eq 4 ]
+  jc set audit-config.mode always
+  [ "$status" -eq 4 ]
+  jc set audit-config.offline_behavior ignore
+  [ "$status" -eq 4 ]
+  jc set audit-config.production_only maybe
+  [ "$status" -eq 4 ]
+  all_unchanged
+}
+
+@test "audit-config: config_version is read-only, so a set exits 5 and nothing is written" {
+  snap
+  jc set audit-config.config_version 5
+  [ "$status" -eq 5 ]
+  all_unchanged
+}
+
+# ================================================================================================================
 # exit 3 and exit 6
 # ================================================================================================================
 
@@ -600,7 +654,7 @@ make_fixture_descriptors() {
   all_unchanged
 }
 
-@test "exit 6: a malformed config file fails get for each of the five files, and set for each editable one, leaving it untouched" {
+@test "exit 6: a malformed config file fails get for each of the six files, and set for each editable one, leaving it untouched" {
   local f key
   for f in $CONFIG_FILES; do
     printf '{ "broken": ' > "$CFG/$f.json"
@@ -634,7 +688,7 @@ make_fixture_descriptors() {
   jc set scope-thresholds.inline_max_files 4
   [ "$status" -eq 6 ]
   [ ! -e "$CFG/scope-thresholds.json" ]
-  [ "$(ls -A "$CFG" | wc -l | tr -d ' ')" -eq 4 ]
+  [ "$(ls -A "$CFG" | wc -l | tr -d ' ')" -eq 5 ]
 }
 
 @test "exit 6: a config file whose version counter is missing is refused, because a bump cannot be applied" {

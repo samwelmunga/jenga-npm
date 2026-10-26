@@ -1,0 +1,7 @@
+$ bash @REPO@/skills/j-commit/scripts/commit-subject-check.sh add retry
+--- stdout
+kind=non-board; no applicable commit-format convention (conventions file invalid)
+--- stderr
+commit-subject-check.sh: conventions file is invalid, ignored: @PROJ@/project/configs/conventions.json
+--- exit
+0

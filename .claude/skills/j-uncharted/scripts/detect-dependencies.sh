@@ -61,7 +61,8 @@
 #       "declared_dependencies": [ "<name>", ... ] | null   // null = not parsed / parse failed
 #     }
 #   ],
-#   "notices": [ "<non-fatal diagnostic>", ... ]
+#   "notices": [ "<non-fatal diagnostic>", ... ],
+#   "secret_files_skipped": { "count": <int>, "paths": [ "<relative name>", ... ] }   // OPTIONAL, see below
 # }
 #
 # ---------------------------------------------------------------------------
@@ -75,12 +76,26 @@
 #     understanding document, not a build system. Every entry carries its raw specifier
 #     and example source files so the reader can verify.
 #
+#   - Secret-looking files (E85_S04_T07): a file whose base name matches the shared list in
+#     secret-files.sh (environment files, auth files, private keys) is never opened, never counted,
+#     never listed and never resolved as an import target, whether it is found by the walk or is the
+#     single-file target itself. The list is read ONCE at start-up from `secret-files.sh patterns`
+#     and `secret-files.sh templates`; there is no second copy of the patterns in this script.
+#     Skips are reported two ways: the OPTIONAL top-level "secret_files_skipped" key (count plus up to
+#     25 sorted relative names; present ONLY when something was skipped, so output for a tree without
+#     such files is byte-identical to before) and one notice line on stderr from secret-files.sh
+#     ("N secret-looking file(s) skipped (names listed, contents never read): ..."), printed once per
+#     run and only when N > 0. Consumers that read the other keys can ignore the new one.
+#
 # Exit codes:
 #   0 — success (including every graceful-degradation path above)
 #   1 — usage error (wrong number of arguments)
 #   2 — target path does not exist
+#   3 — the shared secret-file list (secret-files.sh) could not be loaded (fails closed)
 
 set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 
 usage() {
   cat <<EOF
@@ -144,16 +159,52 @@ REPO_ROOT=$(git -C "$TARGET_DIR" rev-parse --show-toplevel 2>/dev/null || true)
 # Scan and emit
 # ---------------------------------------------------------------------------
 
-python3 - "$TARGET_ABS" "$REPO_ROOT" <<'PY'
+python3 - "$TARGET_ABS" "$REPO_ROOT" "$SCRIPT_DIR/secret-files.sh" <<'PY'
+import fnmatch
 import json
 import os
 import re
+import subprocess
 import sys
 
 TARGET = sys.argv[1]
 REPO_ROOT = sys.argv[2]
+SECRET_FILES_SH = sys.argv[3]
 
 notices = []
+
+# ---------------------------------------------------------------------------
+# Secret-looking files (E85_S04_T07). The one list lives in secret-files.sh; it is read here once and
+# applied to base names only, so a matching file is never opened, counted or listed.
+# ---------------------------------------------------------------------------
+
+
+def _secret_files_list(what):
+    try:
+        res = subprocess.run(["bash", SECRET_FILES_SH, what], stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, universal_newlines=True, check=True)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        sys.stderr.write("detect-dependencies.sh: error: cannot load the secret-file list from %s: %s\n"
+                         % (SECRET_FILES_SH, exc))
+        sys.exit(3)
+    return [line for line in res.stdout.split("\n") if line]
+
+
+SECRET_PATTERNS = _secret_files_list("patterns")
+SECRET_TEMPLATES = _secret_files_list("templates")
+secret_skipped = set()
+
+
+def is_secret_name(name):
+    """Same rule as secret-files.sh: lower-cased base name, not a template, matches some pattern."""
+    name = os.path.basename(name.rstrip("/")).lower()
+    if not name or name in SECRET_TEMPLATES:
+        return False
+    return any(fnmatch.fnmatchcase(name, g) for g in SECRET_PATTERNS)
+
+
+def note_secret(path):
+    secret_skipped.add(rel(path))
 
 if not REPO_ROOT:
     REPO_ROOT = TARGET if os.path.isdir(TARGET) else os.path.dirname(TARGET)
@@ -208,6 +259,9 @@ def rel(path):
 def walk_files(root):
     """Enumerate files under root (or [root] when root is a file), honouring SKIP_DIRS."""
     if os.path.isfile(root):
+        if is_secret_name(root):
+            note_secret(root)
+            return [], False
         return [root], False
     out = []
     for dirpath, dirnames, filenames in os.walk(root):
@@ -221,6 +275,9 @@ def walk_files(root):
             keep.append(d)
         dirnames[:] = keep
         for fn in sorted(filenames):
+            if is_secret_name(fn):
+                note_secret(os.path.join(dirpath, fn))
+                continue
             out.append(os.path.join(dirpath, fn))
             if len(out) >= MAX_FILES:
                 return out, True
@@ -228,6 +285,8 @@ def walk_files(root):
 
 
 def read_text(path):
+    if is_secret_name(path):  # defence in depth: the walk already filters these out
+        return None
     try:
         if os.path.getsize(path) > MAX_BYTES:
             return None
@@ -309,9 +368,11 @@ def resolve_path(base_dir, spec, suffixes):
     for cand in candidates:
         for suffix in suffixes:
             probe = cand + suffix
+            if is_secret_name(probe):  # never stat or name a secret-looking file
+                continue
             if os.path.isfile(probe):
                 return rel(probe)
-        if not suffixes and os.path.exists(cand):
+        if not suffixes and not is_secret_name(cand) and os.path.exists(cand):
             return rel(cand)
     return None
 
@@ -365,6 +426,8 @@ def _py_resolve(dotted, base_dir):
     parts = dotted.split(".")
     for root in (base_dir, REPO_ROOT):
         stem = os.path.join(root, *parts)
+        if is_secret_name(stem + ".py"):
+            continue
         if os.path.isfile(stem + ".py"):
             return rel(stem + ".py")
         if os.path.isfile(os.path.join(stem, "__init__.py")):
@@ -786,5 +849,17 @@ result = {
     "notices": notices,
 }
 
+if secret_skipped:
+    result["secret_files_skipped"] = {
+        "count": len(secret_skipped),
+        "paths": sorted(secret_skipped)[:25],
+    }
+
 print(json.dumps(result, indent=2))
+sys.stdout.flush()
+
+# One shared notice line on stderr, once per run, only when something was skipped (names only).
+if secret_skipped:
+    subprocess.call(["bash", SECRET_FILES_SH, "notice", str(len(secret_skipped))]
+                    + sorted(secret_skipped)[:1000])
 PY

@@ -1,0 +1,14 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh show --category commit-format
+--- stdout
+{
+  "source": "preset",
+  "preset": "conventional-commits",
+  "summary": "Conventional Commits",
+  "values": {
+    "style": "conventional-commits",
+    "message_regex": "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\\([^)]+\\))?!?: .+"
+  }
+}
+--- stderr
+--- exit
+0

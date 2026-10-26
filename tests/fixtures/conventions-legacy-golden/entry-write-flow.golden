@@ -1,0 +1,151 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh draft-init
+--- stdout
+@TMP@/conventions-draft.@RAND@
+--- stderr
+conventions-entry.sh: no recorded conventions yet: starting blank
+--- exit
+0
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh draft-set commit-format --draft @TMP@/conventions-draft.@RAND@ --source custom --summary Tracker key then summary --value style=tracker-key --value message_regex=^[A-Z]+-[0-9]+ .+ --value subject_max_length=50
+--- stdout
+{"ok":true,"action":"draft-set","category":"commit-format","draft":"@TMP@/conventions-draft.@RAND@","changed":true}
+--- stderr
+--- exit
+0
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh draft-set naming --draft @TMP@/conventions-draft.@RAND@ --source preset --preset kebab-files-camel-identifiers
+--- stdout
+{"ok":true,"action":"draft-set","category":"naming","draft":"@TMP@/conventions-draft.@RAND@","changed":true}
+--- stderr
+--- exit
+0
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh draft-set testing --draft @TMP@/conventions-draft.@RAND@ --source custom --summary unit tests for new logic --value expectation=unit tests
+--- stdout
+{"ok":true,"action":"draft-set","category":"testing","draft":"@TMP@/conventions-draft.@RAND@","changed":true}
+--- stderr
+--- exit
+0
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh draft-skip testing --draft @TMP@/conventions-draft.@RAND@
+--- stdout
+{"ok":true,"action":"draft-skip","category":"testing","draft":"@TMP@/conventions-draft.@RAND@","changed":true}
+--- stderr
+--- exit
+0
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh draft-diff --draft @TMP@/conventions-draft.@RAND@ --format text
+--- stdout
++ commit-format: Tracker key then summary
++ naming: kebab-case files, camelCase identifiers
+--- stderr
+--- exit
+0
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh draft-diff --draft @TMP@/conventions-draft.@RAND@
+--- stdout
+{
+  "added": [
+    "commit-format",
+    "naming"
+  ],
+  "removed": [],
+  "changed": [],
+  "unchanged": [],
+  "categories": [
+    {
+      "id": "commit-format",
+      "label": "Commit format",
+      "status": "added",
+      "before": null,
+      "after": {
+        "source": "custom",
+        "summary": "Tracker key then summary",
+        "values": {
+          "style": "tracker-key",
+          "message_regex": "^[A-Z]+-[0-9]+ .+",
+          "subject_max_length": 50
+        }
+      }
+    },
+    {
+      "id": "naming",
+      "label": "Naming",
+      "status": "added",
+      "before": null,
+      "after": {
+        "source": "preset",
+        "preset": "kebab-files-camel-identifiers",
+        "summary": "kebab-case files, camelCase identifiers",
+        "values": {
+          "identifier_case": "camelCase",
+          "file_case": "kebab-case"
+        }
+      }
+    }
+  ]
+}
+--- stderr
+--- exit
+0
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh commit --draft @TMP@/conventions-draft.@RAND@
+--- stdout
+{"ok":true,"action":"commit","path":"@PROJ@/project/configs/conventions.json","registry":"@PROJ@/project/configs/checklists.json","changed":true,"categories":2,"generator":"conventions checklist: 2 added, 0 updated, 0 removed, 0 unchanged (registry seeded from the shipped default)"}
+--- stderr
+--- exit
+0
+=== file project/configs/conventions.json
+{
+  "conventions_version": 1,
+  "categories": {
+    "commit-format": {
+      "source": "custom",
+      "summary": "Tracker key then summary",
+      "values": {
+        "style": "tracker-key",
+        "message_regex": "^[A-Z]+-[0-9]+ .+",
+        "subject_max_length": 50
+      }
+    },
+    "naming": {
+      "source": "preset",
+      "preset": "kebab-files-camel-identifiers",
+      "summary": "kebab-case files, camelCase identifiers",
+      "values": {
+        "identifier_case": "camelCase",
+        "file_case": "kebab-case"
+      }
+    }
+  }
+}
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh draft-init
+--- stdout
+@TMP@/conventions-draft.@RAND@
+--- stderr
+conventions-entry.sh: seeded from the recorded conventions in @PROJ@/project/configs/conventions.json (2 categories)
+--- exit
+0
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh commit --draft @TMP@/conventions-draft.@RAND@
+--- stdout
+{"ok":true,"action":"commit","path":"@PROJ@/project/configs/conventions.json","registry":"@PROJ@/project/configs/checklists.json","changed":false,"categories":2,"generator":"conventions checklist: 0 added, 0 updated, 0 removed, 2 unchanged"}
+--- stderr
+--- exit
+0
+=== file project/configs/conventions.json
+{
+  "conventions_version": 1,
+  "categories": {
+    "commit-format": {
+      "source": "custom",
+      "summary": "Tracker key then summary",
+      "values": {
+        "style": "tracker-key",
+        "message_regex": "^[A-Z]+-[0-9]+ .+",
+        "subject_max_length": 50
+      }
+    },
+    "naming": {
+      "source": "preset",
+      "preset": "kebab-files-camel-identifiers",
+      "summary": "kebab-case files, camelCase identifiers",
+      "values": {
+        "identifier_case": "camelCase",
+        "file_case": "kebab-case"
+      }
+    }
+  }
+}

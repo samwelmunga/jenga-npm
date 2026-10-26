@@ -32,7 +32,8 @@ health-check, or build logic** of its own. All actual implementation lives in th
 this skill wraps; do not duplicate it here or in `scripts/launch.sh`.
 
 `--snapshot` (E47_S04_T02/T03) is a second, independent mode: it captures the API's `/v1/board`,
-`/v1/history`, and `/v1/architecture` responses once, bakes that data inline into the UI build, and
+`/v1/history`, `/v1/architecture`, `/v1/health`, `/v1/documentation`, `/v1/rapports`,
+`/v1/todo-warnings`, `/v1/ideas`, and `/v1/security` responses once, bakes that data inline into the UI build, and
 inlines all JS/CSS into a single, fully self-contained HTML file (default `jenga.html`) — viewable
 via `file://` with no running server, so it can be handed to someone on another device. It does not
 start a long-running server and does not open a browser; it is a one-shot export. `--data-url`
@@ -40,6 +41,31 @@ start a long-running server and does not open a browser; it is a one-shot export
 self-contained, it can be base64-encoded into a `data:text/html;base64,...` URI that any browser can
 open directly — no shared filesystem, hosting, or git round-trip needed, which matters when the
 agent is running remotely (e.g. a cloud/remote session) and cannot hand the user a local path.
+
+**Ports (E47_S08_T03).** With no `--port` the dashboard binds the first port verified free by actually binding
+it, starting at 3001, and prints the URL it really bound (`Dashboard API running at http://localhost:<port>`; relay
+that URL, never assume 3001). An explicit `--port <n>` or `JENGA_API_PORT` that is busy exits non-zero with
+"port <n> is already in use" and is never replaced. The chosen port is recorded in
+`project/queue/dashboard-port.json` (removed on a graceful stop), so `open` needs no port flag: if this project's
+dashboard is already running it opens that one instead of starting a second, and `dashboard-open.cjs` resolves
+`--port`, then `JENGA_API_PORT`, then the recorded port, then 3001. The built UI calls its own origin, and the Vite
+dev server (`npm run dev` in `project/app/ui`) takes a verified-free port from 5173 and proxies `/v1` to the API's
+real port, so start the API first. The helper is `scripts/find-free-port.cjs` (dependency-free, reusable).
+
+**Leave guard (E47_S08_T02).** The UI asks "Are you sure you want to close down the dashboard?" (Stay/Leave, Esc = Stay)
+when the browser Back button would leave it, and the browser's native prompt appears on tab close or reload. This
+needs no server, so it is identical in a `file://` or `data:` snapshot: Back shows the confirmation and Leave goes
+back to the page the user came from. If the snapshot was opened as the first page of a tab, there is nowhere to go
+back to: Leave closes the dialog, turns the guard off and tries `window.close()` (honoured only for script-opened
+windows), so the user is never trapped. Chrome skips history entries a page pushed without any user interaction, so
+a snapshot nobody has clicked in leaves on the first Back, without the dialog. The logic is `project/app/ui/src/hooks/useLeaveGuard.js`.
+
+The dashboard includes a **Security** tab (`GET /v1/security`, also captured by `--snapshot`, so it renders
+offline too). It shows the credential-access findings table and the dependency-audit results, read from
+`credential-findings.json`, the `audit_result`/`audit_consent` events in `events.json` and `audit-config.json`;
+it only reads, and a project with no `credential-findings.json` sees "No credential scan is recorded yet". The route's
+payload is in `project/documentation/api-contract.md` (section 6) and the data sources and refresh commands are in
+`project/documentation/security-audits.md` (section 9).
 
 ## Instructions
 
@@ -86,8 +112,9 @@ agent is running remotely (e.g. a cloud/remote session) and cannot hand the user
      *invoking* project, per `E47_S02`'s generalized data-source resolution — not this repo's own
      data, unless that happens to be the invoking project.
    - Runs `E47_S04_T02`'s capture step
-     (`project/app/api/scripts/capture-snapshot.js`) to collect `/v1/board`, `/v1/history`, and
-     `/v1/architecture` into one JSON artifact.
+     (`project/app/api/scripts/capture-snapshot.js`) to collect `/v1/board`, `/v1/history`,
+     `/v1/architecture`, `/v1/health`, `/v1/documentation`, `/v1/rapports`, `/v1/todo-warnings`,
+     `/v1/ideas`, and `/v1/security` into one JSON artifact.
    - Runs `project/app/ui/scripts/build-snapshot-html.cjs`, which inlines the built `dist/`
      (JS + CSS) into a single `index.html` and embeds that JSON as a
      `<script id="jenga-dashboard-data">` tag. It has **zero dependencies**, so it behaves
@@ -124,7 +151,7 @@ agent is running remotely (e.g. a cloud/remote session) and cannot hand the user
 
    In both cases, print the rest of the script's stdout/stderr back to the user as-is — do not
    reinterpret, summarize away, or suppress error output from the underlying scripts; they already
-   produce user-facing messages (e.g. "Dashboard API running at http://localhost:3001",
+   produce user-facing messages (e.g. "Dashboard API running at http://localhost:<port>",
    "Snapshot dashboard written to: <path>").
 
 6. **`start` and `open` are long-running.** `dashboard:start` and `dashboard:open` run a foreground

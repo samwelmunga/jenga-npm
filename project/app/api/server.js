@@ -43,10 +43,12 @@ const rapportsRouter      = require('./routes/rapports');
 const ideasRouter         = require('./routes/ideas');
 const documentationRouter = require('./routes/documentation');
 const todoWarningsRouter  = require('./routes/todo-warnings');
+const securityRouter      = require('./routes/security');
 
 const { API_VERSION } = require('./response');
 
-const PORT = parseInt(process.env.JENGA_API_PORT || '3001', 10);
+// E47_S08_T03: JENGA_API_PORT, when set, is an explicit request: bind exactly it or fail. Unset, the first
+// verified-free port from 3001 is bound (see scripts/find-free-port.cjs). Resolved when started directly.
 
 const app = express();
 
@@ -63,6 +65,7 @@ app.use('/v1/rapports',      rapportsRouter);
 app.use('/v1/ideas',         ideasRouter);
 app.use('/v1/documentation', documentationRouter);
 app.use('/v1/todo-warnings', todoWarningsRouter);
+app.use('/v1/security',      securityRouter);
 
 // ── Fallback routes ────────────────────────────────────────────────────────────
 // Registered on demand (not at require-time) so callers that mount additional
@@ -86,10 +89,36 @@ let server;
 
 if (require.main === module) {
   attachFallbackRoutes(app);
-  server = app.listen(PORT, () => {
-    console.log(`[jenga-api] v${API_VERSION} listening on port ${PORT}`);
-  });
-  registerShutdownHandlers(server);
+  const path = require('path');
+  const pkgScripts = path.resolve(__dirname, '../../../scripts');
+  const { listenOnFreePort } = require(path.join(pkgScripts, 'find-free-port.cjs'));
+  const portState = require(path.join(pkgScripts, 'dashboard-port-state.cjs'));
+  const raw = process.env.JENGA_API_PORT;
+  const explicit = raw ? Number(raw) : null;
+  if (raw && (!Number.isInteger(explicit) || explicit < 1 || explicit > 65535)) {
+    console.error(`[jenga-api] JENGA_API_PORT must be a valid port number (1-65535), got: ${raw}`);
+    process.exit(1);
+  }
+  listenOnFreePort(app, { explicit, start: portState.DEFAULT_PORT })
+    .then(({ server: srv, port }) => {
+      server = srv;
+      console.log(`[jenga-api] v${API_VERSION} listening on port ${port}`);
+      let projectRoot = null;
+      try { projectRoot = require('./lib/resolve-project-root').resolveProjectRoot(); } catch { /* not in a project */ }
+      if (projectRoot) {
+        portState.writeState(projectRoot, { port });
+        process.on('exit', () => portState.clearState(projectRoot));
+      }
+      registerShutdownHandlers(server);
+    })
+    .catch(err => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`[jenga-api] port ${explicit} is already in use (JENGA_API_PORT); free it or unset JENGA_API_PORT to pick a free port.`);
+      } else {
+        console.error(`[jenga-api] could not start: ${err.message}`);
+      }
+      process.exit(1);
+    });
 }
 
 // ── Graceful Shutdown ──────────────────────────────────────────────────────────

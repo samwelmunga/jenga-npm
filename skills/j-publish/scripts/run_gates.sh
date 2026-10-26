@@ -4,21 +4,34 @@ set -euo pipefail
 # /publish quality gate runner
 #
 # Invocation:
-#   run_gates.sh <phase> <target> <publish_json_path> [--non-interactive]
+#   run_gates.sh <phase> <target> <publish_json_path> [--non-interactive] [--ci]
 #
 # Arguments:
 #   <phase>              pre | post
 #   <target>             target name from publish.json
 #   <publish_json_path>  path to publish.json
-#   --non-interactive    disable prompts; any gate failure aborts immediately
+#   --non-interactive    disable prompts; any gate failure aborts immediately. Says nothing about audit consent
+#   --ci                 the caller is a committed CI workflow: the standing consent for the dependency audit
 #
 # Exit codes:
 #   0  all required gates passed (or were intentionally skipped with warnings)
 #   2  one or more gates failed
+#
+# Built-in "audit" gate (pre phase, epic E85): npm and npm-ci targets run scripts/audit-deps.sh against
+# $REPO_ROOT (the directory holding the package.json that npm_pipeline.sh publishes) after the mandatory
+# gates. It passes --ci only when CI consent is present and never --approved. CI consent is exactly one of:
+# this script's own --ci argument, CI=true in the environment, or GITHUB_ACTIONS=true in the environment.
+# --non-interactive (which publish_deploy.sh also sends for a human's `deploy --yes`) and a missing tty are
+# NOT consent, so under audit mode ask a --yes run reports "audit:skipped (no consent)". Outcomes: exit 0 passed (an
+# "unavailable" result under offline_behavior warn is a pass with a visible warning); exit 1 (findings at or
+# above the threshold) fails the gate, or, interactively, asks "proceed anyway / stop"; exit 2 or 3 fails;
+# exit 4 (no consent: audit mode ask or off) is reported as skipped, never as passed or failed. Every result
+# that carries JSON is handed to scripts/audit-record.sh. Other target types report
+# "audit:skipped (not an npm target)".
 
 usage() {
   cat <<'USAGE'
-Usage: run_gates.sh <phase> <target> <publish_json_path> [--non-interactive]
+Usage: run_gates.sh <phase> <target> <publish_json_path> [--non-interactive] [--ci]
 USAGE
 }
 
@@ -31,7 +44,7 @@ fi
 PUBLISH_HISTORY="$REPO_ROOT/project/logs/publish-history.json"
 CUSTOM_SCRIPT_PATTERN='^[./a-zA-Z0-9_-]+$'
 
-if [[ $# -lt 3 || $# -gt 4 ]]; then
+if [[ $# -lt 3 || $# -gt 5 ]]; then
   usage >&2
   exit 1
 fi
@@ -40,22 +53,35 @@ PHASE="$1"
 TARGET_NAME="$2"
 PUBLISH_JSON="$3"
 NON_INTERACTIVE=0
+# 1 only on a genuine CI signal: this script's --ci argument, CI=true or GITHUB_ACTIONS=true. Neither
+# --non-interactive (also sent for a human's `deploy --yes`) nor a missing tty is consent for a dependency
+# audit, so the audit gate keys off this alone.
+CI_CONSENT=0
 PROMPT_INPUT_FD=0
 
-if [[ $# -eq 4 ]]; then
-  if [[ "$4" != "--non-interactive" ]]; then
-    usage >&2
-    exit 1
-  fi
-  NON_INTERACTIVE=1
+if [[ "${CI:-}" == "true" || "${GITHUB_ACTIONS:-}" == "true" ]]; then
+  CI_CONSENT=1
 fi
+
+for extra_arg in "${@:4}"; do
+  case "$extra_arg" in
+    --non-interactive) NON_INTERACTIVE=1 ;;
+    --ci) CI_CONSENT=1 ;;
+    *)
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
 
 if [[ ! -t 0 ]]; then
   NON_INTERACTIVE=1
 fi
 
 if (( NON_INTERACTIVE == 0 )); then
-  if exec 3</dev/tty 2>/dev/null; then
+  # The 2>/dev/null is scoped to a group: on a bare `exec`, a redirection is permanent, which silenced stderr
+  # (failure blocks and prompts) for the rest of every interactive run.
+  if { exec 3</dev/tty; } 2>/dev/null; then
     PROMPT_INPUT_FD=3
   else
     NON_INTERACTIVE=1
@@ -513,12 +539,134 @@ resolve_gate_command() {
 
 RESULTS=()
 
+# Print the path of a repo-level script, trying the checkout layout first and the npm-installed layout second.
+find_repo_script() {
+  local name="$1"
+  local candidate
+  for candidate in \
+    "$SCRIPT_DIR/../../../scripts/$name" \
+    "$REPO_ROOT/scripts/$name" \
+    "$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/$name"; do
+    if [[ -f "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Interactive choice after an audit with findings: [p] proceed anyway / [s] stop. Returns 0 to proceed, 2 to stop.
+prompt_audit_proceed() {
+  local choice choice_lower
+  while true; do
+    read -r -u "$PROMPT_INPUT_FD" -p "[p] Proceed anyway / [s] Stop: " choice || choice="s"
+    choice_lower="$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')"
+    case "$choice_lower" in
+      p) return 0 ;;
+      s) return 2 ;;
+      *) echo "Please enter 'p' or 's'." >&2 ;;
+    esac
+  done
+}
+
+# Runs the dependency audit gate. Appends one entry to RESULTS. Returns 0 to continue, 2 to abort the run.
+run_audit_gate() {
+  local audit_script record_script package_dir out_file err_file audit_status audit_json_status
+  local -a audit_args
+
+  if [[ "$TARGET_TYPE" != "npm" && "$TARGET_TYPE" != "npm-ci" ]]; then
+    RESULTS+=("audit:skipped (not an npm target)")
+    log_info "Gate 'audit' skipped: not an npm target."
+    return 0
+  fi
+
+  if ! audit_script="$(find_repo_script audit-deps.sh)"; then
+    log_warn "Dependency audit skipped: audit-deps.sh was not found."
+    RESULTS+=("audit:skipped (audit-deps.sh not found)")
+    return 0
+  fi
+  record_script="$(find_repo_script audit-record.sh || true)"
+
+  # npm_pipeline.sh publishes $REPO_ROOT/package.json, so that is the directory to audit.
+  package_dir="$REPO_ROOT"
+  audit_args=(--dir "$package_dir" --json)
+  if (( CI_CONSENT )); then
+    audit_args+=(--ci)
+  fi
+
+  out_file="$(mktemp "${TMPDIR:-/tmp}/run-gates-audit.XXXXXX")"
+  err_file="$(mktemp "${TMPDIR:-/tmp}/run-gates-audit-err.XXXXXX")"
+  log_info "Running gate 'audit'..."
+  set +e
+  bash "$audit_script" "${audit_args[@]}" >"$out_file" 2>"$err_file"
+  audit_status=$?
+  set -e
+  LAST_GATE_COMMAND="audit-deps.sh ${audit_args[*]}"
+
+  audit_json_status=""
+  if jq -e 'type == "object"' "$out_file" >/dev/null 2>&1; then
+    audit_json_status="$(jq -r '.status // ""' "$out_file")"
+    if [[ -n "$record_script" ]]; then
+      bash "$record_script" result --file "$out_file" --agent j-publish >/dev/null 2>&1 \
+        || log_warn "Could not record the audit result (audit-record.sh failed)."
+    fi
+  fi
+
+  case $audit_status in
+    0)
+      if [[ "$audit_json_status" == "unavailable" ]]; then
+        log_warn "Dependency audit unavailable (offline_behavior warn); continuing. $(tail -n 1 "$err_file")"
+        RESULTS+=("audit:passed (unavailable, warning)")
+      else
+        RESULTS+=("audit:passed")
+      fi
+      log_info "Gate 'audit' passed."
+      rm -f "$out_file" "$err_file"
+      return 0
+      ;;
+    4)
+      log_warn "Dependency audit skipped: no consent ($(tail -n 1 "$err_file")). To opt in, set mode to on in project/configs/audit-config.json (for example: jenga config set audit-config.mode on) or run the audit explicitly (scripts/audit-deps.sh --approved after you agree); publish does not decide consent."
+      RESULTS+=("audit:skipped (no consent)")
+      rm -f "$out_file" "$err_file"
+      return 0
+      ;;
+    1)
+      RUN_STATUS=1
+      RUN_OUTPUT="$(jq -r '"threshold: \(.threshold)",
+        (.findings[]? | "- \(.severity): \(.name) (fix available: \(.fix_available))")' "$out_file" 2>/dev/null || true)"
+      ;;
+    *)
+      RUN_STATUS=$audit_status
+      RUN_OUTPUT="$(cat "$err_file" 2>/dev/null || true)"
+      ;;
+  esac
+  rm -f "$out_file" "$err_file"
+
+  # Failure paths: findings at or above the threshold (1), config error (2), unavailable under fail (3).
+  append_gate_failure_history "audit"
+  print_failure_block "audit"
+  if (( NON_INTERACTIVE )) || [[ $audit_status -ne 1 ]]; then
+    return 2
+  fi
+  if prompt_audit_proceed; then
+    log_warn "Proceeding despite dependency audit findings."
+    RESULTS+=("audit:failed (proceeded anyway)")
+    return 0
+  fi
+  log_error "Deploy stopped after the dependency audit reported findings."
+  return 2
+}
+
 run_gate() {
   local gate_json="$1"
   local gate_name
   local gate_status
 
   gate_name="$(printf '%s' "$gate_json" | jq -r '.name')"
+  if [[ "$gate_name" == "audit" && "$(printf '%s' "$gate_json" | jq -r '.source // ""')" == "audit" ]]; then
+    run_audit_gate
+    return $?
+  fi
   if attempt_gate "$gate_json" "$gate_name"; then
     gate_status=0
   else
@@ -573,6 +721,8 @@ build_gate_list() {
     for gate in "${mandatory_pre_gates[@]}"; do
       printf '{"name":"%s","config":{},"source":"mandatory"}\n' "$gate"
     done
+    # Built-in dependency audit gate, after the mandatory gates (run_audit_gate reports non-npm targets as skipped).
+    printf '{"name":"audit","config":{},"source":"audit"}\n'
   fi
 
   while IFS= read -r gate_json; do
@@ -582,7 +732,7 @@ build_gate_list() {
     if [[ "$PHASE" == "pre" ]]; then
       local is_mandatory=0
       local m_gate
-      for m_gate in "${mandatory_pre_gates[@]}"; do
+      for m_gate in "${mandatory_pre_gates[@]}" audit; do
         if [[ "$gate_name" == "$m_gate" ]]; then
           is_mandatory=1
           break

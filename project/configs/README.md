@@ -7,7 +7,7 @@ This directory holds version-controlled configuration files consumed by Jenga AI
 ## Changing settings: `jenga config`
 
 `jenga config` is the supported way to change the settings in this directory. It is a plain terminal command: it runs
-no model and costs no tokens. It lists the five config files below, shows each key with its current value, and edits the
+no model and costs no tokens. It lists the six config files below, shows each key with its current value, and edits the
 scalar (integer, string, boolean) settings with type and range validation. From a chat session, use `/jenga-config`
 instead (see "Changing settings from a chat session: `/jenga-config`" below); it runs this same command.
 
@@ -37,7 +37,7 @@ three things:
 
 | Action | What it runs | Result |
 |--------|--------------|--------|
-| list | `jenga config` | The interactive picker over the five config files and their keys. It needs a terminal; with none, use `get` or `set`, or run `jenga config` in a terminal. |
+| list | `jenga config` | The interactive picker over the six config files and their keys. It needs a terminal; with none, use `get` or `set`, or run `jenga config` in a terminal. |
 | get | `jenga config get <file-id>.<key>` | Prints one value (read-only keys can be read too). |
 | set | `jenga config set <file-id>.<key> <value>` | Validates, writes, and bumps the version counter where the file has one. |
 
@@ -76,7 +76,8 @@ and shared with everyone on the project. There is no local override layer and no
 ### What is editable
 
 Editable: the integer settings of `scope-thresholds.json` (every key except `threshold_version`), of
-`playbook-config.json` (`max_composition_depth`), and the string settings of `test-config.json`: the two that control the
+`playbook-config.json` (`max_composition_depth`), the string and boolean settings of `audit-config.json` (every key except
+`config_version`; see the "audit-config.json" section below), and the string settings of `test-config.json`: the two that control the
 commit-time test prompt (`commit_prompt_default`: empty, `skip`, `scoped` or `full`, empty meaning always prompt;
 `commit_scope_map_file`: a relative `.json` path, default `templates/test-scope-map.json`) and the three that set which
 test run must pass before a board scope is closed (the scope test policy, see the "Scope test policy" section of
@@ -105,8 +106,8 @@ see `project/documentation/config-descriptors.md` for the descriptor format and 
 
 ### Version counters
 
-`scope-thresholds.json` carries `threshold_version` and `playbook-config.json` carries `config_version`. A successful
-`jenga config set` of any key in those files increments the counter by exactly 1, in the same write as the value. A
+`scope-thresholds.json` carries `threshold_version`, while `playbook-config.json` and `audit-config.json` each carry
+`config_version`. A successful `jenga config set` of any key in those files increments the counter by exactly 1, in the same write as the value. A
 `set` that leaves the value unchanged writes nothing and does not bump. `checklists.json` has **no** bump rule:
 `checklist_version` is pinned to the integer `1` by `scripts/validate-checklists.sh`, so a counter that must not move
 cannot be incremented. `workflow.json` and `test-config.json` carry no counter.
@@ -191,6 +192,53 @@ playbook nesting-depth safety limits. Read by `skills/jenga/scripts/load-playboo
   existing `JENGA_PLAYBOOKS_TEST_ROOT` fixture override is reused for this lookup too — see that
   script's own header). Missing or invalid config is a soft fallback to the default, never a halt
   (composition depth-limiting is a safety default, not a required setup file).
+
+---
+
+## audit-config.json
+
+Settings for the dependency audit. Read by `scripts/audit-deps.sh`, the audit script that lands in a later task of
+`E85_S01`; until it exists nothing consults this file, but the keys, defaults and validation are already live in
+`jenga config`. A separate file from the others because it carries a different concern: whether, and how strictly,
+Jenga may run `npm audit` against the project, which contacts the network.
+
+### Fields
+
+| Field | Type | Default | Allowed | Description |
+|-------|------|---------|---------|-------------|
+| `config_version` | integer | 1 | read-only | Version counter for this config, mirroring `playbook-config.json`'s. Incremented by `jenga config set` on every successful change to a value below (read-only there, so it cannot be set directly); a hand edit must still increment it by hand. |
+| `mode` | string | `ask` | `off`, `ask`, `on` | Consent for running the audit; see "What `mode` means" below. |
+| `severity_threshold` | string | `high` | `low`, `moderate`, `high`, `critical` | The lowest severity that counts as a finding. Anything below it is ignored. |
+| `offline_behavior` | string | `warn` | `warn`, `fail` | What happens when the audit cannot run (no `npm`, no lockfile, registry unreachable). `warn` exits 0 with an "unavailable" status; `fail` exits 3. |
+| `production_only` | boolean | `false` | `true`, `false` | When `true`, only production dependencies are audited (`npm audit --omit=dev`). |
+
+### What `mode` means
+
+`mode` is the project's consent setting for the audit, so it decides who may start one:
+
+- `off` always refuses: the audit never runs, whatever flags are passed.
+- `ask` (the default) never audits without being told to: the audit runs only when the caller passes `--approved` or
+  `--ci`, and otherwise refuses.
+- `on` is the user's standing opt-in. It is made by the user's own `jenga config set audit-config.mode on` and nothing
+  else, and it lets the audit run without a flag.
+
+`--approved` is passed only by an agent that has just obtained the user's approval in the session and logged it.
+`--ci` is passed only by a committed workflow. An agent must never set `mode` to `on` itself: a standing opt-in the
+user did not make is not consent.
+
+### Changing a value
+
+```bash
+jenga config get audit-config.severity_threshold        # prints: high
+jenga config set audit-config.severity_threshold critical
+```
+
+A value outside the allowed list exits `4` and leaves the file byte-identical; `config_version` is refused with exit
+`5`.
+
+### Consuming Skills
+
+- `scripts/audit-deps.sh` — the only reader (added by a later task of `E85_S01`).
 
 ---
 

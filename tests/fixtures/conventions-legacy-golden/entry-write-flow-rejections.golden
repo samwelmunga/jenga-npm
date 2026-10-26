@@ -1,0 +1,48 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh draft-init
+--- stdout
+@TMP@/conventions-draft.@RAND@
+--- stderr
+conventions-entry.sh: no recorded conventions yet: starting blank
+--- exit
+0
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh draft-set commit-format --draft @TMP@/conventions-draft.@RAND@ --source custom --summary x --value style=s --strength block
+--- stdout
+--- stderr
+conventions-entry.sh: refused: block strength: categories.commit-format.strength is "block" - strength "block" is not allowed for conventions (use "advisory" or "confirm"). The draft was not changed.
+--- exit
+1
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh draft-set commit-format --draft @TMP@/conventions-draft.@RAND@ --source custom --summary x --value style=s --value subject_max_length=abc
+--- stdout
+--- stderr
+conventions-entry.sh: refused: wrong type: categories.commit-format.values.subject_max_length must be an integer (got string). The draft was not changed.
+--- exit
+1
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh draft-set commit-format --draft @TMP@/conventions-draft.@RAND@ --source custom --summary x --value style=s --value colour=red
+--- stdout
+--- stderr
+conventions-entry.sh: refused: unknown key in values: categories.commit-format.values.colour (allowed for commit-format: style, message_regex, subject_max_length, template, ref_source, ref_pattern, on_unresolved, apply_to_board_commits). The draft was not changed.
+--- exit
+1
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh draft-set not-a-category --draft @TMP@/conventions-draft.@RAND@ --source custom --summary x --value a=b
+--- stdout
+--- stderr
+conventions-entry.sh: unknown category: not-a-category (allowed: commit-format, branching, naming, code-comments, formatting-linting, testing, file-layout, language-tooling, documentation-placement, commit-trace)
+--- exit
+1
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh draft-show --draft @TMP@/conventions-draft.@RAND@
+--- stdout
+{"conventions_version":1,"categories":{}}
+--- stderr
+--- exit
+0
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh commit --draft @TMP@/conventions-draft.@RAND@
+--- stdout
+{"ok":true,"action":"commit","path":"@PROJ@/project/configs/conventions.json","registry":"@PROJ@/project/configs/checklists.json","changed":true,"categories":0,"generator":"conventions checklist: nothing to do (no conventions recorded, no registry created)"}
+--- stderr
+--- exit
+0
+=== file project/configs/conventions.json
+{
+  "conventions_version": 1,
+  "categories": {}
+}

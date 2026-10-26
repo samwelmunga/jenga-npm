@@ -360,23 +360,25 @@ sum_of() { cksum < "$1"; }
   [ ! -e "$REG" ]
 }
 
-@test "seed: with no registry the default's 5 items are all carried and the generated items follow, and it validates" {
+@test "seed: with no registry the default's items are all carried and the generated items follow, and it validates" {
+  local n; n="$(jq '.items | length' "$DEFAULT_REG")"
   conv_three
   run --separate-stderr bash "$GEN"
   [ "$status" -eq 0 ]
   assert_contains "$output" "3 added"
   assert_contains "$output" "seeded"
-  [ "$(jq '.items | length' "$REG")" = "8" ]
-  [ "$(jq -c '.items[0:5] | map(.id)' "$REG")" = "$(jq -c '.items | map(.id)' "$DEFAULT_REG")" ]
-  [ "$(jq -c '.items[5:] | map(.id)' "$REG")" = '["conv-branching","conv-naming","conv-testing"]' ]
+  [ "$(jq '.items | length' "$REG")" = "$((n + 3))" ]
+  [ "$(jq -c --argjson n "$n" '.items[0:$n] | map(.id)' "$REG")" = "$(jq -c '.items | map(.id)' "$DEFAULT_REG")" ]
+  [ "$(jq -c --argjson n "$n" '.items[$n:] | map(.id)' "$REG")" = '["conv-branching","conv-naming","conv-testing"]' ]
   run bash "$VALIDATE" "$REG"
   [ "$status" -eq 0 ]
 }
 
 @test "seed: the carried default items are unchanged in content" {
+  local n; n="$(jq '.items | length' "$DEFAULT_REG")"
   conv_three
   bash "$GEN" >/dev/null
-  [ "$(jq -S -c '.items[0:5]' "$REG")" = "$(jq -S -c '.items' "$DEFAULT_REG")" ]
+  [ "$(jq -S -c --argjson n "$n" '.items[0:$n]' "$REG")" = "$(jq -S -c '.items' "$DEFAULT_REG")" ]
 }
 
 @test "seed: the shipped default itself is never written" {
@@ -442,6 +444,7 @@ sum_of() { cksum < "$1"; }
 }
 
 @test "removal: dropping one category removes only its conv- item on the next run" {
+  local n; n="$(jq '.items | length' "$DEFAULT_REG")"
   conv_three
   bash "$GEN" >/dev/null
   jq 'del(.categories.naming)' "$CONV" > "$CONV.x" && mv "$CONV.x" "$CONV"
@@ -449,7 +452,7 @@ sum_of() { cksum < "$1"; }
   [ "$status" -eq 0 ]
   assert_output_contains "0 added, 0 updated, 1 removed, 2 unchanged"
   [ "$(jq -c '.items | map(.id)' "$REG" | jq -c '[.[] | select(startswith("conv-"))]')" = '["conv-branching","conv-testing"]' ]
-  [ "$(jq '.items | length' "$REG")" = "7" ]
+  [ "$(jq '.items | length' "$REG")" = "$((n + 2))" ]
 }
 
 @test "update: a changed convention rewrites only its own item" {

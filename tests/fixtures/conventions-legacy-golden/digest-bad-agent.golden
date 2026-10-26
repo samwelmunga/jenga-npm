@@ -1,0 +1,6 @@
+$ env bash @REPO@/scripts/conventions-digest.sh --agent nobody
+--- stdout
+--- stderr
+conventions-digest.sh: unknown --agent value "nobody" (developer, tester, scrum-master or commit)
+--- exit
+2

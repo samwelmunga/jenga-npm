@@ -1,0 +1,9 @@
+$ env bash @REPO@/scripts/conventions-digest.sh --agent developer
+--- stdout
+Project conventions (1 recorded; explicit, set through j.conventions):
+commit-format: Conventional Commits [style=conventional-commits; message_regex=^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?: .+] (checklist item conv-commit-format)
+Precedence: the conventions above are explicit and beat inference from the codebase; infer only for categories not listed.
+EST: board commits keep the mandatory task(E##_S##_T##): / story(...) / epic(...) naming; a recorded commit-format convention applies to non-board commits only.
+--- stderr
+--- exit
+0

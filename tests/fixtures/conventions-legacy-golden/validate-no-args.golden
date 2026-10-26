@@ -1,0 +1,6 @@
+$ bash @REPO@/scripts/validate-conventions.sh
+--- stdout
+--- stderr
+usage: validate-conventions.sh [--presets] <file> [more-files...]
+--- exit
+2

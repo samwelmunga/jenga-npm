@@ -1,0 +1,36 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh presets branching
+--- stdout
+[
+  {
+    "id": "trunk-based",
+    "label": "Trunk-based",
+    "description": "Short-lived branches off the default branch, merged back quickly.",
+    "values": {
+      "model": "trunk-based"
+    },
+    "placeholder_fields": []
+  },
+  {
+    "id": "github-flow",
+    "label": "GitHub Flow",
+    "description": "One feature branch per change, named feature/<slug>, merged through review.",
+    "values": {
+      "model": "github-flow",
+      "branch_pattern": "feature/<slug>"
+    },
+    "placeholder_fields": []
+  },
+  {
+    "id": "git-flow",
+    "label": "Git Flow",
+    "description": "Long-lived develop plus feature/, release/ and hotfix/ branches.",
+    "values": {
+      "model": "git-flow",
+      "branch_pattern": "feature/<slug>, release/<version>, hotfix/<slug>"
+    },
+    "placeholder_fields": []
+  }
+]
+--- stderr
+--- exit
+0

@@ -1,0 +1,6 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh show --category naming
+--- stdout
+--- stderr
+conventions-entry.sh: category "naming" is not recorded in @PROJ@/project/configs/conventions.json
+--- exit
+1

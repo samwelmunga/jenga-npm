@@ -1,0 +1,115 @@
+$ bash @REPO@/scripts/generate-convention-checklist.sh --print
+--- stdout
+[
+  {
+    "id": "conv-commit-format",
+    "text": "My commit message follows the project's commit convention: Conventional Commits. This applies to non-board commits only; EST naming (task(E##_S##_T##):, story(...) and epic(...)) stays required for board commits.",
+    "situations": ["pre-commit"],
+    "kind": "judgment",
+    "enforcement": "advisory",
+    "tick_scope": "run",
+    "provenance": {
+      "source": "convention",
+      "category": "commit-format"
+    }
+  },
+  {
+    "id": "conv-branching",
+    "text": "The branch I am working on follows the project's branching convention: Trunk-based.",
+    "situations": ["pre-task"],
+    "kind": "judgment",
+    "enforcement": "advisory",
+    "tick_scope": "run",
+    "provenance": {
+      "source": "convention",
+      "category": "branching"
+    }
+  },
+  {
+    "id": "conv-naming",
+    "text": "New and renamed identifiers, files and types follow the project's naming convention: kebab-case files, camelCase identifiers.",
+    "situations": ["pre-task", "pre-commit"],
+    "kind": "judgment",
+    "enforcement": "advisory",
+    "tick_scope": "run",
+    "provenance": {
+      "source": "convention",
+      "category": "naming"
+    }
+  },
+  {
+    "id": "conv-code-comments",
+    "text": "Code comments and in-code documentation follow the project's convention: Comment the why, not the what.",
+    "situations": ["pre-commit"],
+    "kind": "judgment",
+    "enforcement": "advisory",
+    "tick_scope": "run",
+    "provenance": {
+      "source": "convention",
+      "category": "code-comments"
+    }
+  },
+  {
+    "id": "conv-formatting-linting",
+    "text": "The code is formatted and linted per the project's convention: Formatter and linter enforced.",
+    "situations": ["pre-commit"],
+    "kind": "judgment",
+    "enforcement": "advisory",
+    "tick_scope": "run",
+    "provenance": {
+      "source": "convention",
+      "category": "formatting-linting"
+    }
+  },
+  {
+    "id": "conv-testing",
+    "text": "The change meets the project's testing expectations: Tests for every change.",
+    "situations": ["pre-commit"],
+    "kind": "judgment",
+    "enforcement": "advisory",
+    "tick_scope": "run",
+    "provenance": {
+      "source": "convention",
+      "category": "testing"
+    }
+  },
+  {
+    "id": "conv-file-layout",
+    "text": "New files and directories are placed according to the project's layout convention: src/ plus tests/.",
+    "situations": ["pre-task"],
+    "kind": "judgment",
+    "enforcement": "advisory",
+    "tick_scope": "run",
+    "provenance": {
+      "source": "convention",
+      "category": "file-layout"
+    }
+  },
+  {
+    "id": "conv-language-tooling",
+    "text": "The change uses the project's chosen language and tooling: Pinned runtime and committed lockfile.",
+    "situations": ["pre-task"],
+    "kind": "judgment",
+    "enforcement": "advisory",
+    "tick_scope": "run",
+    "provenance": {
+      "source": "convention",
+      "category": "language-tooling"
+    }
+  },
+  {
+    "id": "conv-documentation-placement",
+    "text": "Documentation I add or change is placed where the project's convention says: Published docs in docs/.",
+    "situations": ["pre-commit"],
+    "kind": "judgment",
+    "enforcement": "advisory",
+    "tick_scope": "run",
+    "provenance": {
+      "source": "convention",
+      "category": "documentation-placement"
+    }
+  }
+]
+--- stderr
+--- exit
+0

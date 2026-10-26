@@ -19,6 +19,7 @@
       "platform": "npm-ci-oidc",
       "github_repo": "samwelmunga/jenga-npm",
       "workflow_path": ".github/workflows/npm-publish.yml",
+      "audit_level": "high",
       "checks": {
         "pre": [
           "lint",

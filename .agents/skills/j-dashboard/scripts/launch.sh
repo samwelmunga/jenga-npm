@@ -14,6 +14,12 @@
 # `start` serves the UI alongside the API unless --api-only is given. `open`
 # does the same and also opens the dashboard in the browser.
 #
+# Ports (E47_S08_T03): with no --port the dashboard binds the first verified-free
+# port from 3001 and prints the URL it actually bound. An explicit --port that is
+# busy fails (non-zero exit), it is never replaced. `open` needs no port flag: if
+# this project's dashboard is already running it opens that one (found through
+# project/queue/dashboard-port.json), otherwise it starts one and opens it.
+#
 # Same symlink-resolution + repo-root derivation pattern used elsewhere in this
 # skill library (e.g. skills/j-mirror-public/scripts/compute-publicize-diff.sh),
 # so this script behaves identically whether invoked directly or via a symlink,

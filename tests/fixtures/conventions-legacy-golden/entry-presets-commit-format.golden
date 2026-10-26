@@ -1,0 +1,36 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh presets commit-format
+--- stdout
+[
+  {
+    "id": "conventional-commits",
+    "label": "Conventional Commits",
+    "description": "Commit subjects follow type(scope): subject, e.g. feat(api): add retry.",
+    "values": {
+      "style": "conventional-commits",
+      "message_regex": "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\\([^)]+\\))?!?: .+"
+    },
+    "placeholder_fields": []
+  },
+  {
+    "id": "imperative-subject",
+    "label": "Imperative short subject",
+    "description": "A short imperative subject with no type prefix, e.g. Add retry to the client.",
+    "values": {
+      "style": "imperative-subject",
+      "subject_max_length": 72
+    },
+    "placeholder_fields": []
+  },
+  {
+    "id": "free-form",
+    "label": "Free-form",
+    "description": "No required commit message format.",
+    "values": {
+      "style": "free-form"
+    },
+    "placeholder_fields": []
+  }
+]
+--- stderr
+--- exit
+0

@@ -14,7 +14,7 @@ setup() {
   git config user.email test@example.com
   git config user.name Test
   mkdir -p scripts skills/j-close-story/scripts project/board/tasks project/logs secret
-  cp "$REPO_ROOT/scripts/with-lock.sh" "$REPO_ROOT/scripts/events-append.sh" scripts/
+  cp "$REPO_ROOT/scripts/with-lock.sh" "$REPO_ROOT/scripts/events-append.sh" "$REPO_ROOT/scripts/commits-for-item.sh" scripts/
   cp "$REPO_ROOT/skills/j-close-story/scripts/check-privatized.sh" \
      "$REPO_ROOT/skills/j-close-story/scripts/update-task-frontmatter.sh" skills/j-close-story/scripts/
   printf 'secret/\n' > .publicignore

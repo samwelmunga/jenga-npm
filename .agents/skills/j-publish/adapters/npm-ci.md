@@ -58,6 +58,10 @@ An `npm-ci` target must define:
 - `github_repo` — **required**; `owner/name` identifying the GitHub repository
 - `workflow_path` — **optional**; path to the workflow file to generate and
   trigger; defaults to `.github/workflows/npm-publish.yml`
+- `audit_level` — **optional**; `low`, `moderate`, `high` (default), `critical`
+  or `off`. The threshold of the CI dependency audit described under
+  "Dependency audit in the generated workflows" below; any other value is
+  rejected by `validate_config.sh` (exit 4)
 - `secrets` — **not required**; any `secrets` block present is ignored by this
   adapter
 
@@ -70,8 +74,8 @@ The adapter requires the following tools at invocation time:
 
 - `jq` — to read `publish.json` target config
 - `git` — to commit the generated workflow file
-- `gh` — GitHub CLI, authenticated via `gh auth login`, to trigger the workflow
-  via `gh workflow run`
+- `gh` — GitHub CLI, signed in by you beforehand (you run `gh auth login`
+  yourself; the skill never does), to trigger the workflow via `gh workflow run`
 
 The `gh` CLI must be authenticated before running `/publish deploy` against an
 `npm-ci` target.
@@ -89,7 +93,8 @@ bash skills/j-publish/scripts/npm_ci_pipeline.sh \
 
 Run the adapter phases in this exact order:
 
-1. **`validate`** — verify that `gh` CLI is authenticated (`gh auth status`),
+1. **`validate`** — verify that the `gh` CLI is signed in (an exit-status-only
+   probe whose output is discarded; see `validate_npm_ci_env.sh`),
    that `github_repo` resolves to an accessible repository, and that all
    required `npm.*` fields (`package_name`, `access`, `registry`, `dist_tag`)
    are present and non-empty. Abort with exit 4 on any failure.
@@ -128,12 +133,14 @@ Run the adapter phases in this exact order:
    workflow sets one.
 
 3. **`commit-workflow`** — write the generated YAML to `<workflow_path>`
-   (creating the `.github/workflows/` directory if needed) and commit it with:
+   (creating the `.github/workflows/` directory if needed) and, unless
+   `audit_level` is `off`, the scheduled audit workflow to
+   `.github/workflows/dependency-audit.yml`, then commit both in one step with:
    ```
-   git add <workflow_path>
+   git add <workflow_path> .github/workflows/dependency-audit.yml
    git commit -m "chore(publish): update npm CI workflow for target <name>"
    ```
-   If the file already exists and the content is unchanged (`git diff --quiet`),
+   If both files already exist and their content is unchanged (`git diff --quiet`),
    skip the commit — the operation is idempotent.
 
 4. **`trigger`** — invoke:
@@ -184,13 +191,45 @@ When `--dry-run` is passed:
 - The `validate` phase runs normally; config and environment errors still
   surface.
 - The `generate-workflow` phase runs normally; the rendered workflow YAML is
-  printed to stdout.
-- The `commit-workflow` phase is **skipped** — no file is written, no git
-  commit is made.
+  printed to stdout, followed by the rendered `dependency-audit.yml`.
+- The `commit-workflow` phase is **skipped** — no file is written (neither
+  workflow), no git commit is made.
 - The `trigger` phase is **skipped** — `gh workflow run` is not called.
 - The adapter exits 0 after printing the YAML.
 - The ledger entry written by `publish_deploy.sh` will have
   `platform_state: "dry-run"`.
+
+## Dependency audit gate
+
+`run_gates.sh pre` runs the same built-in `audit` gate for `npm-ci` targets as for `npm`; see "Dependency audit gate" in `skills/j-publish/adapters/npm.md`.
+
+## Dependency audit in the generated workflows
+
+Besides the local pre-publish gate above, `generate-workflow` adds two audit
+surfaces to the CI the adapter generates (E85_S01_T09). Neither depends on
+Jenga's `scripts/audit-deps.sh`, because `scripts/` is not copied into a
+consumer's tree: both run `npm audit` directly.
+
+- **An `audit` job in the publish workflow.** It checks out the repository and
+  runs `npm audit --audit-level=<audit_level>` with `contents: read` only. The
+  `publish` job and the `stage` job both declare `needs: audit`, so neither a
+  publish nor a stage can proceed past a failing audit. Running `npm audit` in
+  a CI job is itself the explicit CI consent; it is never implied by `--yes`.
+- **A scheduled `dependency-audit.yml`.** Rendered from
+  `skills/j-publish/assets/audit-workflow.yml.tpl` and written to
+  `.github/workflows/dependency-audit.yml` by the same `commit-workflow`
+  phase. Triggers: a weekly `schedule`, `workflow_dispatch`, and a
+  `pull_request` filtered to `package.json` / `package-lock.json`. It has
+  `contents: read` only, references no secrets, and pins `actions/checkout` to
+  the same commit SHA as the publish workflow. It uses the Node and npm
+  preinstalled on `ubuntu-latest`, so it needs no `setup-node` action.
+
+The threshold is the target's `audit_level` key in `publish.json`: `low`,
+`moderate`, `high` (default when absent) or `critical`. Set `audit_level` to
+`off` to omit both the `audit` job and `dependency-audit.yml`; the generator
+then prints a visible warning on stderr. An existing `dependency-audit.yml`
+from an earlier run is not deleted. `validate_config.sh` rejects any other
+value with exit 4.
 
 ## Exit Codes
 
@@ -207,6 +246,8 @@ A successful non-dry-run produces:
 
 - The workflow file written to `<workflow_path>` in the working tree (default:
   `.github/workflows/npm-publish.yml`) and committed to the repository
+- `.github/workflows/dependency-audit.yml` (unless `audit_level` is `off`),
+  committed in the same commit
 - A git commit: `chore(publish): update npm CI workflow for target <name>`
 - A workflow run URL printed to stdout
 - A history entry in `project/logs/publish-history.json` written by

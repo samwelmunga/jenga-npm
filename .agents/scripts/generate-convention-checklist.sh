@@ -18,7 +18,10 @@
 # Data: templates/conventions-checklist-map.json, located relative to this script (so it works from a consumer
 # install at node_modules/@jenga-ai/agent/). Which item each category produces, at which phase and with which
 # strength is data there, not logic here; the map's _comment documents its fields. Category order is the order of
-# the keys in templates/conventions-schema.json.
+# the keys in templates/conventions-schema.json, followed by its opt_in_categories keys (absent means none). The map's
+# opt_in_categories section is searched when a category has no entry in its categories section, and the map's
+# opt_in_alternatives[<category>] alternatives are tried before that category's own (all three are no-ops for a
+# project that records neither commit-format.template nor commit-trace).
 #
 # Output: one JSON array on stdout, one item per recorded category, each
 #   { "id": "conv-<category>", "text", "situations", "kind", ["verify",] "enforcement", "tick_scope",
@@ -154,7 +157,7 @@ def pick($m; $e):
 | [ $order[] | . as $cat
     | select($cats | has($cat))
     | $cats[$cat] as $e
-    | ($map[0].categories[$cat]) as $m
+    | (($map[0].categories[$cat] // $map[0].opt_in_categories[$cat]) | if . == null then . else .alternatives = (($map[0].opt_in_alternatives[$cat] // []) + (.alternatives // [])) end) as $m
     | (if $m == null then error("no map entry for category " + $cat) else . end)
     | select($m.enabled != false)
     | (if $m.item_id != ("conv-" + $cat) then error("map entry for " + $cat + " has item_id " + ($m.item_id | tojson) + ", expected conv-" + $cat) else . end)
@@ -194,7 +197,7 @@ render_items() {
 
   [ -f "$MAP" ] || { printf '%s: mapping file not found: %s\n' "$SELF" "$MAP" >&2; return 1; }
   jq -e . "$MAP" >/dev/null 2>&1 || { printf '%s: mapping file is not valid JSON: %s\n' "$SELF" "$MAP" >&2; return 1; }
-  order="$(jq -c '.categories | keys_unsorted' "$SCHEMA" 2>/dev/null)" \
+  order="$(jq -c '(.categories | keys_unsorted) + ((.opt_in_categories // {}) | keys_unsorted)' "$SCHEMA" 2>/dev/null)" \
     || { printf '%s: cannot read the category list from %s\n' "$SELF" "$SCHEMA" >&2; return 1; }
 
   err="$(mktemp "${TMPDIR:-/tmp}/gen-conv-err.XXXXXX")" || return 1

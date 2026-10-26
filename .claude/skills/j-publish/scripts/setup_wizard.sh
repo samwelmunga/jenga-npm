@@ -337,6 +337,8 @@ if [[ "$DEPLOY_TYPE" == "npm" ]]; then
   printf '\nnpm setup: follow the prompts in %s to collect answers,\n' "$TEMPLATE_PATH"
   printf 'then perform the "Post-collection actions" section (write target block\n'
   printf 'to publish.json and generate the NPM_TOKEN instructions file).\n'
+  # One-time dependency-audit opt-in notice (E85_S04_T04). Best effort: the hook always exits 0.
+  [[ -f "${SCRIPT_DIR}/audit_notice_hook.sh" ]] && bash "${SCRIPT_DIR}/audit_notice_hook.sh" || true
   exit 0
 fi
 
@@ -344,6 +346,8 @@ if [[ "$DEPLOY_TYPE" == "npm-ci" ]]; then
   printf '\nnpm-ci setup: follow the prompts in %s to collect answers,\n' "$TEMPLATE_PATH"
   printf 'then perform the "Post-collection actions" section (write target block\n'
   printf 'to publish.json). No NPM_TOKEN is required — publishing uses OIDC.\n'
+  # One-time dependency-audit opt-in notice (E85_S04_T04). Best effort: the hook always exits 0.
+  [[ -f "${SCRIPT_DIR}/audit_notice_hook.sh" ]] && bash "${SCRIPT_DIR}/audit_notice_hook.sh" || true
   exit 0
 fi
 

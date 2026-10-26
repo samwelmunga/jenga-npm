@@ -1,0 +1,54 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh check commit-format subject_max_length 72
+--- stdout
+{"valid":true}
+--- stderr
+--- exit
+0
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh check commit-format subject_max_length abc
+--- stdout
+{"valid":false,"reason":"wrong type: categories.commit-format.values.subject_max_length must be an integer (got string)"}
+--- stderr
+--- exit
+0
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh check commit-format style 
+--- stdout
+{"valid":false,"reason":"empty value: categories.commit-format.values.style must not be empty or whitespace-only"}
+--- stderr
+--- exit
+0
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh check commit-format colour red
+--- stdout
+{"valid":false,"reason":"unknown key in values: categories.commit-format.values.colour (allowed for commit-format: style, message_regex, subject_max_length, template, ref_source, ref_pattern, on_unresolved, apply_to_board_commits)"}
+--- stderr
+--- exit
+0
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh check naming identifier_case camelCase
+--- stdout
+{"valid":true}
+--- stderr
+--- exit
+0
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh check formatting-linting lint_command <lint command>
+--- stdout
+{"valid":false,"reason":"lint_command is still an unreplaced placeholder (<lint command>): supply the real value, or leave the field unset"}
+--- stderr
+--- exit
+0
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh check summary one tidy line
+--- stdout
+{"valid":true}
+--- stderr
+--- exit
+0
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh check summary 
+--- stdout
+{"valid":false,"reason":"empty value: categories.commit-format.summary must not be empty or whitespace-only"}
+--- stderr
+--- exit
+0
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh check not-a-category style x
+--- stdout
+{"valid":false,"reason":"unknown category: not-a-category (allowed: commit-format, branching, naming, code-comments, formatting-linting, testing, file-layout, language-tooling, documentation-placement, commit-trace)"}
+--- stderr
+--- exit
+0

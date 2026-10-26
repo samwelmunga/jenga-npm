@@ -1,0 +1,151 @@
+{
+  "script": "detect-dependencies.sh",
+  "version": 1,
+  "target": ".",
+  "target_absolute": "@TARGET@",
+  "target_type": "directory",
+  "repo_root": "@TARGET@",
+  "files_scanned": 6,
+  "files_truncated": false,
+  "unrecognised": false,
+  "languages": [
+    {
+      "language": "javascript",
+      "files": 3
+    },
+    {
+      "language": "shell",
+      "files": 2
+    },
+    {
+      "language": "python",
+      "files": 1
+    }
+  ],
+  "unrecognised_extensions": [
+    {
+      "extension": ".example",
+      "files": 1
+    },
+    {
+      "extension": ".json",
+      "files": 1
+    },
+    {
+      "extension": ".md",
+      "files": 1
+    },
+    {
+      "extension": ".txt",
+      "files": 1
+    },
+    {
+      "extension": "<no extension>",
+      "files": 1
+    }
+  ],
+  "counts": {
+    "internal": 3,
+    "external": 5
+  },
+  "internal": [
+    {
+      "raw": "../src/app",
+      "language": "javascript",
+      "resolved": "src/app.js",
+      "occurrences": 1,
+      "sources": [
+        "tests/app.test.js"
+      ]
+    },
+    {
+      "raw": "./src/helper.sh",
+      "language": "shell",
+      "resolved": "src/helper.sh",
+      "occurrences": 2,
+      "sources": [
+        "run.sh"
+      ]
+    },
+    {
+      "raw": "./lib/util",
+      "language": "javascript",
+      "resolved": "src/lib/util.js",
+      "occurrences": 1,
+      "sources": [
+        "src/app.js"
+      ]
+    }
+  ],
+  "external": [
+    {
+      "name": "left-pad",
+      "language": "javascript",
+      "kind": "package",
+      "occurrences": 1,
+      "sources": [
+        "src/app.js"
+      ]
+    },
+    {
+      "name": "json",
+      "language": "python",
+      "kind": "stdlib",
+      "occurrences": 1,
+      "sources": [
+        "src/main.py"
+      ]
+    },
+    {
+      "name": "lib",
+      "language": "python",
+      "kind": "package",
+      "occurrences": 1,
+      "sources": [
+        "src/main.py"
+      ]
+    },
+    {
+      "name": "os",
+      "language": "python",
+      "kind": "stdlib",
+      "occurrences": 1,
+      "sources": [
+        "src/main.py"
+      ]
+    },
+    {
+      "name": "git",
+      "language": "shell",
+      "kind": "command",
+      "occurrences": 1,
+      "sources": [
+        "run.sh"
+      ]
+    }
+  ],
+  "manifests": [
+    {
+      "name": "package.json",
+      "path": "package.json",
+      "location": "target",
+      "distance": 0,
+      "declared_dependencies": [
+        "jest",
+        "left-pad"
+      ]
+    },
+    {
+      "name": "requirements.txt",
+      "path": "requirements.txt",
+      "location": "target",
+      "distance": 0,
+      "declared_dependencies": [
+        "requests"
+      ]
+    }
+  ],
+  "notices": [
+    "Target is not inside a git repository; repo root fell back to '@TARGET@'. Internal/external classification may be less accurate."
+  ]
+}

@@ -45,6 +45,9 @@ ERRORS="$(
         type == "object"
         and ((.pre? == null) or (.pre | gate_list_valid))
         and ((.post? == null) or (.post | gate_list_valid));
+      def target_label: (.name? // "<unnamed>");
+      def audit_level_valid: (. == null) or (type == "string" and (. == "low" or . == "moderate" or . == "high" or . == "critical" or . == "off"));
+      def audit_level_diag($t): if ($t.audit_level? | audit_level_valid) then empty else ("target \"" + ($t | target_label) + "\": audit_level must be one of \"low\", \"moderate\", \"high\", \"critical\" or \"off\"") end;
       def secrets_valid:
         type == "object"
         and (.app_store_connect_api_key_id? | env_ref)
@@ -101,6 +104,7 @@ ERRORS="$(
         and (.checks? | checks_valid)
         and (.secrets? | npm_secrets_valid)
         and (.npm? | npm_valid)
+        and (.audit_level? | audit_level_valid)
         and ((.ios? // null) == null);
       def npm_ci_target_valid:
         type == "object"
@@ -108,9 +112,9 @@ ERRORS="$(
         and (.type? == "npm-ci")
         and ((.github_repo? // "") | non_empty_string)
         and (.npm? | npm_ci_valid)
+        and (.audit_level? | audit_level_valid)
         and ((.ios? // null) == null);
       def target_valid: ios_target_valid or npm_target_valid or npm_ci_target_valid;
-      def target_label: (.name? // "<unnamed>");
       def npm_diagnostics:
         . as $t
         | [
@@ -119,6 +123,7 @@ ERRORS="$(
             (if ((($t.npm?.package_name? // "") | type) == "string" and (($t.npm.package_name | length) > 0) and ((($t.npm.package_name | test("^(?:@[a-z0-9][a-z0-9._-]*\\/)?[a-z0-9][a-z0-9._-]*$"))) | not)) then ("target \"" + ($t | target_label) + "\": npm.package_name must match npm naming rules") else empty end),
             (if (((($t.npm?.access? // "") == "public") or (($t.npm?.access? // "") == "restricted")) | not) then ("target \"" + ($t | target_label) + "\": npm.access must be \"public\" or \"restricted\"") else empty end),
             (if (($t.ios? // null) != null) then ("target \"" + ($t | target_label) + "\": ios block is not allowed on npm targets") else empty end),
+            audit_level_diag($t),
             (if (((($t.platform? // "") == "npm-registry") or (($t.platform? // "") == "github-packages")) | not) then ("target \"" + ($t | target_label) + "\": platform must be \"npm-registry\" or \"github-packages\" for npm targets") else empty end),
             (if (($t.secrets? | npm_secrets_valid) | not) then ("target \"" + ($t | target_label) + "\": secrets must contain NPM_TOKEN or NODE_AUTH_TOKEN as an environment reference") else empty end)
           ] | .[];
@@ -130,7 +135,8 @@ ERRORS="$(
             (if ((($t.npm?.package_name? // "") | non_empty_string) | not) then ("target \"" + ($t | target_label) + "\": npm.package_name is required and must be a non-empty string") else empty end),
             (if ((($t.npm?.package_name? // "") | type) == "string" and (($t.npm.package_name | length) > 0) and ((($t.npm.package_name | test("^(?:@[a-z0-9][a-z0-9._-]*\\/)?[a-z0-9][a-z0-9._-]*$"))) | not)) then ("target \"" + ($t | target_label) + "\": npm.package_name must match npm naming rules") else empty end),
             (if (((($t.npm?.access? // "") == "public") or (($t.npm?.access? // "") == "restricted")) | not) then ("target \"" + ($t | target_label) + "\": npm.access must be \"public\" or \"restricted\"") else empty end),
-            (if (($t.ios? // null) != null) then ("target \"" + ($t | target_label) + "\": ios block is not allowed on npm-ci targets") else empty end)
+            (if (($t.ios? // null) != null) then ("target \"" + ($t | target_label) + "\": ios block is not allowed on npm-ci targets") else empty end),
+            audit_level_diag($t)
           ] | .[];
       def per_target_errors:
         . as $t

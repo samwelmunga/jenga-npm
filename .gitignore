@@ -39,6 +39,11 @@ mcp/router/.session.json
 # Claude/Copilot session artefacts
 agents/.agents/
 
+# Running dashboard's recorded port (project/queue/dashboard-port.json, E47_S08_T03): machine-local, written
+# when the dashboard starts and removed when it stops.
+project/queue/dashboard-port.json
+project/queue/dashboard-port.json.*.tmp
+
 # Per-session handoff files (project/queue/handoffs/) are transient,
 # single-use signals consumed and deleted by hooks/on_session_end.sh
 # immediately after routing (see templates/SCRUM_BOARD_SCHEMA.md's
@@ -99,6 +104,33 @@ project/queue/checklist-ticks/*
 project/queue/checklist-markers/*
 !project/queue/checklist-markers/.gitkeep
 
+# Workflow run state (project/data/workflow-runs/, E80_S02) is private
+# operational state: one workflow run per state file, plus the transient
+# *.lock.d / .tmp-* entries the lock and the write-then-rename leave beside
+# them. A run is meant to span sessions, which is exactly why it
+# must never become a durable git artifact: a committed run would be
+# resumed on every clone. Mirrors the checklist-ticks/ rule above. Ignore the
+# subdirectory only, never project/data/ itself, which is partly tracked
+# (baselines.json). Also blocklisted for the public mirror in .publicignore,
+# because project/data/ is not covered by the project/queue/ entry there.
+project/data/workflow-runs/*
+!project/data/workflow-runs/.gitkeep
+
+# One-time dependency-audit opt-in notice marker (scripts/audit-notice.sh, E85_S04_T02):
+# records that this clone's user has already seen the notice, so it is per-user
+# state and must never be committed. File only (and its transient .tmp/.lock.d
+# siblings); project/data/ itself stays partly tracked.
+project/data/audit-notice-shown
+project/data/audit-notice-shown.*
+
+# Workflow artifacts (project/data/workflow-artifacts/, E80_S04) are deliberately
+# NOT ignored: a sprint or roadmap artifact is a deliverable that collaborators
+# and the dashboard timeline read, and an ignored location would make `latest`
+# return nothing on a fresh clone. The directory is tracked via its .gitkeep, so
+# do not widen any project/data/ rule to cover it. The cost is that every run is
+# retained; pruning is a future concern. It is blocklisted for the public mirror
+# in .publicignore, because project-specific plans must not leak downstream.
+
 # Per-session execution ledger (project/queue/execution-ledger.jsonl,
 # skills/j-break/scripts/record-execution.sh — E44_S09) is append-only,
 # queue-like transient state: one line per terminal task status a /do, /dooo
@@ -125,6 +157,12 @@ project/queue/epic-lock-*.json
 # Per-session perceived-branch state (project/queue/perceived-branch/, E78_S01):
 # one file per live session, removed at SessionEnd; never a durable record.
 project/queue/perceived-branch/
+
+# Per-task commit ref store (project/queue/commit-refs/, scripts/task-commit-ref.sh): one JSON file per task holding
+# the ref captured from the user's branch and the frozen ref. Per-machine working state like handoffs/ above, never
+# history. The whole directory is listed, not *.json, so the script's temp files and its .lock.d lock directories cannot
+# be committed by accident. Already blocklisted for the public mirror via project/queue/ (.publicignore).
+project/queue/commit-refs/
 
 # E73_S01 spike: raw hook-payload logs (project/logs/spike-hook-payloads/) can contain prompt text.
 # They are research artefacts only and must never be committed; only redacted summaries in the

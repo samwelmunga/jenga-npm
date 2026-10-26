@@ -79,7 +79,7 @@ Via the `gh` CLI (recommended):
 gh secret set DROPLET_SSH_HOST --body "1.2.3.4" --repo owner/myrepo
 gh secret set DROPLET_SSH_USER --body "deploy" --repo owner/myrepo
 gh secret set DROPLET_SSH_PORT --body "22" --repo owner/myrepo
-gh secret set DROPLET_SSH_KEY < ~/.ssh/id_deploy --repo owner/myrepo
+gh secret set DROPLET_SSH_KEY < "<path-to-your-deploy-key>" --repo owner/myrepo
 ssh-keyscan -H 1.2.3.4 | gh secret set DROPLET_KNOWN_HOSTS --repo owner/myrepo
 ```
 
@@ -90,9 +90,9 @@ Via the GitHub UI: **Repository → Settings → Secrets and variables → Actio
 If you don't have a dedicated deploy key:
 
 ```bash
-ssh-keygen -t ed25519 -C "deploy@myrepo" -f ~/.ssh/id_deploy -N ""
+ssh-keygen -t ed25519 -C "deploy@myrepo" -f <path-to-your-deploy-key> -N ""
 # Add the public key to the host's authorized_keys:
-ssh-copy-id -i ~/.ssh/id_deploy.pub deploy@1.2.3.4
+ssh-copy-id -i <path-to-your-deploy-key>.pub deploy@1.2.3.4
 # Then add the private key to GitHub secrets (see above)
 ```
 

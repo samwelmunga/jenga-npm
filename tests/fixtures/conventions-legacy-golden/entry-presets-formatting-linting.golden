@@ -1,0 +1,40 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh presets formatting-linting
+--- stdout
+[
+  {
+    "id": "formatter-and-linter",
+    "label": "Formatter and linter enforced",
+    "description": "A formatter and linter are run by command; the commands shown are placeholders you must replace with your own.",
+    "values": {
+      "approach": "formatter-and-linter",
+      "format_command": "<format command>",
+      "lint_command": "<lint command>"
+    },
+    "placeholder_fields": [
+      "format_command",
+      "lint_command"
+    ]
+  },
+  {
+    "id": "editorconfig-only",
+    "label": ".editorconfig only",
+    "description": "Whitespace and encoding are governed by an .editorconfig file, with no enforced formatter.",
+    "values": {
+      "approach": "editorconfig-only",
+      "editorconfig": true
+    },
+    "placeholder_fields": []
+  },
+  {
+    "id": "none-enforced",
+    "label": "None enforced",
+    "description": "No standing formatting or linting requirement.",
+    "values": {
+      "approach": "none-enforced"
+    },
+    "placeholder_fields": []
+  }
+]
+--- stderr
+--- exit
+0

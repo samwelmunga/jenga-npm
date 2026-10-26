@@ -8,19 +8,36 @@
  * Performs a health check against the API server, then opens the dashboard
  * URL in the system's default browser. Always exits with code 0.
  *
- *   --port <number>   Port to check / open (default: 3001).
- *                     Also respects JENGA_API_PORT env var.
+ *   --port <number>   Port to check / open. Takes priority over everything else.
+ *
+ * Without --port the port is, in order: JENGA_API_PORT, the port the running dashboard recorded in
+ * project/queue/dashboard-port.json (E47_S08_T03), then 3001.
  */
 
 'use strict';
 
 const http     = require('http');
+const path     = require('path');
 const { execFile } = require('child_process');
 
 // ── Parse CLI flags ───────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
 
-let port = parseInt(process.env.JENGA_API_PORT || '3001', 10);
+const PKG_SCRIPTS = path.resolve(__dirname, '../../../../scripts');
+const portState = require(path.join(PKG_SCRIPTS, 'dashboard-port-state.cjs'));
+
+function recordedPort() {
+  try {
+    const root = require(path.resolve(__dirname, '../../api/lib/resolve-project-root.js')).resolveProjectRoot();
+    const state = portState.readState(root);
+    return state ? state.port : null;
+  } catch {
+    return null; // not inside a Jenga project, or nothing recorded
+  }
+}
+
+let port = parseInt(process.env.JENGA_API_PORT || '', 10);
+if (isNaN(port)) port = recordedPort() || portState.DEFAULT_PORT;
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--port' && args[i + 1]) {

@@ -68,6 +68,36 @@ Every mode runs the same shared investigative engine and emits the same understa
 
 ---
 
+## What this skill touches
+
+Stated against the shipped scripts in `skills/j-uncharted/scripts/` (E85_S02_T04). Read it before pointing `/uncharted` at a tree that holds secrets.
+
+**What it reads.** The target you name, and nothing you did not name: a file, a directory, a whole codebase (`onboard`/`refresh`), or an external source you hand to `import`. Concretely, `enumerate-target.sh` opens every file it lists to count lines (it does not print their content), and `detect-dependencies.sh`, `detect-tests.sh` and `inspect-provenance.sh` open source, manifest, test and license files to extract imports, dependencies, test runners and provenance. Files whose names look like secrets are the exception: they are skipped by name before anything is opened (see **Secret-looking files are skipped by name** below). In a git work tree `enumerate-target.sh` lists tracked files and untracked files that are not `.gitignore`d; outside one it falls back to `find`, and `--no-gitignore` forces that. The investigating agent then reads whatever those scripts surface; skipped files are listed by name in the notice only, never surfaced as content.
+
+**What it does not do on its own.** None of the scripts reads an environment variable that holds a secret (there is no `printenv`, `os.environ`, `os.getenv` or `getenv` in the skill), and none opens a credential file by name (environment files, package-manager or netrc auth files, SSH private keys, cloud credential files). The only mention of the home directory is a deletion guard in `import-source.sh` that compares a path against it, and `detect-dependencies.sh` classifies home-relative import specifiers as strings. Neither opens a file. `import-source.sh` runs `git clone` with `GIT_TERMINAL_PROMPT=0` and `GIT_ASKPASS=/usr/bin/true`, so it never prompts for or handles a password itself, but `git` still runs its normally configured credential helpers when you import a private repository.
+
+**Secret-looking files are skipped by name.** `skills/j-uncharted/scripts/secret-files.sh` holds the one shared list, and it is applied by `enumerate-target.sh`, `detect-dependencies.sh`, `detect-tests.sh`, `inspect-provenance.sh` and, for a local directory path, `import-source.sh`. A file is matched on its base name only (case-insensitive), against that list, and a match is never opened, parsed or copied, and appears only as a name in the skip notice and the skipped count. The list covers environment files (`.env` and its per-environment variants), auth files such as `.npmrc`, `.netrc` and `credentials.json`, private keys and PEM/key files (`*.pem`, `*.key`, `*.p12` and similar), and `id_rsa`-style names. Conventional template names (`.env.example`, `.env.sample`, `.env.template`, `.env.dist`) are deliberately not skipped, because they hold placeholders and are worth reading. Every skip is announced, never silent: on stderr, `N secret-looking file(s) skipped (names listed, contents never read): <names>` (the list shows at most 20 names, then "... and M more"), and, when at least one file was skipped, an additive `secret_files_skipped` `{count, paths}` key in the script's JSON output; with nothing skipped there is no notice and the output is unchanged. How each script applies it:
+
+- `enumerate-target.sh`, `detect-dependencies.sh` and `detect-tests.sh` also cover a single-file target: a secret-looking one is skipped and reported, not read. `inspect-provenance.sh` only accepts a directory; given a single secret-looking file it prints the notice, does not read the file, and still rejects the target with exit 2.
+- `import-source.sh` in local directory mode copies the tree without the matching entries (they are never created in staging, so there is no copy-then-delete step) and refuses a single local file whose name looks secret with exit 4. A `git` clone is **not** filtered by name: the whole repository is cloned into staging.
+- `directory-triage.sh` is unchanged: it classifies *directories* only, against a fixed noise list (`node_modules`, `vendor`, `dist`, `build`, `.venv` and the like) and `.gitignore`. The other scripts also skip a fixed set of directory names (`SKIP_DIRS`) in addition to the file-name rule above.
+
+**The tradeoff: names only.** The match never looks inside a file, so a secret kept in an oddly named file is not caught, and a harmless file with a listed name (for example a localisation `.key` file) is skipped. To keep anything else out, `.gitignore` it, move it out of the target, or tell the agent which paths to skip.
+
+**Known gaps.** Each of these is stated against the code and `tests/uncharted-*.bats`:
+
+1. `import-source.sh` copies a local source's own `.git` directory into staging and removes it afterwards, so a credential stored in `.git/config` exists in staging for a short time (`tests/uncharted-import-secret-skip.bats` proves the directory is gone afterwards, not that it was never there). A `git` clone has the same ordering: it is cloned in full and `.git` is then removed.
+2. The list has no entry for kubeconfig-style names (`kubeconfig`, `.kube/config`); they are treated as ordinary files.
+3. Ordinary names that merely sound sensitive, such as `environment.ts`, are not skipped (`tests/uncharted-secret-files.bats` pins this), and neither are `.envrc` or `id_rsa.pub`.
+4. Template names such as `.env.example` are not skipped, by design; a variant such as `.env.example.local` is not exempt and is skipped.
+5. If `secret-files.sh` is missing, `detect-dependencies.sh` and `detect-tests.sh` exit 3, but `inspect-provenance.sh` exits 1, not the 5 its header documents, because sourcing the helper fails first. It still reads nothing in that case (the bats suite asserts only a non-zero exit for it).
+
+**What it writes.** Understanding documents under `project/rapports/analysis/`, board files under `project/board/` (only after the confirmation gates described in each mode), `project/knowledge-graph/graph.json` for the conversational flows, and elicitation and scan-record state. `onboard` and `refresh` never modify application code.
+
+**`import` and the temporary directory.** `import-source.sh` copies or clones the external source into a staging directory under `$TMPDIR` (or the `--staging-dir` you pass), always outside any git work tree. A local-path directory copy leaves secret-looking file names out (never copied, never opened) and a single secret-looking file is refused; a git clone is not filtered. On success the staging root is left in place for Steps 2-4; after you confirm a destination, Step 6 copies the staged content into the repo and then removes the staging root, and Step 5 removes it if you abort. If the script itself fails, its exit trap (`cleanup_on_failure`) removes the staging root, except that it never deletes `/`, `/tmp`, `/var`, `/usr`, `/etc`, the home directory, or anything inside a git work tree. A cloned `.git` directory is deleted after the clone, and nothing from the source is executed.
+
+---
+
 ## Shared Investigative Engine
 
 All three modes call the same engine rather than reimplementing analysis. Per the Skill Implementation Principle in `CLAUDE.md`, the deterministic work lives in scripts under `skills/j-uncharted/scripts/`, not in this file:
@@ -484,6 +514,9 @@ directory immediately after reading it, as part of treating acquired content as 
 this is the **only** point at which that SHA is ever recoverable). Exit codes and the full
 security contract (no hooks, no install scripts, staging always outside the repo working
 tree) are documented in the script's own header — read them there, do not restate them here.
+A local-path directory source is copied without its secret-looking file names (the script lists
+them on stderr and adds an optional `secret_files_skipped` `{count, paths}` key to `SUMMARY_JSON`
+only when it skipped any); a single secret-looking file is refused with exit 4.
 
 **A non-zero exit here means nothing was acquired.** Surface the script's stderr to the user
 and stop; there is no staging directory to clean up in that case (the script cleans up after

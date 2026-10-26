@@ -145,11 +145,44 @@ The deploy flow invokes `skills/j-publish/scripts/run_gates.sh` at two fixed poi
 
 - `build` and `test` are **mandatory global** pre-deploy gates — always run, cannot be disabled via config
 - Per-target `checks.pre` and `checks.post` can add optional gates: `lint`, `type-check`, `custom-script`, `smoke-test`, `ping`
+- `audit` (dependency audit) is a built-in pre-deploy gate for `npm` and `npm-ci` targets, run after the mandatory gates and not configurable via `checks.pre`; other target types report `audit: skipped (not an npm target)`. It calls `scripts/audit-deps.sh --dir <repo root> --json` (adding `--ci` only on a genuine CI signal: `run_gates.sh`'s own `--ci` argument, `CI=true` or `GITHUB_ACTIONS=true` in the environment; never because of `--yes` or `--non-interactive`, and never `--approved`) and records the result with `scripts/audit-record.sh`. Findings at or above the threshold fail the gate (interactively: "proceed anyway / stop"); no consent (audit mode `ask` without a CI signal, or `off`) is a **skip with a notice** that says how to opt in (`mode: on` in `project/configs/audit-config.json`, or run the audit explicitly), never a pass, so `deploy --yes` under mode `ask` reports `audit:skipped (no consent)`; see `skills/j-publish/adapters/npm.md`. `deploy` (including `--dry-run`, the validate rehearsal) and `stage` both reach it through `run_gates.sh pre`
 - Any pre-deploy gate failure exits with code `2` and surfaces the full error output
 - Post-deploy gate failure records a `partial` publish result instead of rolling back the adapter upload
 - `--non-interactive` suppresses retry prompts and aborts immediately on failure
 
 See `skills/j-publish/assets/ci-contract.md` for the full quality-gate policy.
+
+## What this skill touches
+
+This is what `/publish` runs, reads and writes, checked against the scripts in `skills/j-publish/scripts/`.
+
+**External commands it runs**
+
+- `git`: read-only queries (`rev-parse`, `log`, `diff`, `diff-tree`, `tag --list`), plus `add`, `commit`, annotated `tag` and, for the `npm-ci` target, `git push origin HEAD` of the workflow file it generated.
+- `gh`: `gh workflow run`, `gh run list`, `gh run watch` and `gh run view` for the `npm-ci` target and `stage`, and one sign-in probe, `gh auth status` in `validate_npm_ci_env.sh`. The probe's output is discarded (`>/dev/null 2>&1`); only its exit status is used. The skill never runs `gh auth login`, `gh auth token` or `gh secret set`; those are commands you run yourself.
+- `npm`: `publish`, `view` and the `npm stage` family (`publish`, `list`, `view`, `download`, `approve`, `reject`), `version --no-git-tag-version` for `npm-ci`, and, in a scratch directory under `TMPDIR`, `init -y` and `install` of a downloaded tarball during `stage test`. The skill passes no token to `npm`; npm resolves its own credentials.
+- `xcodebuild` (`archive`, `-exportArchive`) and `xcrun` (`notarytool`, with `altool` as the fallback) for the `mobile-ios` target.
+- `ssh`: none is run locally. For the `droplet` target the generated GitHub Actions workflow opens the SSH connection on the GitHub-hosted runner, using the repository secrets you stored.
+- Also `jq`, `uuidgen`, `rsync` (release-note filtering) and, for a configured ping gate, `curl` to the URL you configured.
+
+**Credentials: who sets them, and what the skill does with them**
+
+- Secrets are set by you: `NPM_TOKEN` or `NODE_AUTH_TOKEN` in your own shell for the `npm` target, the `DROPLET_SSH_*` values as repository secrets (your repository host's secret store) for `droplet`, and the App Store Connect and signing values in your own shell for `mobile-ios`. `publish.json` holds references to them (variable or secret names), not values.
+- The `npm-ci` target uses npm trusted publishing (OIDC), so no npm token is stored anywhere.
+- Presence checks only: `validate_npm_env.sh`, `validate_ios_env.sh` and `validate_npm_ci_env.sh` test whether a variable is set and non-empty, or whether `gh` is signed in. They do not capture, print, log or store a credential value, and a failure message names the variable, never its value.
+- `ios_pipeline.sh` is the one script that reads credential-related values from your environment, because the upload has to hand them to Apple's tools. The variable names come from the `secrets` block of `publish.json`.
+  - The App Store Connect key id, issuer id and private-key file **path** are passed as arguments to `xcrun notarytool` (or `xcrun altool`). Because that command line is rendered for display, they are echoed to your terminal in the `[DRY RUN]` output in the failure block of a failed upload, and the key path in the "does not exist" validation error. They are not written to the publish history or to any file.
+  - The signing identity and the provisioning-profile UUID are substituted into an `ExportOptions.plist` template by `sed` (so they appear on that `sed` command line for an instant), written to the scratch directory `.claude/publish-tmp/<run-id>/`, and passed to `xcodebuild -exportArchive` by the plist path. That scratch plist is the only file they are written to, and an `EXIT` trap removes the directory when the script ends.
+  - The contents of the private key file are not read by the skill; it only tests that the path exists, and Apple's tool opens the file itself.
+
+**Local paths it writes**
+
+- The publish configuration (`publish.json` or `project/configs/publish.json`, from `setup`) and its backup copy during a write.
+- The publish history and ledger, `project/logs/publish-history.json` by default (with a `.lock` and a `.tmp` sibling while it is updated), and git tags.
+- `CHANGELOG.md` and the release-notes output path (`deploy`, `release-notes`).
+- Generated workflow files under `.github/workflows/` (`publish-droplet.yml`, the configured `npm-ci` workflow path, and `dependency-audit.yml`), and `package.json` and `package-lock.json` for the `npm-ci` version bump.
+- The iOS archive and export paths from the target's `ios` block, and the scratch directory `.claude/publish-tmp/<run-id>/` described above.
+- Temporary files and directories under `TMPDIR` (release-note filtering, `stage download`, `stage test`, the audit gate).
 
 ## Usage Signatures
 
@@ -171,6 +204,8 @@ Wizard flow:
 7. Validate the saved file with `validate_config.sh`; if validation fails, roll back the write.
 
 During setup, env-var reference answers are checked against the current shell. Missing variables only warn; they do not block save.
+
+For `npm` and `npm-ci` targets, a successful setup and the per-type env validation (`validate_npm_env.sh`, `validate_npm_ci_env.sh`) end by printing the one-time dependency-audit opt-in notice from `scripts/audit-notice.sh` (via `audit_notice_hook.sh`; marker shared with `j.init`). It is never printed for `droplet` or `mobile-ios`, and never changes the command's exit code.
 
 Example invocations:
 

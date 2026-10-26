@@ -1,0 +1,37 @@
+/*
+ * SecurityTab shell styling — E85_S03_T04.
+ *
+ * Colours come from the tokens in `../tokens.css` only (no literal colour values), so the
+ * theme-contrast check and both themes keep working. Spacing uses the shared `--space-*` scale.
+ * E85_S03_T05 and E85_S03_T06 fill `.security-section-body` inside each section.
+ */
+
+.security-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.security-section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: var(--space-md);
+  box-sizing: border-box;
+}
+
+.security-section-heading {
+  margin: 0 0 var(--space-sm);
+  color: var(--color-text);
+}
+
+.security-section-body {
+  min-height: var(--space-lg);
+}
+
+/* ── Mobile (<= 480px, matches tokens.css --breakpoint-mobile) ────────────────── */
+@media (max-width: 480px) {
+  .security-section {
+    padding: var(--space-sm);
+  }
+}

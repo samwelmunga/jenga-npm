@@ -35,6 +35,13 @@
 
 set -uo pipefail
 
+# This tool re-runs real bats files, so it must never run inside a nested suite
+# run (E77_S01_T02). Nothing calls it today; this keeps it that way if something
+# ever does. Logs a SKIP line and exits 0 (a visible skip, not a silent pass).
+# shellcheck source=tests/helpers/nested-suite.bash
+source "$(dirname "${BASH_SOURCE[0]}")/nested-suite.bash"
+log_skip_if_nested_suite_run "prove-assertions-live.sh re-runs real bats files" && exit 0
+
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
 
 BATS=(npx --no-install bats)

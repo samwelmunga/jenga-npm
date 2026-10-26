@@ -70,8 +70,9 @@ The adapter requires the following tools at invocation time:
 - `git` — to commit the generated workflow file
 - `gh` — GitHub CLI, to trigger the workflow via `gh workflow run`
 
-The `gh` CLI must be authenticated (`gh auth login`) before running
-`/publish deploy` against a droplet target.
+You must already be signed in to GitHub with the `gh` CLI before running
+`/publish deploy` against a droplet target. Signing in is something you run
+yourself (`gh auth login`); the skill never runs it.
 
 ### Pipeline entrypoint
 

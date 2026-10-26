@@ -1,0 +1,9 @@
+$ env JENGA_CONVENTIONS_DIGEST_MAX_LINES=4 bash @REPO@/scripts/conventions-digest.sh --agent developer
+--- stdout
+Project conventions (9 recorded; explicit, set through j.conventions):
+Precedence: the conventions above are explicit and beat inference from the codebase; infer only for categories not listed.
+EST: board commits keep the mandatory task(E##_S##_T##): / story(...) / epic(...) naming; a recorded commit-format convention applies to non-board commits only.
+... 9 more categories omitted
+--- stderr
+--- exit
+0

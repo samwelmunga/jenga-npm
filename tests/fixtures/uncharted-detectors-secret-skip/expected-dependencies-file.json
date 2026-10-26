@@ -1,0 +1,48 @@
+{
+  "script": "detect-dependencies.sh",
+  "version": 1,
+  "target": "app.js",
+  "target_absolute": "@TARGET@/src/app.js",
+  "target_type": "file",
+  "repo_root": "@TARGET@/src",
+  "files_scanned": 1,
+  "files_truncated": false,
+  "unrecognised": false,
+  "languages": [
+    {
+      "language": "javascript",
+      "files": 1
+    }
+  ],
+  "unrecognised_extensions": [],
+  "counts": {
+    "internal": 1,
+    "external": 1
+  },
+  "internal": [
+    {
+      "raw": "./lib/util",
+      "language": "javascript",
+      "resolved": "lib/util.js",
+      "occurrences": 1,
+      "sources": [
+        "app.js"
+      ]
+    }
+  ],
+  "external": [
+    {
+      "name": "left-pad",
+      "language": "javascript",
+      "kind": "package",
+      "occurrences": 1,
+      "sources": [
+        "app.js"
+      ]
+    }
+  ],
+  "manifests": [],
+  "notices": [
+    "Target is not inside a git repository; repo root fell back to '@TARGET@/src'. Internal/external classification may be less accurate."
+  ]
+}

@@ -1,0 +1,90 @@
+$ bash @REPO@/skills/j-conventions/scripts/conventions-entry.sh show
+--- stdout
+{
+  "conventions_version": 1,
+  "categories": {
+    "commit-format": {
+      "source": "preset",
+      "preset": "conventional-commits",
+      "summary": "Conventional Commits",
+      "values": {
+        "style": "conventional-commits",
+        "message_regex": "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\\([^)]+\\))?!?: .+"
+      }
+    },
+    "branching": {
+      "source": "preset",
+      "preset": "trunk-based",
+      "summary": "Trunk-based",
+      "values": {
+        "model": "trunk-based"
+      }
+    },
+    "naming": {
+      "source": "preset",
+      "preset": "kebab-files-camel-identifiers",
+      "summary": "kebab-case files, camelCase identifiers",
+      "values": {
+        "identifier_case": "camelCase",
+        "file_case": "kebab-case"
+      }
+    },
+    "code-comments": {
+      "source": "preset",
+      "preset": "comment-the-why",
+      "summary": "Comment the why, not the what",
+      "values": {
+        "policy": "comment-why-not-what"
+      }
+    },
+    "formatting-linting": {
+      "source": "preset",
+      "preset": "formatter-and-linter",
+      "summary": "Formatter and linter enforced",
+      "values": {
+        "approach": "formatter-and-linter",
+        "format_command": "<format command>",
+        "lint_command": "<lint command>"
+      }
+    },
+    "testing": {
+      "source": "preset",
+      "preset": "tests-for-every-change",
+      "summary": "Tests for every change",
+      "values": {
+        "expectation": "tests-for-every-change"
+      }
+    },
+    "file-layout": {
+      "source": "preset",
+      "preset": "src-and-tests",
+      "summary": "src/ plus tests/",
+      "values": {
+        "layout": "src-and-tests",
+        "source_dir": "src",
+        "test_dir": "tests"
+      }
+    },
+    "language-tooling": {
+      "source": "preset",
+      "preset": "pinned-runtime-with-lockfile",
+      "summary": "Pinned runtime and committed lockfile",
+      "values": {
+        "version_policy": "pinned-runtime-and-lockfile",
+        "lockfile_committed": true
+      }
+    },
+    "documentation-placement": {
+      "source": "preset",
+      "preset": "published-docs-in-docs",
+      "summary": "Published docs in docs/",
+      "values": {
+        "policy": "published-docs-in-docs-internal-elsewhere",
+        "public_docs_dir": "docs"
+      }
+    }
+  }
+}
+--- stderr
+--- exit
+0
