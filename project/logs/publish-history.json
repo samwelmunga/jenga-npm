@@ -926,5 +926,37 @@
     "dist_tag": "latest",
     "result": null,
     "reason": "Staged via direct 'gh workflow run npm-publish.yml -f mode=stage' (run 41588134712); /publish stage publish refuses while the mandatory test gate is red on 7 stranded tests/workflow-skill-registration.bats cases (missing tests/helpers/router-route.mjs in the public mirror)."
+  },
+  {
+    "id": "8b01ae3d-8f4c-48dd-addd-68fb92ae8860",
+    "version": "v4.6.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-11-03T06:51:26Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "stage_tested",
+    "git_tag": "v4.6.0",
+    "commit_sha": "9b1cc228f62b14b2601cdabbef173748dcd34a8f",
+    "stage_id": "52e486e1-5f4d-47eb-ac5b-d6112c6d60a3",
+    "dist_tag": null,
+    "result": "pass",
+    "reason": "Manual run of the README consumer procedure against st-test (not via /publish stage test): checksum 3cf6c8b4 matched, postinstall ok, skill smoke test PASS (0 critical, 6 minor), package tests 14/14 and 11/11. st-test npm test: 107 passed, 23 failed, all ENOENT on gitignored project/data/kallor (absent data, unrelated to the package)."
+  },
+  {
+    "id": "16bce78e-d7d9-4a67-8a4a-b6007442685b",
+    "version": "v4.6.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-11-03T06:51:26Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "approved",
+    "git_tag": "v4.6.0",
+    "commit_sha": "9b1cc228f62b14b2601cdabbef173748dcd34a8f",
+    "stage_id": "52e486e1-5f4d-47eb-ac5b-d6112c6d60a3",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": "Approved outside /publish. npm dist-tag latest confirmed at 4.6.0."
   }
 ]
