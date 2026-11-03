@@ -902,5 +902,29 @@
     "dist_tag": "latest",
     "result": null,
     "reason": "Backfilled: approved outside /publish. npm dist-tag latest confirmed at 4.5.0."
+  },
+  {
+    "event": "gate_failure",
+    "gate": "test",
+    "phase": "pre",
+    "target": "npm-jenga",
+    "date": "2026-11-03T02:32:26Z",
+    "exit_code": 2
+  },
+  {
+    "id": "73fb17a2-5e2e-4ae5-8518-10d81a163183",
+    "version": "v4.6.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-11-03T06:10:36Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "staged",
+    "git_tag": "v4.6.0",
+    "commit_sha": "47a409d2ea6db4baccbea46407e3e1b21fd60aa7",
+    "stage_id": "52e486e1-5f4d-47eb-ac5b-d6112c6d60a3",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": "Staged via direct 'gh workflow run npm-publish.yml -f mode=stage' (run 41588134712); /publish stage publish refuses while the mandatory test gate is red on 7 stranded tests/workflow-skill-registration.bats cases (missing tests/helpers/router-route.mjs in the public mirror)."
   }
 ]
