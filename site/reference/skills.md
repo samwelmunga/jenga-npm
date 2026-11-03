@@ -557,6 +557,33 @@ See [workflows](project/documentation/workflows.md) for the definition format an
 
 ---
 
+#### `/j-workflow-recorder`
+
+**Description:** Record a working session as it happens into a continuously-appended `_RECORDING.md` document, so a process performed once by hand becomes a document and, later, a replayable workflow definition.
+
+**Output type:** `any`
+
+**Invokes:** the Scrum Master agent (interpretation of captured steps); capture itself is done by a hook and shell scripts
+
+**When to use:** When you are about to perform a process by hand and want it written down as it happens, so it can later become a replayable workflow definition.
+
+**What it does:**
+- `start [<name>]` — creates the recording document, named after the process (derived from your opening interaction when no name is given), and sets the active-recording pointer
+- `status` — reports whether a recording is active, its path, title, step count and when the pointer expires
+- `stop` — after you confirm the process has ended, seals the recording and hands the closed document to workflow-definition emission
+- Bare `/j-workflow-recorder` starts a recording, or reports the one already running
+- Each user interaction is appended automatically by a hook; the Scrum Master annotates the captured steps with what they mean in the process
+
+**Example:**
+```
+/j-workflow-recorder start setting up the release pipeline
+→ Recording to <documentation>/…_RECORDING.md; capture is automatic on each interaction
+/j-workflow-recorder status
+/j-workflow-recorder stop
+```
+
+---
+
 ### Status & Review
 
 ---
@@ -707,6 +734,33 @@ Queue depth: 2 triggers pending
 
 ---
 
+#### `/j-close-task`
+
+**Description:** Close one already-implemented task by having the Tester verify it and write its status, then have the Scrum Master drain the trigger queue so the story and epic roll up when everything beneath them is complete, and report exactly how far the rollup got.
+
+**Output type:** `any`
+
+**Invokes:** the `tester` agent (verification) and the `scrum-master` agent (rollup)
+
+**When to use:** When a task's work is already committed and merged but its board status is still open, typically the last task of a story you want closed and rolled up without going through `j.do`.
+
+**What it does:**
+- Resolves the task, story and epic files, the task's status class and the commits reachable from `HEAD`
+- Stops, rather than guessing, when the task is `Blocked` or `Rejected`, or has no commit evidence on the current tree
+- Skips the Tester when the task is already closed, and goes straight to the rollup
+- Warns before draining a trigger queue that holds more than rollup triggers, since the Scrum Master processes every trigger and clears the file
+- Reports one of: closed and rolled up, story rolled up with the epic open, story still open, rollup queued, or not closed, based on a fresh read of the board
+
+**Example:**
+```
+/j-close-task E65_S05_T08
+→ Tester: E65_S05_T08 Passed
+→ Scrum Master: story E65_S05 Passed, epic E65 Passed with remarks
+→ Closed and rolled up
+```
+
+---
+
 #### `/j-dashboard`
 
 **Description:** Launch the local Jenga project dashboard (API + UI), or export a single self-contained HTML snapshot with a point-in-time data snapshot baked in.
@@ -774,7 +828,7 @@ Queue depth: 2 triggers pending
 
 **Exit code:** `0` when every selected suite passed, `1` otherwise.
 
-**Notes:** It never writes board status — that remains the Tester agent's exclusive responsibility. See [`project/documentation/test-runner.md`](https://github.com/samwelmunga/jenga-npm/blob/main/project/documentation/test-runner.md).
+**Notes:** It never writes board status — that remains the Tester agent's exclusive responsibility. The Tester also runs the same discovery and run scripts as a per-scope test policy (`test_run_task`, `test_run_story`, `test_run_epic`) before it closes a task, story or epic. See [`project/documentation/test-runner.md`](https://github.com/samwelmunga/jenga-npm/blob/main/project/documentation/test-runner.md).
 
 ---
 
@@ -1184,6 +1238,7 @@ Pick a backend: 1. Google Drive 2. S3 3. Dropbox ... → 1
 - Skips an already installed CLI and an already authenticated account, and reports what was skipped
 - Asks before running any install; hands browser sign-in and token steps to you and re-checks afterwards
 - Refers to secrets by environment-variable name only; values are never echoed or committed
+- After registering an MCP server, tells you it is still `Pending approval` in Claude Code and offers two ways to approve it (start `claude` in the project root and use `/mcp`, or add its name to `enabledMcpjsonServers` in `.claude/settings.local.json`); it writes that setting only if you pick it, since approval is your consent, and an OAuth server is then signed in through `/mcp`
 - Ends with a pass/fail report from independent verification, never from your confirmation alone
 
 **Example:**
@@ -1244,6 +1299,30 @@ Name: shellcheck   Category: lint   Enforcement: 1. required
 **Scope limit:** EST naming stays **mandatory** for board commits. A recorded commit format applies to non-board commits only.
 
 **Notes:** Project layer only — there is no user layer. Writes go through `skills/j-conventions/scripts/conventions-entry.sh`, which validates before an atomic replace and never reports success on a failed validation.
+
+---
+
+#### `/j-checklist`
+
+**Description:** Guided front end for the pre-flight checklist registry. Prints the registry — every situation grouped, or one — and adds, edits, removes, copies or moves a checklist item without hand-editing JSON.
+
+**Output type:** `any`
+
+**Invokes:** none
+
+**When to use:** When you want to see what the standing pre-flight checks are, add a project-specific check, tighten or relax an existing one, or carry an item into another registry file (for example a client project's). Hand-editing `checklists.json` stays supported.
+
+**How it works:**
+- Bare `/j-checklist` prints the registry and offers the actions as a numbered list; you pick an item by the number the printer shows.
+- Every input is validated as it is given, and every write validates the result before an atomic replace, so a failed validation leaves the file untouched.
+- `remove`, `move` and any write to the shipped default `templates/checklists.json` confirm first, showing the exact item.
+- Managed `conv-` items belong to `/j-conventions` and are refused here.
+
+**Two things it tells you before it writes:**
+- **Creating a project's first registry switches the whole project to a new file.** A project's own `checklists.json` replaces the shipped default whole and never merges with it, so the new file is created holding every shipped item plus yours.
+- **`block` has real teeth.** The enforcing hook refuses that situation's irreversible operation at every permission level, including 5 (Unrestricted), with no environment variable that turns it off. Prove the `verify` at `confirm` first.
+
+**Notes:** Writes go through `skills/j-checklist/scripts/checklist-entry.sh`, printing through `checklist-print.sh`. Item definitions only: ticking stays `scripts/checklist.sh tick`. See `project/documentation/preflight-checklists.md`.
 
 ---
 

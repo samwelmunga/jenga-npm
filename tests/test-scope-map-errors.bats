@@ -340,6 +340,101 @@ lock_file() {
 }
 
 # ===================================================================================================================
+# excluded_tests: the optional declaration of a deliberate omission (E72_S07_T03 fix round)
+# ===================================================================================================================
+#
+# The key declares that a test file is deliberately left out of every rule, with the reason, so the gate can say
+# "deliberately kept out" rather than leaving it indistinguishable from "not mapped". It SUBTRACTS NOTHING -- it adds
+# no negation, so map_version stays 1 -- and its reason is mandatory, so nothing is quietly kept out of a gate.
+
+@test "excluded_tests: absent is valid and the output key is absent too, byte-identical to before it existed" {
+  # The key is appended ONLY when the map declares an exclusion, which is why every exact-output assertion in this
+  # file and in tests/test-scope-map-mapping.bats is still valid for a map that does not use it.
+  make_repo
+  scope
+  [ "$status" -eq 0 ]
+  json_check 'has("map_excluded_tests") == false'
+}
+
+@test "excluded_tests: a declaration is reported with its reason and mapped false" {
+  make_repo
+  write_map "$BATS_TEST_TMPDIR/decl.json" '{"map_version":1,"excluded_tests":[{"file":"tests/b.bats","reason":"mutates the real blocklist"}],"rules":[{"source":"scripts/x.sh","tests":["tests/a.bats"]}]}'
+  scope_nomap --map "$BATS_TEST_TMPDIR/decl.json"
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+  json_check '.map_excluded_tests == [{file:"tests/b.bats",reason:"mutates the real blocklist",mapped:false}]'
+  # And it subtracted nothing: the selection is exactly what the rules said.
+  json_check '.mapped_tests == {"bats:tests":["tests/a.bats"]}'
+}
+
+@test "excluded_tests: a declaration a rule selects anyway reads mapped true, warns, and is NOT claimed as excluded" {
+  # Nothing is subtracted, so a contradicted declaration means the file IS in the run. Reporting it as excluded would
+  # be the exact class of false statement this story exists to remove, so it is flagged instead.
+  make_repo
+  write_map "$BATS_TEST_TMPDIR/conflict.json" '{"map_version":1,"excluded_tests":[{"file":"tests/a.bats","reason":"meant to be kept out"}],"rules":[{"source":"scripts/x.sh","tests":["tests/a.bats"]}]}'
+  scope_nomap --map "$BATS_TEST_TMPDIR/conflict.json"
+  [ "$status" -eq 0 ]
+  json_check '.map_excluded_tests == [{file:"tests/a.bats",reason:"meant to be kept out",mapped:true}]'
+  json_check '[.warnings[] | select(test("excluded_tests but a rule selects it"))] | length == 1'
+  json_check '.mapped_tests["bats:tests"] | index("tests/a.bats") != null'
+}
+
+@test "excluded_tests: it is reported on the empty-change-set path too" {
+  # That path emits its JSON from the shell rather than through the matching pass, so it is a separate code path and
+  # needs its own case. An empty commit is how the rest of this file reaches it.
+  make_repo
+  commit_all "empty" --allow-empty
+  write_map "$BATS_TEST_TMPDIR/decl.json" '{"map_version":1,"excluded_tests":[{"file":"tests/b.bats","reason":"why"}],"rules":[{"source":"scripts/x.sh","tests":["tests/a.bats"]}]}'
+  scope_nomap --map "$BATS_TEST_TMPDIR/decl.json"
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+  json_check '.warnings == ["No changed files"]'
+  json_check '.map_excluded_tests == [{file:"tests/b.bats",reason:"why",mapped:false}]'
+}
+
+@test "excluded_tests: entries are sorted by file, so the output stays byte-stable" {
+  make_repo
+  write_map "$BATS_TEST_TMPDIR/two.json" '{"map_version":1,"excluded_tests":[{"file":"tests/z.bats","reason":"z"},{"file":"tests/b.bats","reason":"b"}],"rules":[{"source":"scripts/x.sh","tests":["tests/a.bats"]}]}'
+  scope_nomap --map "$BATS_TEST_TMPDIR/two.json"
+  [ "$status" -eq 0 ]
+  json_check '[.map_excluded_tests[].file] == ["tests/b.bats","tests/z.bats"]'
+}
+
+@test "validation: excluded_tests that is not an array is rejected" {
+  invalid_map '{"map_version":1,"excluded_tests":"tests/a.bats","rules":['"$GOOD_RULE"']}' - "excluded_tests is present but not an array"
+}
+
+@test "validation: an excluded_tests entry that is not an object names its 1-based index" {
+  invalid_map '{"map_version":1,"excluded_tests":["tests/a.bats"],"rules":['"$GOOD_RULE"']}' - "excluded_tests[1]: not an object"
+}
+
+@test "validation: an unknown excluded_tests key is rejected and named" {
+  invalid_map '{"map_version":1,"excluded_tests":[{"file":"tests/a.bats","reason":"r","note":"n"}],"rules":['"$GOOD_RULE"']}' - 'excluded_tests[1]: unknown key "note"'
+}
+
+@test "validation: an excluded_tests file that is missing or empty is rejected" {
+  invalid_map '{"map_version":1,"excluded_tests":[{"reason":"r"}],"rules":['"$GOOD_RULE"']}' - "excluded_tests[1]: file must be a non-empty string"
+  invalid_map '{"map_version":1,"excluded_tests":[{"file":"","reason":"r"}],"rules":['"$GOOD_RULE"']}' - "excluded_tests[1]: file must be a non-empty string"
+}
+
+@test "validation: an excluded_tests file containing a wildcard is rejected as not a literal path" {
+  # The gate matches the declaration against the selected test files EXACTLY, so a glob could never be resolved to a
+  # yes/no answer about whether the file is in the run.
+  invalid_map '{"map_version":1,"excluded_tests":[{"file":"tests/mirror-*.bats","reason":"r"}],"rules":['"$GOOD_RULE"']}' - "must be a literal path, not a glob"
+  invalid_map '{"map_version":1,"excluded_tests":[{"file":"tests/a?.bats","reason":"r"}],"rules":['"$GOOD_RULE"']}' - "must be a literal path, not a glob"
+}
+
+@test "validation: an excluded_tests file outside the dialect is rejected" {
+  invalid_map '{"map_version":1,"excluded_tests":[{"file":"../x.bats","reason":"r"}],"rules":['"$GOOD_RULE"']}' - 'excluded_tests[1]: file:'
+  invalid_map '{"map_version":1,"excluded_tests":[{"file":"/abs/x.bats","reason":"r"}],"rules":['"$GOOD_RULE"']}' - 'excluded_tests[1]: file:'
+}
+
+@test "validation: an excluded_tests reason that is missing or empty is rejected, so nothing is kept out silently" {
+  invalid_map '{"map_version":1,"excluded_tests":[{"file":"tests/a.bats"}],"rules":['"$GOOD_RULE"']}' - "reason must be a non-empty string"
+  invalid_map '{"map_version":1,"excluded_tests":[{"file":"tests/a.bats","reason":""}],"rules":['"$GOOD_RULE"']}' - "reason must be a non-empty string"
+}
+
+# ===================================================================================================================
 # Mapping file resolution failures
 # ===================================================================================================================
 

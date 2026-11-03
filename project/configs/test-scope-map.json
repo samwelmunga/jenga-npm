@@ -1,0 +1,659 @@
+{
+  "_comment": "Jenga's OWN changed-file to test-file map (E72_S07_T03). Referenced by commit_scope_map_file in project/configs/test-config.json; it replaces templates/test-scope-map.json, the shipped generic default, which must never be edited (its own _comment says so, and editing it would ship this project's policy to every consumer). Same format: map_version 1; rules are ADDITIVE, so a changed file maps to the union of every matching rule's tests, never first-match-wins; a rule may carry ONLY source and tests (an extra key, including a per-rule comment, is a validation error), which is why every rationale below lives here. === DROPPED FROM THE SHIPPED DEFAULT: **/*.sh -> tests/**/*.bats. That single rule is what made a scoped gate select the entire catalog for any shell edit (measured 2026-11-01: 261 test files / 5666 cases for a 31-file change set), so carrying it over would undo this story. === CONSEQUENCE: a change in an area no rule covers maps to zero suites and the gate runs E72_S08_T06's BOUNDED DEFAULT SUITE SET, with fallback_reason \"no-mapped-suites\" on stdout and in its JSON. CORRECTED 2026-11-02 (E72_S08_T04): this used to read \"the gate FALLS BACK TO THE FULL CATALOG ... that is the safe direction (more tests, never fewer)\". E72_S08_T02 removed that escalation -- no scoped path can reach the full catalog any more -- and E72_S08_T06 supplied the floor that replaced it, which is never the full catalog and never empty. The reason is still always surfaced, never silent. Adding a rule here is how a new area gets narrowed. === THE MIRROR FAMILY IS ENUMERATED as literal paths instead of tests/mirror-*.bats, because that glob would also match tests/mirror-test-subject-invariant.bats and map_version 1 has NO NEGATION to take it back out. That file runs the whole shipping bats suite inside itself (about 20 minutes per real-push case, 7 such cases; the 2026-10-16 incident measured 2+ hours of no progress) and it mutates the real .publicignore, restoring it only in teardown(), so a killed run leaves the project's blocklist modified. Neither property belongs in an automatic closing gate. Run it deliberately with: bats tests/mirror-test-subject-invariant.bats === KNOWN GAP: map-scope.sh also resolves \"a changed file that is itself a test file\" to its own suite, so EDITING tests/mirror-test-subject-invariant.bats still selects it. No map can prevent that; the in-file marker owned by E77_S02 is the mechanism for it. === tests/commit-test-gate-mirror.bats is deliberately NOT in the mirror family: it is a parity test for skills/j-commit/ and one of the 4 known-red failures E72_S07_T04 records; mapping it to the mirror rules would hide that. === KEPT UNCHANGED from the shipped default: the trailing JavaScript, Python, Go and Rust rules. Nothing here matches them today, but they cost nothing and keep the map correct if such a suite is added. === Shared scripts under scripts/ are named individually rather than via scripts/*.sh, so adding a script does not silently inherit another's test set. === See the \"A project scope map\", \"Suite granularity\" and \"Suites that cannot pass right now\" sections of project/documentation/test-runner.md. === DELIBERATE OMISSIONS ARE NOW DECLARED, not only explained here: the top-level `excluded_tests` key names each test file this map deliberately leaves out of every rule, with its reason. It is a DECLARATION ONLY -- it subtracts nothing, so map_version 1 still has no negation and the enumerate-and-omit mechanism above is still what does the work (tests/project-scope-map.bats mutation-tests exactly that). What it buys is visibility: map-scope.sh reports it as map_excluded_tests, and scope-test-gate.sh prints it and carries it in --json as map_excluded_test_files, so a reader of the gate output can tell \"deliberately kept out\" from \"not mapped\" -- which T03 AC4 requires and which the narrowed selection alone could never show. If a rule ever selects a declared file anyway, map-scope.sh warns and the gate lists it under map_exclusion_conflicts rather than claiming it was excluded. === TWO MORE OMISSIONS, 2026-11-01 (user decision, E72_S07_T04 fix round 4): tests/mirror-permission-level-invariant.bats and tests/mirror-staging-branch-push.bats are now ALSO omitted from every rule and declared in excluded_tests. They were enumerated in the mirror family (and, for the first, in the scripts/jenga-permission-level-switch.sh and templates/permission-levels/*.json rules) until then; the removal is what excludes them, exactly as for the invariant suite above, and the declaration only makes it visible. Both drive the real mirror.sh end-to-end with real git pushes -- the second including the --force flow -- against a disposable LOCAL BARE remote via MIRROR_PUBLIC_URL_OVERRIDE (the real jenga-npm URL is never passed), so the hazard is not that a gate publishes to GitHub but that it drives the real outward-push pipeline whose containment depends on two env-var overrides being set on every invocation, over a working tree mirror.sh rsyncs rather than reading from git HEAD. Per-file reasons are in excluded_tests. The tester recorded both as unverified -- never as passed -- in every verification round of E72_S07; the declaration makes that visible in the gate output instead of depending on a tester declining each time. Run them deliberately with: bats tests/mirror-permission-level-invariant.bats and bats tests/mirror-staging-branch-push.bats === THE LIMIT OF ALL THREE DECLARATIONS: a map omission holds ONLY on the scoped path. Under policy full -- which E72_S08_T01 made a deliberate opt-in rather than a default, re-tiering test_run_task, test_run_story and test_run_epic to none/scoped/none -- all three files are part of the catalog and RUN. CORRECTED 2026-11-02 (E72_S08_T04): this used to read \"(test_run_epic defaults to full) and on either fallback to the full catalog\"; the default is now none and E72_S08_T02 deleted both fallbacks to the full catalog, so policy full set by hand is the only remaining path. The map is the wrong instrument for 'never automatically, on any path' -- that is E77_S02's in-file jenga:manual-only marker, which is not on main yet. See the \"Keeping a hostile suite out of an automatic gate\" section of project/documentation/test-runner.md. === DOCUMENTATION RULES, 2026-11-02 (E72_S08_T07, folded in from the duplicate story E72_S09). Before this, NO rule covered a documentation .md path: three rules touched .md (templates/SCRUM_BOARD_SCHEMA.md, agents/*.md, skills/**/SKILL.md) and the documentation surfaces proper -- project/documentation/, CLAUDE.md, README.md, AGENTS.md, site/, docs/, the non-schema templates/*.md, project/board/ -- had none at all, so a docs-only change matched nothing and the gate fell back to the whole catalog. E72_S08_T06's bounded floor stops that 264-suite run, but a floor asserts nothing ABOUT docs; these rules are the positive mapping, so `scoped` means something for a docs change instead of being nominal. === HOW THE MEMBERSHIP WAS ESTABLISHED: a recorded grep over tests/ (E72_S08_T07 AC3), not from examples. 177 of 271 suites mention a .md path, which is useless as a selector because most build a scratch .md under $BATS_TEST_TMPDIR. The discriminator used instead is whether the suite READS A DOC OFF THE REAL REPO ROOT -- \"$REPO_ROOT\"/<doc> -- rather than out of a fixture tree. Every rule below names only suites that do. The full sweep, with every candidate examined and rejected, is in project/documentation/summaries/E72_S08_T07-summary.md and the \"Documentation changes\" section of project/documentation/test-runner.md. === WHY PER-DOCUMENT RULES AND NOT ONE **/*.md RULE: the same reason shared scripts under scripts/ are named individually rather than via scripts/*.sh -- so adding a document does not silently inherit another's test set. A blanket **/*.md would also be the .md analogue of the **/*.sh catch-all this map dropped: every doc edit would select every doc suite. CONSEQUENCE, ACCEPTED: a documentation path no rule names still matches nothing and falls through to T06's bounded default set, which is the sanctioned outcome (E72_S08_T07 AC6), never a pass that ran nothing. Adding a rule here is how a new document gets narrowed. === DELIBERATELY LEFT OUT, each a real finding of the sweep rather than an oversight. (a) project/documentation/test-runner.md gets no rule: no suite asserts its CONTENT (tests/scope-test-gate.bats only names it in a comment), so there is nothing honest to map it to. (b) The existing agents/*.md rule is NOT extended, though the sweep found four more suites reading agents/*.md off the real root (tests/commit-test-gate-skill.bats, tests/config-descriptors.bats, tests/tools-registry-e2e.bats and tests/commit-test-gate-mirror.bats). An agents doc change already resolves through a rule, so the gap is membership rather than absence, and the fourth suite is one of the 4 known-red failures E72_S07_T04 records -- putting it in a docs rule would feed known redness into every agents doc gate. That call deserves its own decision, not a drive-by edit. (c) templates/SCRUM_BOARD_SCHEMA.md is likewise not extended, though the sweep found tests/resolve-root.bats and tests/reconcile-ladder-statuses.bats also reading it off the real root. (d) skills/**/*.md assets other than SKILL.md get no rule, though tests/digitalocean-descriptor.bats asserts skills/j-publish/adapters/droplet.md and its two mirror copies; that belongs to the skill-asset rule family, not the documentation one. (e) tests/workflow-check-doc-refs.bats, tests/strategy-visibility.bats, tests/strategy-path-resolver.bats, tests/mirror-never-public-refs.bats, tests/check-staged-hardcoded-paths.bats, tests/help-twin-only-listing.bats and tests/copilot-skill-list.bats all look like doc suites and are not: each builds a synthetic doc tree under $BATS_TEST_TMPDIR and asserts a SCRIPT's behaviour, so editing a real document cannot change their result. (f) tests/commits-for-item-differential.bats and tests/read-external-refs.bats do read the real project/board/, but the first walks this repository's full history about six times per board id (roughly 1900 ids) and the second only asserts a live file was NOT touched, so neither asserts board content. project/board/**/*.md therefore maps to tests/validate-board-yaml.bats alone -- the one suite that runs scripts/validate-board.sh over the real board. === NO NEGATION WAS ADDED AND NO EXCLUSION WAS WEAKENED: these are additive {source, tests} rules like every other, map_version 1 still has no negation, excluded_tests is byte-identical, and no rule below names a tests/mirror-* glob, so the enumerate-and-omit mechanism tests/project-scope-map.bats mutation-tests is untouched. === AC4 of E72_S08_T07: this is DATA. No .md literal was added to map-scope.sh or to scope-test-gate.sh. === CONFIG RULES, 2026-11-02 (E72_S08_T04). Before this, NO rule covered project/configs/ at all: all seven live config files returned mapped_suites [] with the warning \"No tests found for the changed files\", measured on main with map-scope.sh --files-from against this map. So EDITING A CONFIG FILE SELECTED ZERO TESTS, and the sharpest instance was this file -- editing the scope map never ran tests/project-scope-map.bats, the suite that pins the map's own invariants INCLUDING the mutation test proving that the mirror family's enumerate-and-omit mechanism is load-bearing. E72_S08_T07 only exercised that suite because it happened to edit the test file itself, which maps to its own suite by map-scope.sh's changed-file-is-a-test-file rule, not because the map change selected it. === THE MASKING, which is why nobody noticed: before E72_S08_T02 a zero-mapping escalated to the full catalog, so editing a config file DID run its asserting suite -- as one of 264. The gap was completely hidden by the very escalation T02 removed. After T02 the same edit runs E72_S08_T06's bounded floor (smoke-test-skills, resolve-root, events-append, scope-test-policy-resolve, discover-tests, j-test-build-catalog), which contains none of the suites below except resolve-root. So the coverage that existed by accident disappeared, and the gap became visible only once it also became real -- which is why it is fixed in the same story that created it. === HOW MEMBERSHIP WAS ESTABLISHED: by E72_S08_T07's discriminator, not a raw grep. A raw grep -rl over tests/ inflates uselessly -- workflow.json matches 95 of 272 suites, test-config.json 24, checklists.json 20, 181 file-hits in total -- because most of those build a scratch config under $BATS_TEST_TMPDIR and assert a SCRIPT's behaviour, so editing the real file cannot change their result. Two tiers were applied and both recorded: TIER A (mapped) the suite reads the real file off the repository root AND makes at least one assertion whose subject is that file's own content, so a bad edit changes the result; TIER B (rejected) the suite reads the real file only as an INPUT to exercise something else -- cp or jq into a fixture tree, export JENGA_*_FILE=, or a content-invariant isolation checksum. Only Tier A suites are named below. The full sweep, with every candidate examined and rejected and the reason for each, is in project/documentation/full-run-call-site-audit.md. === THE CATCH-ALL project/configs/*.json -> tests/config-descriptors.bats IS THE GENERAL FORM, deliberately, and it is the one place a glob is preferred over per-file naming: that suite iterates EVERY live config (audit-config, workflow, scope-thresholds, test-config, playbook-config, checklists) reading $REPO_ROOT/project/configs/<f>.json and asserting that every key it holds is covered by its descriptor, so an eighth config file added tomorrow inherits real coverage instead of leaving an eighth gap. It is also the ONLY Tier A suite for project/configs/playbook-config.json, which therefore has no file-specific rule of its own -- recorded here rather than left to look like an oversight. KNOWN COST, STATED NOT BURIED: tests/config-descriptors.bats has two red cases on main that E72_S08 explicitly disclaims (test 9, real descriptor drift from E72_S07_T03, owner E72_S07; test 14, scope-thresholds max_concurrent_developers, which fails BECAUSE bump_on_change worked and is unowned -- see project/rapports/problems/E72_S07-config-descriptor-drift-unowned.md). Mapping it means a config edit under test_run_story scoped now selects a currently-red suite. It is mapped anyway because it is the asserting suite and withholding it to keep the gate green would be hiding the defect, not fixing it; the redness needs an owner, which the audit document recommends. === tests/checklist-*.bats IS NOT USED for project/configs/checklists.json even though the templates/checklists.json rule above uses exactly that glob. The glob matches five suites and only two of them (checklist-gating, checklist-sh) are Tier A; checklist-entry, checklist-hook and checklist-suggest are fixture-based and the discriminator rejects them. Naming the Tier A ones literally follows this map's own stated principle -- shared scripts under scripts/ are named individually rather than via scripts/*.sh, so adding a file does not silently inherit another's test set -- and the divergence from the template rule is deliberate, not an inconsistency. === DELIBERATELY LEFT OUT, each a real finding of the sweep: (a) tests/config-get-set-e2e.bats reads $REPO_ROOT/project/configs/test-config.json and playbook-config.json, but its setup() copies this repo's real configs into a scratch tree and the assertions compare the COPY against the original, so both sides move together and the result is invariant to the file's content -- Tier B, and it also carries five pre-existing failures plus one from E72_S08_T01. (b) tests/audit-deps.bats reads the real project/configs/audit-config.json only to checksum it before and after, asserting it was NOT modified; the result cannot change when the file is edited. (c) The many suites that cp or jq the real workflow.json into a fixture root (tests/audit-record.bats, tests/audit-notice.bats, tests/audit-status.bats, tests/audit-end-to-end.bats, tests/publish-audit-notice.bats, tests/publish-audit-gate.bats, tests/config-consumer-install.bats, tests/workflow-load-catalog.bats, tests/jenga-list-preflight-deferred.bats, tests/commit-test-gate-run.bats) assert a script's path resolution, not workflow.json's invariants; they are the single largest source of the 95-suite grep inflation. (d) tests/consumer-path-fallback.bats copies the real scope-thresholds.json into a consumer tree for the same reason. (e) CORRECTED 2026-11-02 after verification: tests/audit-end-to-end.bats IS Tier A and is mapped. It exports the real checklists.json as JENGA_CHECKLISTS_FILE and then asserts the result of one named item -- dependency-audit-before-release -- by result, exit_status, reason and action (:219-253), so removing, renaming or re-enforcing that item changes its verdict. The first sweep rejected it as \"export only\", which was wrong. tests/checklist-sh.bats is Tier A for the adjacent reason: it asserts the real registry loads and lists cleanly for every situation, so a malformed edit fails it. (f) tests/conventions-no-leak.bats was mapped in the first pass and is NOW REMOVED as a Tier A FALSE POSITIVE: it reads the real project/configs/checklists.json only inside its denylist() helper, as an INPUT used to build the list of this repository's own identifying values; the subject of its assertions is whether those values leak into public-facing files, not the registry's own invariants. Its one case that does assert a registry (no-leak 10) reads templates/checklists.json, not the project instance. Caught in verification by the tester on E72_S08_T04, recorded here rather than silently dropped. (g) tests/scope-test-policy-resolve.bats looks like test-config.json's asserting suite and is not -- it writes its own fixture config under $CFG_DIR -- though it is already in T06's bounded floor, so a test-config edit reaches it by that route regardless. === NO NEGATION WAS ADDED AND NO EXCLUSION WAS WEAKENED: these are additive {source, tests} rules like every other, map_version 1 still has no negation, excluded_tests is byte-identical, and no rule below names a tests/mirror-* glob or any of the three declared files, so the enumerate-and-omit mechanism tests/project-scope-map.bats mutation-tests is untouched. No rule was added to templates/test-scope-map.json: these suites are specific to this repository and the shipped default stays project-agnostic. === THE SEVEN RULES ARE PINNED BY TESTS, added 2026-11-02 in the same task (E72_S08_T04 DoD item 2, raised in verification): tests/project-scope-map.bats asserts that each of the seven files resolves to a non-empty selection, that test-scope-map.json selects tests/project-scope-map.bats specifically, that no file returns the \"No tests found\" warning, that the rules are selective rather than one blanket set, that the catch-all alone covers playbook-config.json, and -- as a MUTATION test, the same shape used for the mirror family and the documentation rules -- that stripping every project/configs/ rule from a copy of the map empties the selection, so the behaviour demonstrably lives in this DATA and not in a script. === CITATIONS CORRECTED 2026-11-02, after verification of E72_S08_T04 found two of them wrong, and one of the two changed a rule. (1) tests/config-command.bats was first justified by its :105 case, which compares `jenga config get` -- reading the COPY its setup makes at :31 -- against the real file, so both sides move together and it is value-invariant: the same shape this map rejected tests/config-get-set-e2e.bats for. The real Tier A case is :293-302, which runs node over $REPO_ROOT/project/configs/<f>.json itself and asserts the real file round-trips BYTE-IDENTICALLY through JSON.stringify(obj, null, 2) + newline. That case covers scope-thresholds, playbook-config AND test-config, so config-command.bats is now named by all three rules -- and project/configs/playbook-config.json is therefore NO LONGER covered by the catch-all alone, as the first pass recorded. A hand-edit that breaks the 2-space serialisation of any of the three fails it. (2) tests/config-consumer-install.bats rests on :144 alone, not :144+:172; :172 compares a value jq'd out of the real file at :61 against the real file, both sides moving together. :144 is a leak guard that fails only if the real inline_max_files becomes exactly 11 -- thin, but genuinely a read of the real file's content, so the rule stands on it. === RECORDED DECISION on tests/conventions-no-leak.bats, 2026-11-02: it is NOT a pure Tier B. Its no-leak 4 case builds part of its denylist from the REAL registry's non-default item ids (10 today) and scans the five shipped files for them, so a future item whose id collides with text in a shipped file would turn it red -- and no rule now reaches it. Dropped anyway, because the coupling is incidental rather than asserted (the registry is one of five denylist sources, and the suite asserts nothing about the registry's own invariants) and because the risk is covered from the other side by the templates/checklists.json rule and by the five mapped project-instance suites. The residual risk is recorded in project/documentation/full-run-call-site-audit.md section 4.7 rather than left implicit; if the trade proves wrong the fix is one entry, not a redesign.",
+  "map_version": 1,
+  "excluded_tests": [
+    {
+      "file": "tests/mirror-permission-level-invariant.bats",
+      "reason": "deliberately omitted from every rule above, as of 2026-11-01 (it was enumerated in the skills/j-mirror-public/**/*.sh, scripts/jenga-permission-level-switch.sh and templates/permission-levels/*.json rules until then; removing it from all three is what does the work -- this declaration subtracts nothing). WHY IT CANNOT RUN IN AN AUTOMATIC GATE: its entire job is \"does a REAL push get refused\", so it invokes the real skills/j-mirror-public/scripts/mirror.sh end-to-end and executes real git pushes over the real working tree, which mirror.sh rsyncs rather than reading from git HEAD (its own header: four cases drive a real push). The destination is a freshly created LOCAL BARE remote via MIRROR_PUBLIC_URL_OVERRIDE and the real https://github.com/samwelmunga/jenga-npm URL is never passed -- but that containment rests entirely on MIRROR_PUBLIC_URL_OVERRIDE and MIRROR_WORKTREE_PATH_OVERRIDE being set correctly on every single invocation, which is not a property an automatic closing gate should be made to depend on; a killed run can also leave scratch worktrees and marker tags behind. It additionally carries a # jenga:requires-baseline-permissions: marker, so whether it runs or skips depends on ambient session state, which would make a gate result flip between \"verified\" and \"skipped\" for reasons unrelated to the change under test. In every verification round of E72_S07 the tester declined to run it and recorded it as unverified -- never as passed; declaring it here makes that visible in the gate output instead of depending on a tester declining each time. Run it deliberately with: bats tests/mirror-permission-level-invariant.bats"
+    },
+    {
+      "file": "tests/mirror-staging-branch-push.bats",
+      "reason": "deliberately omitted from every rule above, as of 2026-11-01 (it was enumerated in the skills/j-mirror-public/**/*.sh and skills/j-mirror-public/**/*.json rules until then; removing it from both is what does the work -- this declaration subtracts nothing). WHY IT CANNOT RUN IN AN AUTOMATIC GATE: its own header states that EVERY case drives the real mirror.sh end-to-end against a real bare remote, and it is the only suite that exercises mirror.sh's --force flow against one at all, so a gate selecting it executes real force-pushes over the real working tree, which mirror.sh rsyncs rather than reading from git HEAD. The destination is a freshly created LOCAL BARE remote via MIRROR_PUBLIC_URL_OVERRIDE and the real https://github.com/samwelmunga/jenga-npm URL is never passed -- but that containment rests entirely on MIRROR_PUBLIC_URL_OVERRIDE and MIRROR_WORKTREE_PATH_OVERRIDE being set correctly on every single invocation, which is not a property an automatic closing gate should be made to depend on; a killed run can also leave scratch worktrees and marker tags behind, and project/rapports/problems/E67_S03_T04-force-dry-run-pushes-rescue-tag.IGNORE.md records a real case of a --force path pushing a rescue tag outward on a flag combination believed not to push. It additionally carries a # jenga:requires-baseline-permissions: marker, so whether it runs or skips depends on ambient session state, which would make a gate result flip between \"verified\" and \"skipped\" for reasons unrelated to the change under test. In every verification round of E72_S07 the tester declined to run it and recorded it as unverified -- never as passed; declaring it here makes that visible in the gate output instead of depending on a tester declining each time. Run it deliberately with: bats tests/mirror-staging-branch-push.bats"
+    },
+    {
+      "file": "tests/mirror-test-subject-invariant.bats",
+      "reason": "deliberately omitted from every mirror rule above: it runs the whole shipping bats suite inside itself (about 20 minutes per real-push case, 7 such cases; the 2026-10-16 incident measured 2+ hours of no progress) and it mutates the real .publicignore, restoring it only in teardown(), so a killed run leaves the project blocklist modified. Neither property belongs in an automatic closing gate. Run it deliberately with: bats tests/mirror-test-subject-invariant.bats"
+    }
+  ],
+  "rules": [
+    {
+      "source": "skills/j-mirror-public/**/*.sh",
+      "tests": [
+        "tests/mirror-nested-suite-flag.bats",
+        "tests/mirror-never-public-refs.bats",
+        "tests/mirror-orphaned-twin-rewrite.bats",
+        "tests/mirror-publicize-wiring.bats",
+        "tests/mirror-release-prep.bats"
+      ]
+    },
+    {
+      "source": "skills/j-mirror-public/**/*.json",
+      "tests": [
+        "tests/mirror-nested-suite-flag.bats",
+        "tests/mirror-publicize-wiring.bats",
+        "tests/mirror-release-prep.bats"
+      ]
+    },
+    {
+      "source": ".publicignore",
+      "tests": [
+        "tests/mirror-never-public-refs.bats",
+        "tests/external-refs-absent-safe.bats",
+        "tests/workflow-publicignore.bats",
+        "tests/skill-allow-list-bijection.bats"
+      ]
+    },
+    {
+      "source": "scripts/never-public-refs.sh",
+      "tests": [
+        "tests/mirror-never-public-refs.bats"
+      ]
+    },
+    {
+      "source": "scripts/check-public-references.sh",
+      "tests": [
+        "tests/mirror-never-public-refs.bats"
+      ]
+    },
+    {
+      "source": "scripts/check-privatized.sh",
+      "tests": [
+        "tests/external-refs-absent-safe.bats",
+        "tests/check-privatized-event.bats"
+      ]
+    },
+    {
+      "source": "skills/j-test/**/*.sh",
+      "tests": [
+        "tests/j-test-*.bats",
+        "tests/discover-tests.bats",
+        "tests/test-scope-map*.bats",
+        "tests/scope-test-gate*.bats",
+        "tests/scope-gate-narrowing.bats",
+        "tests/scope-test-policy-resolve.bats",
+        "tests/baseline-permissions.bats",
+        "tests/project-scope-map.bats",
+        "tests/slowness-probe.bats",
+        "tests/commit-test-gate-*.bats"
+      ]
+    },
+    {
+      "source": "skills/j-test/scripts/lib/*.jq",
+      "tests": [
+        "tests/test-scope-map*.bats",
+        "tests/scope-gate-narrowing.bats",
+        "tests/project-scope-map.bats"
+      ]
+    },
+    {
+      "source": "skills/j-commit/**/*.sh",
+      "tests": [
+        "tests/commit-*.bats",
+        "tests/conventions-commit*.bats",
+        "tests/dev-done-post-sync-commit.bats"
+      ]
+    },
+    {
+      "source": "skills/j-workflow/**/*.sh",
+      "tests": [
+        "tests/workflow-*.bats"
+      ]
+    },
+    {
+      "source": "skills/j-conventions/**/*.sh",
+      "tests": [
+        "tests/conventions-*.bats"
+      ]
+    },
+    {
+      "source": "skills/j-checklist/**/*.sh",
+      "tests": [
+        "tests/checklist-*.bats",
+        "tests/validate-checklists.bats",
+        "tests/preflight-audit-items.bats"
+      ]
+    },
+    {
+      "source": "scripts/checklist*.sh",
+      "tests": [
+        "tests/checklist-*.bats",
+        "tests/validate-checklists.bats",
+        "tests/preflight-audit-items.bats",
+        "tests/jenga-list-preflight-deferred.bats"
+      ]
+    },
+    {
+      "source": "hooks/on_preflight_check.sh",
+      "tests": [
+        "tests/checklist-hook.bats",
+        "tests/checklist-gating.bats"
+      ]
+    },
+    {
+      "source": "skills/j-tools/**/*.sh",
+      "tests": [
+        "tests/tools-*.bats"
+      ]
+    },
+    {
+      "source": "scripts/resolve-tools.sh",
+      "tests": [
+        "tests/tools-resolve.bats",
+        "tests/tools-registry-*.bats"
+      ]
+    },
+    {
+      "source": "skills/j-connect/**/*.sh",
+      "tests": [
+        "tests/connect-*.bats",
+        "tests/*-connect.bats",
+        "tests/*-descriptor.bats",
+        "tests/register-mcp.bats",
+        "tests/detect-platform.bats",
+        "tests/list-services.bats",
+        "tests/validate-descriptor.bats",
+        "tests/run-descriptor.bats"
+      ]
+    },
+    {
+      "source": "skills/j-connect/**/*.json",
+      "tests": [
+        "tests/*-descriptor.bats",
+        "tests/validate-descriptor.bats",
+        "tests/list-services.bats"
+      ]
+    },
+    {
+      "source": "skills/j-uncharted/**/*.sh",
+      "tests": [
+        "tests/uncharted-*.bats",
+        "tests/populate-knowledge-graph.bats"
+      ]
+    },
+    {
+      "source": "skills/j-publish/**/*.sh",
+      "tests": [
+        "tests/publish-*.bats",
+        "tests/npm-*.bats",
+        "tests/pages-*.bats",
+        "tests/compute-deploy-reconcile-no-config.bats"
+      ]
+    },
+    {
+      "source": "skills/j-dashboard/**/*.sh",
+      "tests": [
+        "tests/dashboard-*.bats"
+      ]
+    },
+    {
+      "source": "skills/j-dashboard-share/**/*.sh",
+      "tests": [
+        "tests/dashboard-*.bats",
+        "tests/configure-backend.bats"
+      ]
+    },
+    {
+      "source": "skills/j-cloud-connect/**/*.sh",
+      "tests": [
+        "tests/install-rclone.bats",
+        "tests/configure-backend.bats"
+      ]
+    },
+    {
+      "source": "skills/j-smoke-test/**/*.sh",
+      "tests": [
+        "tests/smoke-test-*.bats"
+      ]
+    },
+    {
+      "source": "skills/j-reconcile/**/*.sh",
+      "tests": [
+        "tests/reconcile-*.bats",
+        "tests/commits-for-item*.bats"
+      ]
+    },
+    {
+      "source": "skills/j-close-story/**/*.sh",
+      "tests": [
+        "tests/close-story-diff-stats.bats",
+        "tests/check-story-closeable-*.bats"
+      ]
+    },
+    {
+      "source": "skills/j-close-task/**/*.sh",
+      "tests": [
+        "tests/close-task-context.bats"
+      ]
+    },
+    {
+      "source": "skills/j-verify/**/*.sh",
+      "tests": [
+        "tests/j-verify.bats"
+      ]
+    },
+    {
+      "source": "skills/j-check-in/**/*.sh",
+      "tests": [
+        "tests/checkin-*.bats"
+      ]
+    },
+    {
+      "source": "skills/j-break/**/*.sh",
+      "tests": [
+        "tests/break-*.bats"
+      ]
+    },
+    {
+      "source": "skills/j-playbook*/**/*.sh",
+      "tests": [
+        "tests/playbook-*.bats",
+        "tests/load-playbooks-*.bats",
+        "tests/run-playbook-step-*.bats",
+        "tests/render-playbook-confirmation-*.bats"
+      ]
+    },
+    {
+      "source": "skills/jenga/**/*.sh",
+      "tests": [
+        "tests/jenga-*.bats",
+        "tests/render-playbook-confirmation-*.bats",
+        "tests/wave-dispatch-cap-contention.bats",
+        "tests/bundle-resume.bats"
+      ]
+    },
+    {
+      "source": "skills/j-init/**/*.sh",
+      "tests": [
+        "tests/init*.bats",
+        "tests/gitignore-repair.bats"
+      ]
+    },
+    {
+      "source": "skills/j-gitignore/**/*.sh",
+      "tests": [
+        "tests/gitignore-repair.bats"
+      ]
+    },
+    {
+      "source": "skills/j-train/**/*.sh",
+      "tests": [
+        "tests/train-cli-root-climb.bats"
+      ]
+    },
+    {
+      "source": "skills/j-strategy/**/*.sh",
+      "tests": [
+        "tests/strategy-*.bats"
+      ]
+    },
+    {
+      "source": "scripts/resolve-root.sh",
+      "tests": [
+        "tests/resolve-root.bats",
+        "tests/*-root-climb.bats",
+        "tests/consumer-path-fallback.bats"
+      ]
+    },
+    {
+      "source": "scripts/events-append.sh",
+      "tests": [
+        "tests/events-*.bats"
+      ]
+    },
+    {
+      "source": "scripts/perceived-branch.sh",
+      "tests": [
+        "tests/perceived-branch.bats",
+        "tests/create-task-worktree*.bats",
+        "tests/merge-task-into-perceived-branch.bats",
+        "tests/worktree-commit-guard-perceived-base.bats"
+      ]
+    },
+    {
+      "source": "scripts/create-task-worktree.sh",
+      "tests": [
+        "tests/create-task-worktree*.bats",
+        "tests/attach-preserves-worktree-hook.bats",
+        "tests/worktree-commit-guard-perceived-base.bats"
+      ]
+    },
+    {
+      "source": "scripts/merge-task-into-perceived-branch.sh",
+      "tests": [
+        "tests/merge-task-into-perceived-branch.bats"
+      ]
+    },
+    {
+      "source": "scripts/audit-deps.sh",
+      "tests": [
+        "tests/audit-*.bats",
+        "tests/dependency-audit-workflow.bats"
+      ]
+    },
+    {
+      "source": "scripts/conventions-digest.sh",
+      "tests": [
+        "tests/conventions-*.bats"
+      ]
+    },
+    {
+      "source": "scripts/task-commit-ref.sh",
+      "tests": [
+        "tests/task-commit-ref.bats",
+        "tests/commit-ref-*.bats",
+        "tests/resolve-commit-ref*.bats",
+        "tests/prepare-task-commit-ref.bats"
+      ]
+    },
+    {
+      "source": "scripts/commit-settings.sh",
+      "tests": [
+        "tests/commit-settings*.bats"
+      ]
+    },
+    {
+      "source": "scripts/validate-board-*.sh",
+      "tests": [
+        "tests/validate-board-*.bats",
+        "tests/board-*.bats"
+      ]
+    },
+    {
+      "source": "scripts/jenga-permission-level-switch.sh",
+      "tests": [
+        "tests/permission-level-template-commit-guard.bats",
+        "tests/baseline-permissions.bats"
+      ]
+    },
+    {
+      "source": "templates/permission-levels/*.json",
+      "tests": [
+        "tests/permission-level-template-commit-guard.bats",
+        "tests/baseline-permissions.bats",
+        "tests/checklist-hook.bats"
+      ]
+    },
+    {
+      "source": "settings.json",
+      "tests": [
+        "tests/checklist-hook.bats",
+        "tests/permission-level-template-commit-guard.bats",
+        "tests/attach-preserves-worktree-hook.bats"
+      ]
+    },
+    {
+      "source": "templates/SCRUM_BOARD_SCHEMA.md",
+      "tests": [
+        "tests/validate-board-*.bats",
+        "tests/board-status-vocabulary.bats",
+        "tests/board-hygiene-playbook.bats"
+      ]
+    },
+    {
+      "source": "templates/checklists.json",
+      "tests": [
+        "tests/validate-checklists.bats",
+        "tests/checklist-*.bats",
+        "tests/preflight-audit-items.bats"
+      ]
+    },
+    {
+      "source": "templates/config-descriptors/*.json",
+      "tests": [
+        "tests/config-descriptors.bats",
+        "tests/config-get-set-e2e.bats",
+        "tests/config-command.bats"
+      ]
+    },
+    {
+      "source": "lib/**/*.js",
+      "tests": [
+        "tests/config-command.bats",
+        "tests/config-get-set-e2e.bats",
+        "tests/jenga-config-run-config.bats"
+      ]
+    },
+    {
+      "source": "agents/*.md",
+      "tests": [
+        "tests/scope-test-gate-wiring.bats",
+        "tests/audit-tester-wiring.bats",
+        "tests/conventions-agents.bats",
+        "tests/checklist-suggest.bats"
+      ]
+    },
+    {
+      "source": "skills/**/SKILL.md",
+      "tests": [
+        "tests/smoke-test-skills.bats",
+        "tests/skill-allow-list-bijection.bats",
+        "tests/help-twin-only-listing.bats",
+        "tests/copilot-skill-list.bats",
+        "tests/router-prefix-guard.bats"
+      ]
+    },
+    {
+      "source": "hooks/on_session_end.sh",
+      "tests": [
+        "tests/events-*.bats",
+        "tests/record-execution.bats"
+      ]
+    },
+    {
+      "source": "project/documentation/public-mirror-content-parity.md",
+      "tests": [
+        "tests/workflow-publicignore.bats"
+      ]
+    },
+    {
+      "source": "project/documentation/workflows.md",
+      "tests": [
+        "tests/workflow-doc-sections.bats"
+      ]
+    },
+    {
+      "source": "project/documentation/skill-authoring.md",
+      "tests": [
+        "tests/smoke-test-error-table.bats",
+        "tests/check-public-playbook-steps.bats"
+      ]
+    },
+    {
+      "source": "project/documentation/preflight-checklists.md",
+      "tests": [
+        "tests/checklist-gating.bats"
+      ]
+    },
+    {
+      "source": "project/documentation/project-conventions.md",
+      "tests": [
+        "tests/prepare-task-commit-ref.bats",
+        "tests/conventions-precommit-timing.bats"
+      ]
+    },
+    {
+      "source": "project/documentation/config-descriptors.md",
+      "tests": [
+        "tests/config-descriptors.bats"
+      ]
+    },
+    {
+      "source": "project/documentation/mcp-registration-decision.md",
+      "tests": [
+        "tests/register-mcp.bats"
+      ]
+    },
+    {
+      "source": "project/documentation/atlassian-connect.md",
+      "tests": [
+        "tests/atlassian-connect.bats"
+      ]
+    },
+    {
+      "source": "project/documentation/distribution.md",
+      "tests": [
+        "tests/workflow-skill-registration.bats"
+      ]
+    },
+    {
+      "source": "CLAUDE.md",
+      "tests": [
+        "tests/break-signal.bats",
+        "tests/j-test-skill.bats",
+        "tests/smoke-test-skills.bats",
+        "tests/connect-skill-shell.bats",
+        "tests/conventions-skill.bats",
+        "tests/scope-test-gate-wiring.bats",
+        "tests/workflow-skill-docs.bats"
+      ]
+    },
+    {
+      "source": "README.md",
+      "tests": [
+        "tests/break-signal.bats",
+        "tests/j-test-skill.bats",
+        "tests/smoke-test-skills.bats",
+        "tests/workflow-skill-docs.bats"
+      ]
+    },
+    {
+      "source": "AGENTS.md",
+      "tests": [
+        "tests/break-signal.bats",
+        "tests/j-test-skill.bats",
+        "tests/smoke-test-skills.bats"
+      ]
+    },
+    {
+      "source": "site/**/*.md",
+      "tests": [
+        "tests/site-dir-migration.bats",
+        "tests/pages-permalinks.bats",
+        "tests/connect-skill-shell.bats",
+        "tests/smoke-test-skills.bats"
+      ]
+    },
+    {
+      "source": "docs/**/*.md",
+      "tests": [
+        "tests/site-dir-migration.bats"
+      ]
+    },
+    {
+      "source": "templates/PROBLEM_RAPPORT_TEMPLATE.md",
+      "tests": [
+        "tests/checklist-suggest.bats"
+      ]
+    },
+    {
+      "source": "templates/CHANGELOG_TEMPLATE.md",
+      "tests": [
+        "tests/npm-stage-approve-changelog.bats"
+      ]
+    },
+    {
+      "source": "templates/CRITICAL_ERROR_TABLE_TEMPLATE.md",
+      "tests": [
+        "tests/smoke-test-error-table.bats"
+      ]
+    },
+    {
+      "source": "project/board/**/*.md",
+      "tests": [
+        "tests/validate-board-yaml.bats"
+      ]
+    },
+    {
+      "source": "project/configs/*.json",
+      "tests": [
+        "tests/config-descriptors.bats"
+      ]
+    },
+    {
+      "source": "project/configs/test-scope-map.json",
+      "tests": [
+        "tests/project-scope-map.bats",
+        "tests/test-scope-map.bats"
+      ]
+    },
+    {
+      "source": "project/configs/test-config.json",
+      "tests": [
+        "tests/audit-tester-wiring.bats",
+        "tests/config-command.bats",
+        "tests/default-suite-set.bats",
+        "tests/project-scope-map.bats",
+        "tests/tools-registry-e2e.bats"
+      ]
+    },
+    {
+      "source": "project/configs/scope-thresholds.json",
+      "tests": [
+        "tests/config-command.bats",
+        "tests/config-consumer-install.bats"
+      ]
+    },
+    {
+      "source": "project/configs/workflow.json",
+      "tests": [
+        "tests/resolve-root.bats",
+        "tests/strategy-path-resolver.bats"
+      ]
+    },
+    {
+      "source": "project/configs/checklists.json",
+      "tests": [
+        "tests/audit-end-to-end.bats",
+        "tests/checkin-gate.bats",
+        "tests/checklist-gating.bats",
+        "tests/checklist-sh.bats",
+        "tests/preflight-audit-items.bats",
+        "tests/validate-checklists.bats"
+      ]
+    },
+    {
+      "source": "project/configs/audit-config.json",
+      "tests": [
+        "tests/init-audit-config.bats"
+      ]
+    },
+    {
+      "source": "project/configs/playbook-config.json",
+      "tests": [
+        "tests/config-command.bats"
+      ]
+    },
+    {
+      "source": "src/**/*.js",
+      "tests": [
+        "test/**/*.test.js",
+        "tests/**/*.test.js"
+      ]
+    },
+    {
+      "source": "lib/**/*.ts",
+      "tests": [
+        "test/**/*.test.ts"
+      ]
+    },
+    {
+      "source": "src/**/*.py",
+      "tests": [
+        "tests/test_*.py",
+        "tests/**/*_test.py"
+      ]
+    },
+    {
+      "source": "**/*.go",
+      "tests": [
+        "**/*_test.go"
+      ]
+    },
+    {
+      "source": "src/**/*.rs",
+      "tests": [
+        "tests/*.rs"
+      ]
+    }
+  ]
+}

@@ -33,8 +33,10 @@ skills/                    ← Canonical skill source — invoke as j.<name> or 
 ├── j-break/
 ├── j-btw/
 ├── j-check-in/
+├── j-checklist/
 ├── j-clearify/                (alias: j-wtf)
 ├── j-close-story/
+├── j-close-task/
 ├── j-cloud-connect/
 ├── j-commit/
 ├── j-connect/

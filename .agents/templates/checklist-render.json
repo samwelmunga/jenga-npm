@@ -1,0 +1,12 @@
+{
+  "_comment": "Render template for the pre-flight checklist print surface (E67_S10_T01), read by skills/j-checklist/scripts/checklist-print.sh. The renderer hardcodes no line format: every character of an item line, a group heading and an empty-group line comes from this file. -- PLACEHOLDERS: {name} is replaced from the item; the closed set is n (1-based position within its group), id, text (whitespace flattened to single spaces), kind, enforcement, tick_scope, checkbox, tick_state (the checker's own description, 'unticked' or 'ticked(<scope>) by <actor> at <time>') and, in group_heading only, situation. A placeholder outside this set is a hard error, never printed literally. Substitution is a single pass, so an item whose text contains '{id}' is printed as written. -- LINE FORM: 'item' must keep satisfying the ranked_list playbook type in templates/playbook-types.json, whose per_line rule is the POSIX ERE ^[0-9]+\\. [^[:space:]]+ — .+$ (<n>. <id> — <text>). The field after the number must be free of whitespace, so the checkbox cannot go before the id; it goes after the em dash, which is also where a Definition of Done checkbox line (- [ ] <criterion>) puts its box relative to its text. Kind, enforcement and tick scope are on the same line because the verifier checks every line of a list. -- CHECKBOX: 'checkbox.unticked' and 'checkbox.ticked' are the two values of the {checkbox} placeholder; an item is ticked when the checker reports a tick state beginning 'ticked'. -- GROUPS: 'group_heading' is printed above each situation's items in the all-situations form only (a single-situation print has no heading, so it stays a valid ranked_list), 'empty_group' stands in for a situation no item names, and 'blank_lines_between_groups' separates consecutive groups. Numbering restarts at 1 in every group, so a group never mixes situations.",
+  "template_version": 1,
+  "item": "{n}. {id} — {checkbox} {text} ({kind}, {enforcement}, {tick_scope})",
+  "checkbox": {
+    "unticked": "[ ]",
+    "ticked": "[x]"
+  },
+  "group_heading": "## {situation}",
+  "empty_group": "(no items apply)",
+  "blank_lines_between_groups": 1
+}

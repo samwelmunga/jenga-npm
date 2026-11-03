@@ -351,8 +351,14 @@ package run shape, with a results table that asks for exit statuses and yes/no a
 2026-10-02 Supabase observation as logged-in only, and lists what stays unverified. The unverified facts
 come from `supabase-connect-research.md` section 7 and `digitalocean-connect-research.md` section 9.
 
-**Results:** recorded by `E65_S08_T08` in the matching research doc, which also corrects any descriptor field
-that proves wrong. Until then nothing in the research docs is changed.
+**Results (2026-10-31):** recorded in `supabase-connect-research.md` section 7a and
+`digitalocean-connect-research.md` section 9a. At the user's explicit request an agent ran the exit-status
+checks (A1, A2, B1 to B3) against the user's own already-logged-in CLIs, with the logged-out state simulated
+by an empty `HOME` (Supabase) or an empty `--config` (doctl); no token was read or recorded. The user
+themselves approved both MCP servers and completed OAuth in a scratch project (A3, B4: connected, tool list
+loads). The stdio run shapes were read from the READMEs, not run (A4: not documented; B5: documented). No
+descriptor field proved wrong, so no descriptor or test changed. Not tested: the DigitalOcean entry without an
+explicit `"type": "http"`.
 
 Stale note for whoever records the results: `supabase-connect-research.md` section 5 still says a
 re-run rewrites a hand-edited `supabase` entry back to the bare URL; AC1 (E65_S08_T01) fixed that, and the

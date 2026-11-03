@@ -1,0 +1,205 @@
+{
+  "id": "deploy-stage",
+  "name": "Stage deploy and consumer verification",
+  "description": "Verify origin/main carries an unreleased version, get npm web auth in place (forwarding the login URL, cancelling after 60 minutes), dispatch the GitHub Actions stage job, wait for the stage to be ready, run the README consumer verification against the ST-Test project, then report the results and offer to promote the stage to a live npm release and tag it.",
+  "keywords": [
+    "stage deploy",
+    "staged release",
+    "st-test",
+    "consumer verification",
+    "promote stage"
+  ],
+  "examples": [
+    "run the stage deploy and test it against st-test",
+    "stage 4.6.0 and verify it in the consumer project"
+  ],
+  "inputs": [
+    {
+      "name": "target",
+      "description": "publish.json target name to stage",
+      "default": "npm-jenga"
+    },
+    {
+      "name": "config",
+      "description": "Path to publish.json",
+      "default": "./publish.json"
+    },
+    {
+      "name": "st_test_path",
+      "description": "Directory of the ST-Test consumer project",
+      "default": "../st-test"
+    },
+    {
+      "name": "auth_timeout_minutes",
+      "description": "Minutes to wait for the npm web login before cancelling the run",
+      "default": "60"
+    },
+    {
+      "name": "stage_timeout_minutes",
+      "description": "Minutes to wait for the staged version to become inspectable on the registry",
+      "default": "30"
+    }
+  ],
+  "steps": [
+    {
+      "id": "check_release",
+      "type": "compute",
+      "command": "project/.workflows/scripts/check-release-ready.sh",
+      "timeout_seconds": 180,
+      "outputs": [
+        {
+          "name": "release",
+          "kind": "data",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "confirm_release",
+      "type": "confirm",
+      "prompt": "origin/main release check:\n${steps.check_release.outputs.release}\n\nStage this version? Choosing 'Cancel the run' means this workflow run is cancelled (j.workflow cancel) and nothing is dispatched.",
+      "options": [
+        "Stage this version",
+        "Cancel the run"
+      ]
+    },
+    {
+      "id": "npm_login_start",
+      "type": "compute",
+      "command": "project/.workflows/scripts/npm-login-start.sh",
+      "timeout_seconds": 180,
+      "outputs": [
+        {
+          "name": "login",
+          "kind": "data",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "forward_login_url",
+      "type": "confirm",
+      "prompt": "npm authentication is needed to inspect, download and approve the stage. Forward the line below to the user verbatim — if it carries a URL, they must open it and complete the login including 2FA:\n${steps.npm_login_start.outputs.login}\n\nPick 'Waiting for sign-in' to start the ${inputs.auth_timeout_minutes}-minute wait. The next step polls npm whoami and fails the run if the sign-in has not completed in time.",
+      "options": [
+        "Waiting for sign-in",
+        "Cancel the run"
+      ]
+    },
+    {
+      "id": "npm_login_wait",
+      "type": "compute",
+      "command": "project/.workflows/scripts/npm-login-wait.sh",
+      "args": [
+        "${inputs.auth_timeout_minutes}"
+      ],
+      "timeout_seconds": 3900,
+      "checkpoint": true,
+      "outputs": [
+        {
+          "name": "whoami",
+          "kind": "data",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "stage_dispatch",
+      "type": "skill",
+      "skill": "j.publish",
+      "args": {
+        "invoke": "stage publish ${inputs.target} ${inputs.config}"
+      },
+      "checkpoint": true
+    },
+    {
+      "id": "stage_ready",
+      "type": "compute",
+      "command": "project/.workflows/scripts/stage-wait-ready.sh",
+      "args": [
+        "${inputs.stage_timeout_minutes}"
+      ],
+      "timeout_seconds": 2100,
+      "checkpoint": true,
+      "outputs": [
+        {
+          "name": "stage_id",
+          "kind": "data",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "st_test",
+      "type": "compute",
+      "command": "project/.workflows/scripts/st-test-run.sh",
+      "args": [
+        "${inputs.st_test_path}",
+        "${steps.stage_ready.outputs.stage_id}"
+      ],
+      "timeout_seconds": 3600,
+      "checkpoint": true,
+      "outputs": [
+        {
+          "name": "report",
+          "kind": "data",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "record_stage_tested",
+      "type": "skill",
+      "skill": "j.publish",
+      "args": {
+        "invoke": "record the ST-Test result above as a stage_tested ledger entry for stage ${steps.stage_ready.outputs.stage_id} (pass or fail per the report), without re-running stage test"
+      }
+    },
+    {
+      "id": "report_and_choose",
+      "type": "confirm",
+      "prompt": "ST-Test verification results for stage ${steps.stage_ready.outputs.stage_id}:\n${steps.st_test.outputs.report}\n\nHow should this release proceed? 'Release to npm prod' continues into stage approve (2FA required) and then tagging. 'Already released' skips the approve attempt — the next step will report that the stage is no longer approvable, which is expected; carry on to tagging. 'Stop here' means cancel this run with j.workflow cancel and leave the stage unapproved. 'Other' means stop and ask the user what to do.",
+      "options": [
+        "Release to npm prod",
+        "Already released",
+        "Stop here",
+        "Other (describe below)"
+      ]
+    },
+    {
+      "id": "approve_stage",
+      "type": "skill",
+      "skill": "j.publish",
+      "args": {
+        "invoke": "stage approve ${steps.stage_ready.outputs.stage_id}"
+      },
+      "checkpoint": true
+    },
+    {
+      "id": "release_notes",
+      "type": "skill",
+      "skill": "j.publish",
+      "args": {
+        "invoke": "release-notes"
+      }
+    },
+    {
+      "id": "commit_records",
+      "type": "skill",
+      "skill": "j.commit"
+    },
+    {
+      "id": "finalize",
+      "type": "compute",
+      "command": "project/.workflows/scripts/finalize-release.sh",
+      "timeout_seconds": 300,
+      "checkpoint": true,
+      "outputs": [
+        {
+          "name": "summary",
+          "kind": "data",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

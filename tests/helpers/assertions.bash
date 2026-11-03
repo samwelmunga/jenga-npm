@@ -170,3 +170,36 @@ assert_one_of() {
     "expected value to EQUAL ONE OF: $*
 $(_jenga_show "$value")"
 }
+
+# -----------------------------------------------------------------------------
+# require_baseline_permissions (E72_S07_T02)
+#
+# Skip the current test when the working tree's settings files do NOT sit at the
+# level-2 (Guarded) baseline. Use it in a case that drives a REAL mirror.sh push
+# and therefore needs mirror.sh's check_permission_level_invariant to let the push
+# through: while the session is elevated that invariant correctly refuses, so the
+# case fails for a reason that has nothing to do with the change under test. That
+# is what made every story's closing gate unpassable on 2026-10-22 (E72_S07).
+#
+# Do NOT use it in a case that builds its own elevated fixture (one that calls
+# elevate_to_level_5 or writes the settings files itself). Those are immune to
+# ambient state and are the coverage that proves the guard refuses a bad push —
+# skipping them would hide the very regression class the suite exists for.
+#
+# The verdict comes from skills/j-test/scripts/baseline-permissions.sh, the sole
+# decider, so this helper holds no copy of the signal. A skip here is visible as
+# a bats skip, but note the scope test gate never relies on it: bats exits 0 on a
+# skip, so the gate EXCLUDES marked files itself and reports them (see that
+# script's "A SKIP IS NEVER A PASS").
+# -----------------------------------------------------------------------------
+require_baseline_permissions() {
+  local root="${1:-$REPO_ROOT}"
+  local decider="$root/skills/j-test/scripts/baseline-permissions.sh"
+  if [ ! -f "$decider" ]; then
+    return 0   # no decider on this checkout: behave exactly as before it existed
+  fi
+  if ! bash "$decider" check --root "$root" >/dev/null 2>&1; then
+    skip "$(bash "$decider" reason --root "$root" 2>/dev/null \
+            || printf 'the session is not at the level-2 baseline')"
+  fi
+}

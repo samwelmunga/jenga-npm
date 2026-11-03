@@ -452,6 +452,146 @@ this file, with the reason for each, is under "Documentation reference check". R
 None of the three is expected to need a `playbook` step; that type is there for projects chaining existing
 playbooks.
 
+## Recording a workflow from a live session (`E89_S05_T01`)
+
+A definition does not have to be written by hand. `j.workflow-recorder` (`skills/j-workflow-recorder/SKILL.md`)
+follows a process while it is performed and appends it, interaction by interaction, to one `_RECORDING.md`
+document. The recording is the intermediate artefact: a process done once by hand becomes a document, and a closed
+document becomes a replayable definition through "Emitting a definition from a recording" below. This section
+documents the recording side; the emission side has its own section.
+
+### Sub-commands and who writes what
+
+- `j.workflow-recorder start [<name>]` creates the recording and sets the session's active-recording pointer. With
+  no `<name>` the Scrum Master derives a short descriptive name from the user's opening interaction, or asks for one
+  sentence if that interaction is too thin to name a process from.
+- `j.workflow-recorder status` reports the path, title, step count and pointer expiry. The step count is a health
+  check: a pointer that stays active while the count stays at zero across several interactions means capture is not
+  reaching the file.
+- `j.workflow-recorder stop` confirms with the user that the process has ended, then seals the recording
+  (`close-recording.sh`) and hands the closed path to the emitter.
+- Bare `j.workflow-recorder` behaves as `status` when a recording is already active and as `start` when it is not;
+  it never starts a second recording on top of a running one. If `start` finds one running, the user chooses
+  between continuing it, stopping it first, or replacing the pointer (the replaced document stays on disk and stops
+  being appended to).
+
+Two writers share the file, which is why a recording survives a context summarisation. **Capture** is a
+`UserPromptSubmit` hook (`hooks/on_recording_step.sh`): it appends one verbatim step per user interaction, holds no
+state, reads the pointer from disk on every event and is fail-open. **Interpretation** is the Scrum Master: it
+annotates captured steps with what they mean in the process, which is what turns a transcript into a process
+document. The Scrum Master never appends a step and never edits a recording file directly, and a captured step it
+never interpreted stays in the document uninterpreted. The recording file format (markers, body escaping, format
+versions) is defined once, in the header of `skills/j-workflow-recorder/scripts/recording-format.sh`.
+
+### The `_RECORDING.md` naming convention
+
+`skills/j-workflow-recorder/scripts/recording-path.sh` derives the file name and prints the absolute path; no other
+script or instruction re-derives it.
+
+- **Slug.** The descriptive name is lowercased, every run of non-alphanumeric characters is collapsed to a single
+  hyphen, and no leading or trailing hyphen is kept (the shape the board's own file slugs use). A name with no
+  alphanumeric character at all is refused.
+- **Suffix.** The slug is followed by `_RECORDING.md`, so the recording's file name minus that suffix is its
+  identity, and later the id of the emitted definition.
+- **Length limit.** 100 characters is the limit for the whole file name: slug plus `_RECORDING` plus `.md`. The slug
+  budget is therefore 100 minus the suffix length, computed in the script from its two constants and not written as a
+  literal. Truncation cuts mid-word, as board file names do, and strips any hyphen the cut leaves at the end.
+- **Collisions.** An existing recording is never overwritten and a clash is not an error. A numeric discriminator
+  (`-2`, `-3`, ...) is paid for out of the slug budget, so the 100-character ceiling still holds after it is added.
+  The scan is capped; exhausting it exits `5`. The script creates nothing and reserves nothing, so it is a pure
+  function of the name and the directory's contents: the file is created (`recording-file.sh create`, which refuses
+  to clobber) before a second path is asked for.
+- **Destination.** The recording goes in the documentation root resolved from `workflow.json`'s `paths.documentation`
+  through `scripts/resolve-root.sh`. Nothing in the recorder writes that location as a literal, and a project that
+  relocates its documentation root moves its recordings with it. `--dir` and the `JENGA_RECORDING_DIR` environment
+  variable override it, which exists as a test seam. Because recordings live there, they are maintainer-internal
+  documents like everything else in that root, not content for `docs/` or `site/`.
+
+### The two interrogation points
+
+Most captured steps pass silently: a recorder that asks after every prompt is unusable, and an annotation is keyed by
+step id, so a step that was not interrogated now can still be annotated later. A step enters at most one route, chosen
+by the Scrum Master from the step's own text and the recording so far (the criteria are in the skill body and the
+exact wording is in `skills/j-workflow-recorder/assets/interrogation-prompts.md`).
+
+1. **The deviation ladder** is asked when a step looks like a departure from the process: it introduces a subject the
+   recording has not mentioned, undoes something already recorded, or signposts itself as being about something else.
+   It asks whether the step is a deviation from the process, then (for a deviation) whether the process has ended
+   there, then what the step's relevance is. Answering "part of the process" to the first question still asks
+   relevance and skips the second, so the in-process path is two questions and a detour in a continuing process is
+   three. A step that carries `deviation: out-of-process` is excluded from the emitted definition.
+2. **The end-of-process question** is asked when a step looks like a plausible final step (a stated completion, the
+   named outcome reached, a verification with nothing pending, or a wind-down), and it is not asked when the step
+   was already routed through the ladder, whose second question is the same question. "Ended" hands the recording to
+   `stop`, and the user's answer there is the confirmation `stop` would otherwise ask for. A session ending is never
+   by itself a process ending.
+
+**The user's answers are part of the record.** Every answer is written into the recording, inside the step it
+concerns, by `skills/j-workflow-recorder/scripts/record-answer.sh`, as a typed annotation (`deviation`,
+`end-of-process`, `relevance`, later `step-type`) with the user's own words kept in a note. Nothing is held only in
+the conversation, so a summarised or restarted context loses none of it. An annotation of a given kind is made once
+per step; a second is refused unless it explicitly replaces the first.
+
+### How an emitted definition relates to a hand-written one
+
+An emitted definition is an ordinary definition. It is the same JSON format, validated by the same
+`templates/workflow-schema.json` and `scripts/workflow/validate-workflow.sh`, it uses the same five step types
+(`skill`, `playbook`, `compute`, `render`, `confirm`) and no sixth, it is written into the same workflows directory
+and it appears in `j.workflow list` and runs with `j.workflow run` exactly as a hand-written one does. Nothing in
+the runner distinguishes the two.
+
+Two things differ, and both are deliberate:
+
+- **Out-of-process steps are excluded.** A recording is a full record of a session, definitions describe the process
+  and not the session around it. A step annotated `deviation: out-of-process` is therefore not emitted. Exclusion
+  takes precedence: if such a step also carries a relevance body, that body is never emitted. A step annotated
+  `deviation: in-process` that also carries a relevance body is emitted, and the relevance becomes its `description`.
+- **The definition links back to its recording.** The emitted definition carries a top-level `source_recording` naming
+  the recording file, each step carries a `description`, and the recording's frontmatter gains `emitted_workflow`
+  naming the definition's id, so each can be found from the other. These keys are additive: the schema declares no
+  `additionalProperties` rule and the validator ignores unknown keys, so a hand-written definition without them is
+  equally valid.
+
+The emitter's behaviour (how a step's type is judged and persisted, exit codes, idempotent re-emission) is in the
+next section.
+
+## Emitting a definition from a recording (`E89_S04_T01`)
+
+`skills/j-workflow-recorder/scripts/emit-workflow.sh <recording-path>` is the one path that produces a definition
+from observed behaviour rather than from an author writing JSON. It takes a **closed** `*_RECORDING.md`, writes
+`<id>.json` into the directory `scripts/resolve-root.sh get workflows` prints, and prints that path. The id is the
+recording's file name minus `_RECORDING.md`, so it must satisfy the schema's `id_pattern`. The definition is an
+ordinary one: it lists in `j.workflow list` and runs with `j.workflow run`.
+
+- **Step types are a judgment, made once and written down.** Each included step is one of the five existing types;
+  no type is added. The Scrum Master decides which, and the decision is persisted into the recording as a
+  `step-type` annotation (`skills/j-workflow-recorder/scripts/record-answer.sh`). The emitter uses a persisted
+  annotation verbatim. A step with none makes it print the step (`<step-id><TAB><first line of its text>`) and exit
+  `9`; the judgment comes back through `--answer <step-id>=<type>`, is written into the recording first, and
+  emission continues. There is deliberately no tool-to-type table: the recording knows what the user wrote, not
+  reliably which tool ran.
+- **A type's required fields come from the step's text.** `skill` takes its name from the leading word (`/j-x` or
+  `j.x`, the rest becomes `args.input`), `playbook` from `j.playbook <id>`, `compute` from a leading relative script
+  path (the remaining words become `args`), `render` from a leading `.json` or `.md` template path, and `confirm`
+  uses the text as its `prompt` with the options `Yes` and `No`. A judged type its text cannot fill is exit `10`,
+  naming the step: nothing is invented, and the way out is `record-answer.sh ... step-type <type> --replace`.
+- **Exclusion beats relevance.** A step annotated `deviation: out-of-process` is not emitted, is never asked for a
+  type, and a `relevance` body it also carries is emitted nowhere. An emitted step's `description` is its stated
+  relevance, else its recorded text.
+- **Validation is the existing validator and nothing is left behind on failure.** The candidate is written beside
+  the destination under a hidden name the loader does not glob, checked with `scripts/workflow/validate-workflow.sh`,
+  and moved into place only on a clean pass. On failure the validator's text is printed, the candidate is removed and
+  the exit code is `8`.
+- **Cross-link, in the same pass.** The recording's frontmatter gains `emitted_workflow: <id>`; the definition gains a
+  top-level `source_recording: <recording file name>` and a per-step `description`. None of these three keys is in
+  `templates/workflow-schema.json`: the schema declares no `additionalProperties` rule and the validator ignores
+  unknown keys (as it does `renderer` and `timeout_seconds`), so they are additive.
+- **Re-emission is byte-identical** from a fully annotated recording: fixed key order, no timestamps. A re-emission
+  may overwrite the definition only when the recording already names it; any other file at the destination is
+  refused (exit `7`).
+
+The exit-code table and the exact mapping are in the script's header; `tests/workflow-recorder-emit.bats` pins them.
+
 ## Public mirror
 
 `project/.workflows/` is blocklisted in `.publicignore` (`E80_S01_T08`) with the same reasoning as <!-- check-doc-refs: ignore -->
@@ -461,6 +601,24 @@ tooling downstream and land in the directory a consumer uses for their own. The 
 `load-workflows.sh` treats a missing `project/.workflows/` as a silent no-op. The reasoning is in <!-- check-doc-refs: ignore -->
 `project/documentation/public-mirror-content-parity.md` ("Project-local workflows are private"), and the run-state
 directory is blocklisted separately by `E80_S02`.
+
+### Shipped builtin: `epic-wrap-up`
+
+`templates/workflows/epic-wrap-up.json` is a builtin that ships to consumers: doc-sync, commit, `j.close-task`, a
+permission-level bracket (5 for the middle of the run, back to 2 at the end), removal of a scratch project's
+`.mcp.json`, `j.close-story`, and removal of the epic's merged worktrees (`scripts/epic-worktrees.sh`). Its inputs are
+`epic`, `task`, `story`, `scratch_path` and `base`. Two properties follow from where it runs:
+
+- **Its compute commands carry the `node_modules/@jenga-ai/agent/` prefix**, because a command is resolved relative to
+  the project anchor with no package fallback (see "Known limits"). It therefore runs in a consumer install, not in a
+  checkout of the framework itself. <!-- check-doc-refs: ignore -->
+- **It names only skills and scripts that ship.** `j.dev-done` and `j.self-sync` are private, so the shipped
+  definition commits with `j.commit`. `tests/epic-wrap-up-scripts.bats` checks every skill and script it references
+  against `.publicignore`.
+
+The framework repo's own variant, `epic-wrap-up-framework` in `project/.workflows/`, adds the mirror sync through
+`j.dev-done` and uses root-relative commands. It has a different id because a builtin wins over a project definition
+with the same id. <!-- check-doc-refs: ignore -->
 
 
 ### Git treatment

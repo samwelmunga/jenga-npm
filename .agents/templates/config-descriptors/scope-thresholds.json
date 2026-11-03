@@ -98,6 +98,17 @@
       "min": 1,
       "max": 1440,
       "bump_on_change": "threshold_version"
+    },
+    {
+      "key": "recording_ttl_minutes",
+      "label": "Recording TTL (minutes)",
+      "type": "integer",
+      "description": "Minutes after which an active-recording pointer counts as absent, so a session that died mid-recording cannot wedge a later one; a live recording renews its own pointer, so this only has to outlast a dead session.",
+      "editable": true,
+      "default": 90,
+      "min": 1,
+      "max": 1440,
+      "bump_on_change": "threshold_version"
     }
   ]
 }

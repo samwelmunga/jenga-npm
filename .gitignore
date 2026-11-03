@@ -104,6 +104,20 @@ project/queue/checklist-ticks/*
 project/queue/checklist-markers/*
 !project/queue/checklist-markers/.gitkeep
 
+# Active-recording pointer (project/queue/active-recordings/,
+# skills/j-workflow-recorder/scripts/active-recording.sh — E89_S01_T03) is the
+# transient "which recording document is this session appending to" value a
+# later turn reads instead of relying on conversation memory: one
+# recording-<digest>.json per session key, plus the *.lock.d / .tmp-* entries
+# the lock and the write-then-rename leave beside them. It is meaningful only
+# for the session that wrote it and only until its TTL expires, so committing
+# one would make every clone believe a recording is live and refuse to start a
+# new one without --force. Sibling of the checklist-markers/ rule above; also
+# blocklisted for the public mirror via project/queue/. Ignored as a whole
+# directory rather than with a tracked .gitkeep, because nothing inside it is
+# ever meant to be tracked and the script creates it on first write.
+project/queue/active-recordings/
+
 # Workflow run state (project/data/workflow-runs/, E80_S02) is private
 # operational state: one workflow run per state file, plus the transient
 # *.lock.d / .tmp-* entries the lock and the write-then-rename leave beside
@@ -168,3 +182,6 @@ project/queue/commit-refs/
 # They are research artefacts only and must never be committed; only redacted summaries in the
 # report leave this directory. Also blocklisted for the public mirror in .publicignore.
 project/logs/spike-hook-payloads/
+
+# Machine-local slowness probe log (scripts/slowness-probe.sh)
+project/logs/slowness-probe.jsonl

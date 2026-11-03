@@ -83,6 +83,12 @@ build_pkg() {
   mkdir -p "$PKG/skills/j-commit/scripts" "$PKG/skills/j-test/scripts" "$PKG/scripts" "$PKG/templates"
   cp "$REPO_ROOT/skills/j-commit/scripts/test-gate-scoped.sh" "$GATE"
   cp "$REPO_ROOT"/skills/j-test/scripts/*.sh "$PKG/skills/j-test/scripts/"
+  # E72_S07_T02 made skills/j-test/scripts/lib/glob-defs.jq a HARD dependency of
+  # map-scope.sh and narrow-suites.sh (both die when it is absent), and the *.sh
+  # glob above cannot see it. Copy the whole lib/ tree rather than a second glob,
+  # so the next asset that is not a .jq cannot repeat the same omission.
+  mkdir -p "$PKG/skills/j-test/scripts/lib"
+  cp -R "$REPO_ROOT"/skills/j-test/scripts/lib/. "$PKG/skills/j-test/scripts/lib/"
   cp "$REPO_ROOT/scripts/resolve-root.sh" "$PKG/scripts/"
   cp "$REPO_ROOT/templates/test-scope-map.json" "$PKG/templates/"
   cat > "$PKG/skills/j-test/scripts/discover-tests.sh" <<'EOF'

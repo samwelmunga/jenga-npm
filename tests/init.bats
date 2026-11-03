@@ -425,7 +425,14 @@ run_j_init_as_consumer() {
 # E72_S01_T06: the scaffolded test-config.json carries the two commit option keys at
 # the defaults the test-config descriptor declares, so a new project starts with the
 # same shape this repo has and `jenga config get` finds both keys. E72_S06_T01 adds the
-# three per-scope test_run_* keys (none, scoped, full) after them.
+# three per-scope test_run_* keys (none, scoped, none) after them. E72_S08_T06 adds
+# test_default_suite_set (empty: not configured) last.
+#
+# THE SCAFFOLD'S KEY SHAPE IS PINNED IN TWO PLACES: the keys_unsorted equality below, and
+# the descriptor-default loop in the NEXT case. A key added to
+# skills/j-init/assets/test-config_template.json must be added to BOTH or this case fails
+# while the next one passes, which reads like init.sh broke rather than like a pin going
+# stale (E72_S08_T06 round 1 did exactly that).
 @test "init.sh scaffolds test-config.json with the commit option defaults and an empty tools list" {
   local init_script="$REPO_ROOT/skills/init/scripts/init.sh"
   if [ ! -f "$init_script" ]; then init_script="$REPO_ROOT/skills/j-init/scripts/init.sh"; fi
@@ -437,9 +444,9 @@ run_j_init_as_consumer() {
   [ "$status" -eq 0 ]
   run jq -e '.commit_scope_map_file == "templates/test-scope-map.json"' "$cfg"
   [ "$status" -eq 0 ]
-  run jq -e '.test_run_task == "none" and .test_run_story == "scoped" and .test_run_epic == "full"' "$cfg"
+  run jq -e '.test_run_task == "none" and .test_run_story == "scoped" and .test_run_epic == "none"' "$cfg"
   [ "$status" -eq 0 ]
-  run jq -e '(keys_unsorted) == ["tools","commit_prompt_default","commit_scope_map_file","test_run_task","test_run_story","test_run_epic"]' "$cfg"
+  run jq -e '(keys_unsorted) == ["tools","commit_prompt_default","commit_scope_map_file","test_run_task","test_run_story","test_run_epic","test_default_suite_set"]' "$cfg"
   [ "$status" -eq 0 ]
   run jq -e '.tools == []' "$cfg"
   [ "$status" -eq 0 ]
@@ -451,7 +458,7 @@ run_j_init_as_consumer() {
   local descriptor="$REPO_ROOT/templates/config-descriptors/test-config.json"
   local template="$REPO_ROOT/skills/j-init/assets/test-config_template.json"
   local key
-  for key in commit_prompt_default commit_scope_map_file test_run_task test_run_story test_run_epic; do
+  for key in commit_prompt_default commit_scope_map_file test_run_task test_run_story test_run_epic test_default_suite_set; do
     run jq -n -e --arg k "$key" --slurpfile d "$descriptor" --slurpfile t "$template" \
       '($d[0].keys[] | select(.key == $k) | .default) == $t[0][$k]'
     [ "$status" -eq 0 ]

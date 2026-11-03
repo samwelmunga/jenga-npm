@@ -242,6 +242,69 @@ make_bin() {
 }
 
 # ===================================================================================================================
+# Deduplication: the second pass, on the final command (E72_S07_T02 fix round)
+# ===================================================================================================================
+#
+# Rules 1-2 key an npm suite on its package.json script BODY. narrow-suites.sh rewrites a bats suite's `command` but
+# cannot rewrite that body (it will not edit a project's package.json), so once narrowing moved the bats command the two
+# keys stopped agreeing and a group that folded before split into two entries carrying BYTE-IDENTICAL commands.
+# run-suites.sh runs each numbered entry and never compares commands, so a `full` gate under any exclusion ran the whole
+# narrowed selection twice -- the hazard rule 2 exists to prevent, reintroduced from the other end. Rule 5 folds the
+# survivors once more on their final command. See project/documentation/scope-gate-npm-fold-double-execution.md.
+
+@test "second pass: a narrowed bats suite and its npm twin fold back into ONE entry" {
+  # Exactly the post-narrowing discovery narrow-suites.sh produces in this repository: all three commands rewritten to
+  # the same narrowed string, while package.json still holds the un-narrowed body rule 2 keys the npm suite on.
+  mkdir -p "$BATS_TEST_TMPDIR/proj"
+  printf '%s' '{"scripts":{"test":"bats tests/*.bats"}}' > "$BATS_TEST_TMPDIR/proj/package.json"
+  write_discovery "$BATS_TEST_TMPDIR/d.json" '[
+    {"id":"bats:tests","name":"bats tests","type":"unit","ecosystem":"bats","command":"bats '"'"'tests/a.bats'"'"' '"'"'tests/b.bats'"'"'"},
+    {"id":"config:bats:integration","name":"bats (integration)","type":"integration","ecosystem":"config","command":"bats '"'"'tests/a.bats'"'"' '"'"'tests/b.bats'"'"'"},
+    {"id":"npm:test","name":"npm test","type":"unit","ecosystem":"npm","command":"bats '"'"'tests/a.bats'"'"' '"'"'tests/b.bats'"'"'"}]'
+  catalog_ok --root "$BATS_TEST_TMPDIR/proj" --discovery-file "$BATS_TEST_TMPDIR/d.json"
+  json_check '(.runnable | length) == 1'
+  # The survivor rule is unchanged, so the npm entry still wins and keeps its label.
+  json_check '.runnable[0].id == "npm:test" and .runnable[0].ecosystem == "npm"'
+  json_check '(.runnable[0].also | map(.id)) == ["bats:tests","config:bats:integration"]'
+}
+
+@test "second pass: two identical commands can never both be numbered, whatever produced them" {
+  # Stated as the invariant rather than as the npm case: no two runnable entries may carry the same command string.
+  # Here nothing is an npm suite at all, so rule 2 is not involved and only the final-command pass can fold them.
+  write_discovery "$BATS_TEST_TMPDIR/d.json" '[
+    {"id":"bats:tests","name":"bats tests","type":"unit","ecosystem":"bats","command":"bats tests/a.bats"},
+    {"id":"shellcheck:all","name":"shellcheck","type":"sast","ecosystem":"shellcheck","command":"shellcheck x.sh"}]'
+  catalog_ok --root "$EMPTY_ROOT" --discovery-file "$BATS_TEST_TMPDIR/d.json"
+  json_check '([.runnable[].command] | length) == ([.runnable[].command] | unique | length)'
+  json_check '(.runnable | length) == 2'
+}
+
+@test "second pass: it is the identity when no two surviving commands coincide" {
+  # Every catalog built from an UN-narrowed discovery is in this state, so the pass must change nothing there. The npm
+  # alias fixture is this repo's own four-suite discovery plus a package.json alias, i.e. the shape rule 2 was written
+  # for: rule 2 folds the group, the second pass finds nothing further to do.
+  catalog_ok --root "$FIX/npm-alias" --discovery-file "$FIX/npm-alias/discovery.json"
+  json_check '[.runnable[].id] == ["npm:test","shellcheck:all"]'
+  json_check '(.runnable[0].also | map(.id)) == ["bats:tests","config:bats:integration"]'
+  json_check '.runnable[0].command == "npm test"'
+  json_check '(.runnable[1].also | length) == 0'
+}
+
+@test "second pass: an npm suite and a non-npm suite sharing the final command keep the npm survivor" {
+  # The survivor rule of the second pass is rule 3 verbatim: first npm entry, else first non-config, else first config.
+  # Here the config suite declares `npm test` literally while scripts.test is something else, so rule 2 keys them apart
+  # and only the final-command pass can see that they run the same thing.
+  mkdir -p "$BATS_TEST_TMPDIR/proj"
+  printf '%s' '{"scripts":{"test":"jest"}}' > "$BATS_TEST_TMPDIR/proj/package.json"
+  write_discovery "$BATS_TEST_TMPDIR/d.json" '[
+    {"id":"config:npm:smoke","name":"npm smoke","type":"smoke","ecosystem":"config","command":"npm test"},
+    {"id":"npm:test","name":"npm test","type":"unit","ecosystem":"npm","command":"npm test"}]'
+  catalog_ok --root "$BATS_TEST_TMPDIR/proj" --discovery-file "$BATS_TEST_TMPDIR/d.json"
+  json_check '(.runnable | length) == 1 and .runnable[0].id == "npm:test"'
+  json_check '(.runnable[0].also | map(.id)) == ["config:npm:smoke"]'
+}
+
+# ===================================================================================================================
 # Not runnable
 # ===================================================================================================================
 
@@ -615,9 +678,31 @@ Notes:
   shellcheck -S warning "$BUILD"
 }
 
-@test "the script contains no hardcoded project/ path literal" {
-  run grep -n 'project/' "$BUILD"
-  [ "$status" -eq 1 ]
+@test "the script contains no hardcoded project/ path literal on a non-comment line" {
+  # The rule is about CODE, not prose. Its canonical formulation is
+  # tests/workflow-no-hardcoded-paths.bats's Rule A — "fails when any of them
+  # carries a project/ working-file path literal on a non-comment line ...
+  # comment lines describe the layout and are ignored" — and
+  # tests/link-external-ref.bats implements the same narrowing ("no hardcoded
+  # project/ path IN CODE", grep -v '^[[:space:]]*#'). What the rule exists to
+  # prevent is a script typing a working-file location instead of resolving it
+  # through scripts/resolve-root.sh, which only a non-comment line can do.
+  #
+  # This case used to be absolute, and so flagged the documentation
+  # cross-reference at build-catalog.sh:89 (a full-line comment pointing at the
+  # decision record for pass-2 folding). Deleting a provenance pointer to
+  # satisfy a lint is the wrong trade, and an absolute guard would re-trip on
+  # every future cross-reference in this script. Narrowed to the canonical form
+  # instead. As there, a trailing comment after code is NOT stripped: code that
+  # merely mentions a path in a trailing comment is still flagged, which is the
+  # strict, safe direction.
+  local offenders
+  offenders="$(grep -n -F -e 'project/' "$BUILD" | grep -v -E '^[0-9]+:[[:space:]]*#' || true)"
+  if [ -n "$offenders" ]; then
+    echo "hardcoded project/ path literal(s) on non-comment lines of $BUILD:" >&2
+    echo "$offenders" >&2
+  fi
+  [ -z "$offenders" ]
 }
 
 @test "the script is bash 3.2 clean: no associative arrays, mapfile or case-modification expansions" {

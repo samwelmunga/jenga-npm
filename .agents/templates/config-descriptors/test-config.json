@@ -1,7 +1,7 @@
 {
   "descriptor_version": 1,
   "file": "test-config.json",
-  "description": "The tester's tool stack, the commit-time test options and the per-scope test-run policy. The tool list is read-only here and changes only through the tester's user-approval flow; the two commit_* keys and the three test_run_* keys are plain strings you can set.",
+  "description": "The tester's tool stack, the commit-time test options, the per-scope test-run policy and the bounded default suite set. The tool list is read-only here and changes only through the tester's user-approval flow; the two commit_* keys, the three test_run_* keys and test_default_suite_set are plain strings you can set.",
   "keys": [
     {
       "key": "tools",
@@ -18,7 +18,12 @@
       "description": "The answer j.commit's test prompt assumes without asking: skip, scoped or full; empty means no recorded default, so it always prompts.",
       "editable": true,
       "default": "",
-      "allowed": ["", "skip", "scoped", "full"]
+      "allowed": [
+        "",
+        "skip",
+        "scoped",
+        "full"
+      ]
     },
     {
       "key": "commit_scope_map_file",
@@ -36,7 +41,11 @@
       "description": "Which test run must pass before a task is closed: none runs no suite beyond the tester's own tests, scoped runs only the suites mapped from the changed files, full runs the whole catalog.",
       "editable": true,
       "default": "none",
-      "allowed": ["none", "scoped", "full"]
+      "allowed": [
+        "none",
+        "scoped",
+        "full"
+      ]
     },
     {
       "key": "test_run_story",
@@ -45,7 +54,11 @@
       "description": "Which test run must pass before a story is closed: none runs no suite beyond the tester's own tests, scoped runs only the suites mapped from the changed files, full runs the whole catalog.",
       "editable": true,
       "default": "scoped",
-      "allowed": ["none", "scoped", "full"]
+      "allowed": [
+        "none",
+        "scoped",
+        "full"
+      ]
     },
     {
       "key": "test_run_epic",
@@ -53,8 +66,21 @@
       "type": "string",
       "description": "Which test run must pass before an epic is closed: none runs no suite beyond the tester's own tests, scoped runs only the suites mapped from the changed files, full runs the whole catalog.",
       "editable": true,
-      "default": "full",
-      "allowed": ["none", "scoped", "full"]
+      "default": "none",
+      "allowed": [
+        "none",
+        "scoped",
+        "full"
+      ]
+    },
+    {
+      "key": "test_default_suite_set",
+      "label": "Bounded default suite set",
+      "type": "string",
+      "description": "The bounded default suite set: a comma-separated list of root-relative test-file globs a scoped gate runs when the changed files map to no suite at all. It is the floor beneath a scoped run, never the full catalog and never empty; a value resolving to every runnable test file is refused as a misconfiguration, and one resolving to none is refused rather than reported as a pass. Empty means not configured. Globs, not suite ids, because a suite here is a whole test directory.",
+      "editable": true,
+      "default": "",
+      "pattern": "^$|^[A-Za-z0-9_./*?-]+(,[A-Za-z0-9_./*?-]+)*$"
     }
   ]
 }

@@ -128,16 +128,16 @@ EOF
   # boolean: audit-config production_only; integer: the scope-thresholds and playbook-config settings; string: audit-config mode, severity_threshold and offline_behavior, test-config's two commit_* keys (E72_S01_T04) and three test_run_* keys (E72_S06_T01)
   [ "$(printf '%s' "$output" | jq -c .)" = '["boolean","integer","string"]' ]
   run jq -s '[.[].keys[] | select(.editable == true and .type == "string") | .key] | sort' "$SHIPPED"/*.json
-  [ "$(printf '%s' "$output" | jq -c .)" = '["commit_prompt_default","commit_scope_map_file","mode","offline_behavior","severity_threshold","test_run_epic","test_run_story","test_run_task"]' ]
+  [ "$(printf '%s' "$output" | jq -c .)" = '["commit_prompt_default","commit_scope_map_file","mode","offline_behavior","severity_threshold","test_default_suite_set","test_run_epic","test_run_story","test_run_task"]' ]
   run jq -s '[.[].keys[] | select(.type == "array" or .type == "object") | .editable] | unique' "$SHIPPED"/*.json
   [ "$(printf '%s' "$output" | jq -c .)" = '[false]' ]
 }
 
-@test "bump rules: eight scope-thresholds keys and max_composition_depth bump; checklists, workflow, test-config never" {
+@test "bump rules: nine scope-thresholds keys and max_composition_depth bump; checklists, workflow, test-config never" {
   run jq -r '[.keys[] | select(.editable == true) | .bump_on_change] | unique | join(",")' "$SHIPPED/scope-thresholds.json"
   [ "$output" = "threshold_version" ]
   run jq '[.keys[] | select(.editable == true)] | length' "$SHIPPED/scope-thresholds.json"
-  [ "$output" -eq 8 ]
+  [ "$output" -eq 9 ]
   run jq -r '.keys[] | select(.key == "max_composition_depth") | .bump_on_change' "$SHIPPED/playbook-config.json"
   [ "$output" = "config_version" ]
   local f
@@ -156,7 +156,7 @@ EOF
 
 @test "test-config: commit_prompt_default and commit_scope_map_file are editable strings with the agreed defaults and rules" {
   local d="$SHIPPED/test-config.json"
-  [ "$(jq -r '[.keys[].key] | join(",")' "$d")" = "tools,commit_prompt_default,commit_scope_map_file,test_run_task,test_run_story,test_run_epic" ]
+  [ "$(jq -r '[.keys[].key] | join(",")' "$d")" = "tools,commit_prompt_default,commit_scope_map_file,test_run_task,test_run_story,test_run_epic,test_default_suite_set" ]
   run jq -c '.keys[] | select(.key == "commit_prompt_default") | [.type, .editable, .default, .allowed]' "$d"
   [ "$output" = '["string",true,"",["","skip","scoped","full"]]' ]
   run jq -c '.keys[] | select(.key == "commit_scope_map_file") | [.type, .editable, .default]' "$d"
@@ -178,12 +178,22 @@ EOF
   [ -f "$REPO_ROOT/agents/tester.md" ]
 }
 
-@test "test-config: the live config carries every editable key at its descriptor default and a non-empty tools array" {
-  local d="$SHIPPED/test-config.json" c="$REPO_ROOT/project/configs/test-config.json" key
-  for key in commit_prompt_default commit_scope_map_file test_run_task test_run_story test_run_epic; do
-    [ "$(jq -c --arg k "$key" '.keys[] | select(.key == $k) | .default' "$d")" = "$(jq -c --arg k "$key" '.[$k]' "$c")" ] \
-      || { echo "test-config.json $key differs from its descriptor default" >&2; return 1; }
-  done
+# The editable-default-equality loop was REMOVED on 2026-11-02 and is not to be reinstated. It
+# asserted that this repository's live test-config.json holds every editable key at its SHIPPED
+# descriptor default — false by construction, for the same reason the version-counter case below
+# lost its own copy of this assertion.
+#
+# The removed loop's own comment was the proof: it had to exempt test_default_suite_set because
+# "its descriptor default is \"\" while this repository configures a real membership, so the two are
+# expected to differ." That is true of EVERY editable key the moment a project sets one — which is
+# what editable means. commit_scope_map_file then reached the same state when E72_S07_T03 pointed it
+# at project/configs/test-scope-map.json, and the case went red for a legitimate configuration
+# change. Each new divergence would have needed another hand-written exemption.
+#
+# The tools-array assertions below are sound and are kept.
+# See project/rapports/problems/E72_S08-removed-error-generating-guards.md.
+@test "test-config: the live config carries a non-empty tools array" {
+  local c="$REPO_ROOT/project/configs/test-config.json"
   [ "$(jq '.tools | type' "$c")" = '"array"' ]
   [ "$(jq '.tools | length' "$c")" -ge 1 ]
 }
@@ -192,14 +202,14 @@ EOF
 # Three FLAT editable string keys (the schema can only express an editable key as a scalar), same shape as
 # commit_prompt_default but with no empty value: an absent key reads as its default, so "" is never needed.
 
-@test "test-config: test_run_task, test_run_story and test_run_epic are editable strings defaulting to none, scoped and full, allowing none, scoped and full" {
+@test "test-config: test_run_task, test_run_story and test_run_epic are editable strings defaulting to none, scoped and none, allowing none, scoped and full" {
   local d="$SHIPPED/test-config.json" key
   run jq -c '.keys[] | select(.key == "test_run_task") | [.type, .editable, .default, .allowed]' "$d"
   [ "$output" = '["string",true,"none",["none","scoped","full"]]' ]
   run jq -c '.keys[] | select(.key == "test_run_story") | [.type, .editable, .default, .allowed]' "$d"
   [ "$output" = '["string",true,"scoped",["none","scoped","full"]]' ]
   run jq -c '.keys[] | select(.key == "test_run_epic") | [.type, .editable, .default, .allowed]' "$d"
-  [ "$output" = '["string",true,"full",["none","scoped","full"]]' ]
+  [ "$output" = '["string",true,"none",["none","scoped","full"]]' ]
   for key in test_run_task test_run_story test_run_epic; do
     # each carries a label and a description, and no nested policy object or bump rule exists
     [ "$(jq -r --arg k "$key" '.keys[] | select(.key == $k) | (.label | length > 0) and (.description | length > 0)' "$d")" = "true" ]
@@ -215,7 +225,7 @@ EOF
   local f
   for f in "$c" "$t"; do
     run jq -c '[.test_run_task, .test_run_story, .test_run_epic]' "$f"
-    [ "$output" = '["none","scoped","full"]' ] || { echo "$f has the wrong test_run_* values: $output" >&2; return 1; }
+    [ "$output" = '["none","scoped","none"]' ] || { echo "$f has the wrong test_run_* values: $output" >&2; return 1; }
   done
 }
 
@@ -244,21 +254,21 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "the version counters are read-only and each editable default equals the value the configs hold" {
+# The second half of this case — asserting that every EDITABLE descriptor default equals the value
+# the live configs hold — was REMOVED on 2026-11-02 and is not to be reinstated.
+# It was false by construction. An editable key exists precisely so a project can change it, and
+# `jenga config set` bumps the file's counter when it does. So the assertion failed BECAUSE the
+# feature worked: this repository raised max_concurrent_developers/testers from the shipped default
+# 4 to 8 via the config command (threshold_version 6 -> 8), and the case went red for it.
+# Worse, it made the verdict depend on working-tree state — the same branch was observed red by one
+# agent and green by another, because the config change was uncommitted. A test whose result moves
+# with the tree is a false signal in any gate.
+# The read-only-counter assertion below is the half that was always sound and is kept.
+# See project/rapports/problems/E72_S08-removed-error-generating-guards.md.
+@test "the version counters are read-only" {
   run jq -r '.keys[] | select(.key == "threshold_version" or .key == "config_version" or .key == "checklist_version") | .editable' \
     "$SHIPPED/scope-thresholds.json" "$SHIPPED/playbook-config.json" "$SHIPPED/checklists.json"
   [ "$output" = "$(printf 'false\nfalse\nfalse')" ]
-  local f key src
-  for f in scope-thresholds playbook-config audit-config; do
-    for key in $(jq -r '.keys[] | select(.editable == true) | .key' "$SHIPPED/$f.json"); do
-      # audit-config is compared against the shipped init template: this repository's own copy may be stricter
-      src="$REPO_ROOT/project/configs/$f.json"
-      [ "$f" = audit-config ] && src="$REPO_ROOT/skills/j-init/assets/audit-config_template.json"
-      [ "$(jq --arg k "$key" '.keys[] | select(.key == $k) | .default' "$SHIPPED/$f.json")" = \
-        "$(jq --arg k "$key" '.[$k]' "$src")" ] \
-        || { echo "$f.json $key default differs from the config value" >&2; return 1; }
-    done
-  done
 }
 
 @test "every shipped pointer names something that exists (a repo path or a j.<skill>)" {
@@ -532,7 +542,7 @@ EOF
   assert_starts_with "$(printf '%s\n' "$output" | sed -n 2p)" "2. checklists — "
   assert_starts_with "$(printf '%s\n' "$output" | sed -n 3p)" "3. conventions — "
   assert_output_contains "5. scope-thresholds — "
-  assert_output_contains "(8 editable keys)"
+  assert_output_contains "(9 editable keys)"
   assert_output_contains "(4 editable keys)"
   assert_output_contains "(1 editable key)"
   assert_output_contains "(0 editable keys)"

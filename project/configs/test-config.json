@@ -28,7 +28,7 @@
     {
       "tool_name": "-",
       "type": "performance",
-      "comment": "Not applicable at current scale — no runtime service to load-test"
+      "comment": "Not applicable at current scale \u2014 no runtime service to load-test"
     },
     {
       "tool_name": "-",
@@ -37,8 +37,9 @@
     }
   ],
   "commit_prompt_default": "",
-  "commit_scope_map_file": "templates/test-scope-map.json",
+  "commit_scope_map_file": "project/configs/test-scope-map.json",
   "test_run_task": "none",
   "test_run_story": "scoped",
-  "test_run_epic": "full"
+  "test_run_epic": "none",
+  "test_default_suite_set": "tests/smoke-test-skills.bats,tests/resolve-root.bats,tests/events-append.bats,tests/scope-test-policy-resolve.bats,tests/discover-tests.bats,tests/j-test-build-catalog.bats"
 }

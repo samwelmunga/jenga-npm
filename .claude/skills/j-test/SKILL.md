@@ -70,7 +70,7 @@ bash "$TEST_DIR/parse-selection.sh" <N> "<answer>"
 bash "$TEST_DIR/run-suites.sh" --catalog "$CATALOG" <numbers...>
 ```
 
-Stream its output as it runs and relay its `Test Results` summary unchanged.
+Stream its output as it runs and relay its `Test Results` summary unchanged. When the selection is every suite, it starts with a slowness probe (wall versus CPU time of one reference file, about a minute); if it reports the machine as slow, tell the user that wall-clock durations in this run are not a measure of the tests. The probe never changes which suites run or the exit code (see `project/documentation/test-runner.md`, "The slowness preflight").
 
 ### 6. Interpret and finish
 

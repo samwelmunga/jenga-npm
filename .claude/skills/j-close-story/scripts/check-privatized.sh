@@ -142,11 +142,13 @@ REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)
 PUBLICIGNORE="$REPO_ROOT/.publicignore"
 [ -f "$PUBLICIGNORE" ] || die ".publicignore not found at $PUBLICIGNORE"
 
-WITH_LOCK_SCRIPT="$REPO_ROOT/scripts/with-lock.sh"
-UPDATE_FRONTMATTER_SCRIPT="$REPO_ROOT/skills/j-close-story/scripts/update-task-frontmatter.sh"
+# Package-relative first (REPO_ROOT is the consumer's repo when run from node_modules/), node_modules fallback.
+WITH_LOCK_SCRIPT="$SCRIPT_DIR/../../../scripts/with-lock.sh"
+[ -f "$WITH_LOCK_SCRIPT" ] || WITH_LOCK_SCRIPT="$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/with-lock.sh"
+UPDATE_FRONTMATTER_SCRIPT="$SCRIPT_DIR/update-task-frontmatter.sh"
 EVENTS_FILE="$REPO_ROOT/project/logs/events.json"
 
-EVENTS_APPEND_SCRIPT="$REPO_ROOT/scripts/events-append.sh"
+EVENTS_APPEND_SCRIPT="$SCRIPT_DIR/../../../scripts/events-append.sh"
 [ -f "$EVENTS_APPEND_SCRIPT" ] || EVENTS_APPEND_SCRIPT="$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/events-append.sh"
 
 # The shared commit resolver (E79_S02_T07). Same lookup order as the helpers above.

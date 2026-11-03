@@ -1,0 +1,9 @@
+# file<TAB>target (or *)<TAB>reason. Consumed by testbed_sweep_package_root_paths (tests/helpers/consumer-testbed.bash).
+scripts/check-public-playbook-steps.sh	scripts/check-publicignore-match.sh	maintainer-only CI check; runs from the monorepo checkout against its own scripts/
+scripts/check-public-references.sh	*	maintainer-only CI check; runs from the monorepo checkout against its own scripts/
+scripts/dryrun-pages-site-diff.sh	*	maintainer-only site build rehearsal; runs from the monorepo checkout
+scripts/smoke-harness.sh	scripts/smoke.sh	guarded by an -f test: absent means skip, never a failure
+scripts/compute-deploy-reconcile.sh	skills/j-mirror-public/assets/config.json	presence probe for 'is a public mirror configured in this repo'; absent exits 0 by design
+skills/j-mirror-public/scripts/mirror.sh	*	mirror pipeline; operates on the maintainer's own repo root, not on package helpers
+skills/j-publish/scripts/npm_pipeline.sh	scripts/generate-legacy-shipped-paths.js	guarded by an -f test and best-effort: absent means publish without regenerating
+skills/j-smoke-test/scripts/smoke-test-skills.sh	*	ROOT is the explicit --root argument (a tree to inspect), not a git-derived consumer root

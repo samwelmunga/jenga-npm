@@ -165,19 +165,30 @@ MATCH="$REPO_ROOT/scripts/check-publicignore-match.sh"
   [[ "$output" != *BLOCKED* ]]
 }
 
-@test "project/.workflows/ is matched by .publicignore and appears exactly once as a pattern line" {
-  run grep -Fxc 'project/.workflows/' "$PUBLICIGNORE"
+@test "project/.workflows/ is excluded by .publicignore, with deploy-stage as the one exception" {
+  # The exclude is the rule that keeps project-local workflows private; it appears exactly once.
+  # Its deploy-stage include exceptions (user decision 2026-11-01) are asserted in detail by
+  # tests/workflow-publicignore.bats.
+  run grep -Fxc -e '- project/.workflows/**' "$PUBLICIGNORE"
   [ "$status" -eq 0 ]
   [ "$output" -eq 1 ]
-  # Behavioural check with the same rsync semantics the mirror uses, on a throwaway tree: the
-  # project-local directory is excluded, a sibling project file is not.
+  # Behavioural check with the same rsync semantics the mirror uses, on a throwaway tree: an ordinary
+  # project-local workflow is excluded, deploy-stage and its scripts ship, a sibling project file is
+  # untouched.
   scratch="$BATS_TEST_TMPDIR/tree"
-  mkdir -p "$scratch/project/.workflows" "$scratch/project/other" "$BATS_TEST_TMPDIR/dest"
+  mkdir -p "$scratch/project/.workflows/scripts" "$scratch/project/other" "$BATS_TEST_TMPDIR/dest"
   : > "$scratch/project/.workflows/mine.json"
+  : > "$scratch/project/.workflows/deploy-stage.json"
+  : > "$scratch/project/.workflows/scripts/st-test-run.sh"
+  : > "$scratch/project/.workflows/scripts/deploy-public-prep.sh"
   : > "$scratch/project/other/keep.json"
   run rsync -a --dry-run --exclude-from="$PUBLICIGNORE" --out-format='%n' "$scratch/" "$BATS_TEST_TMPDIR/dest/"
   [ "$status" -eq 0 ]
   [[ "$output" != *"project/.workflows/mine.json"* ]]
+  [[ "$output" == *"project/.workflows/deploy-stage.json"* ]]
+  [[ "$output" == *"project/.workflows/scripts/st-test-run.sh"* ]]
+  # A helper that is not named in .publicignore stays private, wildcard-free by design.
+  [[ "$output" != *"deploy-public-prep.sh"* ]]
   [[ "$output" == *"project/other/keep.json"* ]]
 }
 
@@ -186,7 +197,7 @@ MATCH="$REPO_ROOT/scripts/check-publicignore-match.sh"
   [ "$status" -eq 0 ]
   [ "$output" -eq 1 ]
   marker="$(grep -Fn 'Decision (E80_S05_T07, 2026-10-25)' "$PUBLICIGNORE" | cut -d: -f1)"
-  entry="$(grep -Fxn 'project/.workflows/' "$PUBLICIGNORE" | cut -d: -f1)"
+  entry="$(grep -Fxn -e '- project/.workflows/**' "$PUBLICIGNORE" | cut -d: -f1)"
   [ "$((marker - entry))" -le 3 ]
   run grep -F 'Stranded-check outcome' "$PUBLICIGNORE"
   [ "$status" -eq 0 ]

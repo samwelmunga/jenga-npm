@@ -255,12 +255,12 @@ run_loader() {
   assert_contains "$stderr" "validator could not run"
 }
 
-@test "the real templates/workflows/ holds .gitkeep and only the example-report definition and its template" {
+@test "the real templates/workflows/ holds .gitkeep, example-report and epic-wrap-up, each definition with its template where it has one" {
   [ -f "$REPO_ROOT/templates/workflows/.gitkeep" ]
-  run find "$REPO_ROOT/templates/workflows" -type f ! -name .gitkeep ! -name example-report.json ! -name example-report.md
+  run find "$REPO_ROOT/templates/workflows" -type f ! -name .gitkeep ! -name example-report.json ! -name example-report.md ! -name epic-wrap-up.json
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-  # the only .json the loader scans is the one example-report definition
+  # the only .json files the loader scans are the two shipped definitions
   run find "$REPO_ROOT/templates/workflows" -type f -name '*.json'
-  [ "$output" = "$REPO_ROOT/templates/workflows/example-report.json" ]
+  [ "$(printf '%s\n' "$output" | sort)" = "$(printf '%s\n%s\n' "$REPO_ROOT/templates/workflows/epic-wrap-up.json" "$REPO_ROOT/templates/workflows/example-report.json")" ]
 }

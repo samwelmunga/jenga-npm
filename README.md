@@ -190,6 +190,7 @@ Skills live in `.agents/skills/<name>/SKILL.md`. Invoke with `j.<name>` in your 
 | `j.commit` | Commit finished work with the EST naming convention, after asking whether to run tests first (scoped to the change, the full suite, or skip, with a remembered default) |
 | `j.conventions` | Record the project's conventions (commit format, branching, naming, testing, file layout, docs placement) so every agent follows them — detects what the project already does and offers presets |
 | `j.check-in` | Report which dispatched agents are actually alive, silent, or finished-but-leaking processes |
+| `j.checklist` | Print and manage the pre-flight checklist registry — add, edit, remove, copy or move a standing check without hand-editing JSON; every input is validated, destructive actions confirm first |
 | `j.status` | Print a full scrum board overview — epics, stories, tasks, rapports, queue depth |
 
 ### `/jenga` — one command, several behaviors

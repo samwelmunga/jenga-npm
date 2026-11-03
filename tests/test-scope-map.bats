@@ -9,7 +9,12 @@
 #   3. it stays project-agnostic: templates/ ships downstream through /j-mirror-public, so no path specific to
 #      this repository may appear anywhere in it (comment included);
 #   4. it actually ships: it lives under a directory package.json `files` lists, .publicignore does not block it,
-#      and no per-project copy is scaffolded under project/configs/.
+#      and a per-project map stays OPT-IN rather than scaffolded -- the /init test-config scaffold and the
+#      `jenga config` descriptor both still default to templates/test-scope-map.json, so a fresh project reads
+#      the shipped generic map unless it deliberately points elsewhere. This repository does point elsewhere
+#      (project/configs/test-scope-map.json, E72_S07_T03), which is why the earlier form of the last case --
+#      "no per-project copy is scaffolded" -- is obsolete; the project map has its own suite in
+#      tests/project-scope-map.bats, and what survives here is the defaults-and-separation half.
 #
 # Read-only: nothing here writes outside $BATS_TEST_TMPDIR.
 
@@ -112,6 +117,30 @@ MATCH="$REPO_ROOT/scripts/check-publicignore-match.sh"
   assert_output_contains "templates/test-scope-map.json"
 }
 
-@test "no per-project copy is scaffolded at project/configs/test-scope-map.json" {
-  [ ! -e "$REPO_ROOT/project/configs/test-scope-map.json" ]
+@test "a per-project map is opt-in: both scaffold defaults still point at the shipped template" {
+  # This replaces "no per-project copy is scaffolded at
+  # project/configs/test-scope-map.json" (E72_S07_T03 deliberately added exactly
+  # that copy for THIS repository). The obsolete assertion was protecting a live
+  # property, which is pinned here instead: nothing scaffolds a per-project map,
+  # so a fresh project gets the shipped generic default and a project map is a
+  # deliberate opt-in through commit_scope_map_file.
+  run jq -r '.commit_scope_map_file' "$REPO_ROOT/skills/j-init/assets/test-config_template.json"
+  [ "$status" -eq 0 ]
+  [ "$output" = "templates/test-scope-map.json" ]
+  run jq -r '.keys[] | select(.key == "commit_scope_map_file") | .default' \
+    "$REPO_ROOT/templates/config-descriptors/test-config.json"
+  [ "$status" -eq 0 ]
+  [ "$output" = "templates/test-scope-map.json" ]
+}
+
+@test "a per-project map never becomes the shipped one: the two files are not copies" {
+  # The other half of what the obsolete case guarded. A project map that is a
+  # copy of the template -- or a template edited into a project map -- would ship
+  # this repository's own policy to every consumer. templates/ stays generic
+  # (asserted above by the no-repository-paths case); the two must stay distinct
+  # files rather than one being a duplicate of the other.
+  proj="$REPO_ROOT/project/configs/test-scope-map.json"
+  [ -f "$proj" ] || skip "this repository has no project-local scope map"
+  run cmp -s "$MAP" "$proj"
+  [ "$status" -ne 0 ]
 }

@@ -9,8 +9,10 @@
 #
 # Isolation. Every fixture (registry, rapports directory, rapports, candidate registries) is generated at test time
 # into $BATS_TEST_TMPDIR. setup() points every seam of the checker into the temp dir, so the real rapports directory
-# (project/rapports/) and the real registry (project/configs/checklists.json) are never read or written; one test
-# proves it by snapshotting both around a full flow:
+# (project/rapports/) and the real registry (project/configs/checklists.json) are never read or written. The hygiene
+# case proves the checker writes only to its designated directory by running a copy of it inside a sandbox git repo it
+# owns and snapshotting that sandbox and $PROJ around a full flow; it never observes the live repository, which other
+# sessions may write to while the suite runs. The seams are:
 #   JENGA_CHECKLISTS_FILE          the project instance            -> $F (does not exist until a test writes it)
 #   JENGA_CHECKLISTS_DEFAULT_FILE  the shipped default             -> a path that does not exist
 #   JENGA_CHECKLIST_STATE_DIR      the tick store                  -> $STATE (unused here, pinned for safety)
@@ -1064,14 +1066,50 @@ accept_candidate() {
 # Hygiene
 # -----------------------------------------------------------------------------
 
-@test "hygiene: a full suggest, pending, resolve, rejected flow leaves the real project/rapports and project/configs/checklists.json untouched" {
-  local real_rapports="$REPO_ROOT/project/rapports" real_registry="$REPO_ROOT/project/configs/checklists.json"
-  local rap_before reg_before status_before
-  rap_before="$(snap "$real_rapports")"
-  reg_before="$([ -e "$real_registry" ] && cksum < "$real_registry" || echo absent)"
-  status_before="$(git -C "$REPO_ROOT" status --porcelain -- project/rapports project/configs 2>/dev/null || true)"
+# snap_tree <dir>: like snap, but ignores the .git directory (its contents change on every commit).
+snap_tree() {
+  [ -e "$1" ] || { echo "(absent)"; return 0; }
+  (
+    cd "$1" && find . -path ./.git -prune -o -print | LC_ALL=C sort | while IFS= read -r p; do
+      if [ -f "$p" ]; then printf '%s %s\n' "$p" "$(cksum < "$p")"; else printf '%s\n' "$p"; fi
+    done
+  )
+}
 
+# The property: suggest/pending/resolve/rejected write only into the designated rapports directory ($RAP). It is
+# observed on trees this test owns, never on the live repository (which any other session may write to while the suite
+# runs, which made the previous version of this case fail on unrelated rapports). Two sandboxes stand in for the
+# places a misbehaving tool could write instead:
+#   $PKG   a git repo holding a copy of scripts/ and templates/, so the checker's package-relative location is
+#          $PKG, with a committed canary rapport and canary registry. The checker is run from here, as a copy.
+#   $PROJ  the project root the checker resolves (setup), with its stub workflow.json.
+# A canary, an extra file, a changed byte or a dirty `git status` in either is a failure.
+@test "hygiene: a full suggest, pending, resolve, rejected flow writes only to the designated rapports directory, observed on owned sandbox trees" {
+  local PKG="$T/pkg"
+  mkdir -p "$PKG/project/rapports" "$PKG/project/configs"
+  cp -R "$REPO_ROOT/scripts" "$REPO_ROOT/templates" "$PKG/"
+  printf '# canary rapport\n' > "$PKG/project/rapports/canary-existing.md"
+  printf '{"canary": true}\n' > "$PKG/project/configs/checklists.json"
+  git -C "$PKG" init -q
+  git -C "$PKG" add -A
+  git -C "$PKG" -c user.name=t -c user.email=t@example.invalid commit -q -m "fixture baseline"
+  local CHECKLIST="$PKG/scripts/checklist.sh"    # dynamic scope: ck() and the helpers run the sandbox copy
+
+  local pkg_before proj_before head_before
+  pkg_before="$(snap_tree "$PKG")"
+  proj_before="$(snap_tree "$PROJ")"
+  head_before="$(git -C "$PKG" rev-parse HEAD)"
+  [ -z "$(git -C "$PKG" status --porcelain)" ]
+
+  cd "$PKG"
   S_ID=hygiene-one sug_ok precautionary
+  local first="$RPT"
+
+  # an unrelated rapport is created and committed in the owned tree while the flow is running
+  printf '# unrelated rapport\n' > "$PKG/project/rapports/unrelated-concurrent.md"
+  git -C "$PKG" add project/rapports/unrelated-concurrent.md
+  git -C "$PKG" -c user.name=t -c user.email=t@example.invalid commit -q -m "unrelated rapport"
+
   S_ID=hygiene-two sug_ok recurrence --incident "E67_S05_T02"
   ck pending
   [ "$status" -eq 0 ]
@@ -1079,13 +1117,19 @@ accept_candidate() {
   [ "$status" -eq 0 ]
   ck rejected
   [ "$status" -eq 0 ]
+  [ "$first" != "$RPT" ]
 
-  # everything the flow wrote is under the test's temp dir ...
+  # everything the flow wrote is under the designated directory, which is inside the test's temp dir ...
   [ "$(dirname "$RPT")" = "$RAP" ]
+  [ "$(dirname "$first")" = "$RAP" ]
   case "$RAP" in "$BATS_TEST_TMPDIR"/*) ;; *) echo "rapports dir escaped the temp dir: $RAP" >&2; return 1 ;; esac
+  [ -d "$RAP" ]
   [ ! -e "$PROJ/project/rapports" ]
-  # ... and the real locations are exactly as they were
-  [ "$(snap "$real_rapports")" = "$rap_before" ]
-  [ "$([ -e "$real_registry" ] && cksum < "$real_registry" || echo absent)" = "$reg_before" ]
-  [ "$(git -C "$REPO_ROOT" status --porcelain -- project/rapports project/configs 2>/dev/null || true)" = "$status_before" ]
+  # ... the project root the checker resolved is exactly as it was ...
+  [ "$(snap_tree "$PROJ")" = "$proj_before" ]
+  # ... and the package tree differs from its baseline by the unrelated rapport and nothing else
+  [ "$(snap_tree "$PKG")" = "$(printf '%s\n%s\n' "$pkg_before" "./project/rapports/unrelated-concurrent.md $(cksum < "$PKG/project/rapports/unrelated-concurrent.md")" | LC_ALL=C sort)" ]
+  [ -z "$(git -C "$PKG" status --porcelain)" ]
+  [ "$(git -C "$PKG" rev-list --count "$head_before"..HEAD)" = "1" ]
+  [ "$(cksum < "$PKG/project/configs/checklists.json")" = "$(printf '{"canary": true}\n' | cksum)" ]
 }

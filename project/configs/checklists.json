@@ -142,6 +142,20 @@
       "kind": "judgment",
       "enforcement": "advisory",
       "tick_scope": "run"
+    },
+    {
+      "id": "code-paths-use-resolved-root",
+      "text": "Code added in this commit hardcodes no machine-specific path or URI (a /Users/<name>/ or /home/<name>/ location, a Windows user directory, or a file:// URI with an absolute path); files and URIs are reached through the resolved project root (scripts/resolve-root.sh, a workflow.json paths key, or a root variable derived from git) instead.",
+      "situations": [
+        "pre-commit"
+      ],
+      "kind": "machine",
+      "verify": "bash \"$([ -f scripts/check-staged-hardcoded-paths.sh ] && echo scripts/check-staged-hardcoded-paths.sh || echo node_modules/@jenga-ai/agent/scripts/check-staged-hardcoded-paths.sh)\"",
+      "enforcement": "advisory",
+      "tick_scope": "run",
+      "provenance": {
+        "source": "authored"
+      }
     }
   ]
 }

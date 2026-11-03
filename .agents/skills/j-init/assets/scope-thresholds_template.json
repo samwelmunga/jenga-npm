@@ -7,5 +7,6 @@
   "max_concurrent_developers": 3,
   "max_concurrent_testers": 3,
   "slot_ttl_minutes": 45,
-  "marker_ttl_minutes": 60
+  "marker_ttl_minutes": 60,
+  "recording_ttl_minutes": 90
 }

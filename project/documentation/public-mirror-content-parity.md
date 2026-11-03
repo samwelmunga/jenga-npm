@@ -569,11 +569,69 @@ matching the loader.
 Workflow definitions follow the same two-source shape as playbooks (`E80_S01`): the framework-owned
 BUILTIN source `templates/workflows/`, and the project-owned PROJECT source `project/.workflows/`.
 Only the first is framework content. Exactly as for `project/.playbooks/` above, the second is
-blocklisted in full (`E80_S01_T08`):
+blocklisted (`E80_S01_T08`) — with one named exception, `deploy-stage`, added by the user decision of
+2026-11-01:
 
 ```
-project/.workflows/
++ project/.workflows/
++ project/.workflows/deploy-stage.json
++ project/.workflows/scripts/
++ project/.workflows/scripts/check-release-ready.sh
++ project/.workflows/scripts/npm-login-start.sh
++ project/.workflows/scripts/npm-login-wait.sh
++ project/.workflows/scripts/stage-wait-ready.sh
++ project/.workflows/scripts/st-test-run.sh
++ project/.workflows/scripts/finalize-release.sh
+- project/.workflows/**
 ```
+
+**The `deploy-stage` exception.** `project/.workflows/deploy-stage.json` and the scripts it calls are
+the **public** repo's own release workflow: they check `origin/main` for an unreleased version, get the
+npm web login in place, dispatch the `stage` job of `.github/workflows/npm-publish.yml`, wait for the
+stage, run the README's consumer verification against the ST-Test project, then promote the stage and
+tag the release. The repo it *runs* in is therefore the public one, while the canonical, hand-edited
+copy stays here — the usual direction for this repo's content.
+
+It has to travel by the mirror rather than being copied into the public checkout by hand, because the
+mirror is one-way and authoritative: `mirror.sh` rsyncs with `--delete --delete-excluded` and protects
+only `.git/`, so any public-only file under a blocklisted path is deleted by the very next run. The
+include rules and their order are load-bearing for the same two reasons as
+`project/logs/publish-history.json` above: include lines must precede the exclude (first match wins),
+and rsync will not descend into an excluded directory to reach a file inside it. The trailing
+`- project/.workflows/**` is what keeps the default intact — every *other* project-local workflow
+(`deploy-public.json`, `epic-wrap-up-framework.json`, anything added later) stays private.
+
+**Why the scripts are named one by one, not matched with `scripts/***`.**
+`project/.workflows/scripts/` is shared by every project-local workflow, private ones included. A
+wildcard include shipped `deploy-public-prep.sh` the moment it was added — and that helper drives
+`/mirror-public` and resolves `skills/j-mirror-public/scripts/release-prep.sh`, a path that is never
+public, so the mirror would have carried a broken script referencing a skill that is not there. Note
+that the `never-public-refs` guard does not catch this class on its own: its path-hit scan is scoped to
+npm reach, and `project/.workflows/` ships to GitHub without being packed into the npm tarball. The
+explicit list is what keeps this document's "over-block, don't under-block" policy true here — a new
+helper is private until it is named in `.publicignore`.
+`tests/workflow-publicignore.bats` asserts the absence of the wildcard, and
+`tests/workflow-skill-registration.bats` asserts behaviourally that an unnamed helper does not ship.
+
+**Two channels, gated separately — the public repo is not the published package.** This file governs
+one channel only: what reaches the public **GitHub** mirror. What reaches the **npm registry** is
+governed independently by `package.json`'s `files` array, and the two do not track each other. A file
+can be in the first and absent from the second, which is exactly the case here: `deploy-stage` ships to
+`jenga-npm` because that is the repo it runs in, and it is in **no** published or staged tarball,
+because `files` has no `project/.workflows/` entry. Verified with `npm pack --dry-run
+--ignore-scripts`: of the files packed, the only ones under `project/` come from
+`project/app/{api,ui,package.json}` — zero from `project/.workflows/`. (Use `--ignore-scripts`; without
+it this repo's `prepack` runs a vite build and buries the file list in its output.) The same holds for a
+staged release, since `npm stage publish` packs by the same rules.
+
+So "is it private?" has two answers and they can differ. Ask which channel is meant before answering:
+`.publicignore` for the GitHub mirror, `package.json`'s `files` for the registry. This distinction had
+to be re-derived once in conversation, which is why it is written down here.
+
+One consequence worth knowing: because the canonical copy lives here, `j.workflow` lists
+`deploy-stage` in **this** repo too, where its steps do not apply (this repo never publishes to npm —
+see `project/documentation/distribution.md` and the `/mirror-public` contract). Run it from the public
+checkout.
 
 **Why.** Project-local workflows are per-project by definition. Ours are not framework content, and a
 consumer's are not ours to overwrite. Shipping our own would push private workflow tooling downstream
@@ -596,8 +654,11 @@ sanctioned mitigations.
 private-tooling playbook entries, the blocklist line is a single root-relative path; the generated
 mirrors do not carry the project-local directory.
 
-`tests/workflow-publicignore.bats` asserts the exact `.publicignore` line and that this document
-mentions `project/.workflows/`.
+`tests/workflow-publicignore.bats` asserts the nine include rules and the exclude, that every include
+precedes the exclude, that `scripts/check-publicignore-match.sh` (the same rsync matcher
+`/mirror-public` uses) really classifies `deploy-stage.json` and its scripts PUBLIC while every other
+project-local workflow stays BLOCKED, and that this document mentions both `project/.workflows/` and
+the exception.
 
 ## Retired: the twin-parity gate
 

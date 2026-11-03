@@ -102,6 +102,15 @@ Exit codes: `0` pass, `1` any `fail`, `3` `needs-user-action` (no fail), `2` usa
 | `register_mcp` | Not supported: `skipped`. Otherwise calls `register-mcp.sh` (`.mcp.json`, see [mcp-registration-decision.md](mcp-registration-decision.md)): `added`/`updated` are `pass`, `unchanged` is `skipped`; `detail` carries `added`/`updated`/`unchanged`. An existing entry *satisfies* the descriptor when its identity fields match: http, `type` is `http` and the URL equals the descriptor's ignoring query string and fragment; stdio, `command` and `args` equal and every `env` name the descriptor lists is present. A satisfying entry is left byte-identical and reported `unchanged`, so local customisation (for example `?read_only=true`, a hand-added `headers` or extra `env` key) is kept. Only a non-satisfying entry is `updated`, and then the descriptor's fields are merged over it rather than replacing it wholesale (see [e65-s08-decisions.md](e65-s08-decisions.md), AC1). |
 | `verify` | Runs `verify.command`: exit 0 is `pass`, otherwise `fail`. |
 
+**Registered is not approved.** A passing `register_mcp` only writes `.mcp.json`; Claude Code still lists the
+server as `Pending approval` (`claude mcp list` shows it), and some interfaces never show the approval dialog.
+The user approves it themselves, either by starting `claude` in the project root and using `/mcp`, or by adding
+the server name to `enabledMcpjsonServers` in `.claude/settings.local.json`. The skill adds that setting only
+after the user explicitly chooses it, because approval is the user's consent. A server with its own sign-in
+(OAuth) is then authenticated through `/mcp`; the bare `{type,url}` entries for Supabase and DigitalOcean were
+verified this way (see `supabase-connect-research.md` section 7a and `digitalocean-connect-research.md`
+section 9a).
+
 By default the run stops at the first `fail` or `needs-user-action` (later steps depend on it);
 `--continue` keeps going and the summary reports the worst status. A command's own output is discarded (or,
 for install, sent to stderr), never to stdout, so a token a tool prints cannot reach the results.

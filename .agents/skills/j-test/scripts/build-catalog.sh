@@ -73,6 +73,20 @@
 #      the project itself says to run those tests; a config-only entry carries
 #      no information the others lack.
 #   4. Empty-command suites never join a group; they go straight to not_runnable.
+#   5. SECOND PASS, on the final `command` (E72_S07_T02 fix round). The surviving
+#      entries of rules 1-3 are grouped once more by their literal `command` and
+#      folded again, by the same survivor rule. Rules 1-2 key an npm suite on its
+#      package.json script BODY, which narrow-suites.sh cannot rewrite (that would
+#      mean editing the project's package.json), so once narrowing rewrote a bats
+#      suite's command the two keys no longer agreed and a group that folded
+#      before split into two entries carrying byte-identical commands.
+#      run-suites.sh executes each numbered entry and never compares commands, so
+#      a `full` run under any exclusion ran the whole narrowed selection TWICE —
+#      the exact hazard rule 2 exists to prevent, reintroduced from the other end.
+#      This pass makes two identical commands impossible to number separately
+#      whatever produced them. It is the identity whenever no two surviving
+#      commands coincide, which is every catalog built from an un-narrowed
+#      discovery. See project/documentation/scope-gate-npm-fold-double-execution.md.
 #   Scripts that call other scripts (`npm run other`) are not resolved further.
 #
 # ---------------------------------------------------------------------------
@@ -178,12 +192,32 @@ def norm: {
         then (($scripts[.id | ltrimstr("npm:")] // "") as $b
               | if ($b | type) == "string" and $b != "" then $b else .command end)
         else .command end)})) as $run
+# Pass 1: the documented key (command, or an npm suite's package.json script body).
 | ($run | group_by(.key) | map(
     (map(select(.ecosystem == "npm"))[0]
       // map(select(.ecosystem != "config"))[0]
       // .[0]) as $sv
     | {sv: $sv,
        also: (map(select(.id != $sv.id)) | map({id, name, type}) | sort_by(.id))}
+  )) as $pass1
+# Pass 2 (E72_S07_T02 fix round): fold the SURVIVORS again on their literal
+# `command`. Pass 1 keys an npm suite on its script body, which narrow-suites.sh
+# cannot rewrite (that would mean editing package.json); so when narrowing moves
+# a bats suite's command the two keys stop agreeing and a group that folded
+# before splits in two, with byte-identical commands on both halves. run-suites.sh
+# runs each numbered entry and never compares commands, so a `full` run executed
+# the whole narrowed selection twice. Grouping once more on the final command
+# makes two identical commands impossible to number separately whatever produced
+# them, and the survivor rule is the same one, so the npm entry still wins and
+# keeps its label. With no two commands coinciding this pass is the identity.
+| ($pass1 | group_by(.sv.command) | map(
+    (map(.sv)) as $svs
+    | ((($svs | map(select(.ecosystem == "npm"))) | .[0])
+       // (($svs | map(select(.ecosystem != "config"))) | .[0])
+       // ($svs | .[0])) as $sv
+    | {sv: $sv,
+       also: (((map(.also) | add) + ($svs | map({id, name, type})))
+              | map(select(.id != $sv.id)) | unique_by(.id) | sort_by(.id))}
   ) | sort_by(.sv.id) | to_entries
   | map({n: (.key + 1)} + (.value.sv | {id, name, type, ecosystem, command})
         + {also: .value.also})) as $runnable

@@ -85,7 +85,7 @@ default_for() {
   case "$1" in
     task) printf 'none' ;;
     story) printf 'scoped' ;;
-    epic) printf 'full' ;;
+    epic) printf 'none' ;;
   esac
 }
 
@@ -175,13 +175,13 @@ default_for() {
   done
 }
 
-@test "the defaults are none, scoped and full for task, story and epic" {
+@test "the defaults are none, scoped and none for task, story and epic" {
   sp get task
   expect_silent_mode none
   sp get story
   expect_silent_mode scoped
   sp get epic
-  expect_silent_mode full
+  expect_silent_mode none
 }
 
 @test "an empty config file prints the default silently" {
@@ -223,7 +223,7 @@ default_for() {
   sp get story
   expect_silent_mode none
   sp get epic
-  expect_silent_mode full
+  expect_silent_mode "$(default_for epic)"
 }
 
 # ---------------------------------------------------------------------------
@@ -251,13 +251,13 @@ default_for() {
 }
 
 @test "the shipped defaults written out explicitly resolve to themselves" {
-  set_cfg '{"test_run_task":"none","test_run_story":"scoped","test_run_epic":"full"}'
+  set_cfg '{"test_run_task":"none","test_run_story":"scoped","test_run_epic":"none"}'
   sp get task
   expect_silent_mode none
   sp get story
   expect_silent_mode scoped
   sp get epic
-  expect_silent_mode full
+  expect_silent_mode none
 }
 
 # ---------------------------------------------------------------------------
@@ -281,7 +281,7 @@ default_for() {
 @test "a number falls back to the default with a warning" {
   set_cfg '{"test_run_epic":3}'
   sp get epic
-  expect_warned_mode full test_run_epic '3'
+  expect_warned_mode none test_run_epic '3'
 }
 
 @test "null falls back to the default with a warning" {
@@ -311,7 +311,7 @@ default_for() {
 @test "values are matched exactly: wrong case and padding are invalid" {
   set_cfg '{"test_run_epic":"Full"}'
   sp get epic
-  expect_warned_mode full test_run_epic '"Full"'
+  expect_warned_mode none test_run_epic '"Full"'
   set_cfg '{"test_run_task":" none"}'
   sp get task
   expect_warned_mode none test_run_task '" none"'
@@ -357,7 +357,7 @@ default_for() {
 @test "a JSON value that is not an object falls back with a warning" {
   set_cfg '["full"]'
   sp get epic
-  expect_mode full
+  expect_mode "$(default_for epic)"
   assert_contains "$stderr" "test_run_epic"
   set_cfg '"full"'
   sp get task
@@ -407,7 +407,7 @@ default_for() {
 
 @test "--config naming a missing file prints the default silently" {
   sp get epic --config "$BATS_TEST_TMPDIR/nope.json"
-  expect_silent_mode full
+  expect_silent_mode "$(default_for epic)"
 }
 
 @test "--config with an invalid value warns and falls back" {

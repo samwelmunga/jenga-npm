@@ -37,6 +37,15 @@
 # non-interactive parent ignores SIGINT and cannot trap it; send SIGTERM (or
 # start the script under `set -m`) in that situation.
 #
+# SLOWNESS PREFLIGHT. When the selection is the whole runnable catalog, the first step is
+# scripts/slowness-probe.sh (header: the contract): one reference bats file is run and its
+# wall time compared with its CPU time; wall above 2.5 times CPU classifies the machine as
+# slow, the probe collects diagnostics and logs them to its own JSON-lines log under the root,
+# and a note is printed after the summary. The probe never changes which suites run or the
+# exit code. Skipped (silently) when bats or the reference file is absent, inside a nested
+# suite run (JENGA_NESTED_SUITE_RUN set), and with JENGA_SLOWNESS_PROBE=0. It adds about a
+# minute to a full run on a healthy machine.
+#
 # SUMMARY (stdout, after the last suite; exact layout):
 #   Test Results
 #   ============
@@ -58,7 +67,8 @@
 #   130  interrupted
 #
 # The locale is forced to C for this script's own bookkeeping only; the suites
-# get the caller's original locale back. Writes nothing to disk. macOS bash 3.2
+# get the caller's original locale back. Writes nothing to disk itself (the preflight
+# probe appends one line to its own log). macOS bash 3.2
 # compatible. Requires jq plus coreutils.
 ################################################################################
 
@@ -244,6 +254,23 @@ for ((k = 0; k < TOTAL; k++)); do
   STATUS+=("pending")
 done
 
+# ---- slowness preflight (full-catalog runs only) ----------------------------------------
+# Before a run that covers every runnable suite, check whether this machine is slow right
+# now (wall time versus CPU time of one reference bats file) so that a slow run is explained
+# instead of mistaken for slow tests. Skipped silently when the reference file or bats is
+# absent (a consumer install, a synthetic root), inside a nested suite run, and when
+# JENGA_SLOWNESS_PROBE=0. It never changes the suites that run or this script's exit code.
+SLOW_NOTE=0
+if [ "$TOTAL" -eq "$RUNNABLE_COUNT" ] && [ "${JENGA_SLOWNESS_PROBE:-1}" != "0" ] \
+  && [ -z "${JENGA_NESTED_SUITE_RUN:-}" ] && PROBE="$(resolve_helper scripts/slowness-probe.sh)"; then
+  probe_rc=0
+  bash "$PROBE" --root "$ROOT" --quiet-skip </dev/null || probe_rc=$?
+  case "$probe_rc" in
+    130) exit 130 ;;
+    10) SLOW_NOTE=1 ;;
+  esac
+fi
+
 # ---- interrupt handling -----------------------------------------------------------
 INTERRUPTED=0
 CHILD=""
@@ -356,5 +383,9 @@ fi
     printf '%d passed, %d failed. Exit code: %d\n' "$PASSED" "$FAILED" "$CODE"
   fi
 }
+
+if [ "$SLOW_NOTE" -eq 1 ]; then
+  printf 'Note: the slowness probe found this machine slow before the run; wall-clock durations in this run are not a measure of the tests.\n'
+fi
 
 exit "$CODE"

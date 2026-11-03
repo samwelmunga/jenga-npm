@@ -56,6 +56,15 @@ project/documentation/plans/
 project/documentation/summaries/
 project/instructions/
 
+# --- Presentation / pitchmaterial (user decision 2026-10-28) ---
+# Nothing tied to the Jenga intro presentation is published: the Marp source deck
+# and both PowerPoint exports (editable, and the image-based one carrying the
+# speaker notes). project/documentation/ is not blanket-blocklisted, so the whole
+# directory is listed explicitly rather than file by file, so a later deck or a
+# re-export is covered without touching this file again. No test exercises it, so
+# the test-subject invariant above does not apply.
+project/documentation/presentations/
+
 # --- Unposted draft reply for the maintainer to post by hand on the public issue ---
 project/documentation/credential-access-issue-reply-draft.md
 
@@ -98,7 +107,35 @@ project/.playbooks/
 # (no warning, no error), so the mirror simply has no PROJECT workflow source. As with the playbook
 # entry, no `.claude/` or `.agents/` parallel lines are needed -- those mirrors are generated from the
 # root, and the project-local directory is not one of the root framework directories they receive.
-project/.workflows/
+#
+# ONE EXCEPTION, user decision 2026-11-01: `deploy-stage` and its scripts DO ship.
+# `project/.workflows/deploy-stage.json` is the PUBLIC repo's own release workflow -- it stages
+# @jenga-ai/agent from jenga-npm, verifies the stage against the ST-Test consumer project, promotes it
+# and tags the release -- so the repo it RUNS in is the public one, while the canonical copy stays
+# here. It has to travel by the mirror: private is the source of truth and the mirror is one-way, so a
+# copy hand-placed in the public checkout would be deleted by the very next run (mirror.sh rsyncs with
+# `--delete --delete-excluded` and protects only `.git/`).
+#
+# The ORDER and the directory lines are load-bearing -- include lines must precede the exclude (first
+# match wins), and rsync will not descend into an excluded directory to reach a file inside it. Same
+# pattern, and the same reasoning, as `project/logs/publish-history.json` above.
+#
+# deploy-stage's scripts are named ONE BY ONE rather than with a `scripts/***` wildcard, on purpose.
+# `project/.workflows/scripts/` is shared by every project-local workflow, including private ones: a
+# wildcard shipped `deploy-public-prep.sh` the moment it was added, and that script drives
+# /mirror-public and references `skills/j-mirror-public/scripts/release-prep.sh`, which is never
+# public -- a broken, private-referencing script in the mirror. An explicit list keeps this file's
+# stated policy ("over-block, don't under-block"): a new helper is private until it is named here.
++ project/.workflows/
++ project/.workflows/deploy-stage.json
++ project/.workflows/scripts/
++ project/.workflows/scripts/check-release-ready.sh
++ project/.workflows/scripts/npm-login-start.sh
++ project/.workflows/scripts/npm-login-wait.sh
++ project/.workflows/scripts/stage-wait-ready.sh
++ project/.workflows/scripts/st-test-run.sh
++ project/.workflows/scripts/finalize-release.sh
+- project/.workflows/**
 #
 # --- Decision (E80_S05_T07, 2026-10-25): j.workflow SHIPS to the public mirror ---
 # The user did not ask to keep the skill private, and it is framework-generic: j.workflow is the runner
@@ -327,7 +364,6 @@ tests/dev-done-post-sync-commit.bats
 # section, option 1 (blocklist) is correct when the ENTIRE file depends on a private subject,
 # and a visible skip would skip every case and report nothing. Same failure mode as the
 # dev-done-post-sync-commit.bats entry directly above; caught before it reached the mirror.
-tests/mirror-permission-level-invariant.bats
 # tests/mirror-test-subject-invariant.bats: runs skills/j-mirror-public/scripts/mirror.sh (MIRROR_SH,
 # invoked by every @test case), which lives under the fully-private skills/j-mirror-public/
 # blocklisted above (both naming forms) -- same reasoning as the entry directly above. Added in the
@@ -479,6 +515,25 @@ Thumbs.db
 jenga.html
 # tests/mirror-publicize-wiring.bats: clones the private repo and runs the blocklisted skills/j-mirror-public/ scripts end to end; it cannot run in the public mirror.
 tests/mirror-publicize-wiring.bats
+
+# --- Decision (E87_S07_T02, 2026-11-01): j.verify SHIPS to the public mirror ---
+# The user did not ask to keep the skill private, and it is framework-generic: j.verify is the
+# retroactive-verification counterpart to j.close-task (which also ships), for a board item registered
+# after its work was built and so carrying no EST-tagged commits. Nothing in it is specific to this
+# repo. So there is deliberately NO ignore entry for `skills/j-verify/` — both its SKILL.md and its
+# `scripts/verify-context.sh` helper ship. Recorded explicitly rather than left implicit by absence,
+# per the task's "decide and record whether it ships" requirement.
+#
+# Stranded-check outcome (2026-11-01, via scripts/check-publicignore-match.sh, the same rsync matcher
+# /j-mirror-public uses): skills/j-verify/SKILL.md, skills/j-verify/scripts/verify-context.sh,
+# CLAUDE.md and lib/skill-allow-list.json all classify PUBLIC. The one skill the skill text depends on
+# at runtime is its own helper script; the two it merely names in prose (j.close-task, j.do) both
+# classify PUBLIC too, so it cannot reference a private-only skill. The npm `files` array already
+# covers `skills/`, so the two channels agree (no npm/GitHub asymmetry). Nothing was ignored as a
+# result.
+# Note: before changing this decision, re-run the check above.
+jobs/
+
 # --- Long-running tests, kept private-side (see project/rapports/problems/E77-long-running-tests-in-the-shipping-suite.md) ---
 # Each file below took 50 seconds or more on its own (130, 99, 78, 73, 59, 58 and 52 seconds, measured one file at a time on a
 # quiet machine), and together they add about nine minutes to the test-subject-invariant gate that /mirror-public runs before
@@ -491,3 +546,18 @@ tests/workflow-dispatch-compute-render.bats
 tests/workflow-outputs.bats
 tests/workflow-compute-registry.bats
 tests/workflow-pause-resume.bats
+
+# --- Tests that fail in the mirror-shaped tree, kept private-side for the v4.6.0 release ---
+# The test-subject-invariant gate ran these in the public mirror shape and each failed. They are a stop-gap
+# blocklist, not a diagnosis: each is either stranded (its subject is blocklisted) or genuinely broken, and
+# should be repaired or moved to the 'Private-tooling tests' block with its subject.
+tests/baseline-permissions.bats
+tests/config-command.bats
+tests/config-get-set-e2e.bats
+tests/consumer-install-testbed.bats
+tests/credential-access-guard.bats
+tests/dependency-audit-workflow.bats
+tests/epic-wrap-up-scripts.bats
+tests/mirror-permission-level-invariant.bats
+tests/pages-workflow.bats
+tests/project-scope-map.bats

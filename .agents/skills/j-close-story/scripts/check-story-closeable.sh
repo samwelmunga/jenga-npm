@@ -4,7 +4,11 @@
 # Usage: bash check-story-closeable.sh <story-id>
 #
 # Exits 0 and prints "CLOSEABLE" to stdout when all tasks in the story's
-# `tasks:` frontmatter list have status Passed, Passed with remarks, or Done.
+# `tasks:` frontmatter list have status Passed, Passed with remarks, or Done,
+# or one of the script-set lifecycle statuses (Merged, Publicized, Privatized,
+# Deployed to Stage, Deployed to Prod). Those are only ever set on a ticket that
+# was already terminal, so they supersede a pass and never mean unfinished work
+# (templates/SCRUM_BOARD_SCHEMA.md, "Status Writers").
 # Exits 1 and prints a descriptive message to stderr for any other outcome.
 #
 # This script always re-reads task files from disk — never uses cached state.
@@ -183,7 +187,7 @@ for task_id in ${TASK_IDS[@]+"${TASK_IDS[@]}"}; do
 
   # 4d. Evaluate status
   case "$task_status" in
-    Passed|"Passed with remarks"|Done)
+    Passed|"Passed with remarks"|Done|Merged|Publicized|Privatized|"Deployed to Stage"|"Deployed to Prod")
       # Task is in a terminal state — OK
       ;;
     "")

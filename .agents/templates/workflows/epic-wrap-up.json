@@ -1,0 +1,156 @@
+{
+  "id": "epic-wrap-up",
+  "name": "Epic wrap-up",
+  "description": "Close out an epic: sync docs, commit, close the last task and roll up its story and epic, remove a scratch project's .mcp.json, close the last story, and remove the epic's merged worktrees, with the permission level raised to 5 only for the middle of the run.",
+  "keywords": [
+    "epic wrap-up",
+    "close epic",
+    "wrap up epic",
+    "finish epic"
+  ],
+  "examples": [
+    "wrap up epic E65 with its last task E65_S05_T08 and story E65_S05",
+    "run the epic wrap-up workflow for E70"
+  ],
+  "inputs": [
+    {
+      "name": "epic",
+      "description": "Epic id whose merged worktrees are removed, e.g. E65"
+    },
+    {
+      "name": "task",
+      "description": "Id of the last open task, closed by j.close-task, e.g. E65_S05_T08"
+    },
+    {
+      "name": "story",
+      "description": "Id of the story closed by j.close-story, e.g. E65_S05"
+    },
+    {
+      "name": "scratch_path",
+      "description": "Directory of the scratch project whose .mcp.json is deleted"
+    },
+    {
+      "name": "base",
+      "description": "Branch the worktrees must be merged into",
+      "default": "main"
+    }
+  ],
+  "steps": [
+    {
+      "id": "doc_sync",
+      "type": "skill",
+      "skill": "j.doc-sync",
+      "checkpoint": true
+    },
+    {
+      "id": "commit",
+      "type": "skill",
+      "skill": "j.commit",
+      "checkpoint": true
+    },
+    {
+      "id": "close_task",
+      "type": "skill",
+      "skill": "j.close-task",
+      "args": {
+        "task": "${inputs.task}"
+      },
+      "checkpoint": true
+    },
+    {
+      "id": "level_up",
+      "type": "skill",
+      "skill": "j.jenga-permission-level",
+      "args": {
+        "level": "5"
+      },
+      "checkpoint": true
+    },
+    {
+      "id": "approve_mcp",
+      "type": "confirm",
+      "prompt": "Delete ${inputs.scratch_path}/.mcp.json? Permission level is 5 until the last step. If this run is abandoned, switch back with j.jenga-permission-level 2.",
+      "options": [
+        "Delete it",
+        "Skip the deletion"
+      ]
+    },
+    {
+      "id": "remove_mcp",
+      "type": "compute",
+      "command": "node_modules/@jenga-ai/agent/scripts/remove-scratch-mcp.sh",
+      "args": [
+        "${inputs.scratch_path}"
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "kind": "data",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "close_story",
+      "type": "skill",
+      "skill": "j.close-story",
+      "args": {
+        "story": "${inputs.story}"
+      },
+      "checkpoint": true
+    },
+    {
+      "id": "list_worktrees",
+      "type": "compute",
+      "command": "node_modules/@jenga-ai/agent/scripts/epic-worktrees.sh",
+      "args": [
+        "list",
+        "${inputs.epic}",
+        "${inputs.base}"
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "kind": "data",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "approve_worktrees",
+      "type": "confirm",
+      "prompt": "Worktrees matching ${inputs.epic} (only the 'removable' lines, merged into ${inputs.base} and clean, are removed; 'none' means nothing to do):\n${steps.list_worktrees.outputs.candidates}",
+      "options": [
+        "Remove the removable ones",
+        "Skip the removal"
+      ]
+    },
+    {
+      "id": "remove_worktrees",
+      "type": "compute",
+      "command": "node_modules/@jenga-ai/agent/scripts/epic-worktrees.sh",
+      "args": [
+        "remove",
+        "${inputs.epic}",
+        "${inputs.base}"
+      ],
+      "timeout_seconds": 300,
+      "checkpoint": true,
+      "outputs": [
+        {
+          "name": "removed",
+          "kind": "data",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "level_down",
+      "type": "skill",
+      "skill": "j.jenga-permission-level",
+      "args": {
+        "level": "2"
+      }
+    }
+  ]
+}

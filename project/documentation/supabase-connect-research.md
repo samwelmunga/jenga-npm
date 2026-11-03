@@ -103,11 +103,22 @@ bare URL (reported as `updated`), so appended query parameters are not preserved
 
 | Claim | Why unverified | Source |
 |-------|----------------|--------|
-| `supabase projects list` exits non-zero when logged out | needs credentials/network; not run | local `--help` only |
+| `supabase projects list` exits non-zero when logged out | **Verified 2026-10-31** (E65_S08_T08): exit 1 logged out, exit 0 logged in, Supabase CLI 2.109.1. The logged-out state was simulated with `HOME` pointed at an empty temp directory, which assumes the CLI keeps credentials under `HOME`. | agent run at the user's request; see 7a |
 | Exact URL/code printed by `supabase login`, and that it completes without `--no-browser` interaction | login not run | login reference (describes a browser flow) |
 | Token storage location details | no credential file may be read | login reference |
 | Dashboard supports GitHub sign-in | only an unofficial issue title seen | community GitHub issue (not an official page) |
 | Global npm install of the CLI is unsupported | docs only show a dev-dependency install; no statement either way was found | getting-started page, CLI README |
-| stdio package run command and token env-var | pages read do not give them | MCP source repo (package named, no run shape) |
-| MCP OAuth consent actually loads the server in Claude Code | needs a real account and session | MCP guide |
+| stdio package run command and token env-var | still could not verify (2026-10-31): the current README (repo now `supabase/mcp`) documents only the hosted server; no run command or token variable. npm package `@supabase/mcp-server-supabase` 0.15.0, binary `mcp-server-supabase`. Not run. | repo README, npm registry |
+| MCP OAuth consent actually loads the server in Claude Code | **Verified 2026-10-31** (E65_S08_T08): with a bare `{type:"http",url}` entry written by `run-descriptor.sh --step register_mcp`, the user approved it and completed OAuth in a scratch project; the server showed connected and its tool list loaded (user report; `claude mcp list` showed Connected). Claude Code 2.1.236. | user report, `claude mcp list` |
 | Page contents verbatim | read through a summarising fetch tool, not a raw read | all fetched pages |
+
+### 7a. Real-account verification results (E65_S08_T08, 2026-10-31)
+
+| Item | Result | Version |
+|------|--------|---------|
+| A1 logged-out `supabase projects list` | exit 1 (empty-`HOME` simulation) | Supabase CLI 2.109.1 |
+| A2 logged-in `supabase projects list` | exit 0 | Supabase CLI 2.109.1 |
+| A3 OAuth with bare `{type,url}` entry, connected and tools load | yes | Claude Code 2.1.236 |
+| A4 stdio run shape | not documented in the README; could not verify | n/a |
+
+The descriptor's `auth.check.command` and `.mcp.json` entry needed no correction.

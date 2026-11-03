@@ -1,13 +1,15 @@
 {
-  "generated_at": "2026-10-26T15:27:41.267Z",
-  "skill_count": 50,
+  "generated_at": "2026-11-03T01:15:51.766Z",
+  "skill_count": 54,
   "skills": [
     "brainstorm",
     "break",
     "btw",
     "check-in",
+    "checklist",
     "clearify",
     "close-story",
+    "close-task",
     "cloud-connect",
     "commit",
     "connect",
@@ -50,7 +52,9 @@
     "todo",
     "tools",
     "uncharted",
+    "verify",
     "workflow",
+    "workflow-recorder",
     "wtf"
   ]
 }

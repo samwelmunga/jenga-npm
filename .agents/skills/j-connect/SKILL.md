@@ -99,6 +99,23 @@ validation, registration or reporting logic of its own, and no service names or 
    into the chat; never read, print or echo the contents of a secrets or env file. If a secrets file is
    needed, the runner itself makes it git-ignored before creating it — do not create or edit one yourself.
 
+   **A registered MCP server is not an approved one.** After a `register_mcp` step passes, Claude Code
+   still lists the new `.mcp.json` server as `Pending approval`, and some interfaces (desktop app, IDE
+   extension, or a session started outside the project root) never show the approval dialog, so the user
+   sees nothing to approve. Tell the user to do one of the following, and offer to check the state with
+   `claude mcp list` run in the project root:
+
+   ```
+   The MCP server is registered but not yet approved. How would you like to proceed?
+   1. Start `claude` in a terminal in the project root and approve it in the dialog, then use /mcp
+   2. Approve it in settings (add its name to "enabledMcpjsonServers" in .claude/settings.local.json)
+   3. Other (describe below)
+   ```
+
+   Add the setting **only after the user explicitly picks option 2**; approving a server is the user's
+   consent, never yours. After approval, a server with its own sign-in (OAuth) still needs that done via
+   `/mcp`.
+
 6. **Report the result.** Pipe the final run's output through the report script, for example by saving the
    run's stdout to a results file and invoking:
 

@@ -83,7 +83,8 @@
 #        the shipped copy (checkout, then node_modules/@jenga-ai/agent/templates/).
 #
 #   Format (normative, fixed by templates/test-scope-map.json):
-#     {"map_version":1,"_comment":"...","rules":[{"source":<glob>,"tests":[<glob>,...]}]}
+#     {"map_version":1,"_comment":"...","rules":[{"source":<glob>,"tests":[<glob>,...]}],
+#      "excluded_tests":[{"file":<literal path>,"reason":"..."}]}
 #   `_comment` and unknown top-level keys are ignored. Rules are ADDITIVE: every
 #   rule whose `source` matches a changed file contributes; there is no first-match.
 #   Validation (jq; exit 3, stderr names the file, the rule index (1-based) and
@@ -94,6 +95,19 @@
 #   the dialect. A literal path with no wildcard is valid.
 #   NEGATION IS NOT SUPPORTED in map_version 1: a glob beginning with `!` is a
 #   validation error that says so (it is never matched literally).
+#
+#   `excluded_tests` (OPTIONAL, additive, E72_S07_T03 fix round) declares that a
+#   test file is deliberately left out of every rule, with the reason. It is a
+#   DECLARATION ONLY and SUBTRACTS NOTHING: it adds no negation, which is why
+#   map_version stays 1 and why enumerate-and-omit is still the mechanism that
+#   does the work. Its purpose is reporting — see `map_excluded_tests` under
+#   OUTPUT — so a reader of the gate can tell "deliberately kept out" from "not
+#   mapped", which the selection alone can never show. Validation: present but
+#   not an array; an entry that is not an object or carries a key other than
+#   `file`/`reason`; a `file` that is not a non-empty string, is outside the glob
+#   dialect, or contains a wildcard (it must be a LITERAL path, because the
+#   membership check against the selected files is exact); a `reason` that is not
+#   a non-empty string, so nothing can be kept out of a gate without saying why.
 #
 # GLOB DIALECT (shared with discovery's per-suite `paths`)
 #   Paths are root-relative, `/`-separated, matched against the whole path,
@@ -139,7 +153,8 @@
 #
 #   {"mapped_suites":["bats:tests","npm:test"],
 #    "mapped_tests":{"bats:tests":["tests/a.bats"],"npm:test":["test/a.test.js"]},
-#    "unmapped_files":["README.md"],"warnings":[]}
+#    "unmapped_files":["README.md"],"warnings":[],
+#    "map_excluded_tests":[{"file":"tests/x.bats","reason":"...","mapped":false}]}
 #
 #   mapped_suites   suite ids from discovery, sorted, unique
 #   mapped_tests    one key per mapped suite (same order), value the sorted unique
@@ -147,6 +162,21 @@
 #                   the runner takes file arguments (a whole-suite run stays valid)
 #   unmapped_files  sorted
 #   warnings        sorted, unique, always an array
+#   map_excluded_tests
+#                   APPENDED by the E72_S07_T03 fix round. One entry per
+#                   `excluded_tests` declaration in the map, sorted by file, with
+#                   the declared reason and `mapped`: whether a rule selected the
+#                   file ANYWAY.
+#                   PRESENT ONLY when the map declares at least one — never as an
+#                   empty array — so the output for a map without the key is
+#                   byte-identical to what it was before the key existed, on
+#                   every path including the empty-change-set one. Read it as
+#                   `.map_excluded_tests[]?` or `// []`.
+#                   `mapped: true` means the declaration is stale or contradicted
+#                   — nothing was subtracted, so the file IS in the selection and
+#                   the caller must not report it as excluded. That case also
+#                   raises the warning `scope map declares <file> in
+#                   excluded_tests but a rule selects it; it is NOT excluded`.
 #
 #   ZERO MAPPED SUITES IS NEVER SILENT. With a non-empty change set and
 #   `mapped_suites` empty the warnings contain `No tests found for the changed
@@ -243,50 +273,21 @@ resolve_helper() {
 # Shared glob definitions. globprob returns null for a valid glob and a message
 # (quoting the glob) otherwise. glob_body translates a VALID glob to an
 # unanchored regex; any_re combines globs into one anchored alternation.
+#
+# The definitions live in lib/glob-defs.jq (E72_S07_T02 moved them out of the
+# heredoc that used to sit here) so that narrow-suites.sh matches paths with the
+# IDENTICAL dialect instead of carrying a second copy that could drift. The body
+# is unchanged; only its location moved.
+GLOB_DEFS_FILE="$SCRIPT_DIR/lib/glob-defs.jq"
+# The existence check is NOT in here. glob_defs is only ever called inside a
+# command substitution ("$(glob_defs)"), where a die would exit the subshell
+# alone: the message was printed, execution continued, and jq then failed with a
+# cascade of "globprob/0 is not defined" compile errors instead of the one clean
+# error. Same swallowed-exit hazard as marker_reason's in baseline-permissions.sh.
+# The check is hoisted to the preflight block above, next to jq's.
 glob_defs() {
-  cat <<'EOF'
-def globprob:
-  . as $g
-  | if ($g | type) != "string" then "glob is not a string"
-    elif $g == "" then "glob is empty"
-    elif ($g | startswith("!")) then "glob \($g | tojson) begins with \"!\": negation is not supported in map_version 1"
-    elif ($g | test("[\\x00-\\x1f]")) then "glob \($g | tojson) contains a control character"
-    elif ($g | startswith("/")) then "glob \($g | tojson) begins with \"/\"; globs are relative to the project root"
-    elif ($g | startswith("./")) then "glob \($g | tojson) begins with \"./\"; write the path without it"
-    elif ($g | test("[\\[\\]{}\\\\]")) then "glob \($g | tojson) uses one of [ ] { } \\, which the glob dialect does not support"
-    else ($g | split("/")) as $s
-      | if ($s | index("")) != null then "glob \($g | tojson) has an empty path segment"
-        elif ($s | index("..")) != null then "glob \($g | tojson) has a \"..\" segment"
-        elif ($s | index(".")) != null then "glob \($g | tojson) has a \".\" segment"
-        elif ([ $s[] | select(contains("**") and . != "**") ] | length) > 0
-          then "glob \($g | tojson) uses \"**\" inside a segment; it must be a whole segment"
-        else null end
-    end;
-
-def seg_re:
-  split("")
-  | map(. as $c
-        | if $c == "*" then "[^/]*"
-          elif $c == "?" then "[^/]"
-          elif (".+()|^$" | index($c)) != null then "\\" + $c
-          else $c end)
-  | join("");
-
-def glob_body:
-  split("/") as $s | ($s | length) as $n
-  | [ range(0; $n) as $i | $s[$i] as $g
-      | if $g == "**" then (if $i == $n - 1 then ".+" else "(?:[^/]+/)*" end)
-        else (($g | seg_re) + (if $i == $n - 1 then "" else "/" end)) end ]
-  | join("");
-
-def any_re($globs):
-  if ($globs | length) == 0 then null
-  else "\\A(?:" + ($globs | map(glob_body) | join("|")) + ")\\z" end;
-
-def matches($re): if $re == null then false else test($re) end;
-EOF
+  cat "$GLOB_DEFS_FILE"
 }
-
 # Mapping-file validation. Input: the file slurped (jq -s). Output: one problem
 # per line, in rule order; nothing when the file is valid.
 validate_map_program() {
@@ -305,6 +306,33 @@ def rule_problems($n):
           else [ $r.tests[] | globprob | select(. != null) | "rule \($n): tests: " + . ] end )
     end;
 
+# Optional top-level `excluded_tests` (E72_S07_T03 fix round): a DECLARATION
+# that a test file is deliberately not named by any rule, with the reason. It
+# removes nothing -- it adds no negation to map_version 1 -- it only makes an
+# omission that was prose in `_comment` machine-readable so the gate can say
+# "deliberately excluded" rather than leaving it indistinguishable from "not
+# mapped". The reason is mandatory, for the same purpose the baseline marker
+# makes its reason mandatory: nothing may be quietly kept out of a gate.
+# `file` must be a LITERAL path, not a glob, because the gate matches it against
+# the selected test files exactly.
+def excl_problems($n):
+  . as $x
+  | if ($x | type) != "object" then ["excluded_tests[\($n)]: not an object"]
+    else
+      [ $x | keys[] | select(. != "file" and . != "reason")
+        | "excluded_tests[\($n)]: unknown key \(. | tojson)" ]
+      + ( if ($x.file | type) != "string" or $x.file == ""
+          then ["excluded_tests[\($n)]: file must be a non-empty string"]
+          else [ $x.file | globprob | select(. != null) | "excluded_tests[\($n)]: file: " + . ]
+               + ( if ($x.file | test("[*?]"))
+                   then ["excluded_tests[\($n)]: file must be a literal path, not a glob"]
+                   else [] end )
+          end )
+      + ( if ($x.reason | type) != "string" or $x.reason == ""
+          then ["excluded_tests[\($n)]: reason must be a non-empty string, so nothing is kept out of a gate without saying why"]
+          else [] end )
+    end;
+
 .[0] as $d
 | if length != 1 then ["file must hold exactly one JSON value"]
   elif ($d | type) != "object" then ["top-level value is not an object"]
@@ -313,6 +341,10 @@ def rule_problems($n):
     + ( if ($d.rules | type) != "array" then ["rules is missing or not an array"]
         elif ($d.rules | length) == 0 then ["rules is empty"]
         else [ $d.rules | to_entries[] | .key as $i | .value | rule_problems($i + 1) ] | add end )
+    + ( if $d.excluded_tests == null then []
+        elif ($d.excluded_tests | type) != "array" then ["excluded_tests is present but not an array"]
+        else ([ $d.excluded_tests | to_entries[] | .key as $i | .value | excl_problems($i + 1) ]
+              | add // []) end )
   end
 | .[]
 EOF
@@ -370,8 +402,11 @@ def ext_eco:
 | ($lines | map(select(startswith("X\t"))) | length) as $skipped
 | (if $skipped > 0 then ["skipped \($skipped) path(s) whose name contains a newline"] else [] end) as $skw
 | if ($changed | length) == 0
-  then { mapped_suites: [], mapped_tests: {}, unmapped_files: [],
-         warnings: ((["No changed files"] + $skw) | unique) }
+  then ( ([ ($mapdoc[0].excluded_tests // [])[]
+             | {file: .file, reason: .reason, mapped: false} ] | sort_by(.file)) as $mx0
+         | { mapped_suites: [], mapped_tests: {}, unmapped_files: [],
+             warnings: ((["No changed files"] + $skw) | unique) }
+           + (if ($mx0 | length) > 0 then {map_excluded_tests: $mx0} else {} end) )
   else
     $mapdoc[0].rules as $rules
     | ($cands | reduce .[] as $c ({}; .[$c] = true)) as $candset
@@ -436,8 +471,22 @@ def ext_eco:
         then ["No tests found for the changed files"]
              + (if ($suites | length) == 0 then ["No test suites discovered"] else [] end)
         else [] end ) as $zw
+    # Declared map exclusions (E72_S07_T03 fix round). Reported, never
+    # subtracted: `mapped` says whether a rule selected the file ANYWAY, which
+    # means the declaration is stale or contradicted and the gate must not claim
+    # the file was excluded. Keeping it non-subtracting is what lets map_version
+    # 1 stay at 1 and leaves the enumerate-and-omit mechanism load-bearing.
+    | ( ($mt | [ .[] ] | flatten | unique) ) as $selected
+    | ( [ ($mapdoc[0].excluded_tests // [])[] | . as $e
+          | {file: $e.file, reason: $e.reason,
+             mapped: (($selected | index($e.file)) != null)} ] | sort_by(.file) ) as $mx
+    | ( [ $mx[] | select(.mapped)
+          | "scope map declares \(.file) in excluded_tests but a rule selects it; it is NOT excluded" ] ) as $xw
+    # The key is APPENDED ONLY when the map actually declares an exclusion, so a
+    # map without the key produces byte-identical output to before it existed.
     | { mapped_suites: $ms, mapped_tests: $mt, unmapped_files: $unmapped,
-        warnings: (($inw + $skw + $rw + $dw + $zw) | unique) }
+        warnings: (($inw + $skw + $rw + $dw + $zw + $xw) | unique) }
+      + (if ($mx | length) > 0 then {map_excluded_tests: $mx} else {} end)
   end
 EOF
 }
@@ -729,6 +778,12 @@ main() {
 
   command -v jq >/dev/null 2>&1 || die 1 "jq is required but was not found on PATH"
   command -v git >/dev/null 2>&1 || die 1 "git is required but was not found on PATH"
+  # Hoisted out of glob_defs(), which is only ever reached inside a command
+  # substitution where its die would have exited the subshell alone (E72_S07_T02
+  # fix round). Checked here, where die really does stop the script, so a missing
+  # shared dialect is one clear error rather than a jq compile-error cascade.
+  [ -f "$GLOB_DEFS_FILE" ] \
+    || die 1 "the shared glob definitions are missing at $GLOB_DEFS_FILE"
 
   ROOT_ARG="$root_arg"
   RESOLVER="$(resolve_helper scripts/resolve-root.sh)" || RESOLVER=""
@@ -759,9 +814,18 @@ main() {
     normalise_suites "--suites input" "$raw" 3
   fi
 
-  # No changes: nothing to map, and nothing to discover.
+  # No changes: nothing to map, and nothing to discover. The map is resolved and
+  # validated above, so its declared exclusions are still reported here — and,
+  # as everywhere else, only when it declares any, so the output for a map
+  # without the key stays exactly the literal it always was.
   if [ -z "$CHANGED_TAGGED" ]; then
-    printf '%s\n' '{"mapped_suites":[],"mapped_tests":{},"unmapped_files":[],"warnings":["No changed files"]}'
+    jq -cn --slurpfile m "$MAP_FILE" \
+      '([ ($m[0].excluded_tests // [])[] | {file: .file, reason: .reason, mapped: false} ]
+        | sort_by(.file)) as $mx
+       | {mapped_suites: [], mapped_tests: {}, unmapped_files: [],
+          warnings: ["No changed files"]}
+         + (if ($mx | length) > 0 then {map_excluded_tests: $mx} else {} end)' \
+      || die 1 "jq failed while reporting the empty change set"
     exit 0
   fi
 

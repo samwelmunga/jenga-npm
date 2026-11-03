@@ -29,7 +29,7 @@
 #   scope   key              default   allowed values
 #   task    test_run_task    none      none | scoped | full
 #   story   test_run_story   scoped    none | scoped | full
-#   epic    test_run_epic    full      none | scoped | full
+#   epic    test_run_epic    none      none | scoped | full
 #
 # STDOUT. Exactly one line in every non-usage case: the mode token (`none`,
 # `scoped` or `full`) and nothing else. Warnings and usage go to stderr only.
@@ -78,7 +78,7 @@ Usage: scope-policy.sh get <task|story|epic> [--root <dir>] [--config <file>]
 
 Print the effective test-run mode of a board scope: none, scoped or full.
 
-  get <scope>       task (default none), story (default scoped), epic (default full)
+  get <scope>       task (default none), story (default scoped), epic (default none)
   --root <dir>      project root to resolve the configs directory against
   --config <file>   read this file instead of <configs dir>/test-config.json
   --help            show this help and exit 0
@@ -178,7 +178,7 @@ done
 case "$SCOPE" in
   task)  DEFAULT="none" ;;
   story) DEFAULT="scoped" ;;
-  epic)  DEFAULT="full" ;;
+  epic)  DEFAULT="none" ;;
   *) die_usage "unknown scope: $SCOPE (expected: task, story or epic)" ;;
 esac
 KEY="test_run_${SCOPE}"

@@ -87,9 +87,98 @@ test run must pass before a board scope is closed (the scope test policy, see th
 |--------------|---------|----------------|
 | `test_run_task` | `none` | `none`, `scoped`, `full` |
 | `test_run_story` | `scoped` | `none`, `scoped`, `full` |
-| `test_run_epic` | `full` | `none`, `scoped`, `full` |
+| `test_run_epic` | `none` | `none`, `scoped`, `full` |
 
 An absent key reads as its default, and a present-but-invalid value reads as the default with a warning on stderr.
+
+Editable too: `test_default_suite_set`, the **bounded default suite set** (`E72_S08_T06`) — see the next section.
+
+#### `test_default_suite_set` — the floor beneath a `scoped` gate
+
+A `scoped` gate whose changed files map to **no suite at all** runs this set instead of the full catalog. It is the
+floor: never the whole catalog, never empty. Only the "nothing mapped" cause reaches it — an id with **no commits**
+keeps `exit 3`, because no change set could be derived there at all and a default run would report a pass for a
+change nobody knows.
+
+The value is a flat, **comma-separated list of root-relative test-file globs** in the same dialect the scope map uses:
+
+```bash
+jenga config get test-config.test_default_suite_set
+jenga config set test-config.test_default_suite_set "tests/smoke-test-skills.bats,tests/resolve-root.bats"
+```
+
+| | |
+|---|---|
+| Default | `""` — **not configured** |
+| Allowed | `""`, or one or more globs separated by single commas (no spaces, no `[ ] { } \| \\`, no leading `/`, no `..` segment) |
+| Resolver | `skills/j-test/scripts/resolve-default-suites.sh` |
+| Subset guard | `skills/j-test/scripts/assert-bounded-subset.sh` (shared with `E72_S08_T03`'s `scoped` ≠ `full` invariant) |
+
+**It is globs, not suite ids,** because `discover-tests.sh` emits one bats suite per *directory*: this project's whole
+catalog is the single suite `bats:tests`, so a set named at suite granularity would be the entire catalog and could
+not be bounded. And it is a **flat string, not an array**, because the descriptor schema can only express an editable
+key as a scalar — an array value could never be set through `jenga config` at all.
+
+Three outcomes are refusals rather than runs, each with the offending value named, and **none of them is ever a
+pass**:
+
+- **Not configured** (absent, `null` or empty): the resolver exits `4` and prints the `jenga config set` line to fix
+  it. The shipped descriptor default and the `j.init` scaffold template are both `""` on purpose — naming this
+  project's own test files in a generic default would be wrong for every consumer, and naming nothing honestly says
+  "you have not set this yet". A project that has never heard of the key gets an actionable refusal, not a silent
+  pass and not the full catalog.
+- **Zero runnable test files** (the globs match nothing, or every file they match is run by no runnable suite): exit
+  `5`. A floor that quietly resolves to nothing is a gate going green having executed nothing.
+- **The entire runnable catalog** (including a one-file catalog, where equality is unavoidable): exit `6`. A bounded
+  default set equal to everything is a contradiction whatever the catalog's size.
+
+An invalid glob, or an empty element from a leading, trailing or doubled comma, is exit `3` — the same code
+`commit_scope_map_file` gets for a path that points nowhere, and for the same reason: an explicit setting that is
+wrong is a misconfiguration, never a silent fallback.
+
+**This project's set is six suites, resolving to 6 of 272 runnable test files.** What may be in it is a *property*,
+not a runtime budget: no suite that mutates a tracked artefact of the tree it runs in is eligible, regardless of
+speed, and the same bars a suite that drives a real outward push or that depends on ambient permission state. The
+membership and the reasoning behind it, including what was considered and rejected, are in the "The bounded default
+suite set" section of `project/documentation/test-runner.md`.
+
+Note that `test-config.json` carries **no version counter**, so a successful `set` on this key (as on every other
+editable key of this file) prints no bump suffix. That is deliberate, from `E72_S01_T04`, and is pinned by
+`tests/config-descriptors.bats` and `tests/config-get-set-e2e.bats`.
+
+#### `commit_scope_map_file` — override it, do not edit the shipped map
+
+The default value, `templates/test-scope-map.json`, is the **shipped generic starting point**, and its own `_comment`
+says a project overrides it "by pointing `commit_scope_map_file` at its own map, not by editing this shipped copy".
+Editing the shipped file would push this project's mapping policy out to every consumer of the package.
+
+Overriding it matters more than it looks. The shipped map's `**/*.sh` → `tests/**/*.bats` rule maps **any** shell edit
+to **every** bats file, so a `scoped` gate for a one-script change selects the whole catalog. Write a project map with
+targeted rules and point this key at it:
+
+```bash
+jenga config set test-config.commit_scope_map_file project/configs/test-scope-map.json
+```
+
+The value must be a relative path, free of `..` segments, ending in `.json`, resolved against the project root. A
+configured file that does not exist is an error (exit 3), never a silent fallback to the default — an explicit setting
+pointing nowhere is a misconfiguration.
+
+Note that a precise map narrows which test *files* are resolved; what makes the run itself narrower is
+`skills/j-test/scripts/narrow-suites.sh`, and a suite that cannot pass right now is excluded by
+`skills/j-test/scripts/baseline-permissions.sh`. An excluded suite is always named in the gate's output and never
+counted as passed.
+
+A map can also **declare** a deliberate omission through its top-level `excluded_tests` key, so that a file no rule
+selects is reported as "deliberately kept out" rather than being silently absent. This project declares three
+(2026-11-01): `tests/mirror-test-subject-invariant.bats`, `tests/mirror-permission-level-invariant.bats` and
+`tests/mirror-staging-branch-push.bats` — the first for its ~2 h runtime and its mutation of the real `.publicignore`,
+the other two because each drives the real `mirror.sh` end-to-end with real `git push`es. The declaration **subtracts
+nothing**: removing the file from every rule is what excludes it, and the declaration only makes that visible. It also
+holds **only on the `scoped` path** — under policy `full`, and on either fallback to the full catalog, all three run.
+`test_run_epic` is `none` in this project today, so no epic rollup takes either path. Both are documented in the "Suite granularity" and "Suites that cannot pass right now" sections of
+`project/documentation/test-runner.md`.
+
 Everything else is shown read-only, with a pointer to where to change it:
 
 | Read-only key | Why, and where to edit instead |
@@ -125,7 +214,7 @@ Runtime threshold values used by `/jenga` and `/do` to determine execution scope
 
 | Field | Type | Current Value | Description |
 |-------|------|---------------|-------------|
-| `threshold_version` | integer | 4 | Version counter for this config. **Incremented by `jenga config set` on every successful change to any threshold value** (it is read-only there, so it cannot be set directly); a hand edit of any threshold must still increment it by hand. This makes threshold drift visible in git history and code review. |
+| `threshold_version` | integer | 7 | Version counter for this config. **Incremented by `jenga config set` on every successful change to any threshold value** (it is read-only there, so it cannot be set directly); a hand edit of any threshold must still increment it by hand. This makes threshold drift visible in git history and code review. |
 | `inline_max_files` | integer | 3 | Maximum number of files a task may touch to qualify for `inline` execution scope (no subagent, no worktree). Raised from 1 to 3 (`threshold_version: 2`) — a 1-file cap forced small multi-file work (e.g. a `SKILL.md` plus one small script, the standard "delegate deterministic logic to a script" shape required by CLAUDE.md's Skill Implementation Principle) through the full worktree+tester pipeline, which costs disproportionately more than the change itself. See `E42_S04_T01` for the case that surfaced this. |
 | `inline_max_lines` | integer | 75 | Maximum total lines changed for a task to qualify for `inline` execution scope. Raised from 20 to 75 alongside `inline_max_files` for the same reason — a small `SKILL.md` + script pair routinely exceeds 20 lines. |
 | `story_max_files` | integer | 5 | Maximum number of files a task may touch to qualify for `story` scope bundling (multiple tasks executed in one developer context). |
@@ -134,6 +223,7 @@ Runtime threshold values used by `/jenga` and `/do` to determine execution scope
 | `max_concurrent_testers` | integer | 4 | Maximum number of in-session tester invocations a single orchestrating session may run at once. On a full cap, the developer agent falls back to the existing `project/queue/handoffs/` mechanism instead of waiting. Added in `threshold_version: 3` (`E32_S15`). |
 | `slot_ttl_minutes` | integer | 45 | Time-to-live in minutes for a held concurrency slot (developer or tester). A holder entry older than this value is considered stale and is reclaimed before the next cap check — this guards against a crashed subagent leaking its slot, not against cross-session contention (the counter file itself has no cross-session lifecycle). Added in `threshold_version: 3` (`E32_S15`). |
 | `marker_ttl_minutes` | integer | 60 | Time-to-live in minutes for a pre-flight **situation marker** frame (`scripts/checklist-marker.sh`, the "which lifecycle phase is this session in" value the enforcing hook reads). A frame older than this is treated as **absent**, so a session that died mid-phase cannot wedge every later session in the repo. A judgement, not a measurement: longer than `slot_ttl_minutes` (45, which guards a single dispatch) and far shorter than the tick store's 1440-minute idle TTL (which bounds a whole orchestrated run); a phase that legitimately runs longer calls `checklist-marker.sh refresh --token <t>`, which extends its own frame's expiry in place (a repeated `write` is **not** a refresh: it pushes a second frame). Added in `threshold_version: 4` (`E67_S04`); full reasoning in `project/documentation/preflight-checklists.md` section 9, "Situation marker". |
+| `recording_ttl_minutes` | integer | 90 | Time-to-live in minutes for the **active-recording pointer** (`skills/j-workflow-recorder/scripts/active-recording.sh`, the per-session record of which `_RECORDING.md` is the live one). A pointer older than this is treated as absent, so a session that died mid-recording cannot wedge a later one. **Chosen value: 90, by the user on 2026-11-02.** Reason: a live recording renews its own pointer in place through `active-recording.sh refresh`, so a short ceiling is safe and only has to outlast a dead session, while the earlier unapproved fallback of 720 minutes (12 hours) would have let a session that died yesterday still look live today. Too short a value would drop a healthy recording's pointer between refreshes; too long a value lets a dead session's pointer outlive it. For reference `marker_ttl_minutes` is 60 and `slot_ttl_minutes` is 45. The script reads it fresh on every operation, falls back to 90 when the key is absent, and exits 5 when it is present but not a positive number. Added in `E89_S05_T04`. |
 
 ### Versioning Convention
 
@@ -162,6 +252,9 @@ If you edit `scope-thresholds.json` by hand instead, the old rule still applies:
   `max_concurrent_developers`, `max_concurrent_testers`, and `slot_ttl_minutes` fresh on every
   acquire attempt against a single orchestrating session's
   `project/queue/concurrency-slots-<session_id>.json` counter file (`E32_S15_T02`)
+- `skills/j-workflow-recorder/scripts/active-recording.sh` — reads `recording_ttl_minutes` fresh on every
+  operation that stamps or tests a pointer's expiry (`E89_S01_T03`, shipped by `E89_S05_T04`). An absent key
+  falls back to its built-in default of 90; a present but invalid one is a hard error (exit 5)
 - `scripts/checklist-marker.sh` — reads `marker_ttl_minutes` fresh on every `write`, `clear` and
   `prune`, to decide when a situation-marker frame has expired (`E67_S04_T01`). A missing file or
   key is a hard error for those three; `read` degrades to "no phase is active" instead, because the

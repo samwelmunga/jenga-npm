@@ -242,6 +242,31 @@ suite, prints the summary and exits 130. The suite that was running is listed `(
 The skill's own result is that exit code. After a `1`, `j.test` names the failed suites and offers to re-run only those
 (with their catalog numbers) or stop. When you are done it removes its scratch catalog file.
 
+### The slowness preflight
+
+A run that covers **every** runnable suite of the catalog (a `j.test` answer of blank or all, or the `full` scope test policy — a `scoped` policy can no longer reach the whole catalog at all, see `E72_S08_T02`) starts with `scripts/slowness-probe.sh`. It runs one reference bats file (`tests/workflow-outputs.bats`, about a minute on a healthy machine) and compares its wall time with its CPU time (user + sys). On a healthy machine the two are close; when something outside the tests makes every process start wait (the case recorded in `project/rapports/problems/E77_S06_T11-wall-clock-timings-inflated-by-first-exec-latency.md`: a security agent authorising each `exec`), the file keeps its CPU time and its wall time grows ten times. **Wall above 2.5 times CPU classifies the machine as slow.**
+
+The probe never changes which suites run or the exit code. It prints its result before the first suite; when the machine is slow it also collects diagnostics, and a note after the summary says that the wall-clock durations of that run are not a measure of the tests.
+
+| Probe exit | Meaning |
+|---|---|
+| `0` | healthy, the reference file passed |
+| `1` | the reference file failed (the ratio is still logged, and diagnosed when slow) |
+| `2` | usage error |
+| `3` | skipped: `bats` or the reference file is absent (a consumer install, a synthetic root); nothing measured or logged, and `run-suites.sh` prints nothing |
+| `10` | slow |
+| `130` | interrupted |
+
+It is also run on its own: `bash scripts/slowness-probe.sh` (`--help` for the options; `--threshold`, `--probe-file`, `--exec-files`, `--log`, `--no-log`). Run it by hand when the machine starts to feel sluggish.
+
+**What one run records.** One JSON line is appended to `project/logs/slowness-probe.jsonl` (machine-local, git-ignored, never mirrored): the wall and CPU time and their ratio, the uptime and load, the terminal start time (`$SHELL -i -l -c exit`), the cost of `bash -c :` idle and sampled while the reference file runs (`spawn_inflation`), the highest CPU of the security-agent processes (`wdav*`, `epsext`, `mdatp`) and the number of `git fsmonitor--daemon` processes. When the run is slow it adds the first-exec benchmark (`first_exec_ms` against `reexec_ms` over fresh scripts), the five busiest processes and an `indicators` list naming each measure that crossed its own threshold. Reading the history shows when the slowness returned and what the machine looked like then:
+
+```bash
+jq -c '{ts, ratio, uptime_days, terminal_start_s, first_exec_ms, security_agent_cpu_max, fsmonitor_daemons}' project/logs/slowness-probe.jsonl
+```
+
+**Turning it off or tuning it.** `JENGA_SLOWNESS_PROBE=0` skips it (a CI job where wall time is trustworthy and the extra minute is not wanted); `JENGA_SLOWNESS_THRESHOLD=<n>` changes the 2.5; it is also skipped inside a nested suite run (`JENGA_NESTED_SUITE_RUN` set). The probe only reads: it never changes a machine setting, and does not itself fix a slow machine. The suites it covers are `tests/slowness-probe.bats`.
+
 ## Scope mapping
 
 `skills/j-test/scripts/map-scope.sh` answers one question: which discovered suites cover the files that changed. It is
@@ -426,6 +451,447 @@ It uses the same format as the shipped map: `map_version` set to `1` and a non-e
 ```
 
 Because rules are additive, a change to `lib/parser/a.js` maps to the union of both rules' tests.
+
+The shipped map is a **generic starting point, not a recommendation**: its `**/*.sh` → `tests/**/*.bats` rule maps any
+shell edit to every bats file in the project, which is almost never the mapping a real project wants. Overriding it is
+how a project gets a scoped run that is actually scoped. Point `commit_scope_map_file` at your own file; never edit the
+shipped copy, which would ship your project's policy to every consumer of the package.
+
+A rule may carry **only** `source` and `tests`. Any other key — including a per-rule comment — is a validation error,
+so a map's rationale has to live in its single top-level `_comment`.
+
+#### `excluded_tests` — declaring a deliberate omission
+
+An optional top-level `excluded_tests` array names each test file the map deliberately leaves out of every rule, with
+a mandatory reason:
+
+```json
+{
+  "map_version": 1,
+  "excluded_tests": [
+    { "file": "tests/slow-e2e.bats", "reason": "mutates the real deployment target; run it deliberately" }
+  ],
+  "rules": [ { "source": "lib/**/*.js", "tests": ["test/unit/**/*.test.js"] } ]
+}
+```
+
+It exists for one purpose: **visibility**. A map-based omission is invisible by construction — the file is simply never
+selected, nothing lands in the gate's `excluded_test_files`, and the reader sees only `selected N test file(s)` with no
+way to tell "deliberately kept out" from "simply not mapped". With the declaration, `map-scope.sh` reports it as
+`map_excluded_tests` and the gate prints `deliberately not selected by the scope map (NOT verified, and NOT a pass)`
+and carries it in `--json` as `map_excluded_test_files`.
+
+Three properties are worth knowing:
+
+- **It subtracts nothing.** `map_version` 1 still has no negation; a declaration is a statement about an omission the
+  rules already produce, not a way to remove a file the rules select. This is why `map_version` stays at `1`, and why
+  enumerate-and-omit remains the mechanism that actually does the work.
+- **A contradicted declaration is reported, never believed.** If some rule selects a declared file anyway, the file
+  *is* in the run, so it is listed under `map_exclusion_conflicts` instead of `map_excluded_test_files`, and
+  `map-scope.sh` warns. The gate can never claim a file was kept out while in fact running it.
+- **`file` must be a literal path and `reason` must be non-empty.** A glob is a validation error, because the
+  membership check against the selected files is exact. An empty reason is a validation error for the same purpose the
+  baseline marker has one: nothing is kept out of a gate without saying why.
+
+Every entry is sorted by `file`, and the key is **present in the output only when the map declares at least one**, so a
+map that does not use it produces byte-identical output to before the key existed.
+
+#### A declared omission only holds on the `scoped` path
+
+A declaration is a statement about what the **scope map's rules** select, so it has force only where those rules decide
+the run. **The rule the gate follows is one rule, not a list of paths:** a declared file this run *executes* is reported
+as superseded, and a declared file this run *does not execute* is reported as kept out. Every declared file gets exactly
+one of the two statements, never both and never neither.
+
+`E72_S08_T02` rewrote this table. It had three rows and claimed "exactly one statement per run"; that held only while
+every path either ran *all* the declared files (the escalation to the full catalog) or *none* of them. The bounded
+default suite set is a fourth case the old table could not express — the map **was** consulted, so a declaration is in
+hand, but the declared files **do not run** — and because the floor is configured independently of the scope map it can
+name some declared files and not others, so "one statement per run" became **one statement per declared file**:
+
+| When | What the gate prints | `map_excluded_test_files` | `map_exclusions_superseded` | Did the file run? |
+|---|---|---|---|---|
+| `scoped`, a suite maps (`effective_mode` `"scoped"`) | `deliberately not selected by the scope map (NOT verified, and NOT a pass):` + the reason | the file | `[]` | no |
+| `scoped`, nothing maps → the **bounded default suite set** runs (`effective_mode` `"default-set"`, `fallback_reason` `"no-mapped-suites"`) — **the row `E72_S08_T02` added** | per declared file: `deliberately not selected ...` for the ones the floor does not run, and `the scope map's declared omission is NOT in force for the following: the bounded default suite set runs them, so they WILL RUN and WILL be verified:` for the ones it does | the ones the floor does **not** run | the ones it **does** | per file |
+| policy `full` — the map is never consulted | nothing about the declaration | `[]` | `[]` | **yes** |
+| `fallback_reason` `"no-commits"` — the map is never consulted either | nothing about the declaration | `[]` | `[]` | no: nothing runs at all (exit 3) |
+
+**In this repository the floor runs none of the three declared files**, so row 2's partition is empty on one side:
+`test_default_suite_set` names six suites and not one of them is
+`tests/mirror-test-subject-invariant.bats`, `tests/mirror-permission-level-invariant.bats` or
+`tests/mirror-staging-branch-push.bats`. The declaration is therefore back **in force** on the `no-mapped-suites` path,
+`map_exclusions_superseded` is `[]` and `map_excluded_test_files` keeps all three — the **inverse** of the behaviour
+before `E72_S08_T02`, where the full-catalog escalation ran them and so genuinely did supersede the declaration.
+
+Two consequences worth stating plainly:
+
+- **`map_excluded_test_files` never names a file the run executed, and `map_exclusions_superseded` never names one it
+  did not.** The second half is the part that inverted: the gate claiming a file was "NOT verified" while executing it
+  was the defect `E72_S07`'s fix round 3 removed (the same class as narrowing variant 2), and reporting a file as
+  "WILL RUN and WILL be verified" when the floor does not run it would be that same false statement pointing the other
+  way. The partition is what keeps both halves true for any configured floor, rather than a constant that happens to be
+  right for this one.
+- **Under policy `full` the map exclusion has no effect at all, and nothing is said about it.** The scope map is never
+  read on a `full` run, so there is no declaration in hand to report; the declared file is simply part of the catalog
+  and runs. That is not a false statement, but it *is* silent — if you rely on a declared omission to keep a hostile
+  suite out of an automatic gate, a `full` policy does not give you that. Check `test_run_task` / `test_run_story` /
+  `test_run_epic` before assuming it does. (`test_run_epic` now defaults to `none` — `E72_S08_T01` — so the
+  default epic close consults no map because it runs nothing, not because it runs everything.)
+
+  This is a **documented limitation, not a bug**: a `full` policy's contract is "run the whole catalog", and silently
+  dropping a file from it would break that contract more seriously than running a declared omission does. If a suite
+  must never run automatically under any policy, the map declaration is the wrong instrument — use the
+  `# jenga:requires-baseline-permissions:` marker (see "Suites that cannot pass right now, and how they are excluded"),
+  which is read on every path, or keep the suite out of discovery altogether.
+
+  **After `E72_S08_T02` this gap is `full`-only.** It used to extend to both escalations, which reached the whole
+  catalog from a `scoped` policy; neither exists now. `"no-commits"` runs nothing at all, and `"no-mapped-suites"` runs
+  the bounded default suite set, which in this repository contains none of the declared files. So a `scoped` policy no
+  longer executes a declared omission by accident — only an explicitly configured `full` policy does, or a floor that
+  explicitly names one.
+
+  **Which suites this gap is live for in this repository, named (2026-11-01).** Three files are declared omissions in
+  `project/configs/test-scope-map.json`, and a `full` run executes all three:
+
+  | Declared omission | What a `full` run drives |
+  |---|---|
+  | `tests/mirror-test-subject-invariant.bats` | ~2 h of runtime; mutates the real `.publicignore`, restored only in `teardown()` |
+  | `tests/mirror-permission-level-invariant.bats` | the real `mirror.sh` end-to-end, with real `git push`es |
+  | `tests/mirror-staging-branch-push.bats` | the same, including the `--force` flow |
+
+  The two push-driving ones were added to `excluded_tests` on 2026-11-01 by user decision (`E72_S07_T04` fix round 4),
+  with the `scoped`-only limit accepted as a known: the declaration makes a tester's repeated refusal to run them
+  visible in the gate output instead of depending on a tester declining each time, and it does nothing at all under
+  `full`. **Two changes have since shrunk this exposure without removing it.** `E72_S08_T01` re-tiered the epic policy
+  default from `full` to `none`, and this repository's own `project/configs/test-config.json` now sets
+  `test_run_epic: "none"`; `E72_S08_T02` removed both full-catalog escalations, so a `scoped` policy can no longer
+  reach the whole catalog at all. What remains is that `full` stays an accepted value any project can set deliberately,
+  and that a `test_default_suite_set` which explicitly named one of these files would run it (and would then be
+  reported under `map_exclusions_superseded`, not as kept out).
+
+### This project's own map
+
+Jenga itself runs on `project/configs/test-scope-map.json` (`E72_S07_T03`), with
+`commit_scope_map_file` pointing at it. Its shape is worth reading as a worked example, because two of its decisions
+are the ones any real project has to make.
+
+**It drops the shipped `**/*.sh` → `tests/**/*.bats` rule.** That one rule is what made a scoped gate select the whole
+catalog for any shell edit. Measured on the `E28_S19` change set (31 files): 261 test files / 5666 cases under the
+shipped map, **14** under this one. Every other shipped rule is kept — the JavaScript, Python, Go and Rust ones match
+nothing here today but cost nothing and keep the map correct if such a suite is ever added.
+
+**It has no catch-all, and that is a deliberate trade.** A change in an area no rule covers maps to zero suites, so the
+gate runs the **bounded default suite set** with `fallback_reason: "no-mapped-suites"` and `effective_mode:
+"default-set"` on stdout and in its JSON. The consequence is real but bounded: an uncovered story gets the floor, which
+asserts something rather than nothing but asserts nothing *about* the change. It is always surfaced rather than silent.
+Adding a rule is how a new area gets narrowed; re-adding a catch-all would undo the whole thing.
+
+Until `E72_S08_T02` the consequence was the opposite and much worse: an uncovered story got the **whole catalog**, so
+dropping the catch-all did not remove the full run, it relocated it from a mapped selection to a fallback — and 61
+specific rules leave a larger uncovered surface than one blanket rule did, so it fired *more* often, not less.
+
+### Documentation changes
+
+Added by `E72_S08_T07` (folded in from the duplicate story `E72_S09`). Until then the map had **no rule covering a
+documentation `.md` path**. Three rules touched `.md` — `templates/SCRUM_BOARD_SCHEMA.md`, `agents/*.md` and
+`skills/**/SKILL.md` — and the documentation surfaces proper had none at all, so a documentation-only change matched
+nothing, `map-scope.sh --files-from` returned `mapped_suites: []`, and `scoped` meant "the whole catalog" for every
+docs-only story. `E72_S08_T06`'s bounded default set stops that run, but a floor is generic: it asserts nothing *about*
+documentation. These rules are the positive mapping that does.
+
+**The rules.** Per document, not one blanket `**/*.md`:
+
+| `source` | `tests` | Why those suites |
+|---|---|---|
+| `project/documentation/public-mirror-content-parity.md` | `tests/workflow-publicignore.bats` | reads it as `PARITY_DOC` |
+| `project/documentation/workflows.md` | `tests/workflow-doc-sections.bats` | extracts and validates the workflow example out of it |
+| `project/documentation/skill-authoring.md` | `tests/smoke-test-error-table.bats`, `tests/check-public-playbook-steps.bats` | both read it off the real root |
+| `project/documentation/preflight-checklists.md` | `tests/checklist-gating.bats` | parses its phase-to-skill and situation tables |
+| `project/documentation/project-conventions.md` | `tests/prepare-task-commit-ref.bats`, `tests/conventions-precommit-timing.bats` | both grep its tables |
+| `project/documentation/config-descriptors.md` | `tests/config-descriptors.bats` | checks every code is documented in it |
+| `project/documentation/mcp-registration-decision.md` | `tests/register-mcp.bats` | asserts the decision it records |
+| `project/documentation/atlassian-connect.md` | `tests/atlassian-connect.bats` | asserts its sections and tables |
+| `project/documentation/distribution.md` | `tests/workflow-skill-registration.bats` | asserts its packaging-decision section |
+| `CLAUDE.md` | `tests/break-signal.bats`, `tests/j-test-skill.bats`, `tests/smoke-test-skills.bats`, `tests/connect-skill-shell.bats`, `tests/conventions-skill.bats`, `tests/scope-test-gate-wiring.bats`, `tests/workflow-skill-docs.bats` | each greps its skill table or a named bullet |
+| `README.md` | `tests/break-signal.bats`, `tests/j-test-skill.bats`, `tests/smoke-test-skills.bats`, `tests/workflow-skill-docs.bats` | same, for the public readme |
+| `AGENTS.md` | `tests/break-signal.bats`, `tests/j-test-skill.bats`, `tests/smoke-test-skills.bats` | same, for the `/j-` slash-form table |
+| `site/**/*.md` | `tests/site-dir-migration.bats`, `tests/pages-permalinks.bats`, `tests/connect-skill-shell.bats`, `tests/smoke-test-skills.bats` | front matter, the real permalink set, and `site/reference/skills.md` |
+| `docs/**/*.md` | `tests/site-dir-migration.bats` | it asserts `docs/` does **not** exist, so creating one breaks it |
+| `templates/PROBLEM_RAPPORT_TEMPLATE.md` | `tests/checklist-suggest.bats` | compares a scaffolded rapport against its sections |
+| `templates/CHANGELOG_TEMPLATE.md` | `tests/npm-stage-approve-changelog.bats` | uses it as `TEMPLATE_SRC` |
+| `templates/CRITICAL_ERROR_TABLE_TEMPLATE.md` | `tests/smoke-test-error-table.bats` | uses it as `TEMPLATE` |
+| `project/board/**/*.md` | `tests/validate-board-yaml.bats` | the one suite that runs `scripts/validate-board.sh` over the real board |
+
+**How the membership was established, and why that matters.** By a recorded grep over `tests/`, not from examples
+(`E72_S08_T07` AC3). "Mentions a `.md` path" is useless as a selector: 177 of 271 suites do, because most build a
+scratch `.md` under `$BATS_TEST_TMPDIR`. The discriminator used instead is whether the suite **reads a document off
+the real repository root** — `"$REPO_ROOT"/<doc>` — rather than out of a fixture tree. Only suites that do are named
+above. Suites that look like documentation suites and are not include `tests/workflow-check-doc-refs.bats`,
+`tests/strategy-visibility.bats`, `tests/strategy-path-resolver.bats`, `tests/mirror-never-public-refs.bats`,
+`tests/check-staged-hardcoded-paths.bats`, `tests/help-twin-only-listing.bats` and `tests/copilot-skill-list.bats`:
+each builds a synthetic doc tree and asserts a *script's* behaviour, so editing a real document cannot change its
+result. Mapping them would inflate every docs gate while verifying nothing about the change.
+
+**Per document, deliberately, not one `**/*.md` rule.** Same reason the shared scripts under `scripts/` are named
+individually rather than via `scripts/*.sh`: so adding a document does not silently inherit another's test set. A
+blanket rule would also be the `.md` analogue of the `**/*.sh` catch-all this map dropped — every documentation edit
+would select every documentation suite, which is the shape `E72_S07_T03` removed rather than a narrowing of it.
+
+**The no-match outcome.** A documentation path no rule names matches nothing, exactly like any other uncovered area,
+and falls through to the bounded default suite set (`E72_S08_T06`) — never to a pass that ran nothing, and never
+silently: `map-scope.sh` lists it under `unmapped_files` and warns `No tests found for the changed files`. Adding a
+rule to the table above is how a new document gets narrowed. One case is deliberate rather than pending:
+`project/documentation/test-runner.md` — this page — gets **no rule**, because no suite asserts its *content*
+(`tests/scope-test-gate.bats` only names it in a comment), so there is nothing honest to map it to.
+
+**Three surfaces already had a rule and were left alone**, recorded here so the gap is not mistaken for coverage. The
+sweep found further suites reading them off the real root, but each already resolves through a rule, so the gap is
+membership rather than absence:
+
+- `agents/*.md` — also read by `tests/commit-test-gate-skill.bats`, `tests/config-descriptors.bats`,
+  `tests/tools-registry-e2e.bats` and `tests/commit-test-gate-mirror.bats`. The last is one of the four known-red
+  failures `E72_S07_T04` records, so adding it would feed known redness into every agents-doc gate. That is a
+  decision, not a drive-by edit.
+- `templates/SCRUM_BOARD_SCHEMA.md` — also read by `tests/resolve-root.bats` and `tests/reconcile-ladder-statuses.bats`.
+- `skills/**/SKILL.md` — covers `SKILL.md` only. Other skill `.md` assets have no rule, though
+  `tests/digitalocean-descriptor.bats` asserts `skills/j-publish/adapters/droplet.md` and its two mirror copies. That
+  belongs to the skill-asset rule family rather than this one.
+
+**The `E88_S03` reproduction**, measured read-only with `map-scope.sh --files-from` against a single-bats-suite
+discovery. Its change set is two Markdown files,
+`project/board/tasks/E88_S03_T02_publicignore-test-updates.md` and
+`project/documentation/public-mirror-content-parity.md`
+(`project/rapports/problems/E88_S03_T03-npm-channel-criterion-not-documented.md`):
+
+| | selection |
+|---|---|
+| before | `mapped_suites: []` → full-catalog fallback, 271 test files |
+| after | 2 test files, narrowed to `bats 'tests/validate-board-yaml.bats' 'tests/workflow-publicignore.bats'` |
+
+A strict subset of the catalog, at the real end of the chain — the command `narrow-suites.sh` produces, not just the
+mapped set. `tests/project-scope-map.bats` pins all of it, including a mutation case that strips every `.md` rule from
+a copy of the map and asserts the selection then goes to zero, which is what establishes that the mapping is **data in
+the map** rather than an extension list inside a script (`E72_S08_T07` AC4).
+
+### Keeping a hostile suite out of an automatic gate
+
+Three test files in this repository are kept out of scoped selection this way, each declared in
+`project/configs/test-scope-map.json`'s `excluded_tests`: `tests/mirror-test-subject-invariant.bats` (below) and the
+two push-driving suites in the subsection after it. The mechanism is identical for all three — removed from every
+rule, then declared — and so is its limit: it holds only on the `scoped` path.
+
+`tests/mirror-test-subject-invariant.bats` is excluded from scoped selection — and the map **declares** that omission
+in its `excluded_tests`, so the gate says so out loud rather than leaving a silent absence (see "`excluded_tests` —
+declaring a deliberate omission" above). The reasons are specific rather than a general dislike of slow tests:
+
+- **Runtime.** It runs the whole shipping bats suite *inside* itself — about 20 minutes per real-push case, 7 such
+  cases. The 2026-10-16 incident measured 2+ hours with no progress.
+- **Side effects on the tree it is validating.** It mutates the real `.publicignore` and restores it only in
+  `teardown()`, so a killed run leaves the project's blocklist modified.
+
+Neither property belongs in a gate that runs automatically at every story close.
+
+**How the exclusion is written, and why it looks verbose.** `map_version: 1` has **no negation** — a glob beginning
+with `!` is a validation error, not a way to subtract a file. The only way a file is not selected is for no rule's
+`tests` glob to match it. So the mirror rule **enumerates its seven test files as literal paths** rather than writing
+the obvious `tests/mirror-*.bats`, which would match the excluded file too. The exclusion is therefore auditable by
+reading the map: the file is simply absent from it.
+
+**And it is auditable from the gate output, not only from the map.** The enumeration alone leaves a reader of the gate
+unable to distinguish this deliberate omission from a file that merely was not mapped, which is what `excluded_tests`
+fixes. `tests/project-scope-map.bats` mutation-tests both halves: replacing the enumeration with `tests/mirror-*.bats`
+still selects the file (proving the enumeration is load-bearing) *and* flips the declaration to `mapped: true` with a
+warning (proving the declaration never quietly rescues it).
+
+**The second gap: the exclusion only holds where the map's rules decide the run.** A declared omission is a statement
+about what the map's *rules* select, so it has no force elsewhere. Under policy `full`,
+`tests/mirror-test-subject-invariant.bats` **runs** — with its 2+ hours and its `.publicignore` mutation — and the gate
+says nothing about the declaration, because the map was never consulted.
+
+**`E72_S08_T02` narrowed this gap to `full` alone.** It used to extend to both full-catalog escalations, which a
+`scoped` policy could reach. Now `"no-commits"` runs nothing (exit 3) and `"no-mapped-suites"` runs the bounded default
+suite set, which does not contain this file — so on that path the declaration is **in force**, the gate reports it under
+`map_excluded_test_files` as deliberately not selected, and `map_exclusions_superseded` is `[]`. The only way the floor
+could run it is a `test_default_suite_set` that explicitly named it, which would then be reported as superseded rather
+than as kept out. The full four-case table is under "A declared omission only holds on the `scoped` path" above.
+
+`test_run_epic` now defaults to `none` (`E72_S08_T01`), so the default epic close runs nothing at all. Still, do not
+treat the map declaration as a guarantee that a hostile suite never runs automatically: it is a visibility mechanism
+for the paths where the map decides, and the marker below is the instrument that holds on every path.
+
+**The gap this does not close.** `map-scope.sh` also resolves "a changed file that is itself a test file" to its own
+suite — editing a test runs it. So **editing `tests/mirror-test-subject-invariant.bats` still selects it**, and no map
+can prevent that. That case belongs to `E77_S02`'s in-file `# jenga:manual-only:` marker, which excludes a file from
+every automated run regardless of what the map says. The division of ownership is deliberate:
+
+| Mechanism | Owns |
+|---|---|
+| The project scope map (`E72_S07_T03`) | which test files a **scoped** gate selects for a given change |
+| `E77_S02`'s manual-only marker | "never run this file automatically, in any run, including a change to the file itself" |
+
+There is deliberately **no second exclusion path** for runtime: two mechanisms for "do not run this automatically" is
+the outcome to avoid.
+
+**Running it deliberately.** One documented command, which the exclusion does not affect:
+
+```bash
+bats tests/mirror-test-subject-invariant.bats
+```
+
+#### The two push-driving suites (added 2026-11-01, `E72_S07_T04` fix round 4)
+
+By user decision, `tests/mirror-permission-level-invariant.bats` and `tests/mirror-staging-branch-push.bats` are now
+omitted and declared the same way. Both were enumerated in the mirror family until then — the first additionally in
+the `scripts/jenga-permission-level-switch.sh` and `templates/permission-levels/*.json` rules — and removing them from
+all five places is what excludes them; the declaration only makes it visible.
+
+**Why they cannot be carried by an automatic gate.** Each drives the real `skills/j-mirror-public/scripts/mirror.sh`
+end-to-end and executes real `git push`es, which is the only way to test "does a real push get refused" and "where
+does a real push land"; `mirror-staging-branch-push.bats` is the only suite that exercises `mirror.sh`'s `--force`
+flow against a real bare remote at all. The push destination is a freshly created **local bare** remote via
+`MIRROR_PUBLIC_URL_OVERRIDE` and the real `https://github.com/samwelmunga/jenga-npm` URL is never passed — so the
+hazard is **not** that a gate publishes to GitHub. It is that the gate would drive the real outward-push pipeline over
+a working tree `mirror.sh` rsyncs rather than reading from `git HEAD`, with containment resting entirely on
+`MIRROR_PUBLIC_URL_OVERRIDE` and `MIRROR_WORKTREE_PATH_OVERRIDE` being set correctly on every invocation, leaving
+scratch worktrees and marker tags behind if killed. Both also carry
+`# jenga:requires-baseline-permissions:`, so whether they run or skip depends on ambient session state — a gate result
+that flips between "verified" and "skipped" for reasons unrelated to the change under test. Operationally, the tester
+declined to run them in every verification round of `E72_S07` and recorded them as **unverified — never as passed**.
+Each suite's full reason, and its one documented deliberate command, is in the map's `excluded_tests` entry.
+
+**The limit, stated plainly, because it is the known this decision was taken with.** A map declaration holds only where
+the map's rules decide the run. Under policy `full` these two suites **run**, with their real pushes, and the gate says
+nothing about the declaration at all because the map is never consulted. `E72_S08_T02` removed the two full-catalog
+escalations, so a `scoped` policy no longer reaches them: on `"no-mapped-suites"` the bounded default suite set runs,
+and it contains neither file. See the four-case table under "A declared omission only holds on the `scoped` path", which
+names all three declared omissions and records what `E72_S08_T01`'s re-tiering of the epic default and `T02`'s removal
+of the escalations each shrank.
+
+**Second limit: a change to the test file itself is reported as a conflict, not an exclusion.** The
+changed-file-is-a-test-file rule applies to these two exactly as it does to the invariant suite. Measured read-only on
+2026-11-01 over `--range 450339d2..HEAD` — a range that includes `411c2f71`, which added the baseline marker to all
+three files — the selection is 26 test files and `map-scope.sh` reports all three declarations with `mapped: true`,
+each with the warning `scope map declares <file> in excluded_tests but a rule selects it; it is NOT excluded`, so the
+gate lists them under `map_exclusion_conflicts` rather than claiming they were kept out. That is the honest outcome
+rather than a defect — the declaration never rescues a file the run executes — but it means **editing one of these
+three files still selects it**, and only `E77_S02`'s in-file `# jenga:manual-only:` marker closes that.
+
+**The bar for excluding another suite from the map.** The suite must be slow enough or side-effecting enough that an
+automatic gate cannot carry it, the reason must be recorded in the map's `excluded_tests` entry (and, for context,
+its `_comment`), and there must be a documented command to run it deliberately. "It fails sometimes" is not a reason to exclude — that is a defect to fix. A suite
+that fails on a condition it cannot control is a different mechanism again: see "Suites that cannot pass right now".
+
+### Suite granularity, and why a project map alone is not enough
+
+Writing a precise project map narrows **which test files are resolved**. On its own it does not narrow **what runs**,
+and the difference matters enough to state plainly.
+
+Discovery emits one bats suite **per directory, not per file** (see "What it detects"). A project whose tests all live
+in `tests/` therefore has a single suite whose command is `bats tests/*.bats`. The scope gate used to filter the suite
+*list* to the mapped ids and then run each survivor's command unchanged — so a filtered list of one suite still ran the
+whole directory. Measured on this repository on 2026-11-01: a change set resolved to 11 test files under a targeted map
+and still executed all 261 files / 5666 cases. `test_run_story: scoped` and `test_run_epic: full` were operationally
+identical, and one unrelated red assertion anywhere failed every story's closing gate.
+
+What closes the gap is `skills/j-test/scripts/narrow-suites.sh`, which turns the resolved file list into the command:
+
+- **In a `scoped` run** the candidate files are `map-scope.sh`'s `mapped_tests` — the narrowing hook its output has
+  always carried for this purpose. A bats suite's command becomes `bats <those files>`, so the run is as narrow as the
+  map is precise. With the same change set and a targeted map the executed command went from 261 files to 11.
+- **In a `full` run** there is nothing to narrow, by definition. `narrow-suites.sh` only excludes there (next section),
+  and with nothing to exclude it is a byte-for-byte no-op, so a full run behaves exactly as it did before.
+
+A command is rewritten **only** when it is a bare `bats` invocation with no shell metacharacter. Anything else — an
+opaque `npm` script, a `pytest` or `go` invocation, a command with a pipe — is left exactly as it is and runs whole,
+which is the safe direction. The gate reports those under `not_narrowable` rather than guessing at an argument form.
+
+#### The opaque `npm` entry point
+
+`build-catalog.sh` folds suites that would run the same thing, and for an `npm` suite it keys on the **body of that
+script read from `package.json`** — here `scripts.test` is `bats tests/*.bats`, so `npm test` folds onto `bats:tests`
+and a run-all does not execute the hour-long bats suite twice. Narrowing collides with that fold in two different
+ways, and both needed fixing (full reasoning, measurements and the options weighed:
+`project/documentation/scope-gate-npm-fold-double-execution.md`).
+
+- **When the body *is* byte-equal to a bats suite's command.** The npm entry is rewritten to the *same* narrowed
+  command. On its own that is not enough to keep them folded, because the fold key is the `package.json` body, which
+  narrowing never rewrites — so the keys diverged the moment the bats command moved and the group split into two
+  entries carrying *byte-identical* commands. `run-suites.sh` runs each numbered entry and never compares commands, so
+  a full gate under any exclusion ran the whole narrowed selection **twice**. `build-catalog.sh` therefore folds a
+  second time on the final command (its deduplication **rule 5**), which makes two identical commands impossible to
+  number separately whatever produced them. It is the identity whenever no two commands coincide, so every catalog
+  built from an un-narrowed discovery is unaffected.
+- **When the body is *not* byte-equal** — `bats --tap tests/*.bats`, `bats -r tests`, `npm run test:all`, a
+  `scripts/test.sh` wrapper — the twin rewrite declines, the command stays `npm test`, and that still expands to the
+  whole test directory **including a file an exclusion just removed**. That is not a runtime cost but a false
+  statement: the excluded file runs, fails for the baseline reason it was excluded over, and the failure is attributed
+  to a suite the reader was told had been narrowed. So whenever an exclusion has actually fired, an `npm` suite the
+  twin rule could not cover is **set to not-runnable**: never numbered, never executed, never counted as a pass or a
+  fail. It is named on stdout (`not run (NOT verified) because the suite cannot honour the exclusion:`) and in the
+  JSON's `disabled_suites`, so it is never a silent drop, and no coverage is lost where a narrowable twin exists
+  because that twin runs the same files.
+
+Two consequences of the second rule are accepted deliberately. The `npm` entry leaves the picker while an exclusion is
+in force, so a reader loses the `npm test` label; and a project whose **only** suite is an opaque `npm test` gets
+exit 3 under an exclusion. Exit 3 means "nothing was verified", which is the honest answer for an entry point that
+cannot honour a file-level exclusion — and never a pass. Nothing is disabled when no exclusion fired: a pure `scoped`
+narrowing claims nothing about files an opaque suite might additionally run, so running more there is wasteful rather
+than wrong.
+
+### Suites that cannot pass right now, and how they are excluded
+
+Some suites fail for a reason that has nothing to do with the change under test. The case this mechanism was built for:
+three suites in this repository drive a **real mirror push**, which `mirror.sh`'s `check_permission_level_invariant`
+correctly refuses while `.claude/settings.json` or `.agents/settings.json` sit off the level-2 (Guarded) baseline — the
+state `/jenga-permission-level` leaves behind during an elevated session. On 2026-10-22 that cost 19 failed assertions
+and made every story's closing gate unpassable.
+
+`skills/j-test/scripts/baseline-permissions.sh` is the **sole decider** of both halves of this:
+
+- **The precondition.** `permissions.deny` and `autoMode.allow` of both settings files, compared (order-insensitively)
+  against `templates/permission-levels/level-2-guarded.json`. This is deliberately the same comparison the code under
+  test performs, and deliberately **not** `.jenga-permission-level.json`'s `session_level`, which goes stale in both
+  directions — a stale `2` over loosened files would false-pass, a stale `5` after a restore would false-fail. It is
+  also not a whole-file diff: `settings.json` carries `defaultMode`, `env` and `hooks`, which change for unrelated
+  legitimate reasons. An absent settings file is a harmless skip; a present-but-unparseable one fails closed.
+- **Which files need it.** An in-file marker in the first 40 lines, with a mandatory reason:
+
+  ```text
+  # jenga:requires-baseline-permissions: <why this suite needs the baseline>
+  ```
+
+  A marker with an empty reason is an error (exit 2), so a suite can never be quietly excluded without saying why. The
+  marker lives in the file rather than in `test-config.json` for the same reason `E77_S02`'s manual-only marker does:
+  `test-config.json` ships publicly, and a list entry would publish the name of a blocklisted test file.
+
+**A skip is never reported as a pass.** This is the property that matters most, because a gate that goes green by
+skipping what would have failed is worse than the honest failure it replaced:
+
+- every excluded file is named on stdout with its reason, and listed in the JSON's `excluded_test_files` alongside
+  `exclusion_reason`;
+- an excluded file never enters the `passed` tally, which still comes from `run-suites.sh`'s own summary;
+- if exclusion empties every selected suite, the gate exits **3** ("nothing was verified"), never 0, and nothing is
+  substituted for what the exclusion removed: there is no full catalog for a `scoped` run to reach any more
+  (`E72_S08_T02`), and the bounded default suite set answers "no rule covered this change", never "what did match was
+  all excluded" — substituting there would silently run around the exclusion instead of reporting it. The same holds
+  when the selected suites leave the catalog with no runnable entry at all, which is what happens if the only mapped
+  suite was an opaque `npm` one that had to be disabled (see "The opaque `npm` entry point" above);
+- a suite disabled because it could not honour the exclusion is named on stdout and in `disabled_suites`, and is
+  absent from `suites` and from the pass/fail tally, so it can never read as a pass either.
+
+The suites also skip on their own, through the shared `require_baseline_permissions` helper in
+`tests/helpers/assertions.bash`, which keeps a hand-run `bats tests/mirror-*.bats` honest. **The gate never relies on
+that**: `run-suites.sh` keys strictly on exit status and a bats `skip` exits 0, so a suite-only skip would reach the
+gate as a pass. The gate's own exclusion is what makes the verdict truthful.
+
+Only the cases that actually need ambient baseline state are guarded. In `tests/mirror-permission-level-invariant.bats`
+the eight cases that build their own elevated fixture keep running — they are the coverage proving the guard refuses a
+bad push, and skipping them would hide the regression class the suite exists for.
+
+**The bar for marking another suite.** The condition must be one the suite cannot control, must be detectable by a
+script rather than inferred, and must be stated in the marker's reason. "This test is flaky" and "this test is slow"
+are not it: flakiness is a defect to fix, and runtime is `E77_S02`'s manual-only classification, a separate mechanism
+with a separate marker.
 
 ## The `j.commit` test gate
 
@@ -845,27 +1311,227 @@ deliberately unused, because a resolver that could fail would let a scope be clo
 | `0` | Gate satisfied: policy `none`, or every suite that ran passed |
 | `1` | At least one suite failed; the caller must not close the scope. Reserved for test failures, so a caller can tell "tests failed" from "the gate broke" |
 | `2` | Usage error, nothing ran: a missing, unknown or repeated option, a missing or unknown `--scope`, a missing `--id` or one malformed for the scope, both `--range` and `--rev`, a range or revision git rejects, a `--root` that is not a directory |
-| `3` | Infrastructure error, nothing was verified: `jq` or `git` missing, no git repository for a scoped derivation, a helper script or the root not found, discovery, catalog, mapping or run failing for a reason other than a test failing, or a full (or fallback) catalog with no runnable suite |
+| `3` | Nothing was verified, which is never a pass. **Two kinds**, sharing the one code `E72_S06` gave that meaning. **(a) the `scoped` `no-commits` non-pass** (`E72_S08_T02`): no commits were found for the id, so no change set could be derived; nothing is run, the reason is on stdout, and `--json` **does** print its object. **(b) infrastructure error**, stdout empty: `jq` or `git` missing, no git repository for a scoped derivation, a helper script or the root not found, discovery, catalog, mapping, narrowing, the default-set resolver or the run failing for a reason other than a test failing, a `full` catalog with no runnable suite, **every selected suite having been emptied by exclusion**, or the bounded default suite set failing to resolve (not configured, no runnable test file, or the entire catalog) |
 | `130` | Interrupted while the suites ran: `run-suites.sh`'s code, passed through unchanged |
 
-With `--json` the gate prints one compact JSON object on stdout whenever it reached a verdict (exit 0, 1 or 130) and sends
-the human text and the suites' own output to stderr. The object has `scope`, `id`, `mode` (what the policy asked for),
-`effective_mode` (what ran), `fallback_reason` (`null`, `"no-commits"` or `"no-mapped-suites"`), `suites_run`, `passed`,
-`failed`, `suites` and `exit_code`.
+With `--json` the gate prints one compact JSON object on stdout whenever it reached a verdict — exit 0, 1 or 130, and
+also the exit 3 of the `scoped` `no-commits` non-pass, which is a verdict about the scope rather than a broken gate
+(`E72_S08_T02`) — and sends the human text and the suites' own output to stderr. stdout stays empty for exit 2 and for
+every *other* exit 3. The object has `scope`, `id`, `mode` (what the policy asked for: `none`, `scoped` or `full`),
+`effective_mode` (what actually ran, and it has **four** values, not three: `"none"`, `"scoped"`, `"default-set"` and
+`"full"`), `fallback_reason` (`null`, `"no-commits"` or `"no-mapped-suites"`), `suites_run`, `passed`, `failed`,
+`suites` and `exit_code`, followed by the keys about narrowing and exclusion:
+
+| Key | Meaning |
+|---|---|
+| `test_files_run` | how many test files actually ran |
+| `test_files_available` | how many the selection covered — the pair that shows a `scoped` run is no longer the whole catalog |
+| `excluded_test_files` | every file removed because it cannot pass right now; `[]` when none |
+| `disabled_suites` | suite ids set to not-runnable because they could not honour an exclusion (an opaque `npm` entry point); `[]` when none |
+| `map_excluded_test_files` | test files the scope map declares it deliberately leaves out of every rule, with the reason, **and that this run really did not execute**; `[]` on a full run and when the map declares none |
+| `map_exclusion_conflicts` | declared files some rule selected anyway, so they are in the run and are **not** reported as kept out; `[]` normally |
+| `map_exclusions_superseded` | declared files this run **superseded**, meaning it **executed** them. Derived **per file** since `E72_S08_T02`: on the `"no-mapped-suites"` path the declared files are partitioned on whether the bounded default suite set actually runs them. `[]` whenever the floor runs none of them, which is the case in this repository, so the declaration is back in force there; `[]` also under policy `full` and under `"no-commits"`, where no map is consulted at all. See "A declared omission only holds on the `scoped` path" |
+| `exclusion_reason` | the cause, or `null` when nothing was excluded |
+
+Every one of them was **appended** (`map_exclusions_superseded` most recently); the keys before them keep their
+names, order and meaning, so an existing reader is unaffected. `test_files_run` and `test_files_available` are `null` — not `0` — when a run was not narrowed at all
+(policy `none`, or a `full` run with nothing excluded), because `0` would say "nothing was selected", which is a very
+different and much worse statement than "narrowing did not apply here".
 
 ### Zero mapped suites, and no commits
 
-A `scoped` run never exits 0 having executed nothing. Two cases fall back to the full catalog, each with an explicit line
-on stdout and `effective_mode` `full` in the JSON:
+A `scoped` run never exits 0 having executed nothing, and — since `E72_S08_T02` — **it never runs the full catalog
+either.** The escalation that used to is gone, and the two causes are now handled *differently from each other*,
+because they are different situations.
 
 ```text
-scoped policy: no commits found for <id>; falling back to the full catalog          (fallback_reason "no-commits")
-scoped policy: no suite maps to the changed files; falling back to the full catalog (fallback_reason "no-mapped-suites")
+scoped policy: no commits found for <id>; nothing could be derived, so nothing was verified (not a pass)
+                                                                           (fallback_reason "no-commits", exit 3)
+scoped policy: no suite maps to the changed files; running the bounded default suite set instead (never the full catalog)
+                                                            (fallback_reason "no-mapped-suites", effective_mode "default-set")
 ```
 
-The fallback then behaves exactly like `full`, including exit 3 for an empty catalog. This is the safe direction (more
-tests, not fewer), and it is always surfaced: the tester copies the line and the reason into its status note and its
-report, and the scrum master passes a fallback on to the user as a note rather than a failure.
+**`no-commits` is an explicit non-pass.** Nothing is run, the gate exits **3** (`E72_S06`'s "nothing was verified"
+code, reused rather than a new one), `effective_mode` stays `"scoped"` and `fallback_reason` keeps `"no-commits"`. No
+change set could be derived for the id at all, so there is nothing a default set could honestly verify: running one
+would report a pass for a change nobody could determine. `--json` still prints its object for this exit 3, with
+`suites_run: 0` and `exit_code: 3`.
+
+**`no-mapped-suites` runs the bounded default suite set** — see the next section. There *is* a change here, only no
+rule covers it, so running nothing would be the opposite error. `effective_mode` becomes a third value,
+`"default-set"`, which is what makes all three outcomes tellable apart from the exit code and the output alone: a
+mapped selection ran (`"scoped"`), nothing mapped so the floor ran (`"default-set"`), or the whole catalog ran
+(`"full"`, reachable only from an explicit `full` policy).
+
+**Which bad outcome the `no-mapped-suites` behaviour avoids, and why it is a floor rather than an exit 3 or an exit 0.**
+It avoids **both**, and the choice was made against the scrum master's Rollup Logic, which holds a story open on any
+non-zero gate exit:
+
+- It does not **wedge a sound story.** The old escalation's exit code was decided by the whole catalog's unrelated
+  pre-existing redness — five A/B-verified failures recorded in
+  `project/rapports/problems/E28_S20-story-scope-gate-fails-on-three-pre-existing-main-side-suites.md` plus the already
+  red package-root sweep in `project/rapports/problems/E87_S07_T01-package-root-sweep-offender.md` — so a sound story
+  failed its closing gate on failures it did not cause. On `E88_S03` the scrum master had to decline the gate by hand.
+  A small, explicitly configured set cannot carry that in.
+- It does not **mask a story with genuinely no coverage.** Something is always run and named, the floor's suites are
+  listed on stdout and in `suites`, and a floor that resolves to nothing — or to everything — is **refused** (exit 3)
+  rather than passed.
+
+Either way it is always surfaced: the tester copies the line and the reason into its status note and its report, and the
+scrum master passes it on to the user as a note rather than a failure.
+
+### The bounded default suite set
+
+*Added by `E72_S08_T06`; wired into the gate by `E72_S08_T02`, which removed the full-catalog escalation it replaces.*
+
+A `scoped` run whose changed files map to **no suite at all** no longer has the full catalog to fall back on.
+`E72_S07_T03` moved this project onto a 61-rule `project/configs/test-scope-map.json` and in doing so dropped the
+shipped default's `**/*.sh` → `tests/**/*.bats` catch-all, so an uncovered area now matches nothing — and 61 specific
+rules leave a larger uncovered surface than one blanket rule did, which made the full-run fallback fire *more* often,
+not less. What replaces it is a **bounded default suite set**: a small, explicitly configured set of test files that
+always runs when nothing maps. It is never the full catalog and never empty.
+
+Only the `no-mapped-suites` cause gets it. **`no-commits` keeps `exit 3`**: no change set could be derived there at
+all, so running a default set would report a pass for an id whose change is unknown.
+
+#### The key
+
+`test_default_suite_set` in `test-config.json`: a flat, comma-separated list of root-relative **test-file globs** in
+the same glob dialect the scope map uses (see "The scope map" above).
+
+```json
+"test_default_suite_set": "tests/smoke-test-skills.bats,tests/resolve-root.bats,tests/events-append.bats"
+```
+
+```bash
+jenga config get test-config.test_default_suite_set
+jenga config set test-config.test_default_suite_set "tests/a.bats,tests/b.bats"
+```
+
+Two shape decisions worth stating, because both look arbitrary until the reason is given:
+
+- **A flat string, not a JSON array.** The descriptor schema can only express an *editable* key as a scalar
+  (`lib/config/descriptors.js`), `lib/config/store.js`'s `parseValue` refuses a non-scalar value given on the command
+  line, and every array or object key in every shipped descriptor is pinned `editable: false`. An array value could
+  therefore never be read or written through `jenga config`, which this key must support. Comma is the separator
+  `j.test` already uses for a selection.
+- **Test-file globs, not suite ids.** `discover-tests.sh` emits one bats suite **per directory**, so this
+  repository's whole catalog is the single suite `bats:tests` whose command is `bats tests/*.bats`. A set named at
+  suite granularity would *be* the catalog and could not be bounded at all — the exact defect `E72_S07_T01` measured.
+  Test-file granularity is the only granularity at which "smaller than a full run" is expressible, and it is the
+  granularity `narrow-suites.sh` runs at.
+
+#### The resolver and the strict-subset guard
+
+```bash
+bash skills/j-test/scripts/resolve-default-suites.sh [--root <dir>] [--suites <discovery.json|->] \
+    [--config <file>] [--set <value>]
+bash skills/j-test/scripts/assert-bounded-subset.sh --root <dir> --suites <discovery.json|-> \
+    --files <list|-> [--label <text>] [--json]
+```
+
+`resolve-default-suites.sh` turns the configured value into a runnable selection. It reuses `discover-tests.sh` (or
+the discovery a caller already ran, through `--suites`, so the gate keeps its single tree walk) and
+`build-catalog.sh`'s own runnability verdict; it never re-derives a catalog of its own. Its output deliberately
+**mirrors `map-scope.sh`'s contract** — `mapped_suites`, `mapped_tests`, `unmapped_files`, `warnings`, plus an
+additive trailing `default_set` object — because `narrow-suites.sh --mapped-tests` reads only `.mapped_tests`. The
+gate can therefore substitute the resolver for `map-scope.sh` in the existing discovery → narrow → catalog → run
+pipeline with no change to any other script.
+
+`assert-bounded-subset.sh` is the **one** implementation of the strict-subset property, shared with `E72_S08_T03`'s
+`scoped` ≠ `full` invariant rather than written twice. It compares **test files**, which is the only quantity for
+which "smaller than a full run" means anything here: suite-id set equality is true for *every* selection (one suite
+per directory), and a narrowed command (`bats tests/a.bats`) is never a member of the full catalog's command set
+(`bats tests/*.bats`). `--label` is quoted back in a refusal, so the caller can name the offending setting (`T06`) or
+the responsible scope-map rule (`T03`).
+
+A **runnable suite can decline to say which files it runs**: `discover-tests.sh` gives `paths: []` to an `npm`
+suite (a script body is opaque) and to `shellcheck:all` (it checks sources, not test files). Those files are not in
+the universe the guard compares against, because there is no honest way to enumerate them. So `available_count`
+counts only *enumerable* files, the suite ids concerned are listed in the guard's `opaque_suites` and named in its
+refusal message rather than being papered over, and a selection covering every enumerable file is
+`equals-catalog` even though an opaque suite would also have run. That direction is the safe one — a refusal, never
+a pass. A project whose only runnable suite is opaque has an empty universe and gets `exit 5` for any value: the
+bounded default set is simply not expressible at file level there, and saying so beats selecting something
+arbitrary.
+
+| Exit | Meaning |
+|---|---|
+| `0` | Resolved: a non-empty selection, strictly smaller than the full runnable catalog |
+| `2` | Usage error |
+| `3` | Infrastructure error, **or an invalid configured value**: a glob outside the dialect, or an empty element between two commas. `map-scope.sh` gives an invalid scope-map file the same code — an explicit setting that is wrong is a misconfiguration, never a silent fallback |
+| `4` | **Not configured**: the key is absent, `null` or empty |
+| `5` | **Nothing to run**: the value resolves to zero runnable test files |
+| `6` | **Not a strict subset**: the value resolves to the entire runnable catalog, so it is refused rather than run, with the offending value named |
+
+#### The empty-set rule, and the absent-key default
+
+A value resolving to zero runnable test files is a **refusal (`exit 5`)**, never a pass. That is the whole point of
+the key: a floor that quietly resolves to nothing would be a gate reporting green having executed nothing, which is
+`E72_S06`'s standing rule against exactly that. Two ways to reach it, both named in the message: the globs match no
+file in the working tree, or every file they match is run by no runnable suite (those paths are listed in
+`unmapped_files` and dropped with a warning, so a selection that *still* has a covered file left runs normally).
+
+An **absent or empty key is a separate refusal (`exit 4`)** that names the key and prints the `jenga config set`
+command to fix it. The shipped descriptor default and the `j.init` scaffold template are both `""`, deliberately:
+naming this repository's own test files in a generic default would be wrong for every consumer, and naming nothing
+honestly reports "you have not set this yet". A project that has never heard of the key therefore gets an actionable
+refusal — never a silent pass, and never the full catalog, which is what this story exists to remove.
+
+A configuration that resolves to the **entire** catalog is `exit 6` and is never executed. This holds for a one-file
+catalog too, where `selected == available` is unavoidable: a "bounded default set" equal to everything is a
+contradiction whatever the catalog's size. The guard reports `available_count` in its JSON so a caller that wants the
+opposite policy can make that call itself (`E72_S08_T03` owns that decision for the `scoped` invariant).
+
+#### What is in the set for this project, and why
+
+Six suites, resolving to **6 of 272 runnable test files** (measured 2026-11-02; 272 counts
+`tests/default-suite-set.bats`, which this task adds):
+
+| File | Why it is in the floor |
+|---|---|
+| `tests/smoke-test-skills.bats` | The structural smoke test over the whole skill catalog — the catalog-wide "did this change break a skill" check, and the one member that is broad rather than targeted |
+| `tests/resolve-root.bats` | `scripts/resolve-root.sh`, the root resolver nearly every script in the repository calls |
+| `tests/events-append.bats` | `scripts/events-append.sh`, the shared event-log writer every agent writes through |
+| `tests/scope-test-policy-resolve.bats` | `scope-policy.sh` — the resolver that decides whether a gate runs anything at all. Silent breakage here means no gate |
+| `tests/discover-tests.bats` | `discover-tests.sh`, which every gate and this resolver stand on |
+| `tests/j-test-build-catalog.bats` | `build-catalog.sh`, same reason, including the runnability verdict the subset guard reads |
+
+**The membership rule is a property, not a runtime budget.** Per `E72_S08`'s `E72_S09` fold: *no suite that mutates a
+tracked artefact of the tree it runs in is eligible for the floor*, regardless of how fast it is. A runtime-only
+justification invites re-adding a suite the moment it gets faster or is sharded, and the mutation hazard does not go
+away with speed. The same rule bars a suite that drives a real outward push, and a suite carrying
+`# jenga:requires-baseline-permissions:` — whether such a file runs or skips depends on ambient session state, which
+would make the floor's verdict flip for reasons unrelated to the change under test.
+`tests/default-suite-set.bats` asserts all three properties over the resolved set, so the rule is checked rather
+than merely written down.
+
+The three suites the project map declares in `excluded_tests` are **excluded from the floor for both of their
+recorded reasons**, not only the first:
+
+- `tests/mirror-test-subject-invariant.bats` — roughly **two hours** (it runs the whole shipping bats suite inside
+  itself), **and** it mutates the real `.publicignore` of whatever tree it runs in, restoring it only in
+  `teardown()`. A gate containing it can damage the exact artefact it is gating: on `E88_S03` the full-catalog
+  fallback would have rewritten `.publicignore` while 25 uncommitted lines belonging to other sessions sat in it.
+- `tests/mirror-permission-level-invariant.bats` and `tests/mirror-staging-branch-push.bats` — both drive the real
+  `mirror.sh` end-to-end with real `git push`es (the `--force` path included) against a scratch bare remote. The real
+  `jenga-npm` URL is never passed, so this is not a leak, but the containment rests entirely on
+  `MIRROR_PUBLIC_URL_OVERRIDE` and `MIRROR_WORKTREE_PATH_OVERRIDE` being set on every invocation — not a property an
+  automatic floor should depend on.
+
+**Considered and rejected.** `tests/config-descriptors.bats` (62 cases) validates the whole config surface and would
+look like an obvious floor member, but it cross-checks the live `project/configs/*.json` against the shipped
+descriptors, so it goes red while any config key is being added — the "wedge a sound story" hazard, and it is red on
+`main` today for exactly that reason (`commit_scope_map_file`'s live value and its descriptor default diverged when
+`E72_S07_T03` landed). Every mirror-parity suite was rejected for the same shape of reason: those go red whenever
+`.claude/` and `.agents/` are momentarily unsynced, which is a normal mid-story state. `tests/j-test-run-suites.bats`
+was rejected as redundant once discovery and the catalog are covered — the floor should be small.
+
+**Runtime.** Not measured by the implementing agent (the developer agent never runs tests). The reference point is
+the `E72_S07` story gate: **23 test files / 853 cases in 12 m 06 s wall** on this machine (`project/data/baselines.json`,
+`story_gate`, measured 2026-11-02, with the slowness probe flagging the machine slow in-run — wall time there is not a
+measure of the tests). This floor is 6 files / 264 cases by `bats --count`, so roughly a quarter of that selection.
+The measured wall-clock figure for the floor itself is recorded by the tester at verification.
 
 ### Interplay with the `j.commit` gate
 
@@ -881,20 +1547,27 @@ stay excluded from both for the same reason: the exclusion lives in the shared s
 the cause. The usual ones are `jq` or `git` missing from `PATH`; a `scoped` policy run outside a git repository; the root
 or a helper script (`scope-policy.sh`, `discover-tests.sh`, `build-catalog.sh`, `map-scope.sh`, `run-suites.sh`) not
 found; a scope map that is missing or invalid (the same causes as "A configured scope map is missing or invalid" below);
-or a `full` run, or a fallback to one, whose catalog has no runnable suite (see "No suites found"). Fix the cause and run
-the gate again. Exit 2 is different: the invocation itself was wrong, so check `--scope`, `--id` and `--root`.
+a `full` run whose catalog has no runnable suite (see "No suites found"); or a `scoped` run whose changed files mapped
+to nothing *and* whose bounded default suite set could not be resolved — not configured, resolving to no runnable test
+file, or resolving to the entire catalog (see "The bounded default suite set"). Fix the cause and run the gate again.
+Exit 2 is different: the invocation itself was wrong, so check `--scope`, `--id` and `--root`.
 
-**A scoped run fell back to the full catalog.** Read `fallback_reason` (or the line the gate printed). For
-`no-mapped-suites`, the changed files matched no rule of the scope map, as in "A scoped run maps nothing": add a rule to a
-project scope map (see "A project scope map") or accept the full run. For `no-commits`, the gate found no
-`task(<id>)` commit on the history of `HEAD` at `--root`. For a task this usually means the gate ran from the wrong
-checkout: run it with `--root <worktree>`, or pass `--rev` / `--range`. For a story or an epic, check that the task
-branches are merged into the checkout being used, or pass `--root <worktree>` or `--range`.
+One exit 3 is **not** a broken gate: the `scoped` `no-commits` non-pass. Its message is on stdout, `--json` prints its
+object, and the fix is below.
+
+**A scoped run reports `fallback_reason`.** Since `E72_S08_T02` neither value means the full catalog ran. For
+`no-mapped-suites`, the changed files matched no rule of the scope map, as in "A scoped run maps nothing", and the
+**bounded default suite set** ran instead (`effective_mode: "default-set"`): the gate is satisfied, but it verified the
+floor rather than the change, so add a rule to a project scope map (see "A project scope map") if the change deserves
+real coverage. For `no-commits`, the gate found no `task(<id>)` commit on the history of `HEAD` at `--root`, ran
+nothing, and exited **3** — so the scope must not close on it. For a task this usually means the gate ran from the
+wrong checkout: run it with `--root <worktree>`, or pass `--rev` / `--range`. For a story or an epic, check that the
+task branches are merged into the checkout being used, or pass `--root <worktree>` or `--range`.
 
 **A policy value set in the main checkout is not seen.** With `--root <worktree>` the gate reads `test-config.json` from
 that worktree, so a `jenga config set` made only in the main checkout and not yet committed is not there, and the defaults
-apply (`none`, `scoped`, `full`). Commit the config change so the worktree carries it, or run the gate against the
-checkout where you set it.
+apply (`none`, `scoped`, `none` since `E72_S08_T01`). Commit the config change so the worktree carries it, or run the
+gate against the checkout where you set it.
 
 **A scoped run is very large.** The shipped scope map maps by file type: its `**/*.sh` rule maps a changed shell script to
 every `tests/**/*.bats` file, so in a repository like this one a change to a single script selects a very large suite.
@@ -965,12 +1638,15 @@ warns `test-config.json could not be read; using the default scope map`, and use
 
 ### A scoped run maps nothing
 
-The mapper reported `No tests found for the changed files`, and the gate said so and offered the full suite. Read
-`unmapped_files` in `map-scope.sh`'s output: those are the changed files that no rule's `source` matched and that are not
+The mapper reported `No tests found for the changed files`. What happens next depends on which gate asked: `j.commit`'s
+gate says so and **offers** the full suite (its three-option prompt is unchanged, and is a human-invoked surface), while
+the scope test gate runs the **bounded default suite set** and never offers or takes the full catalog (`E72_S08_T02`).
+Either way, read `unmapped_files` in `map-scope.sh`'s output: those are the changed files that no rule's `source` matched and that are not
 themselves test files. The usual causes are a change to documentation, configuration or board files (no test covers
 them), a source language the shipped map has no rule for, or a layout that differs from the shipped globs (the shipped map
 expects tests under `test/` or `tests/`). Add a rule to a project scope map (see "A project scope map") or choose the full
-suite. The warnings `rule <n> (<source>): ... matched but no existing test file matched its tests globs` and `... test
+suite. In **this** repository the first of those causes is largely closed: documentation and board `.md` paths do have
+rules, so check the table in "Documentation changes" before concluding a docs change cannot be narrowed. The warnings `rule <n> (<source>): ... matched but no existing test file matched its tests globs` and `... test
 files matched but no discovered suite runs them` name the rule whose `tests` globs find nothing, or whose test files no
 suite's `paths` covers.
 

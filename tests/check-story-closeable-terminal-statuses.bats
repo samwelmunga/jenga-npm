@@ -72,6 +72,15 @@ run_guard() {
   assert_output_contains "CLOSEABLE"
 }
 
+@test "script-set lifecycle statuses supersede a pass and are closeable" {
+  for st in "Merged" "Publicized" "Privatized" "Deployed to Stage" "Deployed to Prod"; do
+    write_task_status "$st"
+    run_guard
+    [ "$status" -eq 0 ] || { echo "status '$st' rejected: $output"; return 1; }
+    assert_output_contains "CLOSEABLE"
+  done
+}
+
 @test "In Progress is still OPEN" {
   write_task_status "In Progress"
   run_guard

@@ -149,7 +149,9 @@ if [ ! -f "$CONFIG_FILE" ]; then
   exit 0
 fi
 
-WITH_LOCK_SCRIPT="$REPO_ROOT/scripts/with-lock.sh"
+# Resolved from the package (this script's own directory), not REPO_ROOT: in a consumer REPO_ROOT is the
+# consumer's repo, which does not ship with-lock.sh.
+WITH_LOCK_SCRIPT="$SCRIPT_DIR/with-lock.sh"
 [ -f "$WITH_LOCK_SCRIPT" ] || die "expected script not found: $WITH_LOCK_SCRIPT"
 
 MARKER_FILE="$REPO_ROOT/project/data/deploy-reconcile-marker.json"

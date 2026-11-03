@@ -1480,3 +1480,286 @@ consideration. Both are in `templates/checklists.json` and `project/configs/chec
   decides. It never opts the user in: the `verify` passes neither `--approved` nor `--ci`.
 - `dependency-audit-reviewed`: `judgment`, `pre-commit`, `advisory`, `run`. A reminder for commits that touch
   `package.json` or a lockfile.
+
+### Printing a registry (E67_S10_T01)
+
+`skills/j-checklist/scripts/checklist-print.sh` is the human-readable read path of the `j.checklist` management
+surface (story `E67_S10`). `checklist.sh list <situation>` stays the machine interface (five TAB-separated fields,
+one situation, consumed by the checker and the hook); the print script renders the same registry for a person, one
+situation or every situation grouped. It is read-only: it never writes the registry, never writes a tick and never
+runs a `verify` command.
+
+```
+checklist-print.sh                       every situation, grouped
+checklist-print.sh --all [--run <id>]    the same
+checklist-print.sh <situation> [--run <id>]
+```
+
+**The line form.** Settled by this task from two precedents: the `- [ ]` checkbox of a board item's Definition of
+Done (`templates/SCRUM_BOARD_SCHEMA.md`) and the registered `ranked_list` playbook type (`templates/playbook-types.json`).
+
+```
+1. board-frontmatter-valid — [ ] Every staged scrum board file has valid frontmatter. (machine, block, run)
+```
+
+That is `<n>. <id> — <checkbox> <text> (<kind>, <enforcement>, <tick_scope>)`. The constraint is the live `ranked_list`
+rule, read from the descriptor rather than assumed: `per_line` is the POSIX ERE `^[0-9]+\. [^[:space:]]+ — .+$` with no
+`normalize` transforms, so the field after the number must be free of whitespace and a checkbox before the id
+(`1. [ ] id — ...`) fails it. The checkbox therefore sits after the em dash, inside the free-text field. The
+`(kind, enforcement, tick_scope)` suffix is on the same line because the verifier checks every line of a list, so a
+separate metadata line would fail it. The real verifier, `scripts/workflow/verify-output.sh ranked_list "<output>"`,
+accepts the output of the single-situation form. The grouped form adds heading and blank lines, which are not item
+lines; verify its item lines per group. The live rule admitted no better hybrid, so there is no deviation from the
+form the story proposed.
+
+**The template.** The line form is data, not code: `templates/checklist-render.json` carries the item line, the two
+checkbox glyphs, the group heading, the empty-group line and the gap between groups, with a header documenting the
+closed placeholder set (`n`, `id`, `text`, `kind`, `enforcement`, `tick_scope`, `checkbox`, `tick_state`, and
+`situation` in the heading). The script substitutes placeholders in a single pass and rejects an unknown one. The
+template is found in the package, then `./templates`, then `./node_modules/@jenga-ai/agent/templates`
+(`JENGA_CHECKLIST_RENDER_TEMPLATE` overrides it, for tests). Changing how a list reads is an edit to that file.
+
+**Output.**
+
+- One situation prints that situation's items in registry order with no heading, so it is a valid `ranked_list`.
+  A known situation no item names prints nothing and exits 0.
+- No situation (or `--all`) prints every known situation in order (the base vocabulary, then those the registry
+  declares), each under the template's heading, with the empty-group line for a situation no item names. Numbering
+  restarts at 1 in each group, so a group never mixes situations. An item naming several situations appears once under
+  each.
+- The checkbox is the template's ticked glyph when `checklist.sh list` reports the item as ticked, and its unticked
+  glyph otherwise. Tick state comes from that command, pinned to the exact registry file being rendered, so what is
+  printed is what the checker sees; `--run <id>` (or `JENGA_CHECKLIST_RUN_ID`) selects which run's run-scoped ticks
+  are shown, as for `checklist.sh`.
+
+**Registry resolution and errors.** The registry is selected as `checklist.sh` selects it (`JENGA_CHECKLISTS_FILE`, else
+`<scripts/resolve-root.sh get configs>/checklists.json`, else the shipped default package-relative, then
+`./templates/checklists.json`, then `node_modules/@jenga-ai/agent/templates/checklists.json`; whole file, no merging) and
+validated with `scripts/validate-checklists.sh` before anything is printed.
+
+| Exit | Meaning |
+|---|---|
+| 0 | Printed (a known situation with no items, or no registry at all, prints nothing on stdout) |
+| 1 | The registry is invalid: the validator's own problem lines are on stderr and stdout is empty |
+| 2 | Usage error |
+| 3 | Unknown situation (the `checklist.sh list` exit), distinct from a known situation with no items |
+| 4 | Render template or helper script missing, or the template is malformed |
+| 5 | The project configs directory could not be resolved |
+
+### Editing a registry (E67_S10_T02)
+
+`skills/j-checklist/scripts/checklist-entry.sh` appends, edits and removes one item in a registry file, so that
+managing the registry does not mean hand-editing JSON. It is the writer behind the `j.checklist` skill; the
+checker, the tick store and the hook are untouched, and `scripts/checklist.sh` remains the only reader the gates use.
+The script header is the contract (usage and every exit code); this section records the behaviour that is not
+obvious from it.
+
+```
+checklist-entry.sh [--registry PATH] add --id ID --text TEXT --situation S [--situation S]... --kind KIND \
+                   [--verify COMMAND] --enforcement LEVEL --tick-scope SCOPE
+checklist-entry.sh [--registry PATH] edit ID [--text ...] [--situation S]... [--kind ...] [--verify ...] \
+                   [--enforcement ...] [--tick-scope ...]
+checklist-entry.sh [--registry PATH] remove ID
+checklist-entry.sh [--registry PATH] check FIELD VALUE | check coupling KIND [VERIFY] | show ID | situations | path
+```
+
+**Which file.** `--registry PATH`, else `JENGA_CHECKLISTS_FILE`, else `<configs>/checklists.json` through
+`scripts/resolve-root.sh get configs`. The file must already exist: the script never creates a registry, because a
+project instance replaces the shipped default whole and never merges with it (section 8), so creating an instance
+by appending one item would silently drop every shipped item. Seeding an instance is `copy`/`move`
+(`E67_S10_T03`), not this script.
+
+**Writes are splices, not rewrites.** The script does not re-serialise the registry. It locates the byte span of the
+`items` array and of each item with a string-aware scanner, and changes only the span that belongs to the target:
+
+- `add` inserts `,` plus the new item after the last item. Every pre-existing item, `checklist_version` and
+  `situations` are byte-identical afterwards, in their original order. The new item is rendered in the layout the
+  file already uses (indent width, inline versus expanded scalar arrays, CRLF versus LF), which is why the project
+  instance (every array expanded) and `templates/checklists.json` (scalar arrays inline) both come out looking
+  hand-written.
+- `edit` replaces the target item's span; every other item is byte-identical. Existing key order, unknown keys and
+  `provenance` are kept. An edit that changes nothing writes nothing and reports `"changed": false`.
+- `remove` deletes the target item and exactly the comma and whitespace that belonged to it.
+
+**Schema rules are enforced at input time**, one message per violation, so a bad value is rejected when it is
+given rather than by the validator after the fact: kebab-case `id` (unique, else exit `8`); non-empty single-line
+`text`; a non-empty, duplicate-free `situations` whose entries are base situations or declared in this file's
+top-level `situations` (declaring a new one is a by-hand edit of the file); `kind` of `machine` or `judgment`; the
+`kind`/`verify` coupling in both directions (`machine` needs a non-empty `verify`, `judgment` must not carry the key
+at all); `enforcement`; `tick_scope`. `check FIELD VALUE` runs one of these rules on its own, which is what a wizard
+uses to validate each answer as it is given. The single-line `text` rule is slightly stricter than the validator (which
+accepts a line break): a line break would break the one-line-per-item printed form.
+
+**`edit` and the coupling.** Flipping `kind` to `judgment` drops the now-forbidden `verify` key instead of leaving it to
+fail validation (passing `--verify` in the same call is refused); flipping to `machine` needs `--verify`. `id` and
+`provenance` are never edited, and `situations` given to `edit` replace the whole list.
+
+**Provenance.** `add` writes `"provenance": {"source": "authored"}` and nothing else. No path writes
+`"source": "suggested"` or any of its fields; those belong to the review path of section 9 (Provenance fields).
+
+**Managed `conv-` items are refused.** An item is managed if and only if its `id` starts with `conv-` **and** its
+`provenance.source` is `"convention"`, the same two-part test `scripts/generate-convention-checklist.sh` uses. `edit`
+and `remove` refuse it (exit `10`) and name `j.conventions` as the place to change it, because the generator
+overwrites a hand edit on its next run. A `conv-` id with other or no provenance is an ordinary item and is editable;
+`add` accepts such an id with a warning, since the generator would refuse to write over it.
+
+**Every write validates before it replaces.** Under `scripts/with-lock.sh` on the registry (a lock that cannot be
+acquired means nothing ran, exit `6`), the script writes `<registry>.candidate.<pid>` in the registry's directory,
+validates the **candidate** with `scripts/validate-checklists.sh`, and only on PASS `mv`s it over the registry. On
+FAIL the candidate is removed, the validator's lines are printed, the registry is untouched and the exit code is `11`.
+Success is never reported for a candidate that failed validation. The spliced text is also re-parsed and compared with
+the intended result before it is written, so a scanner bug cannot reach the validator unnoticed.
+
+**Removing an item does not touch its tick records.** Tick state lives outside the registry (section 9, Tick state), and
+a tick for a deleted item is simply never read again. If an item is later re-added under the same `id`, an old tick is
+only honoured when it still matches: `scripts/checklist.sh` binds each tick to a definition hash over the item's
+`kind`, `text` and `verify`, so a stale tick for a different definition is treated as absent. A stale tick therefore
+needs no clean-up here. `scripts/checklist.sh tick --clear <id>` still removes one explicitly.
+
+### Copying and moving between registries (E67_S10_T03)
+
+`checklist-entry.sh` also writes an item into a **different registry file**, named by path: `copy` leaves the source
+alone, `move` removes the item from the source once the target has it. This is how an item reaches a client project,
+or how a project's own item becomes a shipped default. It is not multi-registry support: there is still exactly one
+registry in force per project and `scripts/checklist.sh`'s whole-file selection (section 8) is untouched.
+
+```
+checklist-entry.sh [--registry SRC] copy ID --to TARGET
+checklist-entry.sh [--registry SRC] move ID --to TARGET
+```
+
+**Source and target.** `SRC` is the registry in force (`--registry`, else `JENGA_CHECKLISTS_FILE`, else
+`<configs>/checklists.json`); when the project has no instance and `--registry` was not given, it falls back to the
+shipped default, which is the registry in force then. `--to` is required and names a registry file. There is no
+default target, so the shipped `templates/checklists.json` can never be one implicitly. To address the project's own
+instance, pass `"$(scripts/resolve-root.sh get configs)/checklists.json"`. The item is copied whole, every key, with its
+`provenance` verbatim: an authored item stays authored, and nothing on this path ever writes `"source": "suggested"`
+or any of its fields. It is appended after the target's last item with the same splice discipline as `add`.
+
+**Seed on first instance.** Registry selection is whole-file and never merges (section 8), so creating
+`<configs>/checklists.json` in a project that has none switches that project from the shipped default to the new
+file, and a file holding only the incoming item would silently drop every shipped item. When the `--to` file does not
+exist, the script therefore creates it from the registry currently in force for a project with no instance, the
+shipped default (`JENGA_CHECKLISTS_DEFAULT_FILE`, else package-relative `templates/checklists.json`, else
+`node_modules/@jenga-ai/agent/templates/checklists.json`), plus the incoming item, and says so on stdout before the
+result JSON:
+
+```
+SEEDED: <target> did not exist, so it was created from the registry in force (<default>, 7 shipped items) plus "<id>"; ...
+{"ok":true,"action":"copy","id":"<id>","source":"...","target":"...","seeded":true,"changed":true,"seed_source":"...","seeded_items":7}
+```
+
+A seed is a bigger change than a copy, so a caller must surface that line rather than only the exit status. The rule
+is "any `--to` path whose file does not exist", not only the configs-resolved path: a bare one-item file at an
+arbitrary path is the same hazard the moment someone places it at a project's instance path. The target's directory
+must already exist (exit `14`); the script creates a file, never a directory. If the incoming id is already one of
+the shipped items, the seed is refused as an id collision (the shipped item is already there).
+
+**Situation portability is refused, not carried.** Base situations are valid in every file, but an extension
+(`pre-publish`, `pre-mirror`, ...) is declared per file and nothing is inherited. An item naming a situation the
+target does not declare is refused with exit `12`, listing what the target does declare. Carrying the declaration
+into the target would mean rewriting its top-level `situations` array, which the splice-only writer deliberately never
+does to any key but `items`, and a declared situation with no gate that sets it is dead policy. Declaring it stays a
+by-hand edit of the target, exactly as `add` says; after that the transfer goes through. The target never ends up
+invalid either way: the candidate is validated before it is written.
+
+**Refusals.** An id already in the target is exit `8` (never overwritten, never auto-renamed). A managed `conv-` item
+(id prefix `conv-` **and** `provenance.source` `"convention"`) is not a valid `copy` or `move` source (exit `10`,
+names `j.conventions`: it is generator-owned and each project generates its own). Source and target being the same
+file is exit `13`, as is `move` out of the shipped default.
+
+**The shipped default is only an explicit target.** `--to` the shipped `templates/checklists.json` works, and prints
+on stderr that it ships downstream to every project and must be kept free of project-specific policy. It is never a
+`move` source (a move would delete from it), and, since the source of a `copy` is only read, `copy` from it is fine.
+
+**Ordering and atomicity across two files.** The full ordered contract is the script header; in short, for `move`:
+(1) lock both files with `scripts/with-lock.sh`, nested, in ascending canonical (realpath, byte order) path, so two
+processes moving in opposite directions take the locks in the same order and cannot deadlock (twelve opposite-direction
+moves ran concurrently without a stall); (2) build the target candidate and the source candidate; (3) validate both
+with `scripts/validate-checklists.sh` before anything is replaced; (4) back up the target if it exists, atomically
+replace the target, and only then atomically replace the source; (5) if the source replace fails, restore the target
+from the backup, or delete it if this run created it, and do the same on INT/TERM. `copy` locks only the target (the
+source is read, and an atomic replace gives a consistent snapshot). A failure at any stage therefore leaves both
+files byte-identical to their start: an item is never missing from both. The honest limits: the lock is keyed on the
+path as given (as for `add`), so two different spellings of one file do not exclude each other; and SIGKILL between
+the two replaces cannot be undone, in which case the target backup `<target>.rollback.<pid>` is left behind.
+
+**Failure injection.** `JENGA_CHECKLIST_ENTRY_FAIL_AT=<stage>` forces a failure at one stage and the run rolls back
+exactly as for a real failure: `seed-read` (exit 14; only when the target does not exist), `target-candidate` (1),
+`source-candidate` (1), `target-validate` (11), `source-validate` (11), `target-replace` (1), `source-replace` (1; fails
+after the target was replaced, so it exercises the rollback). The source stages apply to `move` only; any other value
+is a usage error. This is a test seam, not a feature.
+
+New exit codes: `12` situation not declared by the target, `13` source and target the same file or `move` out of the
+shipped default, `14` target directory missing, target not a regular file, or the shipped default needed for the
+seed not found. `8`, `10` and `11` gain the copy/move cases (see the header).
+
+### The `j.checklist` skill: the guided front end (E67_S10_T04)
+
+`skills/j-checklist/SKILL.md` (`j.checklist`, or `/j-checklist`) is the guided way to use the three sections above: it
+prints the registry, then adds, edits, removes, copies and moves items without hand-editing JSON. Hand-editing stays
+fully supported, and this document stays the contract for the data; the skill is the interface over it. It is a
+**user** interface: it gives developer and tester no route around the review path for agent-suggested items (section 9,
+Provenance fields), and it manages item definitions only, so ticking stays `scripts/checklist.sh tick`.
+
+**Scripts Over Inline Logic.** `SKILL.md` carries judgment and presentation only: which action the user wants, how to
+present the registry, how to explain a refusal, and when to confirm. It restates none of the scripts' logic: rendering is
+`checklist-print.sh`, every schema rule and every write is `checklist-entry.sh`, and the instance checks below are
+`checklist-instance.sh`.
+
+**The flow.** Bare `j.checklist` runs `checklist-print.sh` and shows the registry, then offers the actions as a numbered
+list with free text last (CLAUDE.md's Interaction Pattern). An item is picked by the number the printer shows. Numbering
+restarts in each group, so the skill first asks which situation, prints that one situation (a valid `ranked_list`) and
+reads the id from the chosen line. Each input is run through `checklist-entry.sh check <field>` as it is given, and a
+`valid: false` reason is shown verbatim, never repaired. Every write is followed by `scripts/validate-checklists.sh` on the
+file written, and success is never reported without exit `0` from it.
+
+**What confirms first, showing the exact item (`checklist-entry.sh show <id>`).**
+
+| Action | Confirmation |
+|---|---|
+| `add`, `edit` | A summary of the finished item, `Write it / Change something / Cancel` |
+| `remove` | The item, a note that removal is permanent and that its ticks are left behind, `Remove it / Cancel` |
+| `copy`, `move` | The item, source, target and (move) that it leaves the source once the target has it |
+| any write to `templates/checklists.json` | Its own explicit confirmation plus the "ships downstream, keep it free of project-specific policy" warning; the shipped default is only ever an explicit target and never a default, and never a `move` source |
+
+**Two things the skill states before it writes, because both are structural.**
+
+1. **Creating an instance switches the whole file.** A project instance replaces the shipped default whole and never
+   merges with it (section 8). When an action would create the project's first registry, the skill says so first (the new
+   file will hold every shipped item plus the new one, and later changes to the shipped default no longer reach the
+   project on their own) and afterwards reports the `SEEDED:` line `copy`/`move` prints. The same applies to a `copy` or
+   `move` whose `--to` file does not exist yet (`checklist-instance.sh target` says `new`).
+2. **`block` has real teeth.** When an item being added or edited will carry `enforcement: block`, the skill says that
+   `hooks/on_preflight_check.sh` will refuse that situation's irreversible operation while the item is unsatisfied, at every
+   permission level including 5 (Unrestricted), with no environment-variable escape, and suggests writing it at `confirm`
+   first to prove its `verify`.
+
+**`checklist-instance.sh` (E67_S10_T04).** `add`, `edit`, `remove`, `show` and `situations` exit `4` when the project has no
+instance (`checklist-entry.sh` never creates a registry), and `copy <shipped id> --to <new instance>` is refused as an id
+collision with the seed, so a brand-new item has exactly one route into a project that has no instance: author it in a
+scratch registry that starts as a copy of the shipped default, then `copy` it to the instance path, which seeds the
+instance. That is mechanical, so it is a script and not `SKILL.md` prose.
+
+```
+checklist-instance.sh status          instance<TAB><path>   |   default<TAB><instance path (not yet created)><TAB><shipped default>
+checklist-instance.sh target PATH     shipped-default | new | exists      (classify a copy/move target before writing)
+checklist-instance.sh scratch         copy the shipped default into a private temp directory; prints the registry path
+checklist-instance.sh discard PATH    remove that directory (refuses any path this script did not make)
+```
+
+The scratch copy carries the shipped default's declared `situations`, so an item written there is valid for the seeded
+instance. It writes no registry anything reads, and `status` and `target` are read-only. Exit codes: `0` ok, `1` temp
+directory or copy failed, `2` usage or a `discard` of a path it did not make, `4` no shipped default found, `5` the
+instance path could not be resolved. Tests for it belong to `E67_S10_T05`.
+
+**Known limits the skill states instead of hiding.** The lock is keyed on the path as given, so two spellings of one file
+do not exclude each other; a SIGKILL between the two replaces of a `move` leaves a `<target>.rollback.<pid>` file (the
+target as it was), which the skill reports and does not delete; and a SIGTERM sent only to the top-level script does not
+stop the `with-lock.sh` child, which finishes the `move` (print the registry after an interrupted session rather than
+assuming nothing happened). All three are described under "Copying and moving between registries (E67_S10_T03)".
+
+**Registration.** `lib/skill-allow-list.json` carries `j.checklist` (regenerated with
+`node lib/generate-skill-allow-list.js`), the skill is listed in CLAUDE.md's skills table, `README.md` and
+`site/reference/skills.md`, `j.help` lists it from the skill catalog, and the `.claude/` and `.agents/` mirrors carry it
+after `j.self-sync`.

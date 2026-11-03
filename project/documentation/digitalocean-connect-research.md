@@ -190,17 +190,31 @@ change.** (The `droplet.md` copies under `.claude/` and `.agents/` are plain cop
 
 | Claim | Why unverified | Source |
 |-------|----------------|--------|
-| `doctl account get` exits non-zero when unauthenticated | needs a real run; no page states it | install page, `account get` reference |
-| `doctl version` works without authentication | reference page silent | `version` reference |
+| `doctl account get` exits non-zero when unauthenticated | **Verified 2026-10-31** (E65_S08_T08): exit 1 with `--config` pointing at an empty file and `DIGITALOCEAN_ACCESS_TOKEN` unset, exit 0 logged in; doctl 2.1.0. Assumes no other credential store is consulted. | agent run at the user's request; see 9a |
+| `doctl version` works without authentication | **Verified 2026-10-31** (E65_S08_T08): exit 0 with an empty `--config` and no token env var; doctl 2.1.0. | agent run; see 9a |
 | Where `doctl auth init` stores the token and whether it is plain text | `auth init` page silent; README gives only the config file location; no credential file may be read | README |
 | `DIGITALOCEAN_ACCESS_TOKEN` is honoured by the current doctl | stated only in the GitHub README (summarised), not on docs.digitalocean.com pages | https://github.com/digitalocean/doctl |
 | `brew` installs `doctl` on Linux | install page names Homebrew for macOS only | install page |
-| Hosted MCP OAuth works end to end inside Claude Code with a bare `{type,url}` `.mcp.json` entry | needs a real account and a Claude Code session | remote MCP page |
+| Hosted MCP OAuth works end to end inside Claude Code with a bare `{type,url}` `.mcp.json` entry | **Verified 2026-10-31** (E65_S08_T08): entry written by `run-descriptor.sh --step register_mcp` into a scratch project, approved and authenticated by the user; connected and tool list loaded (user report; `claude mcp list` showed Connected). Claude Code 2.1.236. This also settles that the hosted server supports OAuth. | user report, `claude mcp list` |
 | Hosted MCP supports OAuth at all vs token only | the 2025-12-09 blog says token only; the 2026-10-01-verified docs page says OAuth is supported and recommended; docs page relied on | blog vs remote MCP page |
 | Remote MCP endpoint count (24 stated, 22 listed) and that the Droplets URL is current | page extraction | remote MCP page |
 | Whether the hosted entry needs an explicit `"type": "http"` | the page's example omits a transport type | remote MCP page |
 | The local MCP server and doctl both need Node/other prerequisites beyond those listed | not stated | local MCP page |
+| Local MCP run shape as documented today | **Read 2026-10-31** (not run): README gives `npx @digitalocean/mcp --services apps,databases` with token variable `DIGITALOCEAN_API_TOKEN`; npm `@digitalocean/mcp` 1.6.4, repo `digitalocean-labs/mcp-digitalocean` | repo README, npm registry |
 | That `digitalocean-labs` is a supported, non-experimental org | the repo org is non-core; DigitalOcean docs and blog call the server theirs; a summarising tool labelled it "experimental" but that was its inference, not page text | repo README, docs, blog |
 | `.mcp.json` `${VAR}` expansion | recorded as to-confirm in `project/documentation/mcp-registration-decision.md` | that doc |
 | Page contents verbatim | read through a summarising fetch tool, not a raw read | all fetched pages |
-| An end-to-end run against a real DigitalOcean account | no account used, `doctl` not installed locally | n/a |
+| An end-to-end run against a real DigitalOcean account | partly verified 2026-10-31: `doctl account get` exit 0 logged in and hosted MCP connected with tools listed; no droplet operation was run | see 9a |
+
+### 9a. Real-account verification results (E65_S08_T08, 2026-10-31)
+
+| Item | Result | Version |
+|------|--------|---------|
+| B1 `doctl version`, isolated | exit 0 | doctl 2.1.0 |
+| B2 logged-out `doctl account get` (empty `--config`) | exit 1 | doctl 2.1.0 |
+| B3 logged-in `doctl account get` | exit 0 | doctl 2.1.0 |
+| B4 OAuth with bare `{type,url}` entry, connected and tools load | yes | Claude Code 2.1.236 |
+| B5 local run shape | `npx @digitalocean/mcp --services <list>`, `DIGITALOCEAN_API_TOKEN` (read, not run) | `@digitalocean/mcp` 1.6.4 |
+
+The descriptor's `auth.check.command` and `.mcp.json` entry needed no correction. Whether the entry also works
+without an explicit `"type": "http"` was not tested (the entry carries it).
