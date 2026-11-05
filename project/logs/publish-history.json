@@ -974,5 +974,37 @@
     "dist_tag": "latest",
     "result": null,
     "reason": "Staged via direct gh workflow dispatch (run 42121821770), not /publish stage; the public test gate is permanently red."
+  },
+  {
+    "id": "cc55e551-4bc6-4e95-ba10-62996ef401a6",
+    "version": "v4.7.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-11-05T22:39:35Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "stage_tested",
+    "git_tag": "v4.7.0",
+    "commit_sha": "56a7e75250d488e8d80c0b84715f8a9d5e55bd4a",
+    "stage_id": "568c26fc-a743-4346-ab7d-c7aaf846285a",
+    "dist_tag": null,
+    "result": "pass",
+    "reason": "Manual run of the README consumer procedure against st-test (not via /publish stage test): checksum b8ed184d matched, postinstall ok, skill smoke test PASS (0 critical, 6 minor), package tests 14/14 and 11/11. st-test npm test: 107 passed, 23 failed, all ENOENT on gitignored project/data/kallor (absent data)."
+  },
+  {
+    "id": "3839ec02-e384-4ed9-9d27-9a7622e8a7a7",
+    "version": "v4.7.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-11-05T22:39:35Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "approved",
+    "git_tag": "v4.7.0",
+    "commit_sha": "56a7e75250d488e8d80c0b84715f8a9d5e55bd4a",
+    "stage_id": "568c26fc-a743-4346-ab7d-c7aaf846285a",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": "Approved outside /publish. npm dist-tag latest confirmed at 4.7.0."
   }
 ]
