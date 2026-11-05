@@ -832,6 +832,26 @@ Queue depth: 2 triggers pending
 
 ---
 
+#### `/j-tidy`
+
+**Description:** Report, and then reclaim, stale git worktrees and branches — enumerates every registered worktree and every local branch, classifies each one against four safety conditions, and states the disk each group represents.
+
+**Output type:** `any`
+
+**Invokes:** none
+
+**When to use:** When a long-lived project has accumulated worktrees and branches that nothing removes, when the machine is slowing down and `.git`/worktree disk is the suspect, or as part of a `/j-reconcile` run (which invokes this skill as a step, after its orphaned-branch merge).
+
+**Why it exists alongside `/j-reconcile`:** `/j-reconcile` walks the board and matches a worktree by its task-ID slug, so `agent-<hash>` worktrees — created by the native worktree tool and by worktree-isolated subagents — are invisible to it. This sweep enumerates from git and the filesystem instead, which is what lets it see them. Local branches with no worktree are covered too, because a branch outlives the worktree that created it.
+
+**The four safety conditions** (all must hold for an automatic reclaim): the entry carries no content that is not already in its target ref — **content-based, not an ancestry check**, so a squash-merged entry still qualifies; its working tree is clean, with untracked files counting as dirty; and no OS process has its cwd inside it. Any condition that cannot be evaluated yields "retained", never "reclaimable": wrongly retained costs disk, wrongly reclaimed destroys the only copy of someone's work.
+
+**Safety posture:** report-only by default — a bare invocation deletes nothing. Reclaiming removes provably-safe entries automatically and offers every other entry for an explicit, per-entry decision. Worktree removal always goes through the liveness guard; branches are deleted with `git branch -d`, never `-D`, and a refusal keeps the branch and is reported.
+
+**Notes:** Retention age and the count and disk ceilings are read at run time from `tidy-config.json`; no threshold value exists in the scripts, and an unresolvable config disables the ceiling checks rather than substituting a default.
+
+---
+
 #### `/j-smoke-test`
 
 **Description:** Structural smoke test of every skill in the catalog — frontmatter parses, `name` matches the directory, `metadata.prefered_agent` resolves, and referenced scripts and assets exist with scripts passing `bash -n`.

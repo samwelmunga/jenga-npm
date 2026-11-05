@@ -185,3 +185,25 @@ project/logs/spike-hook-payloads/
 
 # Machine-local slowness probe log (scripts/slowness-probe.sh)
 project/logs/slowness-probe.jsonl
+
+# Machine-local files that are never tracked (found untracked when preparing a release).
+# .mcp.json is this checkout's own MCP server registration; .set-status.py is a stray local
+# helper; jenga.html is a generated dashboard snapshot (j.dashboard --snapshot), already
+# blocklisted for the public mirror in .publicignore.
+.mcp.json
+/.set-status.py
+/jenga.html
+
+# Per-session capacity-block counters (project/queue/, written by /do's concurrency slot
+# handling) are runtime state, the same class as the other project/queue/ rules above.
+project/queue/capacity-block-state-*.json
+
+# The Jenga intro presentation (project/documentation/presentations/) is never published and
+# has no tracked siblings; also blocklisted for the public mirror in .publicignore.
+project/documentation/presentations/
+
+# Transient board-file leftovers: the advisory locks the board-writing protocol creates
+# (project/board/**/<item>.md.lock, deleted after each write but orphaned by a crashed session)
+# and editor/script backups. Never records.
+project/board/**/*.md.lock
+project/board/**/*.md.bak

@@ -1,0 +1,16 @@
+{
+  "config_version": 1,
+  "retention_age_days": 14,
+  "worktree_count_ceiling": 40,
+  "branch_count_ceiling": 80,
+  "disk_ceiling_mb": 2048,
+  "report_max_rows_per_group": 15,
+  "notes": {
+    "_about": "Shipped default thresholds for j.tidy (E56_S06_T02). A project instance at project/configs/tidy-config.json REPLACES this file whole - there is no merging, the same way checklists.json and test-scope-map.json work. These numbers live in a config file rather than in skills/j-tidy/scripts/report.sh so that the script contains no threshold value at all: a missing config is reported as unavailable, never silently replaced by a built-in guess.",
+    "retention_age_days": "How old an entry's last commit must be before the report counts it as stale. 14 days is two sprints of inactivity: long enough that a worktree someone is still iterating on is not nagged about, short enough to catch the ones that were abandoned.",
+    "worktree_count_ceiling": "Crossing this makes the report say so prominently. 40 is an order of magnitude below the 229 measured in the Jenga repo on 2026-11-04 and roughly ten concurrent pieces of work with room to spare, so the nag starts long before the backlog becomes a disk problem.",
+    "branch_count_ceiling": "The branch count outruns the worktree count (350 vs 229 measured on 2026-11-04), because a branch survives its worktree. 80 is twice the worktree ceiling, which is the shape that gap actually takes.",
+    "disk_ceiling_mb": "2048 MB (2 GB). A single worktree of the Jenga repo measured 31-85 MB, so 2 GB is on the order of 25-60 worktrees - the same scale as the count ceiling, reached from the direction that actually hurts the machine.",
+    "report_max_rows_per_group": "Rows listed per (verdict, population) group before the report truncates. Truncation ALWAYS prints how many entries were not shown; a silent cap reads as nothing there and is a reporting bug. 15 keeps a full sweep readable in one screen per group."
+  }
+}

@@ -156,6 +156,19 @@
       "provenance": {
         "source": "authored"
       }
+    },
+    {
+      "id": "isolate-test-venue-per-agent",
+      "text": "Any agent that mutates files in order to measure something - mutation testing, fixture edits, a reset, a reinstall - works in its own isolated venue: its own worktree, or a 'git archive <ref>' snapshot in a temp directory, with its own TMPDIR. Never mutate a tree another session may be reading, because that reader then measures a file state which never existed. Evidence (E72_S08_T02): one session's mutation testing landed mid-flight during a sibling's tests/scope-test-gate.bats run, which measured a false 62/64 and saw the gate print a string its own on-disk copy did not contain; re-measured in an isolated 'git archive' snapshot, the true score was 64/64. The hazard is the shared venue, not the parallelism - do not read this item as 'dispatch fewer agents'. On that same task two verifying sessions with different instruments are exactly what caught both authors' errors: one found its own overstated mutation table by reading, the sibling found an unreachable-guard hole by executing, and neither author found their own error though both were careful and both re-read their own work. Parallel independent verification is valuable rather than redundant - isolate the venue and keep the second pair of eyes.",
+      "situations": [
+        "pre-task"
+      ],
+      "kind": "judgment",
+      "enforcement": "advisory",
+      "tick_scope": "run",
+      "provenance": {
+        "source": "authored"
+      }
     }
   ]
 }

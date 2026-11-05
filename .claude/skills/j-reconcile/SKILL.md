@@ -421,6 +421,39 @@ When unscoped, every entry from phase 1 is eligible, exactly as before.
 ### 6.5. Check `project/todo.md` formatting
 Run `bash "$([ -f scripts/check-todo-format.sh ] && echo scripts/check-todo-format.sh || echo node_modules/@jenga-ai/agent/scripts/check-todo-format.sh)"`. This runs unconditionally and is never scope-filtered — a malformed line has no resolvable ref, so it cannot be attributed to any particular epic/story/task scope the way phase 6's cleanup rules can. Exit `0` with no output means nothing to report; skip the MALFORMED TODO ENTRIES section entirely. A non-zero exit prints one `line <N>: <text>` per malformed entry — carry these verbatim into the report's MALFORMED TODO ENTRIES section (see `assets/report_format.md`). Report only: never edit `project/todo.md` on the strength of this check, since fixing a line correctly requires knowing the author's actual intent (which ref, and whether the trailing "(infra)"-style suffix in a misordered line was meant to stay in the title).
 
+### 6.6. Sweep stale worktrees and branches (`j.tidy`)
+
+Invoke the **`j.tidy` skill** (`skills/j-tidy/SKILL.md`) and follow its instructions. This phase
+carries no sweep logic of its own: the classifier, the thresholds and the gated removal path live
+in that skill, and copying any of it into this file would create a second, divergent set of safety
+conditions over an operation that deletes work.
+
+**Why this is not a duplicate of phase 2.** Phase 2 is driven off the board — it walks tasks and
+asks "does this task have a worktree?", matching on the task-ID slug `<E##_S##_T##-short-slug>`.
+`j.tidy` enumerates from git and the filesystem instead, which is the only way to see the
+`agent-<hash>` population: worktrees created by the native worktree tool and by subagents running
+with `isolation: "worktree"`. Those never match a task-ID slug, so no phase of this skill can
+reach them, and they were the bulk of the 9.5 GB measured in this repository on 2026-11-04. Local
+branches with no worktree are likewise outside phase 2's reach, because a branch outlives the
+worktree that created it. The two mechanisms answer different questions: this skill decides what
+the board should say, `j.tidy` decides what is still needed on disk.
+
+**Ordering is load-bearing: this phase must run after phase 2's merge, and it does.** Phase 2 may
+merge an orphaned worktree branch into the current branch on the user's confirmation. If the sweep
+ran first, that branch would still be carrying unmerged content and would be assessed — correctly
+but uselessly — as `retained`, and a branch whose work was about to land would be offered for a
+decision it does not need. Running here, after phases 2 to 6.5, means every merge this run was
+going to perform has already happened and the sweep sees the post-merge truth. Do not move this
+phase earlier.
+
+Scope note: the sweep is **not** scope-filtered. A worktree's disk cost is not attributable to the
+epic/story/task scope resolved in Phase 0, and the `agent-<hash>` population has no board
+provenance to scope by at all. A scoped `/reconcile` run still reports the whole sweep; say so in
+the report rather than implying the numbers are scoped.
+
+Carry `j.tidy`'s own report into the reconcile summary as its own section — do not re-derive or
+re-word a verdict, and do not fold a refusal or a failed removal into a success count.
+
 ### 7. Print a summary
 Output a reconciliation report using the format in `assets/report_format.md` — the report's very
 first substantive line is always `Scope: ...`, reflecting the scope resolved in Phase 0 (see that

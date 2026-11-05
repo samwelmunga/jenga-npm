@@ -1,0 +1,17 @@
+{
+  "config_version": 1,
+  "retention_age_days": 14,
+  "worktree_count_ceiling": 40,
+  "branch_count_ceiling": 80,
+  "disk_ceiling_mb": 2048,
+  "report_max_rows_per_group": 15,
+  "notes": {
+    "_about": "This project's j.tidy thresholds (E56_S06_T02). A project instance REPLACES templates/tidy-config.json whole - there is no merging. Edited by hand: this file has no jenga config descriptor yet (the descriptor suite and the config-list renderer enumerate the six descriptor-backed files by name), so `jenga config set tidy-config.<key>` does not work. See project/configs/README.md.",
+    "_measured_baseline": "Jenga repo, 2026-11-04, before any of E56_S06 existed: 229 registered worktrees (228 besides the primary checkout), 350 local branches, 9.5 GB in .claude/worktrees, .git 245 MB, `git worktree prune --dry-run` finds nothing. A sampled ten worktrees measured 31-85 MB apiece. Every default below is chosen against that baseline - all three ceilings are crossed by it, which is the point: the state that prompted the story must read as a crossed ceiling, not as normal.",
+    "retention_age_days": "14 days - two sprints of inactivity. Long enough not to nag about a worktree someone is still iterating on, short enough to catch the abandoned ones.",
+    "worktree_count_ceiling": "40 - an order of magnitude below the measured 229, and roughly ten concurrent pieces of work with room to spare.",
+    "branch_count_ceiling": "80 - twice the worktree ceiling, matching the shape of the measured 350-vs-229 gap (a branch survives its worktree).",
+    "disk_ceiling_mb": "2048 MB (2 GB) - on the order of 25-60 worktrees at the measured 31-85 MB each, i.e. the same scale as the count ceiling, reached from the direction that actually slows the machine down.",
+    "report_max_rows_per_group": "15 rows per (verdict, population) group before truncation. Truncation always states how many entries were omitted."
+  }
+}

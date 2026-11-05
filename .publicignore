@@ -364,6 +364,7 @@ tests/dev-done-post-sync-commit.bats
 # section, option 1 (blocklist) is correct when the ENTIRE file depends on a private subject,
 # and a visible skip would skip every case and report nothing. Same failure mode as the
 # dev-done-post-sync-commit.bats entry directly above; caught before it reached the mirror.
+tests/mirror-permission-level-invariant.bats
 # tests/mirror-test-subject-invariant.bats: runs skills/j-mirror-public/scripts/mirror.sh (MIRROR_SH,
 # invoked by every @test case), which lives under the fully-private skills/j-mirror-public/
 # blocklisted above (both naming forms) -- same reasoning as the entry directly above. Added in the
@@ -532,8 +533,6 @@ tests/mirror-publicize-wiring.bats
 # covers `skills/`, so the two channels agree (no npm/GitHub asymmetry). Nothing was ignored as a
 # result.
 # Note: before changing this decision, re-run the check above.
-jobs/
-
 # --- Long-running tests, kept private-side (see project/rapports/problems/E77-long-running-tests-in-the-shipping-suite.md) ---
 # Each file below took 50 seconds or more on its own (130, 99, 78, 73, 59, 58 and 52 seconds, measured one file at a time on a
 # quiet machine), and together they add about nine minutes to the test-subject-invariant gate that /mirror-public runs before
@@ -546,18 +545,13 @@ tests/workflow-dispatch-compute-render.bats
 tests/workflow-outputs.bats
 tests/workflow-compute-registry.bats
 tests/workflow-pause-resume.bats
-
-# --- Tests that fail in the mirror-shaped tree, kept private-side for the v4.6.0 release ---
-# The test-subject-invariant gate ran these in the public mirror shape and each failed. They are a stop-gap
-# blocklist, not a diagnosis: each is either stranded (its subject is blocklisted) or genuinely broken, and
-# should be repaired or moved to the 'Private-tooling tests' block with its subject.
-tests/baseline-permissions.bats
-tests/config-command.bats
-tests/config-get-set-e2e.bats
-tests/consumer-install-testbed.bats
-tests/credential-access-guard.bats
-tests/dependency-audit-workflow.bats
+# tests/epic-wrap-up-scripts.bats: tests 9, 10 and 12 read the repo's own .mcp.json and
+# project/.workflows/epic-wrap-up-framework.json, neither of which is in the shipped tree, so they fail in the
+# mirror-shaped tree while passing privately (found by the /mirror-public test gate on 2026-11-05). The file is
+# about the framework repo's own epic wrap-up workflow, so it has no publicly-meaningful subset. Follows its private subject.
 tests/epic-wrap-up-scripts.bats
-tests/mirror-permission-level-invariant.bats
-tests/pages-workflow.bats
+# tests/project-scope-map.bats: seven cases (5, 10, 11, 12, 13, 18 and the like) enumerate and assert the mirror
+# test suites tests/mirror-nested-suite-flag.bats and the three baseline-marked mirror suites, all of which are
+# blocklisted above, so they fail in the mirror-shaped tree while passing privately (found by the /mirror-public
+# test gate on 2026-11-05). The map under test is the maintainer's project scope map. Follows its private subjects.
 tests/project-scope-map.bats

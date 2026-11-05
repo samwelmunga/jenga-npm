@@ -368,3 +368,50 @@ runs exactly that command at `pre-commit`.
 
 None yet. The checker (`scripts/checklist.sh`) lands in `E67_S02` and the skill wiring in `E67_S03`; until
 then this file is validated but not consulted by any skill.
+
+---
+
+## tidy-config.json
+
+`j.tidy`'s nag thresholds (`E56_S06_T02`): how old an entry must be to count as stale, and the worktree
+count, branch count and disk ceilings whose crossing the sweep report calls out prominently. A generic
+default ships at `templates/tidy-config.json`; **this file is the project instance and replaces the
+shipped default whole — there is no merging**, the same arrangement as `checklists.json`. Like
+`test-config.json`, it ships downstream through `/j-mirror-public`, so treat everything in it as
+publishable.
+
+These values live in a config file rather than in `skills/j-tidy/scripts/report.sh` deliberately: that
+script contains no threshold value at all, so there is nothing to drift. When no instance and no template
+can be resolved, the report says the ceiling checks were skipped instead of substituting a built-in
+number, because a hidden default would misreport a project that never configured one.
+
+### Fields
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `config_version` | integer | `1` | Shape version. Read-only. |
+| `retention_age_days` | integer | `14` | Age, from the entry's last commit, at which the report counts it as stale. |
+| `worktree_count_ceiling` | integer | `40` | Registered worktrees above this are reported as a crossed ceiling. |
+| `branch_count_ceiling` | integer | `80` | Local branches with no worktree above this are reported as a crossed ceiling. |
+| `disk_ceiling_mb` | integer | `2048` | Measured worktree disk above this is reported as a crossed ceiling. Skipped when `--no-disk` meant disk was never measured. |
+| `report_max_rows_per_group` | integer | `15` | Entries listed per (verdict, population) group before truncation. Truncation **always** states how many entries were not shown. |
+| `notes` | object | — | Per-key rationale, including the measured baseline the defaults were chosen against. JSON has no comments; this is the same convention `test-config.json` uses with its per-entry `comment` fields. |
+
+### Changing a value
+
+**Hand-edit this file.** It has no `jenga config` descriptor yet, so `jenga config set tidy-config.<key>`
+and `/jenga-config` do not reach it — the descriptor suite and the config-list renderer enumerate the
+descriptor-backed files by name, and adding a seventh is its own piece of work. `report.sh` re-reads the
+file on every run, so an edit takes effect immediately with nothing to restart.
+
+To see what a run actually resolved, and from which file:
+
+```bash
+bash skills/j-tidy/scripts/report.sh --print-thresholds
+```
+
+### Consuming Skills
+
+- `j.tidy` — `skills/j-tidy/scripts/report.sh` (resolution order: `JENGA_TIDY_CONFIG_FILE`, then this
+  file, then `templates/tidy-config.json`).
+- `j.reconcile` — indirectly, by invoking `j.tidy` as a step.

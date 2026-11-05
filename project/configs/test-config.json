@@ -28,7 +28,7 @@
     {
       "tool_name": "-",
       "type": "performance",
-      "comment": "Not applicable at current scale \u2014 no runtime service to load-test"
+      "comment": "Not applicable at current scale — no runtime service to load-test"
     },
     {
       "tool_name": "-",

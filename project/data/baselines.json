@@ -1,235 +1,284 @@
 {
-  "e77_s06_new_bats_files": {
-    "measured": "2026-10-28",
-    "conditions": "1-minute load average 6 to 9 (other agent sessions); not a quiet machine",
-    "tests/test-thresholds.bats": {
-      "cases": 17
-    },
-    "tests/record-timing.bats": {
-      "cases": 14
-    },
-    "tests/shipping-test-timing.bats": {
-      "cases": 17
-    },
-    "tests/long-running-report.bats": {
-      "cases": 21
-    },
-    "T08_four_files": {
-      "cases": 69,
-      "pass": 69,
-      "fail": 0,
-      "wall_s": 66.4,
-      "cpu_s": 13.9
-    },
-    "T09_two_files": {
-      "cases": 24,
-      "pass": 24,
-      "fail": 0,
-      "wall_s": 37.9,
-      "cpu_s": 8.5
-    },
-    "scratch_copy_without_private_skill": {
-      "pass": 31,
-      "skip": 62,
-      "fail": 0
-    },
-    "related_suites": {
-      "config_and_scope_gate_and_assertion_convention": {
-        "cases": 265,
-        "fail": 0
-      },
-      "never_public_refs_smoke_j_test_skill_allowlist_workflow_publicignore": {
-        "cases": 161,
-        "fail": 1,
-        "note": "j-test-skill.bats mirror byte-identity, unsynced .claude/.agents copies of 3 scripts"
-      }
-    },
-    "fixture_timing_unit_costs": {
-      "trivial_bats_file_timed_s": 0.3,
-      "one_second_sleep_file_timed_s": 1.2
-    }
-  },
-  "bats_catalog": {
-    "bats_files": 264,
-    "test_cases": 5770,
-    "measured_on": "2026-11-02",
-    "measured_at": "bundle-E72_S07 HEAD b9272961",
-    "main_checkout": {
-      "bats_files": 266,
-      "test_cases": 5815,
-      "measured_at": "e548cb23"
-    },
-    "note": "Live catalog size, re-measured at verification time. Supersedes 170/3471 (2026-10-22), 261/5666 (450339d2), 264/5733 and 266/5815 readings; the catalog grows continuously and the two checkouts differ, so benchmark a scoped selection against the live count of the tree the gate actually ran in."
-  },
-  "scope_gate_selection": {
-    "measured_on": "2026-11-01",
-    "derivation": "scope-test-gate.sh:723-725 commit-subject rule, project/configs/test-scope-map.json",
-    "E28_S19": {
-      "changed_files": 31,
-      "selected_test_files_project_map": 14,
-      "selected_test_files_shipped_map": 264
-    },
-    "E72_S07": {
-      "changed_files": 47,
-      "selected_test_files_project_map": 26,
-      "includes_invariant_suite": true,
-      "forbidden_suites_selected": [
-        "mirror-test-subject-invariant.bats",
-        "mirror-permission-level-invariant.bats",
-        "mirror-staging-branch-push.bats"
-      ],
-      "note": "All three self-select as changed test files over 450339d2..HEAD (commit 411c2f71 added the baseline marker to each); that selection is 26 test files. CORRECTED 2026-11-01 (re-verify-2): the earlier claim 'No range avoids them' is FALSE. Both 282801a5..1b2f483e and 411c2f71..1b2f483e select 23 test files with zero barred suites, because neither range contains 411c2f71 itself and no later commit touches those three test files. Known Gate Blocker 1 still names only the first of the three.",
-      "ranges_avoiding_forbidden_suites": {
-        "282801a5..1b2f483e": {
-          "selected_test_files": 23,
-          "forbidden": 0
-        },
-        "411c2f71..1b2f483e": {
-          "selected_test_files": 23,
-          "forbidden": 0
-        }
-      }
-    },
-    "note": "264 -> 14 for E28_S19 is an 18.9x reduction; scoped and full are no longer operationally identical. E72_S07 selects the ~2h invariant suite (Known Gate Blocker 1).",
-    "mirror_script_change": {
-      "changed_files": 1,
-      "selected_test_files_project_map": 7,
-      "map_excluded": 1,
-      "note": "skills/j-mirror-public/scripts/mirror.sh -> 7 mapped mirror suites, mirror-test-subject-invariant.bats deliberately excluded and named in map_excluded_test_files."
-    }
-  },
-  "e72_s07_verification": {
-    "measured_on": "2026-11-01",
-    "round": "re-verify-2 after fix round 3",
-    "measured_in": "worktree .claude/worktrees/bundle-E72_S07, branch bundle-E72_S07, head 1b2f483e",
-    "suites_run": 25,
-    "cases_total": 897,
-    "cases_passed": 895,
-    "cases_failed": 2,
-    "previous_round": {
-      "suites_run": 25,
-      "cases_total": 885,
-      "cases_passed": 849,
-      "cases_failed": 36,
-      "note": "suite set close but not provably identical; three suites grew (+6 scope-test-gate, +4 project-scope-map, +4 j-test-build-catalog) and baseline-permissions grew +6, so compare failure counts (36 -> 2), not totals"
-    },
-    "failing_suites": {
-      "perceived-branch.bats": 2
-    },
-    "failing_cases": [
-      "perceived-branch.bats:20",
-      "perceived-branch.bats:24"
-    ],
-    "known_red_remaining": {
-      "perceived-branch.bats": 2
-    },
-    "known_red_resolved": [
-      "scope-test-gate.bats (32 -> 0)",
-      "project-scope-map.bats (1 -> 0)",
-      "j-test-build-catalog.bats (1 -> 0)",
-      "commit-test-gate-mirror.bats (confirmed 5/5 by run)",
-      "external-refs-absent-safe.bats (confirmed 12/12 by run; previously 'not checkable by inspection')"
-    ],
-    "suites_not_run": [
-      "tests/mirror-test-subject-invariant.bats",
-      "tests/mirror-permission-level-invariant.bats",
-      "tests/mirror-staging-branch-push.bats"
-    ],
-    "suites_not_run_reason": "no user approval; ~2h + real .publicignore mutation (first), real pushes (other two). Recorded unverified, never passed.",
-    "ambient_state": {
-      "session_level": 2,
-      "baseline_check_exit": 0,
-      "on_baseline": true,
-      "mirror_parity_clean": true,
-      "j_test_files_compared": 11,
-      "note": "all 11 files under skills/j-test/ byte-identical in both .claude/ and .agents/; j-test-skill.bats 16/16"
-    },
-    "mono_causality_proof": {
-      "method": "reverted resolve_baseline_template to its --root-only form in a scratch copy (/tmp/regress); real tree untouched",
-      "scope_test_gate": {
-        "clean": "57/57",
-        "defect_reintroduced": "19 ok / 38 fail"
-      },
-      "baseline_permissions": {
-        "clean": "33/33",
-        "defect_reintroduced": "31 ok / 2 fail (cases 13, 14)"
-      },
-      "conclusion": "19 ok exactly matches the prior round's 19 (51-32): the 32-red cluster was mono-causal, no second independent cause. Both new fixtures proven load-bearing regression guards."
-    },
-    "npm_layout_fixture": {
-      "layout": "payload under node_modules/@jenga-ai/agent, consumer root separate, consumer carries no templates/",
-      "satisfied_settings": {
-        "check": 0,
-        "reason": 0
-      },
-      "divergent_settings": {
-        "check": 1
-      },
-      "template_in_neither_location": {
-        "check": 2,
-        "reason": 2,
-        "note": "inability to evaluate is never a pass"
-      },
-      "override_masking": "confirmed possible when both settings files are loosened identically and a project-root override is crafted to match; judged acceptable because mirror.sh:877 resolves the same path in the monorepo, so checker and subject cannot disagree"
-    },
-    "story_gate": {
-      "scope": "story E72_S07",
-      "range_used": "282801a5..HEAD (b9272961)",
-      "range_rationale": "same reduced-range decision as the prior round, extended to HEAD because fix round 4 changed tests/project-scope-map.bats; selects 23 test files and none of the three barred suites",
-      "selected_test_files": 23,
-      "test_files_available": 23,
-      "cases_passed": 853,
-      "cases_total": 853,
-      "exit_code": "0",
-      "effective_mode": "scoped",
-      "fallback_reason": null,
-      "runtime": "12m06s wall (prior round 10m06.87s); slowness probe flagged the machine slow in-run, so wall time is not a measure of the tests",
-      "measured_on": "2026-11-02",
-      "round": "re-verify-3 after fix round 4",
-      "exclusion_behaviour": "the baseline-permissions exclusion was a NO-OP: narrow-report.json precondition satisfied, excluded []; gate JSON excluded_test_files [] / exclusion_reason null. All three barred suites held in map_excluded_test_files (3) with map_exclusion_conflicts [], kept out by the reduced range plus the map enumerate-and-omit, not by any exclusion mechanism",
-      "pre_fix_comparison": {
-        "shipped_map_same_range": 264,
-        "project_map_same_range": 23,
-        "note": "AC7 substitution: pre-fix selection IS the whole live catalog (264 files) measured at the same range on the same commit; 11.5x reduction. No pre-fix runtime was ever measured to completion"
-      },
-      "invalidated_run": {
-        "reported_exit": 1,
-        "failing_assertions": 0,
-        "cause": "bats scratch dir bats-run-1N6zxK destroyed mid-run under three concurrent sibling gate runs sharing TMPDIR; nothing verified",
-        "resolution": "discarded and re-run under isolated TMPDIR=/tmp/tester-E72S07-tmp"
-      }
-    },
-    "epic_gate": {
-      "run": false,
-      "run_forbidden": true,
-      "reason": "AC2 was amended 2026-11-01 to forbid a whole-catalog epic execution and to require the epic policy RESOLUTION instead. Policy full would select all three barred suites and no approval exists.",
-      "policy_resolution": {
-        "get story": "scoped",
-        "get epic": "full",
-        "get task": "none",
-        "exit_codes": 0,
-        "measured_at": "e548cb23"
-      },
-      "catalog_enumeration": {
-        "runnable": 2,
-        "runnable_ids": [
-          "npm:test",
-          "shellcheck:all"
-        ],
-        "not_runnable": 1,
-        "not_runnable_ids": [
-          "config:scripts/audit-deps.sh:vulnerability"
-        ],
-        "not_runnable_reason": "no command declared",
-        "tool": "build-catalog.sh (read-only; runs no suite)",
-        "measured_at": "e548cb23"
-      }
-    },
-    "note": "T01 Passed; T02/T03 Passed with remarks; T04 Passed with remarks 2026-11-02 after fix round 4 (re-verify-3). Story gate passed OVER A REDUCED RANGE (282801a5..HEAD), not over the whole-story range 450339d2..HEAD, which selects 26 files including all three barred suites. Remaining remarks in project/rapports/problems/E72_S07_T04-record-inaccuracies-and-concurrent-gate-hazard.md",
-    "known_red_reverified_2026_11_02": {
-      "external-refs-absent-safe.bats": "12/12 pass (run directly; not in the scoped selection)",
-      "perceived-branch.bats": "30/32, exit 1, cases 20 and 24 red, owned by E78, untouched by this story",
-      "commit-test-gate-mirror.bats": "passing inside the gate run (in the 23-file selection)"
-    }
-  }
+	"e77_s06_new_bats_files": {
+		"measured": "2026-10-28",
+		"conditions": "1-minute load average 6 to 9 (other agent sessions); not a quiet machine",
+		"tests/test-thresholds.bats": {
+			"cases": 17
+		},
+		"tests/record-timing.bats": {
+			"cases": 14
+		},
+		"tests/shipping-test-timing.bats": {
+			"cases": 17
+		},
+		"tests/long-running-report.bats": {
+			"cases": 21
+		},
+		"T08_four_files": {
+			"cases": 69,
+			"pass": 69,
+			"fail": 0,
+			"wall_s": 66.4,
+			"cpu_s": 13.9
+		},
+		"T09_two_files": {
+			"cases": 24,
+			"pass": 24,
+			"fail": 0,
+			"wall_s": 37.9,
+			"cpu_s": 8.5
+		},
+		"scratch_copy_without_private_skill": {
+			"pass": 31,
+			"skip": 62,
+			"fail": 0
+		},
+		"related_suites": {
+			"config_and_scope_gate_and_assertion_convention": {
+				"cases": 265,
+				"fail": 0
+			},
+			"never_public_refs_smoke_j_test_skill_allowlist_workflow_publicignore": {
+				"cases": 161,
+				"fail": 1,
+				"note": "j-test-skill.bats mirror byte-identity, unsynced .claude/.agents copies of 3 scripts"
+			}
+		},
+		"fixture_timing_unit_costs": {
+			"trivial_bats_file_timed_s": 0.3,
+			"one_second_sleep_file_timed_s": 1.2
+		}
+	},
+	"bats_catalog": {
+		"bats_files": 264,
+		"test_cases": 5770,
+		"measured_on": "2026-11-02",
+		"measured_at": "bundle-E72_S07 HEAD b9272961",
+		"main_checkout": {
+			"bats_files": 266,
+			"test_cases": 5815,
+			"measured_at": "e548cb23"
+		},
+		"note": "Live catalog size, re-measured at verification time. Supersedes 170/3471 (2026-10-22), 261/5666 (450339d2), 264/5733 and 266/5815 readings; the catalog grows continuously and the two checkouts differ, so benchmark a scoped selection against the live count of the tree the gate actually ran in."
+	},
+	"scope_gate_selection": {
+		"measured_on": "2026-11-01",
+		"derivation": "scope-test-gate.sh:723-725 commit-subject rule, project/configs/test-scope-map.json",
+		"E28_S19": {
+			"changed_files": 31,
+			"selected_test_files_project_map": 14,
+			"selected_test_files_shipped_map": 264
+		},
+		"E72_S07": {
+			"changed_files": 47,
+			"selected_test_files_project_map": 26,
+			"includes_invariant_suite": true,
+			"forbidden_suites_selected": [
+				"mirror-test-subject-invariant.bats",
+				"mirror-permission-level-invariant.bats",
+				"mirror-staging-branch-push.bats"
+			],
+			"note": "All three self-select as changed test files over 450339d2..HEAD (commit 411c2f71 added the baseline marker to each); that selection is 26 test files. CORRECTED 2026-11-01 (re-verify-2): the earlier claim 'No range avoids them' is FALSE. Both 282801a5..1b2f483e and 411c2f71..1b2f483e select 23 test files with zero barred suites, because neither range contains 411c2f71 itself and no later commit touches those three test files. Known Gate Blocker 1 still names only the first of the three.",
+			"ranges_avoiding_forbidden_suites": {
+				"282801a5..1b2f483e": {
+					"selected_test_files": 23,
+					"forbidden": 0
+				},
+				"411c2f71..1b2f483e": {
+					"selected_test_files": 23,
+					"forbidden": 0
+				}
+			}
+		},
+		"note": "264 -> 14 for E28_S19 is an 18.9x reduction; scoped and full are no longer operationally identical. E72_S07 selects the ~2h invariant suite (Known Gate Blocker 1).",
+		"mirror_script_change": {
+			"changed_files": 1,
+			"selected_test_files_project_map": 7,
+			"map_excluded": 1,
+			"note": "skills/j-mirror-public/scripts/mirror.sh -> 7 mapped mirror suites, mirror-test-subject-invariant.bats deliberately excluded and named in map_excluded_test_files."
+		}
+	},
+	"e72_s07_verification": {
+		"measured_on": "2026-11-01",
+		"round": "re-verify-2 after fix round 3",
+		"measured_in": "worktree .claude/worktrees/bundle-E72_S07, branch bundle-E72_S07, head 1b2f483e",
+		"suites_run": 25,
+		"cases_total": 897,
+		"cases_passed": 895,
+		"cases_failed": 2,
+		"previous_round": {
+			"suites_run": 25,
+			"cases_total": 885,
+			"cases_passed": 849,
+			"cases_failed": 36,
+			"note": "suite set close but not provably identical; three suites grew (+6 scope-test-gate, +4 project-scope-map, +4 j-test-build-catalog) and baseline-permissions grew +6, so compare failure counts (36 -> 2), not totals"
+		},
+		"failing_suites": {
+			"perceived-branch.bats": 2
+		},
+		"failing_cases": [
+			"perceived-branch.bats:20",
+			"perceived-branch.bats:24"
+		],
+		"known_red_remaining": {
+			"perceived-branch.bats": 2
+		},
+		"known_red_resolved": [
+			"scope-test-gate.bats (32 -> 0)",
+			"project-scope-map.bats (1 -> 0)",
+			"j-test-build-catalog.bats (1 -> 0)",
+			"commit-test-gate-mirror.bats (confirmed 5/5 by run)",
+			"external-refs-absent-safe.bats (confirmed 12/12 by run; previously 'not checkable by inspection')"
+		],
+		"suites_not_run": [
+			"tests/mirror-test-subject-invariant.bats",
+			"tests/mirror-permission-level-invariant.bats",
+			"tests/mirror-staging-branch-push.bats"
+		],
+		"suites_not_run_reason": "no user approval; ~2h + real .publicignore mutation (first), real pushes (other two). Recorded unverified, never passed.",
+		"ambient_state": {
+			"session_level": 2,
+			"baseline_check_exit": 0,
+			"on_baseline": true,
+			"mirror_parity_clean": true,
+			"j_test_files_compared": 11,
+			"note": "all 11 files under skills/j-test/ byte-identical in both .claude/ and .agents/; j-test-skill.bats 16/16"
+		},
+		"mono_causality_proof": {
+			"method": "reverted resolve_baseline_template to its --root-only form in a scratch copy (/tmp/regress); real tree untouched",
+			"scope_test_gate": {
+				"clean": "57/57",
+				"defect_reintroduced": "19 ok / 38 fail"
+			},
+			"baseline_permissions": {
+				"clean": "33/33",
+				"defect_reintroduced": "31 ok / 2 fail (cases 13, 14)"
+			},
+			"conclusion": "19 ok exactly matches the prior round's 19 (51-32): the 32-red cluster was mono-causal, no second independent cause. Both new fixtures proven load-bearing regression guards."
+		},
+		"npm_layout_fixture": {
+			"layout": "payload under node_modules/@jenga-ai/agent, consumer root separate, consumer carries no templates/",
+			"satisfied_settings": {
+				"check": 0,
+				"reason": 0
+			},
+			"divergent_settings": {
+				"check": 1
+			},
+			"template_in_neither_location": {
+				"check": 2,
+				"reason": 2,
+				"note": "inability to evaluate is never a pass"
+			},
+			"override_masking": "confirmed possible when both settings files are loosened identically and a project-root override is crafted to match; judged acceptable because mirror.sh:877 resolves the same path in the monorepo, so checker and subject cannot disagree"
+		},
+		"story_gate": {
+			"scope": "story E72_S07",
+			"range_used": "282801a5..HEAD (b9272961)",
+			"range_rationale": "same reduced-range decision as the prior round, extended to HEAD because fix round 4 changed tests/project-scope-map.bats; selects 23 test files and none of the three barred suites",
+			"selected_test_files": 23,
+			"test_files_available": 23,
+			"cases_passed": 853,
+			"cases_total": 853,
+			"exit_code": "0",
+			"effective_mode": "scoped",
+			"fallback_reason": null,
+			"runtime": "12m06s wall (prior round 10m06.87s); slowness probe flagged the machine slow in-run, so wall time is not a measure of the tests",
+			"measured_on": "2026-11-02",
+			"round": "re-verify-3 after fix round 4",
+			"exclusion_behaviour": "the baseline-permissions exclusion was a NO-OP: narrow-report.json precondition satisfied, excluded []; gate JSON excluded_test_files [] / exclusion_reason null. All three barred suites held in map_excluded_test_files (3) with map_exclusion_conflicts [], kept out by the reduced range plus the map enumerate-and-omit, not by any exclusion mechanism",
+			"pre_fix_comparison": {
+				"shipped_map_same_range": 264,
+				"project_map_same_range": 23,
+				"note": "AC7 substitution: pre-fix selection IS the whole live catalog (264 files) measured at the same range on the same commit; 11.5x reduction. No pre-fix runtime was ever measured to completion"
+			},
+			"invalidated_run": {
+				"reported_exit": 1,
+				"failing_assertions": 0,
+				"cause": "bats scratch dir bats-run-1N6zxK destroyed mid-run under three concurrent sibling gate runs sharing TMPDIR; nothing verified",
+				"resolution": "discarded and re-run under isolated TMPDIR=/tmp/tester-E72S07-tmp"
+			}
+		},
+		"epic_gate": {
+			"run": false,
+			"run_forbidden": true,
+			"reason": "AC2 was amended 2026-11-01 to forbid a whole-catalog epic execution and to require the epic policy RESOLUTION instead. Policy full would select all three barred suites and no approval exists.",
+			"policy_resolution": {
+				"get story": "scoped",
+				"get epic": "full",
+				"get task": "none",
+				"exit_codes": 0,
+				"measured_at": "e548cb23"
+			},
+			"catalog_enumeration": {
+				"runnable": 2,
+				"runnable_ids": [
+					"npm:test",
+					"shellcheck:all"
+				],
+				"not_runnable": 1,
+				"not_runnable_ids": [
+					"config:scripts/audit-deps.sh:vulnerability"
+				],
+				"not_runnable_reason": "no command declared",
+				"tool": "build-catalog.sh (read-only; runs no suite)",
+				"measured_at": "e548cb23"
+			}
+		},
+		"note": "T01 Passed; T02/T03 Passed with remarks; T04 Passed with remarks 2026-11-02 after fix round 4 (re-verify-3). Story gate passed OVER A REDUCED RANGE (282801a5..HEAD), not over the whole-story range 450339d2..HEAD, which selects 26 files including all three barred suites. Remaining remarks in project/rapports/problems/E72_S07_T04-record-inaccuracies-and-concurrent-gate-hazard.md",
+		"known_red_reverified_2026_11_02": {
+			"external-refs-absent-safe.bats": "12/12 pass (run directly; not in the scoped selection)",
+			"perceived-branch.bats": "30/32, exit 1, cases 20 and 24 red, owned by E78, untouched by this story",
+			"commit-test-gate-mirror.bats": "passing inside the gate run (in the 23-file selection)"
+		}
+	},
+	"bounded_default_suite_set": {
+		"measured_on": "2026-11-02",
+		"measured_by": "tester",
+		"task_id": "E72_S08_T06",
+		"measured_in": "worktree .claude/worktrees/E72_S08_T06-bounded-default-suite-set, branch E72_S08_T06-bounded-default-suite-set, head 70e0fa7b",
+		"config_key": "test_default_suite_set",
+		"membership": [
+			"tests/smoke-test-skills.bats",
+			"tests/resolve-root.bats",
+			"tests/events-append.bats",
+			"tests/scope-test-policy-resolve.bats",
+			"tests/discover-tests.bats",
+			"tests/j-test-build-catalog.bats"
+		],
+		"test_files_selected": 6,
+		"test_files_available": 272,
+		"cases_total": 264,
+		"cases_passed": 264,
+		"cases_failed": 0,
+		"wall_seconds": 158.90,
+		"cpu_seconds": 56.45,
+		"cpu_user_seconds": 28.05,
+		"cpu_sys_seconds": 28.40,
+		"wall_to_cpu_ratio": 2.81,
+		"isolated_tmpdir": "/tmp/t06-floor-timing",
+		"slowness_probe": {
+			"run": "before the timed run, same session",
+			"verdict": "MACHINE IS SLOW",
+			"probe_wall_seconds": 159.263,
+			"probe_cpu_seconds": 46.732,
+			"probe_ratio": 3.41,
+			"slow_above": 2.5,
+			"indicators": [
+				"first exec 165.2ms vs re-exec 5.8ms",
+				"security agents (epsext, wdavdaemon) to 310.7% CPU",
+				"process start 3.0x more costly under load",
+				"16 git fsmonitor daemons"
+			],
+			"note": "wall is not a measure of the tests on this machine; CPU 56.45s is the trustworthy figure. A healthy machine should land nearer CPU time."
+		},
+		"resolver_own_cost_seconds": 1.5,
+		"suites_not_run": [
+			"tests/mirror-test-subject-invariant.bats",
+			"tests/mirror-permission-level-invariant.bats",
+			"tests/mirror-staging-branch-push.bats"
+		],
+		"suites_not_run_reason": "not in the floor and not run by this verification: ~2h runtime plus real .publicignore mutation (first), real pushes (other two).",
+		"note": "First wall-clock measurement of the bounded default suite set. 6 of 272 runnable test files, 264/264 passing. This is the floor beneath a scoped gate for the no-mapped-suites case; compare against the e72_s07_verification story-gate selection of 23-26 test files."
+	}
 }

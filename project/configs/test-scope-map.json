@@ -209,7 +209,33 @@
       "source": "skills/j-reconcile/**/*.sh",
       "tests": [
         "tests/reconcile-*.bats",
-        "tests/commits-for-item*.bats"
+        "tests/commits-for-item*.bats",
+        "tests/tidy-*.bats"
+      ]
+    },
+    {
+      "source": "skills/j-tidy/**/*.sh",
+      "tests": [
+        "tests/tidy-*.bats"
+      ]
+    },
+    {
+      "source": "project/configs/tidy-config.json",
+      "tests": [
+        "tests/tidy-*.bats"
+      ]
+    },
+    {
+      "source": "templates/tidy-config.json",
+      "tests": [
+        "tests/tidy-*.bats"
+      ]
+    },
+    {
+      "source": "skills/j-tidy/SKILL.md",
+      "tests": [
+        "tests/tidy-*.bats",
+        "tests/smoke-test-*.bats"
       ]
     },
     {

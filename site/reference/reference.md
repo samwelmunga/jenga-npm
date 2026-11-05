@@ -78,6 +78,7 @@ skills/                    ← Canonical skill source — invoke as j.<name> or 
 ├── j-status/
 ├── j-strategy/
 ├── j-test/
+├── j-tidy/
 ├── j-todo/
 ├── j-tools/
 ├── j-train/

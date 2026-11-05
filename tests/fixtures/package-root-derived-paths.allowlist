@@ -7,3 +7,5 @@ scripts/compute-deploy-reconcile.sh	skills/j-mirror-public/assets/config.json	pr
 skills/j-mirror-public/scripts/mirror.sh	*	mirror pipeline; operates on the maintainer's own repo root, not on package helpers
 skills/j-publish/scripts/npm_pipeline.sh	scripts/generate-legacy-shipped-paths.js	guarded by an -f test and best-effort: absent means publish without regenerating
 skills/j-smoke-test/scripts/smoke-test-skills.sh	*	ROOT is the explicit --root argument (a tree to inspect), not a git-derived consumer root
+skills/j-close-task/scripts/close-task-context.sh	scripts/commits-for-item.sh	PKG_ROOT is this checkout when the file is present there, else $PROJECT_ROOT/node_modules/@jenga-ai/agent; the path is built from the variable, which the sweep cannot see
+skills/j-verify/scripts/verify-context.sh	skills/j-close-task/scripts/close-task-context.sh	PKG_ROOT is this checkout when the file is present there, else $PROJECT_ROOT/node_modules/@jenga-ai/agent; the path is built from the variable, which the sweep cannot see
