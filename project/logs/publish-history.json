@@ -958,5 +958,21 @@
     "dist_tag": "latest",
     "result": null,
     "reason": "Approved outside /publish. npm dist-tag latest confirmed at 4.6.0."
+  },
+  {
+    "id": "8ddd6e4b-ae51-4492-938f-c2c35bd0d3e5",
+    "version": "v4.7.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-11-05T22:29:41Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "staged",
+    "git_tag": "v4.7.0",
+    "commit_sha": "c2fa6bf7dcdbaa9da379213b7fdf96c10e437cae",
+    "stage_id": "568c26fc-a743-4346-ab7d-c7aaf846285a",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": "Staged via direct gh workflow dispatch (run 42121821770), not /publish stage; the public test gate is permanently red."
   }
 ]
