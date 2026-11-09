@@ -185,12 +185,13 @@ Skills live in `.agents/skills/<name>/SKILL.md`. Invoke with `j.<name>` in your 
 | `j.todo` | Add missions to `project/todo.md` linked to epics and stories |
 | `j.do` | Execute tasks from the scrum board, drives the Developer agent through the full loop |
 | `j.break` | Halt execution after the current task completes and before the next one starts; `hard` persists until cleared, `status` adds a progress rapport for the current run |
-| `j.test` | Discover the project's test suites, pick which to run (blank runs all), and get a pass/fail summary; exit code 0 when all passed, 1 otherwise |
+| `j.test` | Discover the project's test suites, pick which to run (blank runs all), and get a pass/fail summary; exit code 0 when all passed, 1 otherwise. Answering `probe` only checks whether the machine is slow; when it is, `j.test` offers continue anyway, cancel, return to selection, change what counts as slow, or other |
 | `j.smoke-test` | Smoke-test every skill in the catalog (frontmatter, name versus directory, preferred agent, referenced scripts and assets) and get a pass/fail summary with critical findings called out |
 | `j.commit` | Commit finished work with the EST naming convention, after asking whether to run tests first (scoped to the change, the full suite, or skip, with a remembered default) |
 | `j.conventions` | Record the project's conventions (commit format, branching, naming, testing, file layout, docs placement) so every agent follows them — detects what the project already does and offers presets |
 | `j.check-in` | Report which dispatched agents are actually alive, silent, or finished-but-leaking processes |
 | `j.checklist` | Print and manage the pre-flight checklist registry — add, edit, remove, copy or move a standing check without hand-editing JSON; every input is validated, destructive actions confirm first |
+| `j.tidy` | Report, and then reclaim, stale worktrees and branches — classifies each one against four safety conditions (nothing unique vs its target ref, clean tree, no live process inside), reports the disk each group represents, and only ever deletes what is provably safe; everything else needs an explicit decision |
 | `j.status` | Print a full scrum board overview — epics, stories, tasks, rapports, queue depth |
 
 ### `/jenga` — one command, several behaviors
@@ -275,19 +276,18 @@ Enforcement doesn't rest on an agent cooperating: a `PreToolUse` hook (`hooks/on
 
 Before a release goes live, `j.publish` stages it on npm. A staged version can be tested in a real consumer project first. The process below was run against ST-Test, a test environment that borrows the Skolkartan project as its base. Skolkartan is a research tool that aggregates public school data for a set of Swedish municipalities into one comparable dataset with full provenance, built as a Next.js application.
 
-1. **Log in to npm.** `npm whoami` must print your username. If it fails with `E401`, run `npm login --auth-type=web`: it prints a `Login at:` URL. Open it in a browser and complete the login (including 2FA), then run `npm whoami` again to confirm.
-2. **Use npm 11.19 or later.** Older npm versions fail with `Unknown command: "stage"` (11.4.2 and 11.11.0 do; 11.19.0 works). Check with `npm -v`.
-3. **Download the staged tarball** into a temporary directory, not the consumer repo: `npm stage download <stage-id>`. List stage IDs with `npm stage list @jenga-ai/agent`.
-4. **Check the checksum.** The `shasum` from `npm stage view <stage-id>` must match the tarball's `shasum -a 1`.
-5. **Install the tarball** in the consumer: `npm install /path/to/jenga-ai-agent-<version>-<stage-id>.tgz`. This points the dependency at a `file:` path, so restore the registry version after the release.
-6. **Approve and run the postinstall.** npm does not run install scripts that are not approved: `npm approve-scripts @jenga-ai/agent`, then `npm rebuild @jenga-ai/agent`. `.jenga-version` must then match the package version.
-7. **Run the skill smoke test** against the package root, not against `.claude/`, which holds only `skills/` and `agents/`:
+1. **Log in to npm.** `npm whoami` must print your username. If it fails with `E401`, run `npm login`.
+2. **Download the staged tarball** into a temporary directory, not the consumer repo: `npm stage download <stage-id>`. List stage IDs with `npm stage list @jenga-ai/agent`.
+3. **Check the checksum.** The `shasum` from `npm stage view <stage-id>` must match the tarball's `shasum -a 1`.
+4. **Install the tarball** in the consumer: `npm install /path/to/jenga-ai-agent-<version>-<stage-id>.tgz`. This points the dependency at a `file:` path, so restore the registry version after the release.
+5. **Approve and run the postinstall.** npm does not run install scripts that are not approved: `npm approve-scripts @jenga-ai/agent`, then `npm rebuild @jenga-ai/agent`. `.jenga-version` must then match the package version.
+6. **Run the skill smoke test** against the package root, not against `.claude/`, which holds only `skills/` and `agents/`:
    ```sh
    bash node_modules/@jenga-ai/agent/skills/j-smoke-test/scripts/smoke-test-skills.sh --root node_modules/@jenga-ai/agent
    ```
    Exit `0` means no critical finding; exit `1` lists them. The check covers structure (frontmatter, names, referenced scripts and assets), not behaviour.
-8. **Run the package's own tests:** `node node_modules/@jenga-ai/agent/scripts/populate-knowledge-graph.entity-resolution.test.js` and `node node_modules/@jenga-ai/agent/scripts/populate-knowledge-graph.staleness.test.js`.
-9. **Run the consumer's own checks** (for example `npm test`). Suites that read project data fail when that data is absent.
+7. **Run the package's own tests:** `node node_modules/@jenga-ai/agent/scripts/populate-knowledge-graph.entity-resolution.test.js` and `node node_modules/@jenga-ai/agent/scripts/populate-knowledge-graph.staleness.test.js`.
+8. **Run the consumer's own checks** (for example `npm test`). Suites that read project data fail when that data is absent.
 
 ---
 

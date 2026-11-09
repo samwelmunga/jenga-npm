@@ -24,7 +24,7 @@ metadata:
 `/jenga` is interactive by default — it never silently commits to the whole board without showing the user what it's about to run and letting them scope or edit that selection first. It has three entry modes:
 
 - **Bare `/jenga`** (no argument) — renders a numbered picker of the full board, then an editable confirmation tree, before anything executes.
-- **`/jenga <ids>`** (explicit comma-separated scope) — resolves the given IDs via the fuzzy-ID grammar, skipping the picker, then still shows the same editable confirmation tree before executing.
+- **`/jenga <ids>`** (explicit comma-separated scope) — resolves the given IDs via the fuzzy-ID grammar, skipping the picker, then still shows the same editable confirmation tree before executing. Values of three or more digits need explicit letters or separators (`e100s2` or `100 2`); a bare ambiguous digit run such as `10002` is invalid and is rejected with a message asking for letters or separators. The two-digit shorthand (`e01s02`, `0103`) keeps working. Grammar and rationale: `project/documentation/board-ids.md`, section "Fuzzy-ID grammar".
 - **`/jenga *`** (literal wildcard) — the explicit escape hatch. Skips both the picker and the confirmation step entirely and reproduces the original hands-free "commit to everything on the board" pipeline: the entire board is fully decomposed, fully queued, and fully executing — without any user interaction, no user prompts. This is the only path where `/jenga` runs with no user prompts at all.
 
 Once a run's scope is established (by confirmation, or unconditionally under `*`), `/jenga` runs the same underlying phases against that scope: **entry mode resolution → decompose → queue → execute → loop**.
@@ -184,7 +184,7 @@ Skip both the picker and the confirmation step entirely. There is no scoped set 
 This branch is entered when `detect-nl-intent.sh` (invoked above) classifies the argument as `all_resolved` or `mixed` — the picker is skipped entirely in this branch. `detect-nl-intent.sh` has already invoked `resolve-id.sh` internally and reduced its per-segment output to one of these two shapes; `skills/jenga/SKILL.md` never parses `resolve-id.sh`'s raw array itself (see `detect-nl-intent.sh`'s own header comment for the full classification contract, E53_S01_T01).
 
 1. On `all_resolved`, take the `resolved_ids` (or `resolved_ids_csv`) field directly from `detect-nl-intent.sh`'s output and continue to the shared confirmation step below.
-2. On `mixed`, halt this phase (do not proceed to confirmation or Phase 1) and report each entry in `detect-nl-intent.sh`'s `rejected` array — its `input` and `reason` — to the user verbatim; a partial or ambiguous ID is never guessed. The user must re-invoke `/jenga <ids>` with corrected input.
+2. On `mixed`, halt this phase (do not proceed to confirmation or Phase 1) and report each entry in `detect-nl-intent.sh`'s `rejected` array — its `input` and `reason` — to the user verbatim; a partial or ambiguous ID is never guessed. The user must re-invoke `/jenga <ids>` with corrected input. A bare digit run of three or more digits that could be read more than one way (`10002`) lands here too: its `reason` tells the user to use letters or separators, e.g. `e100s02` or `100 2`.
 
 #### Natural-language branch (`/jenga <free-form text>`)
 
@@ -446,6 +446,8 @@ A `mode=hard` record (exit `10`) → collect nothing, dispatch nothing, and prin
 ### Exit condition
 
 There are two distinct exits. Do not confuse them: the first means the board is exhausted, the second means work remains.
+
+**Persist usage (`E76_S02_T05`), before either exit message is printed.** After the final queue drain and the deferral recording below, call `bash "$([ -f scripts/task-usage.sh ] && echo scripts/task-usage.sh || echo node_modules/@jenga-ai/agent/scripts/task-usage.sh)" --persist --task <id> [--task <id>]...` once for the task ids this run dispatched, bundle tasks included. Existence test first: if `scripts/task-usage.sh` exists in neither location (public mirror), or no task was dispatched, do nothing and print nothing. Otherwise print one line per task from the stdout `results[]`, after the exit output and never inside it: `persisted` (`persisted`/`updated`/`unchanged`), `possibly incomplete` (`kept-stored`) or `not measured: <message>` (`not-measured`); any other status or non-zero exit is a warning only. This never changes the exit message, a task status or the break/completion output above it, and does not prompt.
 
 **Break exit (`E44_S02`)** — entered from Phase 4's entry check or step 5's b.1 when a break was requested. It must **not** claim completion. Print:
 

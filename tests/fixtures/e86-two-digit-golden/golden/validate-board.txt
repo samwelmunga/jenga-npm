@@ -1,0 +1,80 @@
+$ validate-board.sh <every board file>
+exit=0
+--- stdout
+✅ project/board/epics/E01_fixture-epic.md: board frontmatter valid (epic)
+✅ project/board/epics/E02_agent-conversation-guardrails.md: board frontmatter valid (epic)
+✅ project/board/epics/E03_parallel-workflow-orchestration.md: board frontmatter valid (epic)
+✅ project/board/epics/E10_fixture-epic.md: board frontmatter valid (epic)
+✅ project/board/epics/E11_fixture-epic.md: board frontmatter valid (epic)
+✅ project/board/epics/E99_fixture-epic.md: board frontmatter valid (epic)
+✅ project/board/stories/E01_S01_fixture-story.md: board frontmatter valid (story)
+✅ project/board/stories/E01_S02_fixture-story.md: board frontmatter valid (story)
+✅ project/board/stories/E01_S03_fixture-story.md: board frontmatter valid (story)
+✅ project/board/stories/E01_S04_fixture-story.md: board frontmatter valid (story)
+✅ project/board/stories/E02_S02_spinoff-skill.md: board frontmatter valid (story)
+✅ project/board/stories/E03_S01_dooo-parallel-execution-orchestrator.md: board frontmatter valid (story)
+✅ project/board/stories/E10_S01_fixture-story.md: board frontmatter valid (story)
+✅ project/board/stories/E10_S10_fixture-story.md: board frontmatter valid (story)
+✅ project/board/stories/E11_S01_fixture-story.md: board frontmatter valid (story)
+✅ project/board/stories/E99_S99_fixture-story.md: board frontmatter valid (story)
+✅ project/board/tasks/E01_S01_T01_fixture-task.md: board frontmatter valid (task)
+✅ project/board/tasks/E01_S01_T02_fixture-task.md: board frontmatter valid (task)
+✅ project/board/tasks/E01_S04_T02_fixture-task.md: board frontmatter valid (task)
+✅ project/board/tasks/E03_S01_T02_scaffold-dooo-skill.md: board frontmatter valid (task)
+✅ project/board/tasks/E03_S01_T04_update-help-skill-listing.md: board frontmatter valid (task)
+✅ project/board/tasks/E10_S01_T01_fixture-task.md: board frontmatter valid (task)
+✅ project/board/tasks/E10_S10_T10_fixture-task.md: board frontmatter valid (task)
+✅ project/board/tasks/E11_S01_T01_fixture-task.md: board frontmatter valid (task)
+✅ project/board/tasks/E99_S99_T99_fixture-task.md: board frontmatter valid (task)
+--- stderr
+validate-board.sh: warning: PyYAML is not installed, so the strict-YAML check is SKIPPED. An unquoted ':' in a scalar and a value merely starting with a quote will NOT be rejected (duplicate keys still are). A pass from this run is weaker than a normal pass. Install it (apt: python3-yaml, pip: PyYAML) to get the full check.
+=== end
+$ validate-board.sh <task file with id: E01x>
+exit=1
+--- stdout
+--- stderr
+validate-board.sh: warning: PyYAML is not installed, so the strict-YAML check is SKIPPED. An unquoted ':' in a scalar and a value merely starting with a quote will NOT be rejected (duplicate keys still are). A pass from this run is weaker than a normal pass. Install it (apt: python3-yaml, pip: PyYAML) to get the full check.
+❌ unrecognised board item id format: E01x
+=== end
+$ validate-board.sh <task file with id: E01_S01x>
+exit=1
+--- stdout
+--- stderr
+validate-board.sh: warning: PyYAML is not installed, so the strict-YAML check is SKIPPED. An unquoted ':' in a scalar and a value merely starting with a quote will NOT be rejected (duplicate keys still are). A pass from this run is weaker than a normal pass. Install it (apt: python3-yaml, pip: PyYAML) to get the full check.
+❌ unrecognised board item id format: E01_S01x
+=== end
+$ validate-board.sh <task file with id: E01_S01_T01_>
+exit=1
+--- stdout
+--- stderr
+validate-board.sh: warning: PyYAML is not installed, so the strict-YAML check is SKIPPED. An unquoted ':' in a scalar and a value merely starting with a quote will NOT be rejected (duplicate keys still are). A pass from this run is weaker than a normal pass. Install it (apt: python3-yaml, pip: PyYAML) to get the full check.
+❌ unrecognised board item id format: E01_S01_T01_
+=== end
+$ validate-board.sh <task file with id: E_01>
+exit=1
+--- stdout
+--- stderr
+validate-board.sh: warning: PyYAML is not installed, so the strict-YAML check is SKIPPED. An unquoted ':' in a scalar and a value merely starting with a quote will NOT be rejected (duplicate keys still are). A pass from this run is weaker than a normal pass. Install it (apt: python3-yaml, pip: PyYAML) to get the full check.
+❌ unrecognised board item id format: E_01
+=== end
+$ validate-board.sh <task file with id: E01_T01>
+exit=1
+--- stdout
+--- stderr
+validate-board.sh: warning: PyYAML is not installed, so the strict-YAML check is SKIPPED. An unquoted ':' in a scalar and a value merely starting with a quote will NOT be rejected (duplicate keys still are). A pass from this run is weaker than a normal pass. Install it (apt: python3-yaml, pip: PyYAML) to get the full check.
+❌ unrecognised board item id format: E01_T01
+=== end
+$ validate-board.sh <task file with id: e01_s01_t01>
+exit=1
+--- stdout
+--- stderr
+validate-board.sh: warning: PyYAML is not installed, so the strict-YAML check is SKIPPED. An unquoted ':' in a scalar and a value merely starting with a quote will NOT be rejected (duplicate keys still are). A pass from this run is weaker than a normal pass. Install it (apt: python3-yaml, pip: PyYAML) to get the full check.
+❌ unrecognised board item id format: e01_s01_t01
+=== end
+$ validate-board.sh <task file with id: E01-S01>
+exit=1
+--- stdout
+--- stderr
+validate-board.sh: warning: PyYAML is not installed, so the strict-YAML check is SKIPPED. An unquoted ':' in a scalar and a value merely starting with a quote will NOT be rejected (duplicate keys still are). A pass from this run is weaker than a normal pass. Install it (apt: python3-yaml, pip: PyYAML) to get the full check.
+❌ unrecognised board item id format: E01-S01
+=== end

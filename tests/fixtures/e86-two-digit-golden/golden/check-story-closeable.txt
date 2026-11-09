@@ -1,0 +1,48 @@
+$ check-story-closeable.sh E01_S01
+exit=0
+--- stdout
+CLOSEABLE
+--- stderr
+=== end
+$ check-story-closeable.sh E01_S02
+exit=1
+--- stdout
+--- stderr
+ERROR: No tasks found in story frontmatter for 'E01_S02' — cannot determine close state
+=== end
+$ check-story-closeable.sh E01_S04
+exit=0
+--- stdout
+CLOSEABLE
+--- stderr
+=== end
+$ check-story-closeable.sh E10_S01
+exit=0
+--- stdout
+CLOSEABLE
+--- stderr
+=== end
+$ check-story-closeable.sh E10_S10
+exit=1
+--- stdout
+--- stderr
+OPEN: 'E10_S10_T10' has status 'Pending'
+=== end
+$ check-story-closeable.sh E11_S01
+exit=1
+--- stdout
+--- stderr
+OPEN: 'E11_S01_T01' has status 'Pending'
+=== end
+$ check-story-closeable.sh E99_S99
+exit=0
+--- stdout
+CLOSEABLE
+--- stderr
+=== end
+$ check-story-closeable.sh E50_S01
+exit=1
+--- stdout
+--- stderr
+ERROR: Story file not found for 'E50_S01' in <ROOT>/project/board/stories
+=== end

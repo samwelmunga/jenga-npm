@@ -112,12 +112,12 @@ json_len() {
 
 # --- rejections ---------------------------------------------------------------------------------
 
-@test "an odd-length digit run is rejected with the malformed digit run reason" {
+@test "an odd-length untagged digit run is rejected with a reason that names the fix" {
   run "$SCRIPT" "010"
   [ "$status" -eq 1 ]
   [ "$(json_field 0 status)" = "rejected" ]
   [ "$(json_field 0 resolved_id)" = "null" ]
-  [ "$(json_field 0 reason)" = "malformed digit run: '010' has odd length 3 (not a multiple of 2)" ]
+  [ "$(json_field 0 reason)" = "digit run '010' cannot be read unambiguously (odd length 3); use letters or separators, e.g. e100s02 or '100 2'" ]
 }
 
 @test "more untagged chunks than open levels is rejected as too many untagged chunks" {

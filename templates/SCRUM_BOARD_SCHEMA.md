@@ -187,7 +187,12 @@ The script is compatible with macOS `bash` 3.2 and is safe under `set -u`. It ne
 | Story | `E##_S##`     | `E##_S##_<slug>.md`               |
 | Task  | `E##_S##_T##` | `E##_S##_T##_<slug>.md`           |
 
-- Numbers are zero-padded to two digits: `E01`, `S03`, `T07`
+- **Width: minimum two digits, no maximum.** `E07`, `E99`, `E100`, `E1001`; a number is never pre-padded beyond its
+  own digits (`E100`, not `E0100`). Stories and tasks follow the same rule (`S03`, `S100`, `T07`, `T100`).
+- Existing two-digit IDs are never renamed, and there is no migration. Parsing accepts any width.
+- **Comparison is numeric, never filename text.** `E99` sorts before `E100`, and `E01` and `E1001` may coexist.
+- Look an item up by its ID with the trailing underscore (`<id>_*.md`), so `E10_*.md` never matches `E100_x.md`.
+- Allocate a new ID with `scripts/next-board-id.sh` (numeric maximum plus one), not by counting or sorting file names.
 - `<slug>` is a short lowercase kebab-case title derived from the item title
 - Example: `E02_S04_T01_add-jwt-middleware.md`
 
@@ -263,6 +268,8 @@ reopened_reason:             # YAML list, one entry per reopen cycle; see Reopen
 docs: []                     # optional list of repo-relative documentation paths, e.g. ["README.md", "docs/API.md"]
 epic_scope_approval: false     # set to true by the human operator only when any task in this epic has execution_scope: epic
 provenance:                  # optional; only valid value is `backfilled` (epic reverse-engineered from pre-existing code by `/uncharted onboard`). Omit for normally-authored epics.
+supersedes:                  # optional; an epic id this epic replaces (for example E57 supersedes E19); absence means it replaces nothing
+superseded_by:               # optional; the epic id that replaced this one (for example E19 is superseded_by E57); absence means it is still current
 external_refs:               # optional; list of links to external systems (Jira, Confluence, Bitbucket); absence means no external links; see External Refs Fields
   - system: jira
     kind: issue
@@ -402,7 +409,7 @@ All five are advisory and non-blocking — they record evidence for later review
 
 ### Usage fields (per-task token accounting)
 
-Eight further task fields record how many tokens the task consumed. Like the runtime-written fields above they are **never authored by hand**: they are written by `/close-story` and by `scripts/task-usage.sh --persist`, and they are task-only (`scripts/validate-board.sh` allow-lists them in a `USAGE_KEYS` group for tasks, not for epics or stories). All token values are non-negative integers written as plain decimal digits, with no separators.
+Eight further task fields record how many tokens the task consumed. Like the runtime-written fields above they are **never authored by hand**: they are written by `/close-story` and by `scripts/task-usage.sh --persist`, and these eight are task-only (`scripts/validate-board.sh` allow-lists them in a `USAGE_KEYS` group for tasks, not for epics or stories). Stories carry their own, separate set, defined under "Usage fields on stories" below. All token values are non-negative integers written as plain decimal digits, with no separators.
 
 | Field | Type | Written by | Meaning |
 |---|---|---|---|
@@ -424,6 +431,34 @@ Rules:
 - **No cost or price field exists.** The fields are token counts only; no pricing table is kept and no dollar figure is derived or stored.
 
 > `task_changed_files` is **not** a frontmatter field despite the similar name. It lives in the bundle manifest at `project/queue/bundle-<E##_S##>.json`, keyed by task ID.
+
+### Usage fields on stories (per-story token accounting)
+
+Thirteen story fields record the tokens a story consumed, as two separate parts and their sum. Like the task fields above they are **runtime-written and never authored by hand**: they are written by `/close-story` and by `scripts/task-usage.sh --persist`. They are **story-only**: `scripts/validate-board.sh` allow-lists them in a `STORY_USAGE_KEYS` group for stories, and **epics do not carry them** (nor do tasks, which have their own `usage_*` set above). Token values are non-negative integers written as plain decimal digits, with no separators.
+
+| Field | Type | Written by | Meaning |
+|---|---|---|---|
+| `usage_tasks_input_tokens` | integer | `/close-story`, `task-usage.sh --persist` | Sum of the story's tasks' `usage_input_tokens` |
+| `usage_tasks_output_tokens` | integer | same | Sum of the story's tasks' `usage_output_tokens` |
+| `usage_tasks_cache_write_tokens` | integer | same | Sum of the story's tasks' `usage_cache_write_tokens` |
+| `usage_tasks_cache_read_tokens` | integer | same | Sum of the story's tasks' `usage_cache_read_tokens` |
+| `usage_tasks_total_tokens` | integer | same | Sum of the four `usage_tasks_*` fields above, i.e. the task part of the story's usage |
+| `usage_overhead_input_tokens` | integer | same | The story's allocated share of Scrum Master and orchestrator overhead, fresh input tokens |
+| `usage_overhead_output_tokens` | integer | same | The same share, output tokens |
+| `usage_overhead_cache_write_tokens` | integer | same | The same share, cache-write tokens |
+| `usage_overhead_cache_read_tokens` | integer | same | The same share, cache-read tokens |
+| `usage_overhead_total_tokens` | integer | same | Sum of the four `usage_overhead_*` fields above, i.e. the overhead part of the story's usage |
+| `usage_total_tokens` | integer | same | `usage_tasks_total_tokens` plus `usage_overhead_total_tokens`, nothing else |
+| `usage_measured_on` | ISO 8601 date, e.g. `2026-10-25` | same | Date of the latest write of these fields |
+| `usage_possibly_incomplete` | the literal `true` only | same | Set on the story when **any of its tasks** carries `usage_possibly_incomplete: true`, so the story's numbers are a **lower bound**. Absent means no known gap; it is never written as `false` |
+
+Rules:
+
+- **Absence means "not measured", not zero.** A story without these fields has not been measured; readers must never display a missing field as `0`. An explicit `0` means a measured zero.
+- **The two parts are separate.** The task part (`usage_tasks_*`) and the allocated overhead part (`usage_overhead_*`) are kept as distinct numbers, so neither is hidden inside the other; `usage_total_tokens` is only their sum.
+- **The allocation rule is not defined here.** How overhead is split across stories is owned by `project/documentation/task-usage.md`; this schema records only the resulting numbers.
+- **Advisory.** The fields record evidence for budgeting and never change a story's status or a task's Passed/Failed outcome.
+- **No cost or price field exists**, as for tasks: token counts only.
 
 ---
 

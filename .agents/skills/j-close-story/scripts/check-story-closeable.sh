@@ -37,6 +37,20 @@ if [[ -z "$PROJECT_ROOT" ]]; then
   echo "ERROR: could not locate project root (git rev-parse --show-toplevel failed from $SCRIPT_DIR)" >&2
   exit 1
 fi
+# Shared board-ID shapes (epic E86). Resolved relative to this script, then the installed package, then the
+# repo root; there is deliberately no fallback regex here, so a missing file is an error rather than a silent
+# return to a two-digit-only guard.
+for _bid_dir in "$SCRIPT_DIR/../../../scripts/lib" "$PROJECT_ROOT/node_modules/@jenga-ai/agent/scripts/lib" "$PROJECT_ROOT/scripts/lib"; do
+  if [[ -f "$_bid_dir/board-ids.sh" ]]; then
+    # shellcheck source=../../../scripts/lib/board-ids.sh
+    . "$_bid_dir/board-ids.sh"
+    break
+  fi
+done
+if [[ -z "$(type -t board_id_kind)" ]]; then
+  echo "ERROR: shared board-ID source scripts/lib/board-ids.sh not found" >&2
+  exit 1
+fi
 STORIES_DIR="$PROJECT_ROOT/project/board/stories"
 TASKS_DIR="$PROJECT_ROOT/project/board/tasks"
 
@@ -50,8 +64,8 @@ fi
 
 STORY_ID="$1"
 
-# Basic sanity check on the story ID format (E##_S##)
-if [[ ! "$STORY_ID" =~ ^E[0-9]{2}_S[0-9]{2}$ ]]; then
+# Basic sanity check on the story ID format (E##_S##, any digit width)
+if [[ ! "$STORY_ID" =~ $BOARD_ID_STORY_RE ]]; then
   echo "ERROR: Invalid story ID format '$STORY_ID'. Expected format: E##_S## (e.g. E17_S06)" >&2
   exit 1
 fi

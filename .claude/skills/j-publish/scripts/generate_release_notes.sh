@@ -306,6 +306,27 @@ _pi_task_is_fully_blocked() {
   return 1
 }
 
+# _load_board_id_sort — sources the shared board-ID helpers (epic E86, E86_S02_T06) for board_id_sort, which orders
+# the "Completed tasks" bullets by numeric task ID (E99 before E100) where plain text order would put E100 before
+# E11. Resolved from this script's own location, in the repo layout and then the installed-package layout, and there
+# is deliberately no fallback ordering: if neither has board-ids.sh this is an error. Loaded lazily, on the first
+# call that has a board to list, so a publish with no project/board/tasks needs nothing.
+_load_board_id_sort() {
+  local cand
+  declare -F board_id_sort >/dev/null 2>&1 && return 0
+  for cand in \
+    "$SCRIPT_DIR/../../../scripts/lib" \
+    "$SCRIPT_DIR/../../../node_modules/@jenga-ai/agent/scripts/lib"; do
+    if [[ -f "$cand/board-ids.sh" ]]; then
+      # shellcheck source=/dev/null
+      . "$cand/board-ids.sh"
+      return 0
+    fi
+  done
+  echo "generate_release_notes.sh: shared board-ids.sh not found (looked in scripts/lib and node_modules/@jenga-ai/agent/scripts/lib relative to $SCRIPT_DIR)" >&2
+  return 1
+}
+
 collect_completed_tasks() {
   local cutoff_date="$1"
   local tasks_dir="$PUBLISH_REPO_ROOT/project/board/tasks"
@@ -313,6 +334,7 @@ collect_completed_tasks() {
   local task_file status completed_date task_id task_title
 
   [[ -d "$tasks_dir" ]] || return 0
+  _load_board_id_sort || return 1
 
   while IFS= read -r -d '' task_file; do
     case "$task_file" in
@@ -342,7 +364,14 @@ collect_completed_tasks() {
   done < <(find "$tasks_dir" -maxdepth 1 -type f -name '*.md' -print0 2>/dev/null)
 
   if (( ${#collected[@]} > 0 )); then
-    printf '%s\n' "${collected[@]}" | LC_ALL=C sort -u
+    # Numeric task-ID order. board_id_sort needs the ID at the start of what it sorts, so each "- <id> — <title>"
+    # bullet is rewritten to "<id>.md <title>" for the sort and restored afterwards; awk then drops the duplicates
+    # that sort -u used to drop (identical bullets are adjacent after the sort).
+    printf '%s\n' "${collected[@]}" \
+      | LC_ALL=C sed 's/^- \([^ ]*\) — /\1.md /' \
+      | board_id_sort \
+      | LC_ALL=C awk '!seen[$0]++' \
+      | LC_ALL=C sed 's/^\([^ ]*\)\.md /- \1 — /'
   fi
 }
 
@@ -582,7 +611,8 @@ if (( STANDALONE )); then
   write_section 'Bug Fixes' BUG_FIXES
   write_section 'Other' OTHER
 
-  COMPLETED_TASKS="$(collect_completed_tasks "$CUTOFF_DATE" || true)"
+  # No `|| true`: a missing shared board-ids.sh must stop the run, not silently drop the section.
+  COMPLETED_TASKS="$(collect_completed_tasks "$CUTOFF_DATE")"
   if [[ -n "$COMPLETED_TASKS" ]]; then
     {
       printf '### Completed tasks\n'
@@ -626,7 +656,8 @@ else
   fi
   _cl_process_subsection 'Other' suffix
 
-  COMPLETED_TASKS="$(collect_completed_tasks "$CUTOFF_DATE" || true)"
+  # No `|| true`: a missing shared board-ids.sh must stop the run, not silently drop the section.
+  COMPLETED_TASKS="$(collect_completed_tasks "$CUTOFF_DATE")"
   CL_NEW_ITEMS=()
   if [[ -n "$COMPLETED_TASKS" ]]; then
     OLD_IFS="$IFS"

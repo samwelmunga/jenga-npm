@@ -67,6 +67,15 @@ it only reads, and a project with no `credential-findings.json` sees "No credent
 payload is in `project/documentation/api-contract.md` (section 6) and the data sources and refresh commands are in
 `project/documentation/security-audits.md` (section 9).
 
+When the board carries token-usage fields, the dashboard also shows a **Budget** tab (E76_S03_T07). It reads the
+`usage_*` frontmatter that `GET /v1/board` already passes through (field names in `templates/SCRUM_BOARD_SCHEMA.md`,
+"Usage fields"), so a `--snapshot` embeds the same data and the tab renders from a `file://` snapshot with no server.
+Per story and per task it shows the four fields (fresh input, output, cache write, cache read) and the total, in
+tokens with thousands separators; a story's task part, allocated overhead part and total are separate rows. An item
+without a measurement says "not measured", never zero, and no price or dollar figure appears. When no task or story
+carries any usage field the tab is not offered and nothing is rendered (no section, no empty placeholder); the live
+dashboard and the snapshot behave the same. The logic is `project/app/ui/src/components/budget/`.
+
 ## Instructions
 
 1. **Parse the invocation.** This skill accepts either:

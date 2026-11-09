@@ -143,7 +143,7 @@ Choose which tests to run:
 Notes:
 - detected tool not listed in test-config.json: npm
 
-Enter selection (comma-separated, or 'all' for all, or blank for 1 through 2):
+Enter selection (comma-separated, or 'all' for all, or 'probe' to only check whether this machine is slow, or blank for 1 through 2):
 ```
 
 Two entries, not one entry per bats file: `npm test` (which runs `bats tests/*.bats`, so it covers the bats suites) and
@@ -244,7 +244,30 @@ The skill's own result is that exit code. After a `1`, `j.test` names the failed
 
 ### The slowness preflight
 
-A run that covers **every** runnable suite of the catalog (a `j.test` answer of blank or all, or the `full` scope test policy — a `scoped` policy can no longer reach the whole catalog at all, see `E72_S08_T02`) starts with `scripts/slowness-probe.sh`. It runs one reference bats file (`tests/workflow-outputs.bats`, about a minute on a healthy machine) and compares its wall time with its CPU time (user + sys). On a healthy machine the two are close; when something outside the tests makes every process start wait (the case recorded in `project/rapports/problems/E77_S06_T11-wall-clock-timings-inflated-by-first-exec-latency.md`: a security agent authorising each `exec`), the file keeps its CPU time and its wall time grows ten times. **Wall above 2.5 times CPU classifies the machine as slow.**
+**In `j.test` the check is a step the user controls, not something the run does on its own.** Answering `probe` at the
+prompt measures the machine and runs no suite. Choosing every suite (blank or `all`) measures first as well. The skill
+passes `--no-probe` to `run-suites.sh`, so the run itself never measures a second time. A healthy result carries on. A
+slow result stops and asks:
+
+```
+This machine is slow right now. What would you like to do?
+1. Continue anyway
+2. Cancel
+3. Return to test selection
+4. Change what counts as slow on this machine
+5. Other (describe below)
+```
+
+(For `probe` alone, option 1 is left out: nothing is waiting to run.) **Change what counts as slow** saves a new
+threshold with `skills/j-test/scripts/slowness-check.sh set-threshold <n|default>` and then judges the probe just made
+against it with `slowness-check.sh reclassify`, without measuring again, so a machine that is simply slower than the
+default 2.5 stops being flagged without another minute of probing. The saved value is one number in
+`project/logs/slowness-threshold`: machine-local, git-ignored, never mirrored. The precedence, for the probe wherever it
+is run, is `--threshold`, then `JENGA_SLOWNESS_THRESHOLD`, then that file, then 2.5. `slowness-check.sh` has four
+subcommands (`probe`, `threshold`, `set-threshold`, `reclassify`; `--help` for the contract).
+
+The rest of this section describes the probe itself, and the unattended preflight that `run-suites.sh` still runs for
+callers that cannot ask anyone (the scope test gate, a direct call). A run that covers **every** runnable suite of the catalog (the `full` scope test policy, or `run-suites.sh` called without `--no-probe` — a `scoped` policy can no longer reach the whole catalog at all, see `E72_S08_T02`) starts with `scripts/slowness-probe.sh`. It runs one reference bats file (`tests/workflow-outputs.bats`, about a minute on a healthy machine) and compares its wall time with its CPU time (user + sys). On a healthy machine the two are close; when something outside the tests makes every process start wait (the case recorded in `project/rapports/problems/E77_S06_T11-wall-clock-timings-inflated-by-first-exec-latency.md`: a security agent authorising each `exec`), the file keeps its CPU time and its wall time grows ten times. **Wall above 2.5 times CPU classifies the machine as slow.**
 
 The probe never changes which suites run or the exit code. It prints its result before the first suite; when the machine is slow it also collects diagnostics, and a note after the summary says that the wall-clock durations of that run are not a measure of the tests.
 
@@ -265,7 +288,7 @@ It is also run on its own: `bash scripts/slowness-probe.sh` (`--help` for the op
 jq -c '{ts, ratio, uptime_days, terminal_start_s, first_exec_ms, security_agent_cpu_max, fsmonitor_daemons}' project/logs/slowness-probe.jsonl
 ```
 
-**Turning it off or tuning it.** `JENGA_SLOWNESS_PROBE=0` skips it (a CI job where wall time is trustworthy and the extra minute is not wanted); `JENGA_SLOWNESS_THRESHOLD=<n>` changes the 2.5; it is also skipped inside a nested suite run (`JENGA_NESTED_SUITE_RUN` set). The probe only reads: it never changes a machine setting, and does not itself fix a slow machine. The suites it covers are `tests/slowness-probe.bats`.
+**Turning it off or tuning it.** `JENGA_SLOWNESS_PROBE=0` skips it (a CI job where wall time is trustworthy and the extra minute is not wanted); `JENGA_SLOWNESS_THRESHOLD=<n>` or the saved machine-local value (above) changes the 2.5; it is also skipped inside a nested suite run (`JENGA_NESTED_SUITE_RUN` set). The probe only reads: it never changes a machine setting, and does not itself fix a slow machine. The suites it covers are `tests/slowness-probe.bats`.
 
 ## Scope mapping
 
@@ -1204,11 +1227,16 @@ configured per scope, and it is independent of the commit-time gate above. By de
 |---|---|---|---|
 | Task | `test_run_task` | `none` | Nothing beyond the tests the tester agent writes and runs for the task |
 | Story | `test_run_story` | `scoped` | The suites mapped from the story's changed files |
-| Epic | `test_run_epic` | `full` | The whole `j.test` catalog |
+| Epic | `test_run_epic` | `none` | Nothing: the gate prints `no suite run (policy none)` and the rollup proceeds. See "Where the full suite runs" |
 
 The scripts are the contract: `skills/j-test/scripts/scope-policy.sh` resolves a key to a mode and
 `skills/j-test/scripts/scope-test-gate.sh` runs what the mode asks for. Both headers carry the full detail; this section
 summarises them, and where they disagree the scripts win.
+
+**No automatic gate runs the full suite.** `E72_S08_T01` moved the epic default from `full` to `none`, and
+`E72_S08_T02` removed the `scoped`-to-`full` escalation (a `scoped` run with nothing mapped now runs the bounded default
+suite set, and one with no commits is a non-pass). `full` is still an accepted value of all three keys, so a project can
+choose it deliberately; nothing selects it on its own. What that means for an epic is under "Where the full suite runs".
 
 ### The three keys and their values
 
@@ -1250,9 +1278,48 @@ board status; the caller applies the rule:
 |---|---|---|---|
 | `0` (satisfied, including policy `none`) | Continue to the judged status | Continue to the story's closing status | Continue the rollup |
 | `1` (a suite failed) | `Failed` plus a problem rapport naming the failed suites | `Failed` plus a rapport, and no `story_rollup` trigger | Stays `In Progress`, no `date_completed`, plus a rapport |
-| `2` or `3` (usage or tooling error) | Reported as an error with a rapport; never a pass | Reported as an error with a rapport; the story's closing status is not written | Reported to the user; no rollup. Never a pass |
+| `2` or `3` (nothing was verified: a usage or tooling error, the `no-commits` non-pass, or a refusal of the bounded default suite set) | Reported as an error with a rapport; never a pass | Reported as an error with a rapport; the story's closing status is not written | Reported to the user; no rollup. Never a pass |
 
 A failing policy run therefore prevents closing the scope. It never passes silently.
+
+Exit 3 does not always mean the gate is broken. Three causes share it, and the tester and the scrum master report each
+as what it is (the gate's message names which): a **tooling failure** (nothing was learned about the project); the
+**`no-commits` non-pass** (no change set could be derived for the id, which usually means the gate ran from the wrong
+checkout); and a **refusal of the bounded default suite set** (`test_default_suite_set` not configured, resolving to no
+runnable test file, resolving to the entire catalog, or invalid), which is a real finding about the project's
+configuration and is reported as that finding. None of the three is a pass, and none writes a closing status.
+
+### Where the full suite runs
+
+After `E72_S08` **no local lifecycle gate runs the full suite**: not a task close, not a story close, not an epic
+rollup. It runs in three places, all chosen by a human or by CI rather than by code:
+
+1. **The public CI `test` job on the `jenga-npm` mirror** (`.github/workflows/mirror-staging-gate.yml`, job `test`,
+   running `npm test`, which is `bats tests/*.bats`) against a checkout of the staging branch. The same workflow's
+   `promote-main` job declares `needs: [test, pack-smoke]`, so the full suite gates **fast-forwarding the public default
+   branch**. It does **not** gate `npm publish`.
+2. **`j.test`**, which a user invokes and which runs the whole runnable catalog by default.
+3. **`j.commit`'s test gate**, option 2 or its zero-mapping fallback prompt, where a human types the choice.
+
+**The epic-rollup trade-off, stated plainly.** With the default `test_run_epic: none`, an epic can roll up with **no test
+run of its own**. That is acceptable because the rollup already requires every story beneath the epic to have passed its
+own `scoped` story gate, so the changed code has been tested at the story boundary, and a full run at the epic boundary was the very
+route the story removed (a gate whose result is decided by the whole catalog's unrelated redness). The cost is real and is
+not hidden: a regression that only shows up in the interaction of several stories' suites is not caught by the epic close. What still catches it:
+
+- The public CI `test` job above, which gates promotion to the public default branch (`promote-main`).
+- A user running `j.test`, or a project that sets `test_run_epic` to `full` (`jenga config set test-config.test_run_epic full`).
+
+What does **not** catch it, so nobody relies on it: `npm-publish.yml` is `workflow_dispatch` only and its publish job
+declares `needs: audit`, the dependency audit, not the test job; `workflow_dispatch` can target any branch, so promotion
+is the normal path onto the public branch but not an enforced one; and its `stage` job declares no `needs:` at all. That
+release-path gap is deliberately left open. A mandatory full-suite gate on the release action was proposed as `E72_S10` and
+rejected on 2026-11-08: the epic's aim is finer-grained control of test runs, with Jenga giving the user the information and
+more frequent offers of a test run at the natural stops, so that nobody is stuck behind a gate. It stays a known limit, not
+a covered case. The authoritative account is
+`project/documentation/full-run-call-site-audit.md` section 2, which this section does not override. Note too that
+`npm test` on the public checkout is top-level only and limited to the suites that survive `.publicignore`: the largest
+automatic run that exists, not a superset of a local `j.test` run.
 
 ### How to change it
 
@@ -1311,12 +1378,12 @@ deliberately unused, because a resolver that could fail would let a scope be clo
 | `0` | Gate satisfied: policy `none`, or every suite that ran passed |
 | `1` | At least one suite failed; the caller must not close the scope. Reserved for test failures, so a caller can tell "tests failed" from "the gate broke" |
 | `2` | Usage error, nothing ran: a missing, unknown or repeated option, a missing or unknown `--scope`, a missing `--id` or one malformed for the scope, both `--range` and `--rev`, a range or revision git rejects, a `--root` that is not a directory |
-| `3` | Nothing was verified, which is never a pass. **Two kinds**, sharing the one code `E72_S06` gave that meaning. **(a) the `scoped` `no-commits` non-pass** (`E72_S08_T02`): no commits were found for the id, so no change set could be derived; nothing is run, the reason is on stdout, and `--json` **does** print its object. **(b) infrastructure error**, stdout empty: `jq` or `git` missing, no git repository for a scoped derivation, a helper script or the root not found, discovery, catalog, mapping, narrowing, the default-set resolver or the run failing for a reason other than a test failing, a `full` catalog with no runnable suite, **every selected suite having been emptied by exclusion**, or the bounded default suite set failing to resolve (not configured, no runnable test file, or the entire catalog) |
+| `3` | Nothing was verified, which is never a pass. **Four kinds**, sharing the one code `E72_S06` gave that meaning. **(a) the `scoped` `no-commits` non-pass** (`E72_S08_T02`): no commits were found for the id, so no change set could be derived; nothing is run, the reason is on stdout, and `--json` **does** print its object. **(b) a refusal of the bounded default suite set** (`E72_S08_T06`), stdout empty: the changed files mapped to no suite and `test_default_suite_set` is not configured (resolver exit 4), resolves to no runnable test file (5), resolves to the entire catalog (6) or is invalid (3). This is a finding about the project's configuration, not a fault in the tooling, and the message names which. **(c) the `scoped` ≠ `full` refusal** (`E72_S08_T03`): the scoped selection is the entire runnable catalog, so nothing is run; the cause and the remedy are on stdout (stderr with `--json`) and `--json` **does** print its object, with `refusal: "scoped-equals-full"`. **(d) infrastructure error**, stdout empty: `jq` or `git` missing, no git repository for a scoped derivation, a helper script or the root not found, discovery, catalog, mapping, narrowing, the default-set resolver or the run failing for a reason other than a test failing, a `full` catalog with no runnable suite, or **every selected suite having been emptied by exclusion** |
 | `130` | Interrupted while the suites ran: `run-suites.sh`'s code, passed through unchanged |
 
 With `--json` the gate prints one compact JSON object on stdout whenever it reached a verdict — exit 0, 1 or 130, and
-also the exit 3 of the `scoped` `no-commits` non-pass, which is a verdict about the scope rather than a broken gate
-(`E72_S08_T02`) — and sends the human text and the suites' own output to stderr. stdout stays empty for exit 2 and for
+also the exit 3 of the `scoped` `no-commits` non-pass and of the `scoped` ≠ `full` refusal, which are verdicts about
+the scope rather than a broken gate (`E72_S08_T02`, `E72_S08_T03`) — and sends the human text and the suites' own output to stderr. stdout stays empty for exit 2 and for
 every *other* exit 3. The object has `scope`, `id`, `mode` (what the policy asked for: `none`, `scoped` or `full`),
 `effective_mode` (what actually ran, and it has **four** values, not three: `"none"`, `"scoped"`, `"default-set"` and
 `"full"`), `fallback_reason` (`null`, `"no-commits"` or `"no-mapped-suites"`), `suites_run`, `passed`, `failed`,
@@ -1332,6 +1399,7 @@ every *other* exit 3. The object has `scope`, `id`, `mode` (what the policy aske
 | `map_exclusion_conflicts` | declared files some rule selected anyway, so they are in the run and are **not** reported as kept out; `[]` normally |
 | `map_exclusions_superseded` | declared files this run **superseded**, meaning it **executed** them. Derived **per file** since `E72_S08_T02`: on the `"no-mapped-suites"` path the declared files are partitioned on whether the bounded default suite set actually runs them. `[]` whenever the floor runs none of them, which is the case in this repository, so the declaration is back in force there; `[]` also under policy `full` and under `"no-commits"`, where no map is consulted at all. See "A declared omission only holds on the `scoped` path" |
 | `exclusion_reason` | the cause, or `null` when nothing was excluded |
+| `refusal` | `null`, or `"scoped-equals-full"` when the gate refused because the scoped selection was the entire runnable catalog (`E72_S08_T03`); `suites_run` is then `0` and `effective_mode` stays `"scoped"` |
 
 Every one of them was **appended** (`map_exclusions_superseded` most recently); the keys before them keep their
 names, order and meaning, so an existing reader is unaffected. `test_files_run` and `test_files_available` are `null` — not `0` — when a run was not narrowed at all
@@ -1438,12 +1506,13 @@ additive trailing `default_set` object — because `narrow-suites.sh --mapped-te
 gate can therefore substitute the resolver for `map-scope.sh` in the existing discovery → narrow → catalog → run
 pipeline with no change to any other script.
 
-`assert-bounded-subset.sh` is the **one** implementation of the strict-subset property, shared with `E72_S08_T03`'s
-`scoped` ≠ `full` invariant rather than written twice. It compares **test files**, which is the only quantity for
-which "smaller than a full run" means anything here: suite-id set equality is true for *every* selection (one suite
+`assert-bounded-subset.sh` is the one implementation of the strict-subset property *for a list of test files* (the
+floor). `E72_S08_T03`'s `scoped` ≠ `full` invariant deliberately does **not** reuse it: that guard measures a *selection*
+against an un-narrowed file universe, which is blind to narrowing and to the level-2 exclusion, so the invariant instead
+compares the test files two *catalogs* will really execute (see "The standing `scoped` ≠ `full` invariant"). The guard compares **test files**, which is the only quantity for
+which "smaller than a full run" means anything for a file list: suite-id set equality is true for *every* selection (one suite
 per directory), and a narrowed command (`bats tests/a.bats`) is never a member of the full catalog's command set
-(`bats tests/*.bats`). `--label` is quoted back in a refusal, so the caller can name the offending setting (`T06`) or
-the responsible scope-map rule (`T03`).
+(`bats tests/*.bats`). `--label` is quoted back in a refusal, so the caller can name the offending setting (`T06`).
 
 A **runnable suite can decline to say which files it runs**: `discover-tests.sh` gives `paths: []` to an `npm`
 suite (a script body is opaque) and to `shellcheck:all` (it checks sources, not test files). Those files are not in
@@ -1481,7 +1550,7 @@ refusal — never a silent pass, and never the full catalog, which is what this 
 A configuration that resolves to the **entire** catalog is `exit 6` and is never executed. This holds for a one-file
 catalog too, where `selected == available` is unavoidable: a "bounded default set" equal to everything is a
 contradiction whatever the catalog's size. The guard reports `available_count` in its JSON so a caller that wants the
-opposite policy can make that call itself (`E72_S08_T03` owns that decision for the `scoped` invariant).
+opposite policy can make that call itself. `E72_S08_T03` decided the same way for the `scoped` invariant: no exemption.
 
 #### What is in the set for this project, and why
 
@@ -1533,6 +1602,90 @@ the `E72_S07` story gate: **23 test files / 853 cases in 12 m 06 s wall** on thi
 measure of the tests). This floor is 6 files / 264 cases by `bats --count`, so roughly a quarter of that selection.
 The measured wall-clock figure for the floor itself is recorded by the tester at verification.
 
+### The standing `scoped` ≠ `full` invariant
+
+`E72_S07` narrowed what a `scoped` selection contains and `E72_S08_T02` removed the escalation to the full catalog. Both
+held only by the *content* of the scope map and of the gate, so a coarse map rule, a re-merged suite definition or a
+regression could quietly restore a `scoped` gate that is a `full` one. `E72_S08_T03` is the machinery that makes it a
+checked property: **a `scoped` run whose selection is the entire runnable catalog is refused. Nothing runs, the gate
+exits 3, and the refusal is never a pass.** It applies to every path that reaches the runner (a mapped selection and the
+bounded default suite set alike) and never to policy `full`.
+
+```
+scope test gate: REFUSED (task E99_S01_T01, policy scoped): the scoped selection is the entire runnable catalog, so nothing was run and nothing was verified (not a pass)
+  a full run would execute 4 test file(s); this run would execute all of them
+  cause: the scope map selected these suite definition(s), which together cover the whole catalog: bats:all
+         - bats:all (paths: alpha/*.bats, beta/*.bats, delta/*.bats, gamma/*.bats)
+         changed files: src/alpha/a.sh
+         scope map: project/scope-map.json; rules whose source matches a changed file:
+           rule 1: src/alpha/*.sh -> alpha/*.bats, beta/*.bats, delta/*.bats, gamma/*.bats
+  remedy: narrow the rule or the suite definition named above so a scoped run selects strictly less, or set test_run_task to full deliberately (...)
+```
+
+#### What "the entire catalog" means: one definition, applied to both sides
+
+Earlier attempts compared a *file universe*, then a *command fingerprint*, and each was blind in a different way (an
+opaque suite contributes no files; narrowing rewrites a command so a fingerprint differs while the files are identical;
+the baseline was the un-narrowed discovery while a full run narrows first). The invariant now has one definition:
+
+- The **units** of a catalog are what its runnable entries execute. A bare `bats` invocation is expanded exactly as the
+  shell expands it, at the project root, and yields one unit per test file (`bats tests/*.bats` and
+  `bats 'tests/a.bats' 'tests/b.bats'` are the same units whenever they name the same files). Every entry that cannot be
+  expanded to files (an npm script whose body is not bats, `shellcheck`, `pytest`) is **one opaque unit**, identified by
+  its command text. An `npm test` / `npm run <key>` entry is first resolved to its `package.json` script body, as
+  `build-catalog.sh` does, so the npm twin of a bats suite is the same files, not a different unit.
+- The **reference** is the catalog a `full` policy would execute, built by `run_full`'s own steps from the one
+  discovery this run already has (`narrow-suites.sh` in full mode, then `build-catalog.sh`). Because it is narrowed the same
+  way, a file the level-2 baseline excludes is excluded from *both* sides and cannot make a bounded run look whole.
+- **What is compared is the test files**, whenever the reference has any. A scope map selects a suite through the test
+  files it covers, so an opaque suite such as `shellcheck:all` is not something a selection can include or leave out.
+  This repository's full catalog is `bats:tests` plus `shellcheck:all`; comparing the opaque suite too would make the
+  invariant vacuous here, and a rule selecting every test file would pass as "smaller" while being the hour-long run
+  this story exists to remove. Refusing is the safe direction. Only a reference with **no** test file at all (a catalog
+  of opaque suites only) is compared on its opaque commands.
+- A `scoped` run is refused iff its compared units **contain every compared unit of the reference**. That is
+  containment, not equality, so a run that exceeds a full run is refused too.
+
+The check runs once, at the one point every run goes through (immediately before `run-suites.sh`), and keys on the
+policy, which is fixed before anything is derived. It does not depend on which path produced the selection, on how a
+command is spelled, or on which suite folded into which. Discovery is not repeated: the reference reuses the single
+discovery.
+
+#### Which exit code, which key
+
+It reuses **exit 3** ("nothing was verified"), as `no-commits` does: no consumer needs to tell the two apart by code,
+and `--json` carries the distinction in a new trailing key, `refusal` (`null`, or `"scoped-equals-full"`), appended
+after `map_exclusions_superseded` as every earlier key was. The object is printed for this exit 3, like `no-commits`,
+because it is a verdict about the scope: `suites_run: 0`, `effective_mode: "scoped"` (it never reads `"full"`),
+`exit_code: 3`, and `fallback_reason` keeps `"no-mapped-suites"` when the refused run was the bounded default suite set.
+
+#### The single-unit catalog
+
+A catalog with exactly one compared unit (one test file, or one opaque command) has `scoped == full` unavoidably. **There is no exemption**: it is refused, with the
+remedy in the message, and a project that really has one thing to run sets `test_run_<scope>: full` deliberately.
+That is the same answer the bounded default suite set gives (`resolve-default-suites.sh` refuses an entire-catalog
+floor whatever the catalog's size), so the two paths agree, and `full` is untouched, so such a project is not bricked.
+
+#### Fails closed, and what it cannot see
+
+If a reference or run entry that looks like a `bats` invocation cannot be expanded safely (it contains command
+substitution, a pipe, a redirect), or the reference has no unit at all, the gate cannot prove the run is smaller than a
+full one. It exits 3 with `cannot prove the scoped run is smaller than a full run` and nothing runs. Expansion is
+only ever done on commands made solely of plain words, globs and single-quoted strings, so nothing is executed to
+decide. Stated limits, not hidden ones:
+
+- A non-`bats` runner is compared by its command text, and only when the catalog has no test file. A scoped run that
+  selects every test file is refused whether or not the opaque suites ran, which over-refuses by design (see above).
+- A recorded refusal on **this** repository needs a rule selecting every `tests/*.bats` file; the shipped
+  `project/configs/test-scope-map.json` has none, which is the point. `shellcheck:all` is never selectable, so no
+  scope-map change can make `scoped` run it, and the invariant is about the test files.
+- The cause line names the rules whose *source* matched a changed file. That is a superset of the rule that decided, not
+  a proof of it, and it is resolved from `commit_scope_map_file` (else `templates/test-scope-map.json`); with
+  `--range`/`--rev` the changed files are not listed and the line says so.
+- `resolve-default-suites.sh` still compares the floor against the un-narrowed file universe (`E72_S08_T06`). A floor that
+  is a strict subset *before* exclusion but the whole catalog *after* it passes that resolver; this check is what refuses
+  it, and the message names `test_default_suite_set`.
+
 ### Interplay with the `j.commit` gate
 
 The two are independent. The commit gate runs at commit time and is steered by `commit_prompt_default`; the scope test
@@ -1549,11 +1702,20 @@ or a helper script (`scope-policy.sh`, `discover-tests.sh`, `build-catalog.sh`, 
 found; a scope map that is missing or invalid (the same causes as "A configured scope map is missing or invalid" below);
 a `full` run whose catalog has no runnable suite (see "No suites found"); or a `scoped` run whose changed files mapped
 to nothing *and* whose bounded default suite set could not be resolved — not configured, resolving to no runnable test
-file, or resolving to the entire catalog (see "The bounded default suite set"). Fix the cause and run the gate again.
+file, or resolving to the entire catalog (see "The bounded default suite set"). That last one is a refusal and a finding
+about `test_default_suite_set`, not a tooling fault: the message names the offending value and the `jenga config set`
+line that fixes it. Fix the cause and run the gate again.
 Exit 2 is different: the invocation itself was wrong, so check `--scope`, `--id` and `--root`.
 
-One exit 3 is **not** a broken gate: the `scoped` `no-commits` non-pass. Its message is on stdout, `--json` prints its
-object, and the fix is below.
+Two exit 3 kinds are **not** a broken gate: the `scoped` `no-commits` non-pass and the `scoped` ≠ `full` refusal. Their
+message is on stdout (stderr with `--json`), `--json` prints their object, and the fix for each is below.
+
+**The gate says `REFUSED ... the scoped selection is the entire runnable catalog`.** `refusal: "scoped-equals-full"`.
+A scoped gate that amounts to a full one is refused (see "The standing `scoped` ≠ `full` invariant"). Read the `cause`
+lines: they name the suite definitions and the scope-map rules (or `test_default_suite_set`) responsible. Narrow that
+rule or definition so the selection is strictly smaller, or, for a project with a single unit to run, set
+`test_run_<scope>` to `full` deliberately. `cannot prove the scoped run is smaller than a full run` is the fail-closed
+form: a `bats` command could not be expanded to files, so simplify it (plain words and globs only).
 
 **A scoped run reports `fallback_reason`.** Since `E72_S08_T02` neither value means the full catalog ran. For
 `no-mapped-suites`, the changed files matched no rule of the scope map, as in "A scoped run maps nothing", and the

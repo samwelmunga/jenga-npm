@@ -37,7 +37,7 @@
 #   2  usage error
 #   3  manifest refused (unparseable, wrong story, bad anchor_sha, not an ancestor)
 #   4  story file or a task file could not be found
-#   5  python3 or scripts/resolve-root.sh unavailable
+#   5  python3, scripts/resolve-root.sh or scripts/lib/board_ids.py unavailable
 ################################################################################
 
 set -o errexit
@@ -63,6 +63,13 @@ for candidate in "$REPO_ROOT/scripts/resolve-root.sh" "$REPO_ROOT/node_modules/@
   [ -f "$candidate" ] && { RESOLVE_ROOT="$candidate"; break; }
 done
 [ -n "$RESOLVE_ROOT" ] || { err "could not locate scripts/resolve-root.sh"; exit 5; }
+
+# The shared numeric board-ID sort key (E86_S02_T01); its directory is handed to the python below.
+BOARD_IDS_LIB=""
+for candidate in "$REPO_ROOT/scripts/lib" "$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/lib"; do
+  [ -f "$candidate/board_ids.py" ] && { BOARD_IDS_LIB="$candidate"; break; }
+done
+[ -n "$BOARD_IDS_LIB" ] || { err "could not locate scripts/lib/board_ids.py"; exit 5; }
 
 resolve_key() {
   local out
@@ -92,14 +99,14 @@ except Exception:
   fi
 fi
 
-python3 - "$STORY_ID" "$STORIES_DIR" "$TASKS_DIR" "$MANIFEST" "$ANCESTOR" <<'PY'
+python3 - "$STORY_ID" "$STORIES_DIR" "$TASKS_DIR" "$MANIFEST" "$ANCESTOR" "$BOARD_IDS_LIB" <<'PY'
 import glob
 import json
 import os
 import re
 import sys
 
-story_id, stories_dir, tasks_dir, manifest_path, ancestor = sys.argv[1:6]
+story_id, stories_dir, tasks_dir, manifest_path, ancestor, ids_lib = sys.argv[1:7]
 SKIP = {"Passed", "Passed with remarks", "Merged"}
 NOTE_ON_RUN = {"Failed", "In Progress", "Blocked"}
 
@@ -107,6 +114,19 @@ NOTE_ON_RUN = {"Failed", "In Progress", "Blocked"}
 def die(code, msg):
     sys.stderr.write("bundle-resume.sh: " + msg + "\n")
     sys.exit(code)
+
+
+# Read-only script: keep the import from leaving a __pycache__ beside the helper.
+sys.dont_write_bytecode = True
+sys.path.insert(0, ids_lib)
+try:
+    from board_ids import board_id_sort_key
+except ImportError:
+    die(5, "could not import board_ids.py from " + ids_lib)
+
+
+def by_board_id(path):
+    return board_id_sort_key(os.path.basename(path))
 
 
 def front(path):
@@ -138,14 +158,14 @@ def front(path):
     return tasks, scalars
 
 
-story_files = sorted(glob.glob(os.path.join(stories_dir, story_id + "_*.md")))
+story_files = sorted(glob.glob(os.path.join(stories_dir, story_id + "_*.md")), key=by_board_id)
 if not story_files:
     die(4, "story file not found for " + story_id)
 story_tasks, _ = front(story_files[0])
 
 statuses = {}
 for tid in story_tasks:
-    files = sorted(glob.glob(os.path.join(tasks_dir, tid + "_*.md")))
+    files = sorted(glob.glob(os.path.join(tasks_dir, tid + "_*.md")), key=by_board_id)
     if not files:
         die(4, "task file not found for " + tid)
     statuses[tid] = front(files[0])[1].get("status", "?")

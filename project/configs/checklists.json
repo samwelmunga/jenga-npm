@@ -169,6 +169,19 @@
       "provenance": {
         "source": "authored"
       }
+    },
+    {
+      "id": "dispatch-cost-and-cadence",
+      "text": "Before dispatching a developer, tester or other long-running subagent, the expected time and token cost was stated to the user and they agreed; the dispatch runs in the background with a time cap of about 30 minutes and a mid-run report at the cap; and no further rework round starts without asking the user again.",
+      "situations": [
+        "pre-task"
+      ],
+      "kind": "judgment",
+      "enforcement": "confirm",
+      "tick_scope": "run",
+      "provenance": {
+        "source": "authored"
+      }
     }
   ]
 }

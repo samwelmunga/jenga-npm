@@ -62,7 +62,7 @@ abs_paths() {
 board_ids_outside_metadata() {
   jq -r '[paths(strings) as $p | {k: ($p | map(tostring) | last), v: getpath($p)}
           | select(.k != "_comment" and .k != "note")
-          | .v | scan("E[0-9]{2}_S[0-9]{2}(_T[0-9]{2})?")] | unique | .[]' "$1"
+          | .v | scan("E[0-9]+_S[0-9]+(_T[0-9]+)?")] | unique | .[]' "$1"
 }
 
 need_publicignore() {

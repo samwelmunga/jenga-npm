@@ -1,0 +1,366 @@
+$ cascade-resolve.sh E01
+exit=0
+--- stdout
+{
+  "items": [
+    {
+      "id": "E01",
+      "type": "epic",
+      "epic_id": "E01",
+      "story_id": null,
+      "title": "Fixture epic E01",
+      "status": "Passed",
+      "summary": "",
+      "file": "project/board/epics/E01_fixture-epic.md"
+    }
+  ],
+  "resolved_ids": [
+    "E01"
+  ],
+  "counts": {
+    "epics": 1,
+    "stories": 0,
+    "tasks": 0
+  },
+  "undecomposed": [],
+  "warnings": []
+}
+--- stderr
+=== end
+$ cascade-resolve.sh E10
+exit=0
+--- stdout
+{
+  "items": [
+    {
+      "id": "E10",
+      "type": "epic",
+      "epic_id": "E10",
+      "story_id": null,
+      "title": "Fixture epic E10",
+      "status": "In Progress",
+      "summary": "",
+      "file": "project/board/epics/E10_fixture-epic.md"
+    },
+    {
+      "id": "E10_S10",
+      "type": "story",
+      "epic_id": "E10",
+      "story_id": "E10_S10",
+      "title": "Fixture story E10_S10",
+      "status": "In Progress",
+      "summary": "Synthetic story under epic E10.",
+      "file": "project/board/stories/E10_S10_fixture-story.md"
+    },
+    {
+      "id": "E10_S10_T10",
+      "type": "task",
+      "epic_id": "E10",
+      "story_id": "E10_S10",
+      "title": "Fixture task E10_S10_T10",
+      "status": "Pending",
+      "summary": "",
+      "file": "project/board/tasks/E10_S10_T10_fixture-task.md"
+    }
+  ],
+  "resolved_ids": [
+    "E10",
+    "E10_S10",
+    "E10_S10_T10"
+  ],
+  "counts": {
+    "epics": 1,
+    "stories": 1,
+    "tasks": 1
+  },
+  "undecomposed": [],
+  "warnings": []
+}
+--- stderr
+=== end
+$ cascade-resolve.sh E99
+exit=0
+--- stdout
+{
+  "items": [
+    {
+      "id": "E99",
+      "type": "epic",
+      "epic_id": "E99",
+      "story_id": null,
+      "title": "Fixture epic E99",
+      "status": "Passed",
+      "summary": "",
+      "file": "project/board/epics/E99_fixture-epic.md"
+    }
+  ],
+  "resolved_ids": [
+    "E99"
+  ],
+  "counts": {
+    "epics": 1,
+    "stories": 0,
+    "tasks": 0
+  },
+  "undecomposed": [],
+  "warnings": []
+}
+--- stderr
+=== end
+$ cascade-resolve.sh E10_S10
+exit=0
+--- stdout
+{
+  "items": [
+    {
+      "id": "E10_S10",
+      "type": "story",
+      "epic_id": "E10",
+      "story_id": "E10_S10",
+      "title": "Fixture story E10_S10",
+      "status": "In Progress",
+      "summary": "Synthetic story under epic E10.",
+      "file": "project/board/stories/E10_S10_fixture-story.md"
+    },
+    {
+      "id": "E10_S10_T10",
+      "type": "task",
+      "epic_id": "E10",
+      "story_id": "E10_S10",
+      "title": "Fixture task E10_S10_T10",
+      "status": "Pending",
+      "summary": "",
+      "file": "project/board/tasks/E10_S10_T10_fixture-task.md"
+    }
+  ],
+  "resolved_ids": [
+    "E10_S10",
+    "E10_S10_T10"
+  ],
+  "counts": {
+    "epics": 0,
+    "stories": 1,
+    "tasks": 1
+  },
+  "undecomposed": [],
+  "warnings": []
+}
+--- stderr
+=== end
+$ cascade-resolve.sh E99_S99
+exit=0
+--- stdout
+{
+  "items": [
+    {
+      "id": "E99_S99",
+      "type": "story",
+      "epic_id": "E99",
+      "story_id": "E99_S99",
+      "title": "Fixture story E99_S99",
+      "status": "Passed",
+      "summary": "Synthetic story under epic E99.",
+      "file": "project/board/stories/E99_S99_fixture-story.md"
+    }
+  ],
+  "resolved_ids": [
+    "E99_S99"
+  ],
+  "counts": {
+    "epics": 0,
+    "stories": 1,
+    "tasks": 0
+  },
+  "undecomposed": [],
+  "warnings": []
+}
+--- stderr
+=== end
+$ cascade-resolve.sh E01_S01_T02
+exit=0
+--- stdout
+{
+  "items": [],
+  "resolved_ids": [],
+  "counts": {
+    "epics": 0,
+    "stories": 0,
+    "tasks": 0
+  },
+  "undecomposed": [],
+  "warnings": [
+    {
+      "input": "E01_S01_T02",
+      "reason": "excluded: terminal status (Passed)"
+    }
+  ]
+}
+--- stderr
+=== end
+$ cascade-resolve.sh E50
+exit=0
+--- stdout
+{
+  "items": [],
+  "resolved_ids": [],
+  "counts": {
+    "epics": 0,
+    "stories": 0,
+    "tasks": 0
+  },
+  "undecomposed": [],
+  "warnings": [
+    {
+      "input": "E50",
+      "reason": "not found on board"
+    }
+  ]
+}
+--- stderr
+=== end
+$ cascade-resolve.sh E01,E10,E11,E99
+exit=0
+--- stdout
+{
+  "items": [
+    {
+      "id": "E01",
+      "type": "epic",
+      "epic_id": "E01",
+      "story_id": null,
+      "title": "Fixture epic E01",
+      "status": "Passed",
+      "summary": "",
+      "file": "project/board/epics/E01_fixture-epic.md"
+    },
+    {
+      "id": "E10",
+      "type": "epic",
+      "epic_id": "E10",
+      "story_id": null,
+      "title": "Fixture epic E10",
+      "status": "In Progress",
+      "summary": "",
+      "file": "project/board/epics/E10_fixture-epic.md"
+    },
+    {
+      "id": "E10_S10",
+      "type": "story",
+      "epic_id": "E10",
+      "story_id": "E10_S10",
+      "title": "Fixture story E10_S10",
+      "status": "In Progress",
+      "summary": "Synthetic story under epic E10.",
+      "file": "project/board/stories/E10_S10_fixture-story.md"
+    },
+    {
+      "id": "E10_S10_T10",
+      "type": "task",
+      "epic_id": "E10",
+      "story_id": "E10_S10",
+      "title": "Fixture task E10_S10_T10",
+      "status": "Pending",
+      "summary": "",
+      "file": "project/board/tasks/E10_S10_T10_fixture-task.md"
+    },
+    {
+      "id": "E11",
+      "type": "epic",
+      "epic_id": "E11",
+      "story_id": null,
+      "title": "Fixture epic E11",
+      "status": "Pending",
+      "summary": "",
+      "file": "project/board/epics/E11_fixture-epic.md"
+    },
+    {
+      "id": "E11_S01",
+      "type": "story",
+      "epic_id": "E11",
+      "story_id": "E11_S01",
+      "title": "Fixture story E11_S01",
+      "status": "Pending",
+      "summary": "Synthetic story under epic E11.",
+      "file": "project/board/stories/E11_S01_fixture-story.md"
+    },
+    {
+      "id": "E11_S01_T01",
+      "type": "task",
+      "epic_id": "E11",
+      "story_id": "E11_S01",
+      "title": "Fixture task E11_S01_T01",
+      "status": "Pending",
+      "summary": "",
+      "file": "project/board/tasks/E11_S01_T01_fixture-task.md"
+    },
+    {
+      "id": "E99",
+      "type": "epic",
+      "epic_id": "E99",
+      "story_id": null,
+      "title": "Fixture epic E99",
+      "status": "Passed",
+      "summary": "",
+      "file": "project/board/epics/E99_fixture-epic.md"
+    }
+  ],
+  "resolved_ids": [
+    "E01",
+    "E10",
+    "E10_S10",
+    "E10_S10_T10",
+    "E11",
+    "E11_S01",
+    "E11_S01_T01",
+    "E99"
+  ],
+  "counts": {
+    "epics": 4,
+    "stories": 2,
+    "tasks": 2
+  },
+  "undecomposed": [],
+  "warnings": []
+}
+--- stderr
+=== end
+$ cascade-resolve.sh E99,E01
+exit=0
+--- stdout
+{
+  "items": [
+    {
+      "id": "E99",
+      "type": "epic",
+      "epic_id": "E99",
+      "story_id": null,
+      "title": "Fixture epic E99",
+      "status": "Passed",
+      "summary": "",
+      "file": "project/board/epics/E99_fixture-epic.md"
+    },
+    {
+      "id": "E01",
+      "type": "epic",
+      "epic_id": "E01",
+      "story_id": null,
+      "title": "Fixture epic E01",
+      "status": "Passed",
+      "summary": "",
+      "file": "project/board/epics/E01_fixture-epic.md"
+    }
+  ],
+  "resolved_ids": [
+    "E99",
+    "E01"
+  ],
+  "counts": {
+    "epics": 2,
+    "stories": 0,
+    "tasks": 0
+  },
+  "undecomposed": [],
+  "warnings": []
+}
+--- stderr
+=== end

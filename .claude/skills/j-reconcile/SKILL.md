@@ -181,8 +181,17 @@ Section 0):
    - A non-zero exit means the lookup itself could not run; treat it like `unavailable`.
 2. **Check documentation artefacts** — look for a plan or summary file under `project/documentation/plans/` or `project/documentation/summaries/` whose name contains the task ID.
 3. **Read the task's acceptance criteria** and spot-check the codebase for the key deliverables described (e.g. if the task says "create `scripts/foo.sh`", verify the file exists).
+4. **Ask which branch holds the commit** — run
+   `bash "$([ -f skills/j-reconcile/scripts/gather-perceived-branch-evidence.sh ] && echo skills/j-reconcile/scripts/gather-perceived-branch-evidence.sh || echo node_modules/@jenga-ai/agent/skills/j-reconcile/scripts/gather-perceived-branch-evidence.sh)" <task_id>`
+   (see "Perceived-branch evidence" below for how to read its record).
 
 If implementation **is confirmed** — no action needed; the status is correct.
+
+If the record says `evidence_branch=perceived`, implementation **is confirmed** on the session's perceived branch
+only. Do **not** demote the task and do **not** merge anything: report it as
+"implemented on `<perceived branch>`, not yet on `<real branch>`" and move on.
+
+For every task checked, state which branch supplied the evidence (`real`, `perceived`, `both` or `none`).
 
 If implementation **cannot be confirmed**:
 1. List git worktrees (`git worktree list`) and branches (`git branch --all`) that appear to match the task ID or its slug (the branch naming convention is `<E##_S##_T##-short-slug>`).
@@ -205,6 +214,17 @@ If implementation **cannot be confirmed**:
      so reconcile does not overturn it. Report it under "LADDER STATUS — UNVERIFIED, LEFT UNCHANGED" (see
      `assets/report_format.md`) so a human can look.
 
+#### Perceived-branch evidence
+
+The script prints one `key=value` line:
+`task_id= real_branch= perceived_branch= perceived_stale=<yes|no> evidence_on_real= evidence_on_perceived= evidence_branch=<real|perceived|both|none>`.
+Read `evidence_branch` for which branch supplied the commit, and `perceived_stale` for a recorded perceived
+branch that no longer exists (then `perceived_branch` still names it, but it was not searched; treat it as not
+set). Remember `perceived_stale=yes` for Phase 7. A non-zero exit means "no perceived-branch information":
+continue exactly as before, without error. The script only reads this session's perceived branch; a state file
+belonging to another session is never read. With no perceived branch set it contributes no extra lines and
+output and exit status are exactly unchanged.
+
 ### 3. Verify "incomplete" tasks — are they secretly implemented?
 For every task recorded in Phase 1 (i.e. every task on the board when unscoped, or only the
 in-scope tasks when scoped) whose status is **not** completed-or-beyond — i.e. an `incomplete` or `unknown`
@@ -216,8 +236,14 @@ stamped or changed.
    (`bash skills/j-reconcile/scripts/commit-evidence.sh <task_id>`, which resolves through
    `scripts/commits-for-item.sh`). Only `status: found` counts as a matching commit; `status: none` and
    `status: unavailable` both mean "not confirmed by git history" and, as before, are not grounds to promote.
+   Use the same per-branch evidence source as phase 2 (`gather-perceived-branch-evidence.sh <task_id>`): a
+   task whose record says `evidence_branch=perceived` or `both` is implemented, even though the real branch
+   has no commit for it.
 2. **Check documentation artefacts** as in phase 2.
 3. **Spot-check acceptance criteria** against the codebase.
+
+When such a task is promoted, name the supplying branch in the report (see Phase 7). If the evidence is
+`perceived` only, the promotion still writes only the board status; it does not merge that branch.
 
 Before treating a matching commit as grounds to promote, run two more checks. These exist because
 a commit referencing a task ID is evidence the code was *touched*, not evidence it is *finished* —
@@ -475,5 +501,16 @@ Omit `UNLINKED CODE` when `summary.uncharted_paths` is 0, omit its `Covered:` li
 `summary.covered_paths` is 0, and omit `NOT CHECKED` when
 `not_checked[]` is empty. Keep the two separate: merging them would report paths as unlinked
 that were never actually checked.
+
+When a perceived branch is set, add one evidence line per task checked in Phase 2 or 3 that is reported (one per
+affected task), placed under that task's entry:
+
+```
+   🌿 E##_S##_T## · evidence from <real|perceived|both|none> — implemented on `<perceived branch>`, not yet on `<real branch>`
+```
+
+The trailing "implemented on ... not yet on ..." clause appears only for `evidence_branch=perceived`. If any record
+had `perceived_stale=yes`, print exactly one notice for the whole run (never per task, never as an error):
+``perceived branch `<name>` no longer exists; ignored``. With no perceived branch set, print none of these lines.
 
 If no changes were made, print: `Board and todo.md are in sync — nothing to reconcile. ✅`

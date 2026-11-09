@@ -1,0 +1,1030 @@
+$ board_index.py graph::nodes
+exit=0
+--- stdout
+[
+  {
+    "id": "E01",
+    "type": "Epic",
+    "title": "Fixture epic E01",
+    "status": "Passed",
+    "path": "project/board/epics/E01_fixture-epic.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": "2026-01-02",
+    "date_completed": "2026-01-03",
+    "stories": [
+      "E01_S01"
+    ]
+  },
+  {
+    "id": "E02",
+    "type": "Epic",
+    "title": "Agent Conversation Guardrails",
+    "status": "Done",
+    "path": "project/board/epics/E02_agent-conversation-guardrails.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-04-29",
+    "date_started": null,
+    "date_completed": "2026-05-10",
+    "stories": [
+      "E02_S01",
+      "E02_S02"
+    ]
+  },
+  {
+    "id": "E03",
+    "type": "Epic",
+    "title": "Parallel Workflow Orchestration",
+    "status": "Passed with remarks",
+    "path": "project/board/epics/E03_parallel-workflow-orchestration.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-04-29",
+    "date_started": "2026-04-29",
+    "date_completed": "2026-10-15",
+    "stories": [
+      "E03_S01",
+      "E03_S02",
+      "E03_S03"
+    ]
+  },
+  {
+    "id": "E10",
+    "type": "Epic",
+    "title": "Fixture epic E10",
+    "status": "In Progress",
+    "path": "project/board/epics/E10_fixture-epic.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": "2026-01-02",
+    "date_completed": null,
+    "stories": [
+      "E10_S01",
+      "E10_S10"
+    ]
+  },
+  {
+    "id": "E11",
+    "type": "Epic",
+    "title": "Fixture epic E11",
+    "status": "Pending",
+    "path": "project/board/epics/E11_fixture-epic.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": null,
+    "date_completed": null,
+    "stories": [
+      "E11_S01"
+    ]
+  },
+  {
+    "id": "E99",
+    "type": "Epic",
+    "title": "Fixture epic E99",
+    "status": "Passed",
+    "path": "project/board/epics/E99_fixture-epic.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": "2026-01-02",
+    "date_completed": "2026-01-03",
+    "stories": [
+      "E99_S99"
+    ]
+  },
+  {
+    "id": "E01_S01_T01-plan",
+    "type": "Plan",
+    "title": "Execution Plan: Fixture task E01_S01_T01",
+    "status": null,
+    "path": "project/documentation/plans/E01_S01_T01-plan.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "story_id": "E01_S01",
+    "task_id": "E01_S01_T01"
+  },
+  {
+    "id": "E01_S01_T02-plan",
+    "type": "Plan",
+    "title": "Execution Plan: Fixture task E01_S01_T02",
+    "status": null,
+    "path": "project/documentation/plans/E01_S01_T02-plan.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "story_id": "E01_S01",
+    "task_id": "E01_S01_T02"
+  },
+  {
+    "id": "E10_S01_T01-plan",
+    "type": "Plan",
+    "title": "Execution Plan: Fixture task E10_S01_T01",
+    "status": null,
+    "path": "project/documentation/plans/E10_S01_T01-plan.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "story_id": "E10_S01",
+    "task_id": "E10_S01_T01"
+  },
+  {
+    "id": "E10_S10_T10-plan",
+    "type": "Plan",
+    "title": "Execution Plan: Fixture task E10_S10_T10",
+    "status": null,
+    "path": "project/documentation/plans/E10_S10_T10-plan.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "story_id": "E10_S10",
+    "task_id": "E10_S10_T10"
+  },
+  {
+    "id": "E11_S01_T01-plan",
+    "type": "Plan",
+    "title": "Execution Plan: Fixture task E11_S01_T01",
+    "status": null,
+    "path": "project/documentation/plans/E11_S01_T01-plan.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "story_id": "E11_S01",
+    "task_id": "E11_S01_T01"
+  },
+  {
+    "id": "E99_S99_T99-plan",
+    "type": "Plan",
+    "title": "Execution Plan: Fixture task E99_S99_T99",
+    "status": null,
+    "path": "project/documentation/plans/E99_S99_T99-plan.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "story_id": "E99_S99",
+    "task_id": "E99_S99_T99"
+  },
+  {
+    "id": "E01_S01",
+    "type": "Story",
+    "title": "Fixture story E01_S01",
+    "status": "Passed",
+    "path": "project/board/stories/E01_S01_fixture-story.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": "2026-01-02",
+    "date_completed": "2026-01-03",
+    "epic_id": "E01",
+    "tasks": [
+      "E01_S01_T01",
+      "E01_S01_T02"
+    ]
+  },
+  {
+    "id": "E01_S02",
+    "type": "Story",
+    "title": "Fixture story E01_S02",
+    "status": "Passed",
+    "path": "project/board/stories/E01_S02_fixture-story.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": "2026-01-02",
+    "date_completed": "2026-01-03",
+    "epic_id": "E01",
+    "tasks": []
+  },
+  {
+    "id": "E01_S03",
+    "type": "Story",
+    "title": "Fixture story E01_S03",
+    "status": "Passed",
+    "path": "project/board/stories/E01_S03_fixture-story.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": "2026-01-02",
+    "date_completed": "2026-01-03",
+    "epic_id": "E01",
+    "tasks": []
+  },
+  {
+    "id": "E01_S04",
+    "type": "Story",
+    "title": "Fixture story E01_S04",
+    "status": "Passed",
+    "path": "project/board/stories/E01_S04_fixture-story.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": "2026-01-02",
+    "date_completed": "2026-01-03",
+    "epic_id": "E01",
+    "tasks": [
+      "E01_S04_T02"
+    ]
+  },
+  {
+    "id": "E02_S02",
+    "type": "Story",
+    "title": "/spinoff Skill",
+    "status": "Merged",
+    "path": "project/board/stories/E02_S02_spinoff-skill.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-04-29",
+    "date_started": "2026-04-29",
+    "date_completed": "2026-04-29",
+    "epic_id": "E02",
+    "tasks": []
+  },
+  {
+    "id": "E03_S01",
+    "type": "Story",
+    "title": "/dooo Skill \u2014 Parallel Execution Orchestrator",
+    "status": "Passed with remarks",
+    "path": "project/board/stories/E03_S01_dooo-parallel-execution-orchestrator.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-04-29",
+    "date_started": "2026-04-29",
+    "date_completed": "2026-10-15",
+    "epic_id": "E03",
+    "tasks": []
+  },
+  {
+    "id": "E10_S01",
+    "type": "Story",
+    "title": "Fixture story E10_S01",
+    "status": "Passed",
+    "path": "project/board/stories/E10_S01_fixture-story.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": "2026-01-02",
+    "date_completed": "2026-01-03",
+    "epic_id": "E10",
+    "tasks": [
+      "E10_S01_T01"
+    ]
+  },
+  {
+    "id": "E10_S10",
+    "type": "Story",
+    "title": "Fixture story E10_S10",
+    "status": "In Progress",
+    "path": "project/board/stories/E10_S10_fixture-story.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": "2026-01-02",
+    "date_completed": null,
+    "epic_id": "E10",
+    "tasks": [
+      "E10_S10_T10"
+    ]
+  },
+  {
+    "id": "E11_S01",
+    "type": "Story",
+    "title": "Fixture story E11_S01",
+    "status": "Pending",
+    "path": "project/board/stories/E11_S01_fixture-story.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": null,
+    "date_completed": null,
+    "epic_id": "E11",
+    "tasks": [
+      "E11_S01_T01"
+    ]
+  },
+  {
+    "id": "E99_S99",
+    "type": "Story",
+    "title": "Fixture story E99_S99",
+    "status": "Passed",
+    "path": "project/board/stories/E99_S99_fixture-story.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": "2026-01-02",
+    "date_completed": "2026-01-03",
+    "epic_id": "E99",
+    "tasks": [
+      "E99_S99_T99"
+    ]
+  },
+  {
+    "id": "E01_S01-summary",
+    "type": "Summary",
+    "title": "Execution Summary: Fixture story E01_S01",
+    "status": null,
+    "path": "project/documentation/summaries/E01_S01-summary.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "story_id": "E01_S01",
+    "task_id": null
+  },
+  {
+    "id": "E01_S01_T01-summary",
+    "type": "Summary",
+    "title": "Execution Summary: Fixture task E01_S01_T01",
+    "status": null,
+    "path": "project/documentation/summaries/E01_S01_T01-summary.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "story_id": "E01_S01",
+    "task_id": "E01_S01_T01"
+  },
+  {
+    "id": "E01_S01_T02-summary",
+    "type": "Summary",
+    "title": "Execution Summary: Fixture task E01_S01_T02",
+    "status": null,
+    "path": "project/documentation/summaries/E01_S01_T02-summary.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "story_id": "E01_S01",
+    "task_id": "E01_S01_T02"
+  },
+  {
+    "id": "E10_S01-summary",
+    "type": "Summary",
+    "title": "Execution Summary: Fixture story E10_S01",
+    "status": null,
+    "path": "project/documentation/summaries/E10_S01-summary.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "story_id": "E10_S01",
+    "task_id": null
+  },
+  {
+    "id": "E10_S01_T01-summary",
+    "type": "Summary",
+    "title": "Execution Summary: Fixture task E10_S01_T01",
+    "status": null,
+    "path": "project/documentation/summaries/E10_S01_T01-summary.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "story_id": "E10_S01",
+    "task_id": "E10_S01_T01"
+  },
+  {
+    "id": "E10_S10-summary",
+    "type": "Summary",
+    "title": "Execution Summary: Fixture story E10_S10",
+    "status": null,
+    "path": "project/documentation/summaries/E10_S10-summary.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "story_id": "E10_S10",
+    "task_id": null
+  },
+  {
+    "id": "E10_S10_T10-summary",
+    "type": "Summary",
+    "title": "Execution Summary: Fixture task E10_S10_T10",
+    "status": null,
+    "path": "project/documentation/summaries/E10_S10_T10-summary.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "story_id": "E10_S10",
+    "task_id": "E10_S10_T10"
+  },
+  {
+    "id": "E11_S01-summary",
+    "type": "Summary",
+    "title": "Execution Summary: Fixture story E11_S01",
+    "status": null,
+    "path": "project/documentation/summaries/E11_S01-summary.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "story_id": "E11_S01",
+    "task_id": null
+  },
+  {
+    "id": "E11_S01_T01-summary",
+    "type": "Summary",
+    "title": "Execution Summary: Fixture task E11_S01_T01",
+    "status": null,
+    "path": "project/documentation/summaries/E11_S01_T01-summary.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "story_id": "E11_S01",
+    "task_id": "E11_S01_T01"
+  },
+  {
+    "id": "E99_S99-summary",
+    "type": "Summary",
+    "title": "Execution Summary: Fixture story E99_S99",
+    "status": null,
+    "path": "project/documentation/summaries/E99_S99-summary.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "story_id": "E99_S99",
+    "task_id": null
+  },
+  {
+    "id": "E99_S99_T99-summary",
+    "type": "Summary",
+    "title": "Execution Summary: Fixture task E99_S99_T99",
+    "status": null,
+    "path": "project/documentation/summaries/E99_S99_T99-summary.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "story_id": "E99_S99",
+    "task_id": "E99_S99_T99"
+  },
+  {
+    "id": "E01_S01_T01",
+    "type": "Task",
+    "title": "Fixture task E01_S01_T01",
+    "status": "Passed",
+    "path": "project/board/tasks/E01_S01_T01_fixture-task.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": "2026-01-02",
+    "date_completed": "2026-01-03",
+    "epic_id": "E01",
+    "story_id": "E01_S01"
+  },
+  {
+    "id": "E01_S01_T02",
+    "type": "Task",
+    "title": "Fixture task E01_S01_T02",
+    "status": "Passed",
+    "path": "project/board/tasks/E01_S01_T02_fixture-task.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [
+      "E01_S01_T01"
+    ],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": "2026-01-02",
+    "date_completed": "2026-01-03",
+    "epic_id": "E01",
+    "story_id": "E01_S01"
+  },
+  {
+    "id": "E01_S04_T02",
+    "type": "Task",
+    "title": "Fixture task E01_S04_T02",
+    "status": "Passed",
+    "path": "project/board/tasks/E01_S04_T02_fixture-task.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [
+      "E01_S04_T01"
+    ],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": "2026-01-02",
+    "date_completed": "2026-01-03",
+    "epic_id": "E01",
+    "story_id": "E01_S04"
+  },
+  {
+    "id": "E03_S01_T02",
+    "type": "Task",
+    "title": "Scaffold skills/dooo/ directory with SKILL.md",
+    "status": "Passed",
+    "path": "project/board/tasks/E03_S01_T02_scaffold-dooo-skill.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-05-08",
+    "date_started": "2026-05-08",
+    "date_completed": "2026-05-08",
+    "epic_id": "E03",
+    "story_id": "E03_S01"
+  },
+  {
+    "id": "E03_S01_T04",
+    "type": "Task",
+    "title": "Update skills/help listing to include /dooo",
+    "status": "Rejected",
+    "path": "project/board/tasks/E03_S01_T04_update-help-skill-listing.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-05-08",
+    "date_started": null,
+    "date_completed": "2026-10-15",
+    "epic_id": "E03",
+    "story_id": "E03_S01"
+  },
+  {
+    "id": "E10_S01_T01",
+    "type": "Task",
+    "title": "Fixture task E10_S01_T01",
+    "status": "Passed",
+    "path": "project/board/tasks/E10_S01_T01_fixture-task.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": "2026-01-02",
+    "date_completed": "2026-01-03",
+    "epic_id": "E10",
+    "story_id": "E10_S01"
+  },
+  {
+    "id": "E10_S10_T10",
+    "type": "Task",
+    "title": "Fixture task E10_S10_T10",
+    "status": "Pending",
+    "path": "project/board/tasks/E10_S10_T10_fixture-task.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": null,
+    "date_completed": null,
+    "epic_id": "E10",
+    "story_id": "E10_S10"
+  },
+  {
+    "id": "E11_S01_T01",
+    "type": "Task",
+    "title": "Fixture task E11_S01_T01",
+    "status": "Pending",
+    "path": "project/board/tasks/E11_S01_T01_fixture-task.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": null,
+    "date_completed": null,
+    "epic_id": "E11",
+    "story_id": "E11_S01"
+  },
+  {
+    "id": "E99_S99_T99",
+    "type": "Task",
+    "title": "Fixture task E99_S99_T99",
+    "status": "Passed",
+    "path": "project/board/tasks/E99_S99_T99_fixture-task.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": "2026-01-02",
+    "date_completed": "2026-01-03",
+    "epic_id": "E99",
+    "story_id": "E99_S99"
+  },
+  {
+    "id": "670e2994dcf854097d6894db71d430d70bf3442b90d02eae8aa135726235236b",
+    "type": "TodoEntry",
+    "title": "# Todo",
+    "status": null,
+    "path": "project/todo.md",
+    "text": "# Todo",
+    "board_ref": null
+  },
+  {
+    "id": "E01_S01",
+    "type": "TodoEntry",
+    "title": "Fixture mission for E01_S01: E01_S01",
+    "status": null,
+    "path": "project/todo.md",
+    "text": "Fixture mission for E01_S01: E01_S01",
+    "board_ref": "E01_S01"
+  },
+  {
+    "id": "E10_S10_T10",
+    "type": "TodoEntry",
+    "title": "Fixture mission for E10_S10_T10: E10_S10_T10",
+    "status": null,
+    "path": "project/todo.md",
+    "text": "Fixture mission for E10_S10_T10: E10_S10_T10",
+    "board_ref": "E10_S10_T10"
+  },
+  {
+    "id": "E11_S01_T01",
+    "type": "TodoEntry",
+    "title": "Fixture mission for E11_S01_T01: E11_S01_T01",
+    "status": null,
+    "path": "project/todo.md",
+    "text": "Fixture mission for E11_S01_T01: E11_S01_T01",
+    "board_ref": "E11_S01_T01"
+  },
+  {
+    "id": "E99_S99_T99",
+    "type": "TodoEntry",
+    "title": "Fixture mission for E99_S99_T99: E99_S99_T99",
+    "status": null,
+    "path": "project/todo.md",
+    "text": "Fixture mission for E99_S99_T99: E99_S99_T99",
+    "board_ref": "E99_S99_T99"
+  }
+]
+--- stderr
+=== end
+$ board_index.py graph::edges
+exit=0
+--- stdout
+[
+  {
+    "from": "E01_S01_T01",
+    "to": "E01_S01_T02",
+    "type": "blocks"
+  },
+  {
+    "from": "E01_S04_T01",
+    "to": "E01_S04_T02",
+    "type": "blocks"
+  },
+  {
+    "from": "E01",
+    "to": "E01_S01",
+    "type": "contains"
+  },
+  {
+    "from": "E01_S01",
+    "to": "E01_S01_T01",
+    "type": "contains"
+  },
+  {
+    "from": "E01_S01",
+    "to": "E01_S01_T02",
+    "type": "contains"
+  },
+  {
+    "from": "E01_S04",
+    "to": "E01_S04_T02",
+    "type": "contains"
+  },
+  {
+    "from": "E02",
+    "to": "E02_S01",
+    "type": "contains"
+  },
+  {
+    "from": "E02",
+    "to": "E02_S02",
+    "type": "contains"
+  },
+  {
+    "from": "E03",
+    "to": "E03_S01",
+    "type": "contains"
+  },
+  {
+    "from": "E03",
+    "to": "E03_S02",
+    "type": "contains"
+  },
+  {
+    "from": "E03",
+    "to": "E03_S03",
+    "type": "contains"
+  },
+  {
+    "from": "E10",
+    "to": "E10_S01",
+    "type": "contains"
+  },
+  {
+    "from": "E10",
+    "to": "E10_S10",
+    "type": "contains"
+  },
+  {
+    "from": "E10_S01",
+    "to": "E10_S01_T01",
+    "type": "contains"
+  },
+  {
+    "from": "E10_S10",
+    "to": "E10_S10_T10",
+    "type": "contains"
+  },
+  {
+    "from": "E11",
+    "to": "E11_S01",
+    "type": "contains"
+  },
+  {
+    "from": "E11_S01",
+    "to": "E11_S01_T01",
+    "type": "contains"
+  },
+  {
+    "from": "E99",
+    "to": "E99_S99",
+    "type": "contains"
+  },
+  {
+    "from": "E99_S99",
+    "to": "E99_S99_T99",
+    "type": "contains"
+  },
+  {
+    "from": "E01_S01_T02",
+    "to": "E01_S01_T01",
+    "type": "depends_on"
+  },
+  {
+    "from": "E01_S04_T02",
+    "to": "E01_S04_T01",
+    "type": "depends_on"
+  },
+  {
+    "from": "E01_S01_T01-plan",
+    "to": "E01_S01_T01",
+    "type": "plans"
+  },
+  {
+    "from": "E01_S01_T02-plan",
+    "to": "E01_S01_T02",
+    "type": "plans"
+  },
+  {
+    "from": "E10_S01_T01-plan",
+    "to": "E10_S01_T01",
+    "type": "plans"
+  },
+  {
+    "from": "E10_S10_T10-plan",
+    "to": "E10_S10_T10",
+    "type": "plans"
+  },
+  {
+    "from": "E11_S01_T01-plan",
+    "to": "E11_S01_T01",
+    "type": "plans"
+  },
+  {
+    "from": "E99_S99_T99-plan",
+    "to": "E99_S99_T99",
+    "type": "plans"
+  },
+  {
+    "from": "E01_S01",
+    "to": "E01_S01",
+    "type": "queued_as"
+  },
+  {
+    "from": "E10_S10_T10",
+    "to": "E10_S10_T10",
+    "type": "queued_as"
+  },
+  {
+    "from": "E11_S01_T01",
+    "to": "E11_S01_T01",
+    "type": "queued_as"
+  },
+  {
+    "from": "E99_S99_T99",
+    "to": "E99_S99_T99",
+    "type": "queued_as"
+  },
+  {
+    "from": "E01_S01-summary",
+    "to": "E01_S01",
+    "type": "summarizes"
+  },
+  {
+    "from": "E01_S01_T01-summary",
+    "to": "E01_S01_T01",
+    "type": "summarizes"
+  },
+  {
+    "from": "E01_S01_T02-summary",
+    "to": "E01_S01_T02",
+    "type": "summarizes"
+  },
+  {
+    "from": "E10_S01-summary",
+    "to": "E10_S01",
+    "type": "summarizes"
+  },
+  {
+    "from": "E10_S01_T01-summary",
+    "to": "E10_S01_T01",
+    "type": "summarizes"
+  },
+  {
+    "from": "E10_S10-summary",
+    "to": "E10_S10",
+    "type": "summarizes"
+  },
+  {
+    "from": "E10_S10_T10-summary",
+    "to": "E10_S10_T10",
+    "type": "summarizes"
+  },
+  {
+    "from": "E11_S01-summary",
+    "to": "E11_S01",
+    "type": "summarizes"
+  },
+  {
+    "from": "E11_S01_T01-summary",
+    "to": "E11_S01_T01",
+    "type": "summarizes"
+  },
+  {
+    "from": "E99_S99-summary",
+    "to": "E99_S99",
+    "type": "summarizes"
+  },
+  {
+    "from": "E99_S99_T99-summary",
+    "to": "E99_S99_T99",
+    "type": "summarizes"
+  }
+]
+--- stderr
+=== end
+$ board_index.py graph::nodes --type Epic
+exit=0
+--- stdout
+[
+  {
+    "id": "E01",
+    "type": "Epic",
+    "title": "Fixture epic E01",
+    "status": "Passed",
+    "path": "project/board/epics/E01_fixture-epic.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": "2026-01-02",
+    "date_completed": "2026-01-03",
+    "stories": [
+      "E01_S01"
+    ]
+  },
+  {
+    "id": "E02",
+    "type": "Epic",
+    "title": "Agent Conversation Guardrails",
+    "status": "Done",
+    "path": "project/board/epics/E02_agent-conversation-guardrails.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-04-29",
+    "date_started": null,
+    "date_completed": "2026-05-10",
+    "stories": [
+      "E02_S01",
+      "E02_S02"
+    ]
+  },
+  {
+    "id": "E03",
+    "type": "Epic",
+    "title": "Parallel Workflow Orchestration",
+    "status": "Passed with remarks",
+    "path": "project/board/epics/E03_parallel-workflow-orchestration.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-04-29",
+    "date_started": "2026-04-29",
+    "date_completed": "2026-10-15",
+    "stories": [
+      "E03_S01",
+      "E03_S02",
+      "E03_S03"
+    ]
+  },
+  {
+    "id": "E10",
+    "type": "Epic",
+    "title": "Fixture epic E10",
+    "status": "In Progress",
+    "path": "project/board/epics/E10_fixture-epic.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": "2026-01-02",
+    "date_completed": null,
+    "stories": [
+      "E10_S01",
+      "E10_S10"
+    ]
+  },
+  {
+    "id": "E11",
+    "type": "Epic",
+    "title": "Fixture epic E11",
+    "status": "Pending",
+    "path": "project/board/epics/E11_fixture-epic.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": null,
+    "date_completed": null,
+    "stories": [
+      "E11_S01"
+    ]
+  },
+  {
+    "id": "E99",
+    "type": "Epic",
+    "title": "Fixture epic E99",
+    "status": "Passed",
+    "path": "project/board/epics/E99_fixture-epic.md",
+    "mentions_skills": [],
+    "mentions_agents": [],
+    "depends_on": [],
+    "parent_doc": null,
+    "date_created": "2026-01-01",
+    "date_started": "2026-01-02",
+    "date_completed": "2026-01-03",
+    "stories": [
+      "E99_S99"
+    ]
+  }
+]
+--- stderr
+=== end

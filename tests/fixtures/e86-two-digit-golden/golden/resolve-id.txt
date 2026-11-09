@@ -1,0 +1,245 @@
+$ resolve-id.sh 'E01s02'
+exit=0
+--- stdout
+[
+  {
+    "input": "E01s02",
+    "status": "resolved",
+    "resolved_id": "E01_S02",
+    "reason": null
+  }
+]
+--- stderr
+=== end
+$ resolve-id.sh 'e01 S04 t02'
+exit=0
+--- stdout
+[
+  {
+    "input": "e01 S04 t02",
+    "status": "resolved",
+    "resolved_id": "E01_S04_T02",
+    "reason": null
+  }
+]
+--- stderr
+=== end
+$ resolve-id.sh '0103'
+exit=0
+--- stdout
+[
+  {
+    "input": "0103",
+    "status": "resolved",
+    "resolved_id": "E01_S03",
+    "reason": null
+  }
+]
+--- stderr
+=== end
+$ resolve-id.sh 'E01'
+exit=0
+--- stdout
+[
+  {
+    "input": "E01",
+    "status": "resolved",
+    "resolved_id": "E01",
+    "reason": null
+  }
+]
+--- stderr
+=== end
+$ resolve-id.sh 'e01s01'
+exit=0
+--- stdout
+[
+  {
+    "input": "e01s01",
+    "status": "resolved",
+    "resolved_id": "E01_S01",
+    "reason": null
+  }
+]
+--- stderr
+=== end
+$ resolve-id.sh 'e01 s01 t02'
+exit=0
+--- stdout
+[
+  {
+    "input": "e01 s01 t02",
+    "status": "resolved",
+    "resolved_id": "E01_S01_T02",
+    "reason": null
+  }
+]
+--- stderr
+=== end
+$ resolve-id.sh '0101'
+exit=0
+--- stdout
+[
+  {
+    "input": "0101",
+    "status": "resolved",
+    "resolved_id": "E01_S01",
+    "reason": null
+  }
+]
+--- stderr
+=== end
+$ resolve-id.sh '1010'
+exit=0
+--- stdout
+[
+  {
+    "input": "1010",
+    "status": "resolved",
+    "resolved_id": "E10_S10",
+    "reason": null
+  }
+]
+--- stderr
+=== end
+$ resolve-id.sh 'e10 s10 t10'
+exit=0
+--- stdout
+[
+  {
+    "input": "e10 s10 t10",
+    "status": "resolved",
+    "resolved_id": "E10_S10_T10",
+    "reason": null
+  }
+]
+--- stderr
+=== end
+$ resolve-id.sh 'e99s99t99'
+exit=0
+--- stdout
+[
+  {
+    "input": "e99s99t99",
+    "status": "resolved",
+    "resolved_id": "E99_S99_T99",
+    "reason": null
+  }
+]
+--- stderr
+=== end
+$ resolve-id.sh '0199'
+exit=1
+--- stdout
+[
+  {
+    "input": "0199",
+    "status": "rejected",
+    "resolved_id": null,
+    "reason": "not found on board: epic=E01, story=S99"
+  }
+]
+--- stderr
+=== end
+$ resolve-id.sh 'E99'
+exit=0
+--- stdout
+[
+  {
+    "input": "E99",
+    "status": "resolved",
+    "resolved_id": "E99",
+    "reason": null
+  }
+]
+--- stderr
+=== end
+$ resolve-id.sh 'e11'
+exit=0
+--- stdout
+[
+  {
+    "input": "e11",
+    "status": "resolved",
+    "resolved_id": "E11",
+    "reason": null
+  }
+]
+--- stderr
+=== end
+$ resolve-id.sh 'E01s02, e01 S04 t02, 0103'
+exit=0
+--- stdout
+[
+  {
+    "input": "E01s02",
+    "status": "resolved",
+    "resolved_id": "E01_S02",
+    "reason": null
+  },
+  {
+    "input": " e01 S04 t02",
+    "status": "resolved",
+    "resolved_id": "E01_S04_T02",
+    "reason": null
+  },
+  {
+    "input": " 0103",
+    "status": "resolved",
+    "resolved_id": "E01_S03",
+    "reason": null
+  }
+]
+--- stderr
+=== end
+$ resolve-id.sh '0101,1010,0199'
+exit=1
+--- stdout
+[
+  {
+    "input": "0101",
+    "status": "resolved",
+    "resolved_id": "E01_S01",
+    "reason": null
+  },
+  {
+    "input": "1010",
+    "status": "resolved",
+    "resolved_id": "E10_S10",
+    "reason": null
+  },
+  {
+    "input": "0199",
+    "status": "rejected",
+    "resolved_id": null,
+    "reason": "not found on board: epic=E01, story=S99"
+  }
+]
+--- stderr
+=== end
+$ resolve-id.sh 'E50'
+exit=1
+--- stdout
+[
+  {
+    "input": "E50",
+    "status": "rejected",
+    "resolved_id": null,
+    "reason": "not found on board: epic=E50"
+  }
+]
+--- stderr
+=== end
+$ resolve-id.sh 'xyz'
+exit=1
+--- stdout
+[
+  {
+    "input": "xyz",
+    "status": "rejected",
+    "resolved_id": null,
+    "reason": "no ID chunks found in input"
+  }
+]
+--- stderr
+=== end

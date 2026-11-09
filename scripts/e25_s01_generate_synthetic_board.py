@@ -4,9 +4,15 @@
 import argparse
 import re
 import shutil
+import sys
 from pathlib import Path
 
-BOARD_REF_RE = re.compile(r"\b(E\d{2}(?:_S\d{2})?(?:_T\d{2})?)\b")
+# Board-ID shapes come from the shared module scripts/lib/board_ids.py (epic E86). This script lives in
+# scripts/, so the module is a sibling lib/ directory.
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+from board_ids import ANY_FRAGMENT  # noqa: E402
+
+BOARD_REF_RE = re.compile(rf"\b({ANY_FRAGMENT})\b", re.ASCII)
 FILE_GROUPS = [
     ("board/epics", "*.md"),
     ("board/stories", "*.md"),

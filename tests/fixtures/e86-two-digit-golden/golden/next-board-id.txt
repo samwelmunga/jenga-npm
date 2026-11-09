@@ -1,0 +1,66 @@
+$ next epic
+exit=0
+--- stdout
+E100
+--- stderr
+=== end
+$ next story E01
+exit=0
+--- stdout
+E01_S05
+--- stderr
+=== end
+$ next story E10
+exit=0
+--- stdout
+E10_S11
+--- stderr
+=== end
+$ next story E11
+exit=0
+--- stdout
+E11_S02
+--- stderr
+=== end
+$ next story E99
+exit=0
+--- stdout
+E99_S100
+--- stderr
+=== end
+$ next task E01_S01
+exit=0
+--- stdout
+E01_S01_T03
+--- stderr
+=== end
+$ next task E01_S04
+exit=0
+--- stdout
+E01_S04_T03
+--- stderr
+=== end
+$ next task E10_S01
+exit=0
+--- stdout
+E10_S01_T02
+--- stderr
+=== end
+$ next task E10_S10
+exit=0
+--- stdout
+E10_S10_T11
+--- stderr
+=== end
+$ next task E11_S01
+exit=0
+--- stdout
+E11_S01_T02
+--- stderr
+=== end
+$ next task E99_S99
+exit=0
+--- stdout
+E99_S99_T100
+--- stderr
+=== end

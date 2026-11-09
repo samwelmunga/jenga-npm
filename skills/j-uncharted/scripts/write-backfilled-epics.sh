@@ -62,7 +62,7 @@
 # EPIC ID CONTINUATION
 # ---------------------------------------------------------------------------
 # Epic IDs must continue the existing board's numbering, never collide with an epic already on
-# it. The next free ID is one past the HIGHEST `E##` found in filenames under BOTH --epics-dir
+# it. The next free ID is one past the HIGHEST `E<digits>` found in filenames under BOTH --epics-dir
 # and the canonical <repo-root>/project/board/epics (the same directory in the common case;
 # checking both means a --epics-dir override used for a dry-run/test pass can never later collide
 # with the real board). IDs are assigned to `kept` entries in array order (rank order).
@@ -88,7 +88,8 @@
 #   2 — input error: report missing/unreadable, unparseable JSON, or no `kept` array
 #   3 — write-path guard: --epics-dir or --json-out resolved outside <repo-root>/project/
 #   4 — write failure: an epic file could not be written, or an existing epic file could not be
-#       read while computing ID continuation
+#       read while computing ID continuation, or the epic ID allocator (scripts/next-board-id.sh)
+#       was not found or failed
 #
 # Examples:
 #   discover-subsystems.sh . | apply-subsystem-cap.sh --rapport "$DOC" | write-backfilled-epics.sh
@@ -259,6 +260,22 @@ fi
 
 ISO_DATE=$(date -u +%Y-%m-%d)
 
+# The one epic-ID allocator (scripts/next-board-id.sh, epic E86) and its sibling scripts/lib/board-ids.sh. Looked up
+# in the project root, then next to the skills/ directory this script is deployed under (the source tree, or the
+# .claude/ / .agents/ mirror or an installed package).
+ALLOCATOR=""
+for _cand in "$REPO_ROOT/scripts/next-board-id.sh" "$SCRIPT_DIR/../../../scripts/next-board-id.sh"; do
+  if [ -f "$_cand" ] && [ -f "$(dirname -- "$_cand")/lib/board-ids.sh" ]; then
+    ALLOCATOR=$(cd -- "$(dirname -- "$_cand")" && pwd -P)/next-board-id.sh
+    break
+  fi
+done
+if [ -z "$ALLOCATOR" ]; then
+  echo "Error: the epic ID allocator scripts/next-board-id.sh (with scripts/lib/board-ids.sh) was not found" >&2
+  echo "       under $REPO_ROOT or beside $SCRIPT_DIR. Nothing was written." >&2
+  exit 4
+fi
+
 # ---------------------------------------------------------------------------
 # Render — the python source is captured into a variable and run with `python3 -c`, exactly as
 # apply-subsystem-cap.sh does, because this script must be able to read stdin itself
@@ -269,9 +286,10 @@ PY_SRC=$(cat <<'PY'
 import json
 import os
 import re
+import subprocess
 import sys
 
-(INPUT, EPICS_DIR, CANONICAL_EPICS_DIR, JSON_OUT, DRY_RUN_S, LABEL, TODAY) = sys.argv[1:8]
+(INPUT, EPICS_DIR, CANONICAL_EPICS_DIR, JSON_OUT, DRY_RUN_S, LABEL, TODAY, ALLOCATOR) = sys.argv[1:9]
 DRY_RUN = DRY_RUN_S == "1"
 
 notices = []
@@ -327,21 +345,48 @@ else:
 # Scan BOTH the target epics dir and the canonical project/board/epics for the highest existing
 # E## so a scratch --epics-dir used for a dry run can never later collide with the real board.
 
-EPIC_FILENAME_RE = re.compile(r"^E(\d{2,})_.+\.md$")
+# The numeric-maximum rule and the width rule (minimum two digits, no maximum) are owned by scripts/next-board-id.sh
+# and scripts/lib/board-ids.sh (epic E86); this script carries neither. The allocator is asked once per directory
+# for the next free epic ID; the same directory is given for the stories and tasks overrides so that only that
+# directory's own epic files count (a scratch --epics-dir never inherits numbers from the real board). The first epic
+# takes the larger of the two answers and each later one is the next number, formatted by the shared formatter,
+# because nothing is written to disk under --dry-run and the allocator could not see the epics already assigned.
 
-def highest_epic_number(directory):
-    highest = 0
-    try:
-        names = os.listdir(directory)
-    except OSError:
-        return 0
-    for name in names:
-        m = EPIC_FILENAME_RE.match(name)
-        if m:
-            highest = max(highest, int(m.group(1)))
-    return highest
+LIB_BOARD_IDS = os.path.join(os.path.dirname(ALLOCATOR), "lib", "board-ids.sh")
 
-next_id = 1 + max(highest_epic_number(EPICS_DIR), highest_epic_number(CANONICAL_EPICS_DIR))
+
+def allocator_failure(what, detail):
+    sys.stderr.write("Error: %s: %s\n" % (what, detail))
+    sys.exit(4)
+
+
+def next_epic_number(directory):
+    if not os.path.isdir(directory):
+        return 1
+    proc = subprocess.Popen(
+        ["bash", ALLOCATOR, "--epics-dir", directory, "--stories-dir", directory,
+         "--tasks-dir", directory, "epic"],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    out, err = proc.communicate()
+    m = re.match(r"^E([0-9]+)$", out.strip())
+    if proc.returncode != 0 or not m:
+        allocator_failure("the epic ID allocator failed for %s" % directory,
+                          (err or out).strip() or "exit %d" % proc.returncode)
+    return int(m.group(1))
+
+
+def format_board_number(number):
+    proc = subprocess.Popen(
+        ["bash", "-c", '. "$1" && board_id_format_number "$2"', "_", LIB_BOARD_IDS, str(number)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    out, err = proc.communicate()
+    if proc.returncode != 0 or not out.strip():
+        allocator_failure("the board ID formatter failed for %d" % number,
+                          err.strip() or "exit %d" % proc.returncode)
+    return out.strip()
+
+
+next_id = max(next_epic_number(EPICS_DIR), next_epic_number(CANONICAL_EPICS_DIR))
 
 
 def slugify(text):
@@ -376,7 +421,7 @@ for entry in kept:
     files = entry.get("files")
     lines = entry.get("lines")
 
-    epic_id = "E%02d" % next_id
+    epic_id = "E" + format_board_number(next_id)
     next_id += 1
 
     title = humanize_path(path)
@@ -495,4 +540,4 @@ PY
 )
 
 python3 -c "$PY_SRC" \
-  "$INPUT" "$EPICS_DIR_REAL" "$CANONICAL_EPICS_DIR" "$JSON_OUT" "$DRY_RUN" "$LABEL" "$ISO_DATE"
+  "$INPUT" "$EPICS_DIR_REAL" "$CANONICAL_EPICS_DIR" "$JSON_OUT" "$DRY_RUN" "$LABEL" "$ISO_DATE" "$ALLOCATOR"

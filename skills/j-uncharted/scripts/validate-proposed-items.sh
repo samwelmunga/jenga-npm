@@ -20,7 +20,7 @@
 #   scripts/validate-story-format.sh  body sections — run against every supplied
 #                                     STORY file only
 #
-# A file is treated as a story when its frontmatter `id` matches E##_S##. That
+# A file is treated as a story when its frontmatter `id` matches E##_S## (any digit width). That
 # is the same classification `validate-board.sh` makes, and it reads the file
 # rather than trusting the path, so a story that landed in the wrong directory
 # is still checked as a story.
@@ -64,6 +64,15 @@ elif [ -f "$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/validate-board.sh" ];
 else
   VALIDATOR_ROOT="$REPO_ROOT/scripts"
 fi
+
+# Shared board-ID shapes (epic E86), from the same scripts/ root the validators come from. There is deliberately
+# no fallback regex here: a missing file is an error, not a silent return to a two-digit-only story test.
+if [ ! -f "$VALIDATOR_ROOT/lib/board-ids.sh" ]; then
+  echo "❌ shared board-ID source not found: $VALIDATOR_ROOT/lib/board-ids.sh" >&2
+  exit 2
+fi
+# shellcheck source=../../../scripts/lib/board-ids.sh
+. "$VALIDATOR_ROOT/lib/board-ids.sh"
 BOARD_VALIDATOR="$VALIDATOR_ROOT/validate-board.sh"
 STORY_VALIDATOR="$VALIDATOR_ROOT/validate-story-format.sh"
 
@@ -125,7 +134,7 @@ for file in "$@"; do
     continue
   fi
   check "board frontmatter" "$BOARD_VALIDATOR" "$file"
-  if [[ "$(item_id "$file")" =~ ^E[0-9]{2}_S[0-9]{2}$ ]]; then
+  if [[ "$(item_id "$file")" =~ $BOARD_ID_STORY_RE ]]; then
     STORIES=$((STORIES + 1))
     check "story format" "$STORY_VALIDATOR" "$file"
   fi

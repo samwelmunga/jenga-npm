@@ -1,0 +1,29 @@
+chore: scaffold fixture project	project/PROJECT_SUMMARY.md project/configs/workflow.json
+epic(E01): add fixture epic	project/board/epics/E01_fixture-epic.md
+story(E01_S01): add fixture story	project/board/stories/E01_S01_fixture-story.md project/documentation/summaries/E01_S01-summary.md
+task(E01_S01_T01): add fixture task	project/board/tasks/E01_S01_T01_fixture-task.md project/documentation/plans/E01_S01_T01-plan.md project/documentation/summaries/E01_S01_T01-summary.md
+task(E01_S01_T02): add fixture task	project/board/tasks/E01_S01_T02_fixture-task.md project/documentation/plans/E01_S01_T02-plan.md project/documentation/summaries/E01_S01_T02-summary.md
+epic(E10): add fixture epic	project/board/epics/E10_fixture-epic.md
+story(E10_S01): add fixture story	project/board/stories/E10_S01_fixture-story.md project/documentation/summaries/E10_S01-summary.md
+task(E10_S01_T01): add fixture task	project/board/tasks/E10_S01_T01_fixture-task.md project/documentation/plans/E10_S01_T01-plan.md project/documentation/summaries/E10_S01_T01-summary.md
+story(E10_S10): add fixture story	project/board/stories/E10_S10_fixture-story.md project/documentation/summaries/E10_S10-summary.md
+task(E10_S10_T10): add fixture task	project/board/tasks/E10_S10_T10_fixture-task.md project/documentation/plans/E10_S10_T10-plan.md project/documentation/summaries/E10_S10_T10-summary.md
+epic(E11): add fixture epic	project/board/epics/E11_fixture-epic.md
+story(E11_S01): add fixture story	project/board/stories/E11_S01_fixture-story.md project/documentation/summaries/E11_S01-summary.md
+task(E11_S01_T01): add fixture task	project/board/tasks/E11_S01_T01_fixture-task.md project/documentation/plans/E11_S01_T01-plan.md project/documentation/summaries/E11_S01_T01-summary.md
+epic(E99): add fixture epic	project/board/epics/E99_fixture-epic.md
+story(E99_S99): add fixture story	project/board/stories/E99_S99_fixture-story.md project/documentation/summaries/E99_S99-summary.md
+task(E99_S99_T99): add fixture task	project/board/tasks/E99_S99_T99_fixture-task.md project/documentation/plans/E99_S99_T99-plan.md project/documentation/summaries/E99_S99_T99-summary.md
+chore(E99_S99_T99): add rapport - fixture sample problem	project/rapports/problems/E99_S99_T99-fixture-sample-problem.md
+merge: land E01_S01_T02-fixture-task into main (Passed)	
+chore: add fixture todo, queue and event log samples	project/logs/events.json project/queue/bundle-E01_S01.json project/queue/handoffs/developer-fixture-session-E01_S01_T01.json project/queue/handoffs/developer-fixture-session-E01_S01_T02.json project/queue/scrum_triggers.jsonl project/todo.md
+story(E01_S02): add fixture story	project/board/stories/E01_S02_fixture-story.md
+story(E01_S03): add fixture story	project/board/stories/E01_S03_fixture-story.md
+story(E01_S04): add fixture story	project/board/stories/E01_S04_fixture-story.md
+task(E01_S04_T02): add fixture task	project/board/tasks/E01_S04_T02_fixture-task.md
+epic(E02): add real-board slice	project/board/epics/E02_agent-conversation-guardrails.md
+story(E02_S02): add real-board slice	project/board/stories/E02_S02_spinoff-skill.md
+epic(E03): add real-board slice	project/board/epics/E03_parallel-workflow-orchestration.md
+story(E03_S01): add real-board slice	project/board/stories/E03_S01_dooo-parallel-execution-orchestrator.md
+task(E03_S01_T02): add real-board slice	project/board/tasks/E03_S01_T02_scaffold-dooo-skill.md
+task(E03_S01_T04): add real-board slice	project/board/tasks/E03_S01_T04_update-help-skill-listing.md

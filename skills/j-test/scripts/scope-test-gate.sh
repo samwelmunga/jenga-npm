@@ -85,6 +85,11 @@
 #          and none of them is a pass or a fall-through: not configured (resolver
 #          exit 4), no runnable test file (5), the entire catalog (6), an invalid
 #          configured value (3).
+#      A scoped run is also checked, just before anything executes, against the
+#      catalog a `full` policy would run (E72_S08_T03): if it would execute every
+#      unit of that catalog it is REFUSED, runs nothing and exits 3 with
+#      `refusal: "scoped-equals-full"`. See THE STANDING scoped != full INVARIANT
+#      above run_catalog, and project/documentation/test-runner.md.
 #      So a caller can tell all THREE outcomes apart from the exit code and the
 #      output alone: effective_mode "scoped" (a mapped selection ran),
 #      "default-set" (nothing mapped, so the floor ran) and "full" (policy `full`
@@ -256,8 +261,9 @@
 #   catalog warnings) go to stderr.
 #   With --json, one compact JSON object on stdout, whenever the gate reached a
 #   verdict: exit 0, 1 or 130, and ALSO the exit 3 of the scoped `no-commits`
-#   non-pass (added by E72_S08_T02), which is a verdict about the scope rather
-#   than a broken gate — its object carries suites_run 0 and exit_code 3. stdout
+#   non-pass (added by E72_S08_T02) and of the scoped-equals-full refusal (added
+#   by E72_S08_T03), which are verdicts about the scope rather than a broken gate
+#   — their objects carry suites_run 0 and exit_code 3. stdout
 #   stays empty for exit 2 and for every OTHER exit 3:
 #     {"scope":"story","id":"E99_S01","mode":"scoped","effective_mode":"default-set",
 #      "fallback_reason":"no-mapped-suites","suites_run":2,"passed":2,"failed":0,
@@ -266,7 +272,7 @@
 #      "excluded_test_files":["tests/x.bats"],"exclusion_reason":"the session is ...",
 #      "disabled_suites":["npm:test"],
 #      "map_excluded_test_files":[{"file":"tests/x.bats","reason":"..."}],
-#      "map_exclusion_conflicts":[],"map_exclusions_superseded":[]}
+#      "map_exclusion_conflicts":[],"map_exclusions_superseded":[],"refusal":null}
 #   mode            what the policy asked for: none, scoped or full.
 #   effective_mode  what actually ran, and it has FOUR values, not three:
 #                   "none"; "scoped" (the mapped selection ran); "default-set"
@@ -321,6 +327,9 @@
 #                   such a file IS in the run and must not be reported as kept
 #                   out — it is listed here instead, never in
 #                   map_excluded_test_files. map-scope.sh also warns on it.
+#   refusal         APPENDED by E72_S08_T03, the last key: null, or
+#                   "scoped-equals-full" when the scoped selection was the entire
+#                   runnable catalog and the gate refused (exit 3, suites_run 0).
 #   map_exclusions_superseded
 #                   APPENDED by fix round 3 of E72_S07_T03; its CONDITION
 #                   INVERTED with E72_S08_T02. Declared omissions this run
@@ -352,8 +361,16 @@
 #        or unknown --scope, missing --id or an id not well-formed for the scope,
 #        both --range and --rev, a --range/--rev git rejects as malformed or as an
 #        unknown revision, a --root that is not a directory
-#   3    nothing was verified, which is never a pass. TWO KINDS, deliberately
+#   3    nothing was verified, which is never a pass. THREE KINDS, deliberately
 #        sharing the one code E72_S06 gave that meaning:
+#        (c) the scoped `scoped-equals-full` REFUSAL (E72_S08_T03): the scoped
+#            selection would execute every unit of the catalog a full run
+#            executes, so nothing is run. The cause and the remedy are on stdout
+#            (stderr with --json) and --json DOES print its object, with
+#            refusal "scoped-equals-full", suites_run 0 and effective_mode
+#            "scoped". It is also exit 3, "cannot prove the scoped run is smaller
+#            than a full run", with stdout empty, when a bats command cannot be
+#            expanded safely.
 #        (a) the scoped `no-commits` NON-PASS (E72_S08_T02): no commits were found
 #            for the id, so no change set could be derived and nothing is run.
 #            The reason is on stdout and --json DOES print its object (OUTPUT).
@@ -565,6 +582,14 @@ MAP_SUPERSEDED_JSON="[]"
 # suite set path sets it (to partition the map's declared omissions); the scoped
 # path leaves it empty, because no rule can select a declared file there.
 POST_NARROW_HOOK=""
+# E72_S08_T03. The name of the refusal this run ended in, or "" when it ended in
+# none. Today there is one value, "scoped-equals-full". It is the --json key
+# `refusal`, so a consumer can tell this exit 3 from the other exit 3 kinds.
+REFUSAL=""
+# The changed files the scoped derivation produced, when it wrote a list (it does
+# not for --range/--rev, which map-scope.sh resolves itself). Only used to word
+# the cause of a refusal; nothing decides on it.
+CHANGED_FILES_LIST=""
 
 # Human text: stdout normally, stderr with --json.
 say() {
@@ -588,7 +613,7 @@ finish() {
       --arg excluded "$EXCLUDED_FILES" --arg exreason "$EXCLUSION_REASON" \
       --arg disabled "$DISABLED_SUITES" \
       --argjson mapexcl "$MAP_EXCLUDED_JSON" --arg mapconf "$MAP_EXCLUSION_CONFLICTS" \
-      --argjson mapsup "$MAP_SUPERSEDED_JSON" \
+      --argjson mapsup "$MAP_SUPERSEDED_JSON" --arg refusal "$REFUSAL" \
       '{scope: $scope, id: $id, mode: $mode, effective_mode: $eff,
         fallback_reason: (if $fr == "" then null else $fr end),
         suites_run: $run, passed: $passed, failed: $failed,
@@ -601,7 +626,8 @@ finish() {
         disabled_suites: ($disabled | split("\n") | map(select(length > 0))),
         map_excluded_test_files: $mapexcl,
         map_exclusion_conflicts: ($mapconf | split("\n") | map(select(length > 0))),
-        map_exclusions_superseded: $mapsup}'
+        map_exclusions_superseded: $mapsup,
+        refusal: (if $refusal == "" then null else $refusal end)}'
   fi
   exit "$code"
 }
@@ -712,10 +738,213 @@ narrow() {
   return 0
 }
 
+# ---- the standing invariant: a scoped run is never the whole catalog (E72_S08_T03) --------------------
+#
+# E72_S07 narrowed what `scoped` selects and E72_S08_T02 removed the escalation to the full catalog.
+# Both hold by the CONTENT of the scope map and of this script, not by machinery, so a coarse map rule
+# or a regression could quietly restore a `scoped` gate that is a `full` one. This is the machinery.
+#
+# THE DEFINITION, ONE FOR BOTH SIDES. The UNITS of a catalog are what its runnable entries execute:
+#   f:<path>     one test file, for every entry whose command is a bare `bats` invocation (the
+#                command is expanded exactly as the shell expands it, at the project root, so
+#                `bats tests/*.bats` and `bats 'tests/a.bats' 'tests/b.bats'` are the same units
+#                whenever they name the same files, whatever their spelling)
+#   c:<command>  one opaque unit for every entry that cannot be expanded to files (an npm script
+#                whose body is not bats, shellcheck, pytest, ...), identified by its command text.
+#                An `npm test` / `npm run <key>` entry is first resolved to its package.json script
+#                body, as build-catalog.sh does, so an npm twin of a bats suite is the same units.
+# WHAT IS COMPARED. The test FILES, whenever the reference has any. A scope map can only ever select
+# a suite through the test files it covers (map-scope.sh's one exception, the .js -> npm extension
+# fallback, selects opaque npm suites), so an opaque suite such as shellcheck:all is not something a
+# selection can include or leave out: this repository's full catalog is bats:tests plus shellcheck:all,
+# and a selection of every one of the 300-odd test files IS the hour-long run the story exists to remove
+# even though shellcheck never ran. Comparing opaque suites too would make the invariant vacuous here.
+# Refusing in that case is the safe direction, and it is what the task's own example describes
+# (a rule mapping `**/*.sh` to `tests/**/*.bats`). Only a reference with NO test file at all (an
+# all-opaque catalog) is compared on its opaque commands instead.
+# A `scoped` run is REFUSED iff its compared units CONTAIN every compared unit of the reference
+# catalog, the catalog a `full` policy would execute. Containment rather than equality, so a run
+# that exceeds the reference is refused too. The reference is built by run_full's own steps (narrow-suites.sh in full mode, then
+# build-catalog.sh, from the one discovery this run already has), so a file the level-2 baseline
+# excludes is excluded from BOTH sides and cannot make a bounded run look whole.
+#
+# ONE CHOKEPOINT. The check is called at the top of run_catalog, the only caller of run-suites.sh, and
+# keys on MODE (written once, before anything is derived) and on the catalog about to be executed.
+# It does not key on EFFECTIVE, on which path produced the selection, or on how a command is spelled.
+#
+# FAIL CLOSED. If a reference or a run entry that looks like a `bats` invocation cannot be expanded
+# safely, or the reference has no unit at all, the gate cannot prove the run is bounded and exits 3.
+# Guessing here is exactly the escape the previous attempts kept finding.
+
+# is_plain_bats <command>: a bare `bats` invocation whose remaining words are only plain words,
+# globs and single-quoted strings, so expanding it with the shell can execute nothing. After the
+# single-quoted pieces (and `\'` pairs) are removed, none of | & ; < > ( ) $ ` " ' \ may remain.
+is_plain_bats() {
+  local rest
+  case "$1" in "bats "*) ;; *) return 1 ;; esac
+  rest="$(printf '%s' "$1" | sed -e "s/\\\\'//g" -e "s/'[^']*'//g")"
+  if printf '%s' "$rest" | grep -q "[|&;<>()\$\`\"'\\\\]"; then
+    return 1
+  fi
+  return 0
+}
+
+# expand_bats_files <bats command>: the existing test files the command names, one per line. Only
+# ever called on a command is_plain_bats accepted. Directories expand to their *.bats files (all
+# below them with -r/--recursive). Options and words that name nothing on disk are ignored.
+expand_bats_files() {
+  local words="${1#bats }"
+  (
+    cd "$ROOT" || exit 0
+    recursive=0
+    # shellcheck disable=SC2086,SC2294
+    eval "set -- $words"
+    for w in "$@"; do
+      case "$w" in -r|--recursive) recursive=1 ;; esac
+    done
+    for w in "$@"; do
+      case "$w" in -*) continue ;; esac
+      if [ -d "$w" ]; then
+        if [ "$recursive" -eq 1 ]; then
+          find "$w" -type f -name '*.bats'
+        else
+          find "$w" -maxdepth 1 -type f -name '*.bats'
+        fi
+      elif [ -f "$w" ]; then
+        printf '%s\n' "$w"
+      fi
+    done
+  ) | sed 's#^\./##'
+}
+
+# catalog_units <catalog> <out>: the byte-sorted unique units of the runnable entries (see above).
+# A line starting with `!` marks an entry that could not be enumerated; the caller fails closed.
+catalog_units() {
+  local catalog="$1" out="$2" id eco cmd eff key body f
+  jq -r '.runnable[] | [.id, .ecosystem, .command] | @tsv' "$catalog" \
+    | while IFS=$'\t' read -r id eco cmd; do
+        eff="$cmd"
+        if [ "$eco" = "npm" ]; then
+          key=""
+          case "$cmd" in
+            "npm test"|"npm t") key="test" ;;
+            "npm run "*) key="${cmd#npm run }" ;;
+            "npm run-script "*) key="${cmd#npm run-script }" ;;
+          esac
+          if [ -n "$key" ] && [ -f "$ROOT/package.json" ]; then
+            body="$(jq -r --arg k "$key" '(.scripts[$k] // "") | if type == "string" then . else "" end' \
+                    "$ROOT/package.json" 2>/dev/null || true)"
+            [ -z "$body" ] || eff="$body"
+          fi
+        fi
+        if is_plain_bats "$eff"; then
+          f="$(expand_bats_files "$eff")"
+          if [ -n "$f" ]; then
+            printf '%s\n' "$f" | sed 's/^/f:/'
+          else
+            printf '!:%s\n' "$eff"
+          fi
+        else
+          case "$eff" in
+            bats|"bats "*) printf '!:%s\n' "$eff" ;;
+            *) printf 'c:%s\n' "$eff" ;;
+          esac
+        fi
+      done > "$out.raw" || return 1
+  LC_ALL=C sort -u "$out.raw" > "$out"
+}
+
+# explain_scoped_cause: what to change, worded for the path that produced the selection. EFFECTIVE
+# is read here to WORD the message and nowhere to decide anything.
+explain_scoped_cause() {
+  local cfgdir cfg rel map ids line
+  if [ "$EFFECTIVE" = "default-set" ]; then
+    say "  cause: the bounded default suite set (test_default_suite_set of test-config.json, resolve-default-suites.sh) names, once the exclusions in force are applied, everything a full run executes"
+    say "         value: $(jq -r '.default_set.value // "(unknown)"' "$DEFAULT_SET_OUT" 2>/dev/null || printf '(unknown)')"
+    return 0
+  fi
+  ids="$(jq -r '.mapped_suites | join(", ")' "$MAP_FILE_OUT" 2>/dev/null || true)"
+  say "  cause: the scope map selected these suite definition(s), which together cover the whole catalog: ${ids:-(none)}"
+  jq -r --argjson ids "$(jq -c '.mapped_suites' "$MAP_FILE_OUT")" \
+    '.suites[] | select(.id as $i | ($ids | index($i)) != null)
+     | "         - " + .id + " (paths: " + ((.paths // []) | if length == 0 then "none, opaque" else join(", ") end) + ")"' \
+    "$DISCOVERY_FILE" 2>/dev/null | while IFS= read -r line; do say "$line"; done || true
+  if [ -n "$CHANGED_FILES_LIST" ] && [ -s "$CHANGED_FILES_LIST" ]; then
+    say "         changed files: $(head -n 5 "$CHANGED_FILES_LIST" | paste -sd ',' - | sed 's/,/, /g')$([ "$(wc -l < "$CHANGED_FILES_LIST")" -gt 5 ] && printf ', ...')"
+    cfgdir=""
+    [ -z "$RESOLVER" ] || cfgdir="$(JENGA_PROJECT_ROOT="$ROOT" bash "$RESOLVER" get configs 2>/dev/null || true)"
+    cfg="${CONFIG_ARG:-$cfgdir/test-config.json}"
+    rel=""
+    [ ! -f "$cfg" ] || rel="$(jq -r '.commit_scope_map_file // ""' "$cfg" 2>/dev/null || true)"
+    map="$ROOT/${rel:-templates/test-scope-map.json}"
+    if [ -f "$map" ]; then
+      say "         scope map: ${rel:-templates/test-scope-map.json}; rules whose source matches a changed file:"
+      jq -r --rawfile f "$CHANGED_FILES_LIST" "$(cat "$SCRIPT_DIR/lib/glob-defs.jq")"'
+        ($f | split("\n") | map(select(length > 0))) as $files
+        | .rules | to_entries[]
+        | any_re([.value.source]) as $re
+        | select(any($files[]; matches($re)))
+        | "           rule " + ((.key + 1) | tostring) + ": " + .value.source + " -> " + (.value.tests | join(", "))' \
+        "$map" 2>/dev/null | head -n 8 | while IFS= read -r line; do say "$line"; done || true
+    fi
+  else
+    say "         (the changed files came from --range/--rev; see the active scope map for the rule that selected them)"
+  fi
+}
+
+# assert_scoped_is_bounded <catalog about to run>: returns 0 when the run is bounded or the policy
+# is not scoped; otherwise REFUSES (prints, sets REFUSAL, finishes 3) and never returns.
+assert_scoped_is_bounded() {
+  local catalog="$1" disc="$TMP_DIR/discovery-full-reference.json" ref="$TMP_DIR/catalog-full-reference.json"
+  local ref_units="$TMP_DIR/units-reference.txt" run_units="$TMP_DIR/units-run.txt" rc=0 total kind
+  [ "$MODE" = "scoped" ] || return 0
+
+  bash "$NARROWER" --root "$ROOT" --suites "$DISCOVERY_FILE" > "$disc" || rc=$?
+  [ "$rc" -eq 0 ] || die 3 "narrow-suites.sh failed with exit status $rc while building the full-run reference"
+  rc=0
+  bash "$CATALOG_BUILDER" --root "$ROOT" --discovery-file "$disc" > "$ref" || rc=$?
+  [ "$rc" -eq 0 ] || die 3 "build-catalog.sh failed with exit status $rc while building the full-run reference"
+  catalog_units "$ref" "$ref_units" || die 3 "could not derive the units of the full-run reference"
+  catalog_units "$catalog" "$run_units" || die 3 "could not derive the units of the catalog about to run"
+
+  if [ ! -s "$ref_units" ] || grep -q '^!' "$ref_units" || grep -q '^!' "$run_units"; then
+    die 3 "cannot prove the scoped run is smaller than a full run: a bats command could not be expanded to test files, or a full run has nothing to enumerate; nothing was verified, so this is not a pass"
+  fi
+  # Compare test files when the reference has any (see WHAT IS COMPARED), else opaque commands.
+  kind="opaque suite command"
+  if grep -q '^f:' "$ref_units"; then
+    kind="test file"
+    grep '^f:' "$ref_units" > "$ref_units.cmp" || true
+    grep '^f:' "$run_units" > "$run_units.cmp" || true
+  else
+    cp "$ref_units" "$ref_units.cmp"
+    cp "$run_units" "$run_units.cmp"
+  fi
+  if [ -n "$(LC_ALL=C comm -23 "$ref_units.cmp" "$run_units.cmp" | head -n 1)" ]; then
+    return 0
+  fi
+
+  total="$(wc -l < "$ref_units.cmp" | tr -d ' ')"
+  REFUSAL="scoped-equals-full"
+  EFFECTIVE="$MODE"
+  RUN_COUNT=0
+  SUITE_LABELS=""
+  say "scope test gate: REFUSED ($SCOPE $ID, policy scoped): the scoped selection is the entire runnable catalog, so nothing was run and nothing was verified (not a pass)"
+  say "  a full run would execute $total $kind(s); this run would execute all of them"
+  explain_scoped_cause
+  if [ "$total" -le 1 ]; then
+    say "  this catalog has exactly one $kind, so a scoped run can never be smaller than a full one"
+  fi
+  say "  remedy: narrow the rule or the suite definition named above so a scoped run selects strictly less, or set test_run_$SCOPE to full deliberately (project/documentation/test-runner.md, 'The standing scoped != full invariant')"
+  finish 3
+}
+
 # run_catalog <catalog file>: run every runnable suite of the catalog; sets
 # RUN_COUNT, PASSED, FAILED, SUITE_LABELS and finishes with the exit code.
 run_catalog() {
   local catalog="$1" nums names counts rc=0 out="$TMP_DIR/run.out"
+  # The standing scoped != full invariant, at the one point every run goes through.
+  assert_scoped_is_bounded "$catalog"
   RUN_COUNT="$(jq -r '.runnable | length' "$catalog")"
   [ "$RUN_COUNT" -gt 0 ] || die 3 "the catalog has no runnable suite; nothing could be run"
   nums="$(jq -r '[.runnable[].n | tostring] | join(" ")' "$catalog")"
@@ -1035,6 +1264,7 @@ else
 $SHAS
 EOF
     sed '/^$/d' "$FILES_LIST.raw" | LC_ALL=C sort -u > "$FILES_LIST"
+    CHANGED_FILES_LIST="$FILES_LIST"
     file_count="$(wc -l < "$FILES_LIST" | tr -d ' ')"
     map_args+=(--files-from "$FILES_LIST")
     say "changed files: $file_count file(s) from $commit_count commit(s) of $ID"

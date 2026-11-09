@@ -282,6 +282,25 @@ while [ -e "$OUT_FILE" ]; do
   n=$((n + 1))
 done
 
+# --- shared board-ID helpers ---------------------------------------------------------------------
+# board_ids.board_id_sort_key (epic E86, E86_S02_T06) orders the board IDs in the Board Linkage row by numeric value
+# (E99 before E100), where plain text order would put E100 before E11 and so change which IDs the row's cut-off keeps.
+# Resolved from this script's own location, in the repo layout and then the installed-package layout; there is
+# deliberately no fallback ordering, so a missing library is an upstream-script error (exit 3).
+BOARD_IDS_LIB=""
+for _cand in \
+  "$SCRIPT_DIR/../../../scripts/lib" \
+  "$SCRIPT_DIR/../../../node_modules/@jenga-ai/agent/scripts/lib"; do
+  if [ -f "$_cand/board_ids.py" ]; then
+    BOARD_IDS_LIB=$(cd -- "$_cand" && pwd -P)
+    break
+  fi
+done
+if [ -z "$BOARD_IDS_LIB" ]; then
+  echo "Error: shared board_ids.py not found (looked in scripts/lib and node_modules/@jenga-ai/agent/scripts/lib relative to $SCRIPT_DIR)" >&2
+  exit 3
+fi
+
 # --- render -------------------------------------------------------------------------------------
 PY_SRC=$(cat <<'PY'
 import json
@@ -290,7 +309,10 @@ import re
 import sys
 
 (tpl_path, enum_path, deps_path, tests_path, mode, origin_arg,
- timestamp, out_path, repo_root, json_out) = sys.argv[1:11]
+ timestamp, out_path, repo_root, json_out, board_ids_lib) = sys.argv[1:12]
+
+sys.path.insert(0, board_ids_lib)
+import board_ids  # shared ID shapes and sort key: scripts/lib/board_ids.py (epic E86)
 
 warnings = []
 notices = []
@@ -419,7 +441,7 @@ def board_linkage():
                 ids.add(m.group(1) if m else fn[:-3])
     if not ids:
         return "unlinked"
-    ordered = sorted(ids)
+    ordered = sorted(ids, key=board_ids.board_id_sort_key)
     shown = ordered[:8]
     out = "linked to " + ", ".join(code(i) for i in shown)
     if len(ordered) > len(shown):
@@ -686,4 +708,4 @@ PY
 
 python3 -c "$PY_SRC" \
   "$TEMPLATE" "$TMP_DIR/enumerate.json" "$TMP_DIR/dependencies.json" "$TMP_DIR/tests.json" \
-  "$MODE" "$ORIGIN" "$ISO_TS" "$OUT_FILE" "$REPO_ROOT" "$JSON_OUT"
+  "$MODE" "$ORIGIN" "$ISO_TS" "$OUT_FILE" "$REPO_ROOT" "$JSON_OUT" "$BOARD_IDS_LIB"

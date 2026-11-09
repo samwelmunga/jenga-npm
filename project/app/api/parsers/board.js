@@ -9,6 +9,13 @@
  * to promote `Pending`/`Backlog` items into the In Progress column; the Backlog tab ignores it
  * entirely. Items that aren't referenced get **no new field at all**, so a project with no
  * `todo.md` produces a byte-identical payload to the pre-T04 parser.
+ *
+ * E76_S03_T06 — frontmatter keys reach the response generically (`...data` below, no whitelist), so
+ * the per-task `usage_*` fields and the per-story `usage_*` fields of `templates/SCRUM_BOARD_SCHEMA.md`
+ * ("Usage fields (per-task token accounting)", "Usage fields on stories") need no code here: an item
+ * that carries them returns them with their numeric values, and an item that does not stays without
+ * them (absent, never `null`, never `0`, so a consumer can say "not measured"). Do not add defaults
+ * or coercion for those keys. Covered by `board.usage-fields.test.js`.
  */
 
 const fs = require('fs');
@@ -16,6 +23,7 @@ const path = require('path');
 const matter = require('gray-matter');
 const { resolveProjectRoot } = require('../lib/resolve-project-root');
 const { readTodoRefs } = require('./todo');
+const { sortBoardIds } = require('./lib/board-id-sort');
 
 // Resolved relative to the invoking project's own root (E47_S02_T01/T02), not a fixed __dirname
 // climb — the old `path.resolve(__dirname, '../../../board')` only ever landed correctly when this
@@ -23,15 +31,16 @@ const { readTodoRefs } = require('./todo');
 const BOARD_ROOT = path.join(resolveProjectRoot(), 'project', 'board');
 
 /**
- * Read all .md files from a directory (non-recursive).
+ * Read all .md files from a directory (non-recursive), in numeric board-ID order of their file
+ * names (E86_S02_T05): `E101` before `E1001`, `S10` before `S100`. `fs.readdirSync` order is
+ * filesystem-dependent, so the sort is always applied here; `parseBoard()` builds the epic, story and
+ * task lists by pushing in this order, so every level of the returned tree inherits it.
  * @param {string} dir
  * @returns {{ file: string, data: Object, content: string }[]}
  */
 function readMarkdownDir(dir) {
   if (!fs.existsSync(dir)) return [];
-  return fs
-    .readdirSync(dir)
-    .filter((f) => f.endsWith('.md'))
+  return sortBoardIds(fs.readdirSync(dir).filter((f) => f.endsWith('.md')))
     .map((f) => {
       const filePath = path.join(dir, f);
       try {

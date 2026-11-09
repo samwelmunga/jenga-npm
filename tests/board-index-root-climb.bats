@@ -43,6 +43,10 @@ install_script_at() {
   local dest_dir="$1"
   mkdir -p "$dest_dir"
   cp "$REPO_ROOT/$SCRIPT_REL" "$dest_dir/board_index.py"
+  # board_index.py imports the shared ID patterns from <parents[3]>/scripts/lib (E86_S01_T05), so the
+  # fixture must carry that module at the matching relative spot: <dest_dir>/../../../scripts/lib.
+  mkdir -p "$dest_dir/../../../scripts"
+  cp -R "$REPO_ROOT/scripts/lib" "$dest_dir/../../../scripts/lib"
 }
 
 # Imports the installed copy as a module and prints ROOT_DIR.

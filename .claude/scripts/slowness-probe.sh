@@ -13,19 +13,26 @@
 # Usage:
 #   slowness-probe.sh [--root <dir>] [--probe-file <rel>] [--threshold <n>] [--log <file>]
 #                     [--no-log] [--exec-files <n>] [--quiet-skip]
+#   slowness-probe.sh --print-threshold [--root <dir>] [--threshold <n>]
 #   slowness-probe.sh --help
 #
 #   --root <dir>        project root; the reference file is resolved under it and the log is
 #                       written under it. Default: the root scripts/resolve-root.sh resolves.
 #   --probe-file <rel>  reference bats file relative to the root. Default
 #                       tests/workflow-outputs.bats (about 60 s on a healthy machine).
-#   --threshold <n>     slow when wall > n * CPU. Default 2.5, or $JENGA_SLOWNESS_THRESHOLD when set
-#                       (the way to change it for the preflight in run-suites.sh).
+#   --threshold <n>     slow when wall > n * CPU. Resolved in this order: this option, then
+#                       $JENGA_SLOWNESS_THRESHOLD, then the machine-local file
+#                       <root>/project/logs/slowness-threshold (one number on its first line,
+#                       git-ignored, written by skills/j-test/scripts/slowness-check.sh
+#                       set-threshold), then 2.5. An unreadable or non-positive value in the file
+#                       is reported on stderr and ignored.
 #   --log <file>        JSON-lines log. Default <root>/project/logs/slowness-probe.jsonl.
 #   --no-log            do not write the log.
 #   --exec-files <n>    number of fresh scripts the first-exec benchmark runs when the machine
 #                       is slow. Default 100.
 #   --quiet-skip        print nothing when the run is skipped (exit 3 still reported).
+#   --print-threshold   measure nothing: print "<n> <source>" for the threshold that applies,
+#                       source being option, environment, saved or default, and exit 0.
 #
 # WHAT IT MEASURES (all of it recorded in one JSON line per run)
 #   - uptime, load average, the CPU of security-agent processes (wdav*, epsext, mdatp) at the
@@ -66,29 +73,37 @@ usage() {
 
 ROOT=""
 PROBE_FILE="tests/workflow-outputs.bats"
-THRESHOLD="${JENGA_SLOWNESS_THRESHOLD:-2.5}"
+THRESHOLD="${JENGA_SLOWNESS_THRESHOLD:-}"
+THRESHOLD_GIVEN=0
+[ -z "$THRESHOLD" ] || THRESHOLD_GIVEN=1
 LOG=""
 WRITE_LOG=1
 EXEC_FILES=100
 QUIET_SKIP=0
+PRINT_THRESHOLD=0
+THRESHOLD_SOURCE="default"
+[ "$THRESHOLD_GIVEN" -eq 0 ] || THRESHOLD_SOURCE="environment"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --help|-h) usage; exit 0 ;;
     --root)       [ "$#" -ge 2 ] || die_usage "--root needs an argument"; ROOT="$2"; shift 2 ;;
     --probe-file) [ "$#" -ge 2 ] || die_usage "--probe-file needs an argument"; PROBE_FILE="$2"; shift 2 ;;
-    --threshold)  [ "$#" -ge 2 ] || die_usage "--threshold needs an argument"; THRESHOLD="$2"; shift 2 ;;
+    --threshold)  [ "$#" -ge 2 ] || die_usage "--threshold needs an argument"; THRESHOLD="$2"; THRESHOLD_GIVEN=1; THRESHOLD_SOURCE="option"; shift 2 ;;
     --log)        [ "$#" -ge 2 ] || die_usage "--log needs an argument"; LOG="$2"; shift 2 ;;
     --no-log)     WRITE_LOG=0; shift ;;
     --quiet-skip) QUIET_SKIP=1; shift ;;
+    --print-threshold) PRINT_THRESHOLD=1; shift ;;
     --exec-files) [ "$#" -ge 2 ] || die_usage "--exec-files needs an argument"; EXEC_FILES="$2"; shift 2 ;;
     *) die_usage "unknown option: $1 (see --help)" ;;
   esac
 done
 
-case "$THRESHOLD" in
-  ''|*[!0-9.]*|.|*.*.*) die_usage "--threshold must be a positive number, got '$THRESHOLD'" ;;
-esac
+if [ "$THRESHOLD_GIVEN" -eq 1 ]; then
+  case "$THRESHOLD" in
+    ''|*[!0-9.]*|.|*.*.*) die_usage "--threshold must be a positive number, got '$THRESHOLD'" ;;
+  esac
+fi
 case "$EXEC_FILES" in
   ''|*[!0-9]*|0*) die_usage "--exec-files must be a positive integer, got '$EXEC_FILES'" ;;
 esac
@@ -100,6 +115,23 @@ fi
 [ -d "$ROOT" ] || die_usage "root is not a directory: $ROOT"
 ROOT="$(cd -- "$ROOT" && pwd)"
 [ -n "$LOG" ] || LOG="$ROOT/project/logs/slowness-probe.jsonl"
+
+if [ -z "$THRESHOLD" ]; then
+  THRESHOLD="2.5"
+  THRESHOLD_FILE="$ROOT/project/logs/slowness-threshold"
+  if [ -f "$THRESHOLD_FILE" ]; then
+    saved="$(head -n 1 "$THRESHOLD_FILE" 2>/dev/null | tr -d '[:space:]')"
+    case "$saved" in
+      ''|*[!0-9.]*|.|*.*.*) err "ignoring $THRESHOLD_FILE: '$saved' is not a positive number" ;;
+      *) if awk -v t="$saved" 'BEGIN { exit !(t > 0) }'; then THRESHOLD="$saved"; THRESHOLD_SOURCE="saved"; else err "ignoring $THRESHOLD_FILE: '$saved' is not a positive number"; fi ;;
+    esac
+  fi
+fi
+
+if [ "$PRINT_THRESHOLD" -eq 1 ]; then
+  printf '%s %s\n' "$THRESHOLD" "$THRESHOLD_SOURCE"
+  exit 0
+fi
 
 if ! command -v bats >/dev/null 2>&1; then
   [ "$QUIET_SKIP" -eq 1 ] || printf 'slowness probe skipped: bats is not on PATH\n'

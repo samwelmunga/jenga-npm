@@ -183,8 +183,9 @@ project/queue/commit-refs/
 # report leave this directory. Also blocklisted for the public mirror in .publicignore.
 project/logs/spike-hook-payloads/
 
-# Machine-local slowness probe log (scripts/slowness-probe.sh)
+# Machine-local slowness probe log and threshold (scripts/slowness-probe.sh, skills/j-test/scripts/slowness-check.sh)
 project/logs/slowness-probe.jsonl
+project/logs/slowness-threshold
 
 # Machine-local files that are never tracked (found untracked when preparing a release).
 # .mcp.json is this checkout's own MCP server registration; .set-status.py is a stray local

@@ -1,0 +1,62 @@
+$ extract-task-diff-stats.sh E01_S01_T01
+exit=0
+--- stdout
+actual_files_changed: 3
+actual_lines_delta: 32
+--- stderr
+=== end
+$ extract-task-diff-stats.sh E01_S01_T02
+exit=0
+--- stdout
+actual_files_changed: 3
+actual_lines_delta: 34
+--- stderr
+=== end
+$ extract-task-diff-stats.sh E01_S04_T02
+exit=0
+--- stdout
+actual_files_changed: 1
+actual_lines_delta: 20
+--- stderr
+=== end
+$ extract-task-diff-stats.sh E10_S01_T01
+exit=0
+--- stdout
+actual_files_changed: 3
+actual_lines_delta: 32
+--- stderr
+=== end
+$ extract-task-diff-stats.sh E10_S10_T10
+exit=0
+--- stdout
+actual_files_changed: 3
+actual_lines_delta: 32
+--- stderr
+=== end
+$ extract-task-diff-stats.sh E11_S01_T01
+exit=0
+--- stdout
+actual_files_changed: 3
+actual_lines_delta: 32
+--- stderr
+=== end
+$ extract-task-diff-stats.sh E99_S99_T99
+exit=0
+--- stdout
+actual_files_changed: 4
+actual_lines_delta: 42
+--- stderr
+=== end
+$ extract-task-diff-stats.sh E01_S01
+exit=1
+--- stdout
+--- stderr
+ERROR: Invalid task ID format 'E01_S01'. Expected E##_S##_T## (e.g. E32_S06_T01)
+=== end
+$ extract-task-diff-stats.sh E01_S01_T50
+exit=0
+--- stdout
+actual_files_changed: 0
+actual_lines_delta: 0
+--- stderr
+=== end

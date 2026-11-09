@@ -332,10 +332,28 @@ ACTIVITY_JSON="$(printf '%s' "$EVENTS_RAW" | jq -c '
 # In Progress, and only those get parsed.
 BOARD_ROWS=""
 if [[ -d "$BOARD_DIR" ]]; then
+  # Shared board-ID helpers (epic E86, E86_S02_T06): board_id_sort orders the In Progress items below, and so the
+  # F5/F6 findings built from them, by numeric ID (E99 before E100) where the shell's glob order is filename text.
+  # Resolved from this script's own location (repo layout, then installed package); there is deliberately no fallback
+  # ordering, so a missing library is an internal script error.
+  BOARD_IDS_SH=""
+  for _cand in "$REPO_ROOT/scripts/lib/board-ids.sh" "$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/lib/board-ids.sh"; do
+    if [[ -f "$_cand" ]]; then BOARD_IDS_SH="$_cand"; break; fi
+  done
+  if [[ -z "$BOARD_IDS_SH" ]]; then
+    echo "ERROR: shared board-ids.sh not found (looked in scripts/lib and node_modules/@jenga-ai/agent/scripts/lib relative to $REPO_ROOT)" >&2
+    exit 1
+  fi
+  # shellcheck source=/dev/null
+  . "$BOARD_IDS_SH"
+
   for board_kind in tasks stories; do
     [[ -d "$BOARD_DIR/$board_kind" ]] || continue
     board_matches="$(grep -l -- '^status:[[:space:]]*In Progress' "$BOARD_DIR/$board_kind"/*.md 2>/dev/null || true)"
     [[ -n "$board_matches" ]] || continue
+    # grep -l prints full paths in glob (text) order; re-sort the bare names numerically and put the directory back.
+    board_matches="$(printf '%s\n' "$board_matches" | sed 's|.*/||' | board_id_sort \
+      | while IFS= read -r _name; do printf '%s\n' "$BOARD_DIR/$board_kind/$_name"; done)"
     while IFS= read -r board_file; do
       [[ -n "$board_file" ]] && [[ -f "$board_file" ]] || continue
       bf_head="$(sed -n '1,40p' "$board_file" 2>/dev/null || true)"

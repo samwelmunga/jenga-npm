@@ -68,7 +68,9 @@
 #   - `file` is repo-relative (relative to the resolved project root), using
 #     forward slashes, suitable for display or re-opening the source file.
 #   - Array order: epics first, then stories, then tasks; within each type,
-#     files are sorted lexically by filename (stable across runs).
+#     files are sorted by the numeric board-ID order of the filename
+#     (E10 < E11 < E100; scripts/lib/board_ids.py board_id_sort_key; identical
+#     to lexical order on equal-width IDs), stable across runs.
 #
 # ---------------------------------------------------------------------------
 # ERROR HANDLING
@@ -83,8 +85,9 @@
 #   0   scan completed (stdout is always valid JSON on this path, even if
 #       some files were skipped with stderr warnings, and even if the
 #       result is an empty array because no board files exist yet)
-#   1   the board root (project/board/) does not exist at all, or python3
-#       is not available — both are real setup problems, not per-file noise
+#   1   the board root (project/board/) does not exist at all, python3
+#       is not available, or the shared scripts/lib/board_ids.py cannot be
+#       found — all real setup problems, not per-file noise
 #
 # ---------------------------------------------------------------------------
 
@@ -116,7 +119,24 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-python3 - "$JENGA_PROJECT_DIR" "$BOARD_DIR" <<'PY'
+# Shared numeric board-ID sort (epic E86): scripts/lib/board_ids.py is the single definition. Resolved relative to this
+# script, so the same relative layout works in the repo (skills/ + scripts/ at the root), in a .claude/ or .agents/
+# mirror, and in node_modules/@jenga-ai/agent. There is deliberately no fallback sort if it is missing.
+BOARD_IDS_LIB=""
+for _cand in \
+  "$SCRIPT_DIR/../../../scripts/lib" \
+  "$SCRIPT_DIR/../../../node_modules/@jenga-ai/agent/scripts/lib"; do
+  if [ -f "$_cand/board_ids.py" ]; then
+    BOARD_IDS_LIB="$(cd "$_cand" && pwd)"
+    break
+  fi
+done
+if [ -z "$BOARD_IDS_LIB" ]; then
+  echo "Error: shared board_ids.py not found (looked in scripts/lib and node_modules/@jenga-ai/agent/scripts/lib relative to $SCRIPT_DIR)" >&2
+  exit 1
+fi
+
+python3 - "$JENGA_PROJECT_DIR" "$BOARD_DIR" "$BOARD_IDS_LIB" <<'PY'
 import json
 import re
 import sys
@@ -124,6 +144,8 @@ from pathlib import Path
 
 project_root = Path(sys.argv[1])
 board_dir = Path(sys.argv[2])
+sys.path.insert(0, sys.argv[3])
+from board_ids import board_id_sort_key  # shared numeric order: scripts/lib/board_ids.py (epic E86)
 
 FRONTMATTER_RE = re.compile(r'^---\n(.*?)\n---\n?(.*)$', re.DOTALL)
 TOP_LEVEL_KV_RE = re.compile(r'^([A-Za-z_][A-Za-z0-9_]*):[ \t]*(.*)$')
@@ -194,7 +216,7 @@ items = []
 for item_type, dir_path in TYPE_DIRS:
     if not dir_path.is_dir():
         continue
-    for f in sorted(dir_path.glob("*.md")):
+    for f in sorted(dir_path.glob("*.md"), key=lambda p: board_id_sort_key(p.name)):
         try:
             text = f.read_text(encoding="utf-8")
         except Exception as e:

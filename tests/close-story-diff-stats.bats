@@ -251,6 +251,7 @@ install_layout() {
   mkdir -p "$1/skills/j-close-story/scripts" "$1/scripts"
   cp "$TASK_SCRIPT" "$STORY_SCRIPT" "$1/skills/j-close-story/scripts/"
   cp "$RESOLVER" "$1/scripts/"
+  cp -R "$REPO_ROOT/scripts/lib" "$1/scripts/lib"
 }
 
 @test "lookup: monorepo layout (resolver at <root>/scripts, found script-relative, not through the cwd)" {
@@ -286,8 +287,9 @@ install_layout() {
 
 @test "lookup: scripts copied somewhere with no resolver beside them fall back to ./scripts in the working directory" {
   build_fixture
-  mkdir -p "$BATS_TEST_TMPDIR/lonely/skills/j-close-story/scripts" "$FIX/scripts"
+  mkdir -p "$BATS_TEST_TMPDIR/lonely/skills/j-close-story/scripts" "$BATS_TEST_TMPDIR/lonely/scripts" "$FIX/scripts"
   cp "$TASK_SCRIPT" "$STORY_SCRIPT" "$BATS_TEST_TMPDIR/lonely/skills/j-close-story/scripts/"
+  cp -R "$REPO_ROOT/scripts/lib" "$BATS_TEST_TMPDIR/lonely/scripts/lib"
   cp "$RESOLVER" "$FIX/scripts/"
   run in_fixture bash "$BATS_TEST_TMPDIR/lonely/skills/j-close-story/scripts/extract-task-diff-stats.sh" E10_S01_T01
   [ "$status" -eq 0 ]
@@ -306,8 +308,9 @@ install_layout() {
 
 @test "lookup: no resolver anywhere is a loud error (exit 1) naming the resolver, never a silent 0 and 0" {
   build_fixture
-  mkdir -p "$BATS_TEST_TMPDIR/lonely/skills/j-close-story/scripts"
+  mkdir -p "$BATS_TEST_TMPDIR/lonely/skills/j-close-story/scripts" "$BATS_TEST_TMPDIR/lonely/scripts"
   cp "$TASK_SCRIPT" "$STORY_SCRIPT" "$BATS_TEST_TMPDIR/lonely/skills/j-close-story/scripts/"
+  cp -R "$REPO_ROOT/scripts/lib" "$BATS_TEST_TMPDIR/lonely/scripts/lib"
   run in_fixture bash "$BATS_TEST_TMPDIR/lonely/skills/j-close-story/scripts/extract-task-diff-stats.sh" E10_S01_T01
   [ "$status" -eq 1 ]
   [[ "$output" == *"commits-for-item.sh"* ]]

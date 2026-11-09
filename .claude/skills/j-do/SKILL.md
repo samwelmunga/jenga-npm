@@ -84,7 +84,7 @@ bash "$([ -f skills/j-break/scripts/check-break.sh ] && echo skills/j-break/scri
 Do not read the flag file yourself. Branch on the exit code and use the record the script prints.
 
 ### 1. Check for `project/todo.md`
-Run `bash "$([ -f scripts/todo_manager.sh ] && echo scripts/todo_manager.sh || echo node_modules/@jenga-ai/agent/scripts/todo_manager.sh)" exists`. If it exits non-zero, inform the user there are no queued tasks and exit.
+Run `bash "$([ -f scripts/todo_manager.sh ] && echo scripts/todo_manager.sh || echo node_modules/@jenga-ai/agent/scripts/todo_manager.sh)" exists`. If it exits non-zero, inform the user there are no queued tasks and exit. If this invocation already executed tasks, run `### 8.1` first.
 
 ### 1.5. Story-Bundle Execution Mode
 
@@ -310,7 +310,7 @@ After acquiring the epic lock and before writing the bundle manifest, scan all o
    - **If any task has `needs_docs: true`**: invoke the tester agent once for the full story. Pass the story ID, the list of all task IDs in the bundle, and the shared worktree path. The tester is responsible for updating individual task statuses.
    - **If all tasks have `needs_docs: false`**: the developer agent self-verifies — reviews each task's implementation against its acceptance criteria without invoking the tester. After self-verification passes, write `status: Passed` and `date_completed: <YYYY-MM-DD>` (today's date) to each task file using the file-locking protocol (steps c.1–c.4 above), and record each one (best-effort, see step c): `bash "$([ -f skills/j-break/scripts/record-execution.sh ] && echo skills/j-break/scripts/record-execution.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/record-execution.sh)" <task_id> Passed --source do-bundle`. No tester invocation occurs.
 
-6. **Cleanup**: on successful bundle completion, invoke the rollback anchor success path (see "### Bundle Manifest and Rollback Anchor" — success path) to delete the bundle manifest. Then **release the developer concurrency slot** acquired in step 3 above: `"$([ -f scripts/release-concurrency-slot.sh ] && echo scripts/release-concurrency-slot.sh || echo node_modules/@jenga-ai/agent/scripts/release-concurrency-slot.sh)" developer <E##_S##> <orchestrator_session_id>` (per `### 4.4` step 2 below). Then **release the epic lock**: run `rm -f project/queue/epic-lock-<E##>.json`. Finally run step 2 (`teardown`) of the **Task-Completion Cleanup Procedure** (`### 7.1` below) once, to delete `project/todo.md` if it is now effectively empty. Each task's entry was already removed in step 4c, so no `remove` runs here; the post-bundle `Passed` rewrite in step 5 re-writes a status whose entry is already gone and does not call `remove` again.
+6. **Cleanup**: on successful bundle completion, invoke the rollback anchor success path (see "### Bundle Manifest and Rollback Anchor" — success path) to delete the bundle manifest. Then **release the developer concurrency slot** acquired in step 3 above: `"$([ -f scripts/release-concurrency-slot.sh ] && echo scripts/release-concurrency-slot.sh || echo node_modules/@jenga-ai/agent/scripts/release-concurrency-slot.sh)" developer <E##_S##> <orchestrator_session_id>` (per `### 4.4` step 2 below). Then **release the epic lock**: run `rm -f project/queue/epic-lock-<E##>.json`. Run `### 8.1` for the bundle's task ids. Finally run step 2 (`teardown`) of the **Task-Completion Cleanup Procedure** (`### 7.1` below) once, to delete `project/todo.md` if it is now effectively empty. Each task's entry was already removed in step 4c, so no `remove` runs here; the post-bundle `Passed` rewrite in step 5 re-writes a status whose entry is already gone and does not call `remove` again.
 
 ### Bundle Manifest and Rollback Anchor
 
@@ -368,7 +368,7 @@ If `/do` is invoked with a task ID (`E##_S##_T##`) or a plain-text title, skip t
 Run `bash "$([ -f scripts/todo_manager.sh ] && echo scripts/todo_manager.sh || echo node_modules/@jenga-ai/agent/scripts/todo_manager.sh)" list` to display the queued tasks. Ask the user:
 - Execute a specific task (by number or title)
 - Execute the next task from the top of the list
-- Exit
+- Exit (run `### 8.1` first if this invocation executed any task)
 
 ### 3. Detect and break down Epics or Stories (scrum-master phase)
 
@@ -827,7 +827,16 @@ Never read the flag file here. Branch on the exit code and use the record the sc
 4. **Resume:** `/proceed` for a soft break; for a hard break, `/break clear` first, then `/proceed`. For a halted **story bundle** (the halt came from step 1.5 c.3), offer first `resume the bundle (/do <E##_S##>)` (after `/break clear` when the break is hard), and individual task dispatch with `/do <E##_S##_T##>` as the alternative. List **completed** (`skipped`), **not started** (`run`) and the intact `anchor_sha` by running `bash "$([ -f skills/j-do/scripts/bundle-resume.sh ] && echo skills/j-do/scripts/bundle-resume.sh || echo node_modules/@jenga-ai/agent/skills/j-do/scripts/bundle-resume.sh)" <E##_S##>` and reading its JSON, never from memory.
 5. **Scoped rapport:** only when the record says `with_status=true`. Run `bash "$([ -f skills/j-break/scripts/render-execution-status.sh ] && echo skills/j-break/scripts/render-execution-status.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/render-execution-status.sh)"` and print its output verbatim. If it fails, say the rapport is unavailable and why. Never improvise a rapport from the board.
 
+6. **Persist usage:** run `### 8.1` for the tasks executed so far before printing the report; it never alters the report.
+
 Nothing is aborted mid-flight: the current task has already run to completion by the time this checkpoint is reached.
 
 When there is no break, go back to step 1.
 
+### 8.1. Persist usage at the end of the run (`E76_S02_T05`)
+
+Called at every end of a run: step 1's and step 2's exits, the step 8 halt report (also reached from a bundle halt) and bundle step 6. **Non-blocking:** it never changes an exit message, a task status or the halt report.
+
+1. **Existence test.** If neither `scripts/task-usage.sh` nor `node_modules/@jenga-ai/agent/scripts/task-usage.sh` exists (public mirror), do nothing: no output, no warning, no "not measured" line. Also do nothing when no task ran.
+2. Run `bash "$([ -f scripts/task-usage.sh ] && echo scripts/task-usage.sh || echo node_modules/@jenga-ai/agent/scripts/task-usage.sh)" --persist --task <id> [--task <id>]...` once, for every task id executed in this run.
+3. Print one line per task from the stdout `results[]`: `persisted` (status `persisted`, `updated` or `unchanged`), `possibly incomplete` (`kept-stored`), `not measured: <message>` (`not-measured`). Any other status, or a non-zero exit (`4`-`9`), is one warning quoting the stderr, never a failure.

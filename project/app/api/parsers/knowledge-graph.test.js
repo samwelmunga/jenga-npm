@@ -34,13 +34,31 @@ const path = require('path');
 
 const GRAPH_JSON_SUFFIX = path.join('project', 'knowledge-graph', 'graph.json');
 
+// E83_S03_T02: readSADMap() also reads project/knowledge-graph/test-links.json (through
+// readTestLinks()), intercepted the same way. Default null = a missing links file, so every
+// pre-existing case runs with no overlay data and the real generated file is never read.
+const LINKS_JSON_SUFFIX = path.join('project', 'knowledge-graph', 'test-links.json');
+
 const originalReadFileSync = fs.readFileSync;
 
 // undefined = passthrough (no mock active); null = simulate a missing file (throws ENOENT); string
 // = literal mocked file content.
 let mockGraphJson;
+let mockLinksJson = null;
 
 fs.readFileSync = function patchedReadFileSync(filePath, ...rest) {
+  if (
+    mockLinksJson !== undefined &&
+    typeof filePath === 'string' &&
+    filePath.endsWith(LINKS_JSON_SUFFIX)
+  ) {
+    if (mockLinksJson === null) {
+      const err = new Error(`ENOENT: no such file or directory, open '${filePath}'`);
+      err.code = 'ENOENT';
+      throw err;
+    }
+    return mockLinksJson;
+  }
   if (
     mockGraphJson !== undefined &&
     typeof filePath === 'string' &&
@@ -63,6 +81,16 @@ function withMockGraphJson(value, fn) {
     return fn();
   } finally {
     mockGraphJson = previous;
+  }
+}
+
+function withMockLinksJson(value, fn) {
+  const previous = mockLinksJson;
+  mockLinksJson = value;
+  try {
+    return fn();
+  } finally {
+    mockLinksJson = previous;
   }
 }
 
@@ -138,15 +166,17 @@ async function run() {
 // Tests
 // ---------------------------------------------------------------------------------------------
 
+// arch-node: E08_S05 type=unit
 test('transforms a fixture graph.json into the {nodes, edges} UI shape', () => {
   const result = withMockGraphJson(JSON.stringify(FIXTURE_GRAPH), () => readSADMap());
 
+  // E83_S03_T02: every node also carries `tests` (empty here: no links file in this case).
   // E20_S10_T03: every returned node now also carries `verified`/`source` (needed so SADMap.jsx
   // can distinguish a fully-rendered node from a ghost stub) — no ghost candidates in this
   // baseline fixture, so both entries here are `verified: true`.
   assert.deepStrictEqual(result.nodes, [
-    { id: 'E-fixture-01', label: 'Fixture Epic', type: 'epic', verified: true, source: 'human', needsRevalidation: false },
-    { id: 'E-fixture-02', label: 'Fixture Story', type: 'story', verified: true, source: 'ast', needsRevalidation: false },
+    { id: 'E-fixture-01', label: 'Fixture Epic', type: 'epic', verified: true, source: 'human', needsRevalidation: false, tests: [] },
+    { id: 'E-fixture-02', label: 'Fixture Story', type: 'story', verified: true, source: 'ast', needsRevalidation: false, tests: [] },
   ]);
 
   assert.deepStrictEqual(result.edges, [
@@ -198,7 +228,11 @@ test('documents (does not fix) that edges pointing at a superseded node are not 
   );
 });
 
-const EMPTY_SAD_MAP = { nodes: [], edges: [], coverage: { shown: 0, hidden: 0, total: 0, needsRevalidation: 0 } };
+const EMPTY_SAD_MAP = {
+  nodes: [],
+  edges: [],
+  coverage: { shown: 0, hidden: 0, total: 0, needsRevalidation: 0, testCovered: 0, testLinksUnrendered: 0 },
+};
 
 test('a missing graph.json produces an empty {nodes, edges, coverage} shape without throwing', () => {
   assert.doesNotThrow(() => {
@@ -230,7 +264,7 @@ test('coverage counts are computed from the same filtering pass as the rendered 
 
   // Fixture: 4 nodes total, 1 superseded (excluded from both shown and hidden — it is not "active"
   // architecture data at all), leaving 3 active nodes: 2 human/ast (shown) + 1 board (hidden).
-  assert.deepStrictEqual(result.coverage, { shown: 2, hidden: 1, total: 3, needsRevalidation: 0 });
+  assert.deepStrictEqual(result.coverage, { shown: 2, hidden: 1, total: 3, needsRevalidation: 0, testCovered: 0, testLinksUnrendered: 0 });
 });
 
 test('coverage.shown equals the count of verified: true nodes (not the raw nodes array length)', () => {
@@ -252,7 +286,7 @@ test('a fixture with zero human/ast nodes produces coverage.shown === 0 (empty-s
   const result = withMockGraphJson(JSON.stringify(allBoardFixture), () => readSADMap());
 
   assert.strictEqual(result.nodes.length, 0);
-  assert.deepStrictEqual(result.coverage, { shown: 0, hidden: 2, total: 2, needsRevalidation: 0 });
+  assert.deepStrictEqual(result.coverage, { shown: 0, hidden: 2, total: 2, needsRevalidation: 0, testCovered: 0, testLinksUnrendered: 0 });
 });
 
 // -------------------------------------------------------------------------------------------
@@ -300,7 +334,7 @@ test('a ghost stub never counts toward coverage.shown', () => {
   const result = withMockGraphJson(JSON.stringify(MIXED_PROVENANCE_FIXTURE), () => readSADMap());
 
   // 1 verified (M-01) shown; M-02 (ghost) + M-03 (fully hidden) both count as hidden; total = 3.
-  assert.deepStrictEqual(result.coverage, { shown: 1, hidden: 2, total: 3, needsRevalidation: 0 });
+  assert.deepStrictEqual(result.coverage, { shown: 1, hidden: 2, total: 3, needsRevalidation: 0, testCovered: 0, testLinksUnrendered: 0 });
 });
 
 // -------------------------------------------------------------------------------------------
@@ -348,6 +382,174 @@ test('tech_stack, dependencies, and _sources are unaffected by graph.json conten
   assert.notDeepStrictEqual(withFixture.sad_map, withMissing.sad_map);
   assert.deepStrictEqual(withMissing.sad_map, EMPTY_SAD_MAP);
   assert.strictEqual(withFixture.sad_map.nodes.length, 2);
+});
+
+// -------------------------------------------------------------------------------------------
+// E83_S03_T02: test-coverage overlay data (tests[], coverage.testCovered, testLinksUnrendered)
+// -------------------------------------------------------------------------------------------
+
+// V-01 (human) is covered by two tests, V-02 (ast) is verified but uncovered, V-03 (ast, stale) is
+// covered, G-01 (board) is a ghost stub (edge to V-01), B-01 (board) has no edge so it is fully
+// hidden. Links also name G-01, B-01 and a node that is not in the graph at all.
+const OVERLAY_GRAPH = {
+  nodes: [
+    { id: 'V-01', type: 'service', label: 'Covered Service', description: 'd', source: 'human' },
+    { id: 'V-02', type: 'service', label: 'Uncovered Service', description: 'd', source: 'ast' },
+    { id: 'V-03', type: 'service', label: 'Stale Covered Service', description: 'd', source: 'ast', needs_revalidation: true },
+    { id: 'G-01', type: 'story', label: 'Ghost Endpoint', description: 'd', source: 'board' },
+    { id: 'B-01', type: 'story', label: 'Hidden Board Node', description: 'd', source: 'board' },
+  ],
+  edges: [{ id: 'o-edge-1', from: 'V-01', to: 'G-01', type: 'depends-on', description: 'depends on ghost' }],
+};
+
+const linkRecord = (node_id, name, extra = {}) => ({
+  node_id,
+  test_id: `tests/${name}.bats`,
+  type: 'unit',
+  name,
+  file: `tests/${name}.bats`,
+  line: 7,
+  ...extra,
+});
+
+const OVERLAY_LINKS = JSON.stringify({
+  schema_version: 1,
+  links: [
+    linkRecord('V-01', 'covers service one'),
+    linkRecord('V-01', 'covers service one again', { type: 'e2e', line: 21 }),
+    linkRecord('V-03', 'covers stale service'),
+    linkRecord('G-01', 'links a ghost stub'),
+    linkRecord('B-01', 'links a hidden board node'),
+    linkRecord('NOT-IN-GRAPH', 'links a missing node'),
+  ],
+});
+
+function readOverlay(graph, links) {
+  return withMockGraphJson(JSON.stringify(graph), () => withMockLinksJson(links, () => readSADMap()));
+}
+
+test('a covered verified node lists its tests with name, type, file and line', () => {
+  const result = readOverlay(OVERLAY_GRAPH, OVERLAY_LINKS);
+
+  const covered = result.nodes.find((n) => n.id === 'V-01');
+  assert.deepStrictEqual(covered.tests, [
+    { name: 'covers service one', type: 'unit', file: 'tests/covers service one.bats', line: 7 },
+    { name: 'covers service one again', type: 'e2e', file: 'tests/covers service one again.bats', line: 21 },
+  ]);
+});
+
+test('a verified node with no links carries tests: []', () => {
+  const result = readOverlay(OVERLAY_GRAPH, OVERLAY_LINKS);
+
+  const uncovered = result.nodes.find((n) => n.id === 'V-02');
+  assert.deepStrictEqual(uncovered.tests, []);
+  for (const node of result.nodes) {
+    assert.ok(Array.isArray(node.tests), `node ${node.id} must carry a tests array`);
+  }
+});
+
+test('a ghost stub with a link still carries tests: [] and is never counted as covered', () => {
+  const result = readOverlay(OVERLAY_GRAPH, OVERLAY_LINKS);
+
+  const ghost = result.nodes.find((n) => n.id === 'G-01');
+  assert.ok(ghost && ghost.verified === false, 'G-01 must be rendered as a ghost stub');
+  assert.deepStrictEqual(ghost.tests, []);
+});
+
+test('coverage.testCovered equals the verified rendered nodes with a non-empty tests', () => {
+  const result = readOverlay(OVERLAY_GRAPH, OVERLAY_LINKS);
+
+  const expected = result.nodes.filter((n) => n.verified && n.tests.length > 0).length;
+  assert.strictEqual(expected, 2, 'fixture sanity: V-01 and V-03 are the covered verified nodes');
+  assert.strictEqual(result.coverage.testCovered, expected);
+});
+
+test('links to a ghost stub, a hidden board node and a node absent from the graph are counted in testLinksUnrendered and render nothing', () => {
+  const result = readOverlay(OVERLAY_GRAPH, OVERLAY_LINKS);
+
+  // 6 link records: 3 land on verified rendered nodes (2 on V-01, 1 on V-03); 3 do not.
+  assert.strictEqual(result.coverage.testLinksUnrendered, 3);
+  const ids = result.nodes.map((n) => n.id);
+  assert.ok(!ids.includes('B-01'), 'a link must never turn a hidden board node into a rendered one');
+  assert.ok(!ids.includes('NOT-IN-GRAPH'), 'a link to an unknown id must not create a node');
+  assert.strictEqual(result.nodes.length, 4, 'V-01, V-02, V-03 and the G-01 ghost stub only');
+});
+
+test('a link to a node absent from the graph is ignored without error', () => {
+  const onlyMissing = JSON.stringify({ links: [linkRecord('NOT-IN-GRAPH', 'orphan link')] });
+  let result;
+  assert.doesNotThrow(() => {
+    result = readOverlay(OVERLAY_GRAPH, onlyMissing);
+  });
+  assert.strictEqual(result.coverage.testCovered, 0);
+  assert.strictEqual(result.coverage.testLinksUnrendered, 1);
+  assert.ok(result.nodes.every((n) => n.tests.length === 0));
+});
+
+test('no links file: tests: [] on every node, testCovered 0, testLinksUnrendered 0, no error', () => {
+  let result;
+  assert.doesNotThrow(() => {
+    result = readOverlay(OVERLAY_GRAPH, null);
+  });
+  assert.ok(result.nodes.length > 0);
+  assert.ok(result.nodes.every((n) => Array.isArray(n.tests) && n.tests.length === 0));
+  assert.strictEqual(result.coverage.testCovered, 0);
+  assert.strictEqual(result.coverage.testLinksUnrendered, 0);
+});
+
+test('an empty or malformed links file degrades exactly like a missing one', () => {
+  const missing = readOverlay(OVERLAY_GRAPH, null);
+  for (const bad of ['', '{not json', '[]', '{}', '{"links":"nope"}', '{"links":[null,1,{"name":"no node id"}]}']) {
+    let result;
+    assert.doesNotThrow(() => {
+      result = readOverlay(OVERLAY_GRAPH, bad);
+    }, `links file ${JSON.stringify(bad)} must not throw`);
+    assert.deepStrictEqual(result, missing, `links file ${JSON.stringify(bad)} must equal the no-links result`);
+  }
+});
+
+test('shown, hidden, total and needsRevalidation are unchanged with and without a links file', () => {
+  const without = readOverlay(OVERLAY_GRAPH, null);
+  const withLinks = readOverlay(OVERLAY_GRAPH, OVERLAY_LINKS);
+
+  for (const key of ['shown', 'hidden', 'total', 'needsRevalidation']) {
+    assert.strictEqual(withLinks.coverage[key], without.coverage[key], `coverage.${key} must not depend on links`);
+  }
+  assert.deepStrictEqual(
+    { shown: withLinks.coverage.shown, hidden: withLinks.coverage.hidden, total: withLinks.coverage.total, needsRevalidation: withLinks.coverage.needsRevalidation },
+    { shown: 3, hidden: 2, total: 5, needsRevalidation: 1 }
+  );
+  assert.deepStrictEqual(
+    withLinks.nodes.map(({ tests, ...rest }) => rest),
+    without.nodes.map(({ tests, ...rest }) => rest),
+    'node fields other than tests must be identical'
+  );
+  assert.deepStrictEqual(withLinks.edges, without.edges);
+});
+
+test('a graph with no rendered nodes reports every link as unrendered', () => {
+  const allBoard = {
+    nodes: [{ id: 'B-01', type: 'epic', label: 'Board Epic', description: 'd', source: 'board' }],
+    edges: [],
+  };
+  const result = readOverlay(allBoard, JSON.stringify({ links: [linkRecord('B-01', 'board link'), linkRecord('X', 'x link')] }));
+
+  assert.deepStrictEqual(result.nodes, []);
+  assert.deepStrictEqual(result.coverage, { shown: 0, hidden: 1, total: 1, needsRevalidation: 0, testCovered: 0, testLinksUnrendered: 2 });
+});
+
+test('a missing graph.json with links present still returns the empty shape without throwing', () => {
+  const result = withMockGraphJson(null, () => withMockLinksJson(OVERLAY_LINKS, () => readSADMap()));
+  assert.deepStrictEqual(result.nodes, []);
+  assert.strictEqual(result.coverage.testCovered, 0);
+});
+
+test('parseArchitecture forwards readSADMap() unchanged, including the overlay fields', async () => {
+  const arch = await withMockGraphJson(JSON.stringify(OVERLAY_GRAPH), () => withMockLinksJson(OVERLAY_LINKS, () => parseArchitecture()));
+
+  assert.strictEqual(arch.sad_map.coverage.testCovered, 2);
+  assert.strictEqual(arch.sad_map.coverage.testLinksUnrendered, 3);
+  assert.strictEqual(arch.sad_map.nodes.find((n) => n.id === 'V-01').tests.length, 2);
 });
 
 run();

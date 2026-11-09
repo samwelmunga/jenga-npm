@@ -1,0 +1,2 @@
+{"event":"session_start","agent":"developer","session_id":"fixture-session","date":"2026-01-02T00:00:00Z"}
+{"event":"task_passed","agent":"tester","session_id":"fixture-session","task_id":"E99_S99_T99","story_id":"E99_S99","epic_id":"E99","date":"2026-01-03T00:00:00Z"}

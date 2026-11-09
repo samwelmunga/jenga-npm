@@ -239,7 +239,7 @@ scope is closed. E72 is `In Progress` again; the first completion (2026-10-14) i
 Decisions settled with the user:
 
 1. Three flat top-level string keys in `project/configs/test-config.json`: `test_run_task` (default `none`),
-   `test_run_story` (default `scoped`), `test_run_epic` (default `full`); allowed values `none`, `scoped`, `full`.
+   `test_run_story` (default `scoped`), `test_run_epic` (default `none`); allowed values `none`, `scoped`, `full`.
    Flat because the config descriptor schema expresses an editable key only as a scalar (as with `commit_prompt_default`);
    editable with `jenga config get|set`, descriptor-validated.
 2. `none` runs nothing beyond the tester agent's own tests for the item; `scoped` runs the suites `map-scope.sh` maps

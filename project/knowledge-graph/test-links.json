@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "generated_from": {
+    "graph_sha256": "d0f36fb805aeeb2fb28280ede8f1e9b03b83d9d217ee68af6081cbb4949ff656",
+    "tests": {
+      "project/app/api/parsers/ideas.test.js": "5d6d3f1fad6e4b26a64cd0b8cefab715e01d0e2c22b9a9d8a24f5f004eb66f3d",
+      "project/app/api/parsers/knowledge-graph.test.js": "e324005879b1d37f1926b20c85be48275ca74eba3a7b581754a6bef70993d536",
+      "project/app/api/parsers/todo.test.js": "bccc188416f5c1ccf581f60745f194f9107251a4dd1f831809dfa10f6758c960",
+      "tests/break-signal.bats": "2366ffc6032003a6b557444df9ecbcd0ddbc48e08197b59d566acc3b744212a5",
+      "tests/populate-knowledge-graph.bats": "bf78d7ba70a7881ba1b71c5aec11e156bd37e1eb1ce137e36b267c2a4ca67d5c"
+    }
+  },
+  "links": [
+    {
+      "node_id": "E06_S05",
+      "test_id": "project/app/api/parsers/todo.test.js",
+      "type": "unit",
+      "name": "project/app/api/parsers/todo.test.js",
+      "file": "project/app/api/parsers/todo.test.js",
+      "line": 1
+    },
+    {
+      "node_id": "E08_S05",
+      "test_id": "project/app/api/parsers/knowledge-graph.test.js::transforms a fixture graph.json into the {nodes, edges} UI shape",
+      "type": "unit",
+      "name": "transforms a fixture graph.json into the {nodes, edges} UI shape",
+      "file": "project/app/api/parsers/knowledge-graph.test.js",
+      "line": 170
+    },
+    {
+      "node_id": "E20",
+      "test_id": "tests/populate-knowledge-graph.bats::containment edge is written from a story's own epic_id",
+      "type": "integration",
+      "name": "containment edge is written from a story's own epic_id",
+      "file": "tests/populate-knowledge-graph.bats",
+      "line": 206
+    },
+    {
+      "node_id": "E20_S09",
+      "test_id": "tests/populate-knowledge-graph.bats",
+      "type": "unit",
+      "name": "tests/populate-knowledge-graph.bats",
+      "file": "tests/populate-knowledge-graph.bats",
+      "line": 2
+    },
+    {
+      "node_id": "E20_S09",
+      "test_id": "tests/populate-knowledge-graph.bats::containment edge is written from a story's own epic_id",
+      "type": "integration",
+      "name": "containment edge is written from a story's own epic_id",
+      "file": "tests/populate-knowledge-graph.bats",
+      "line": 206
+    },
+    {
+      "node_id": "E35",
+      "test_id": "project/app/api/parsers/ideas.test.js",
+      "type": "unit",
+      "name": "project/app/api/parsers/ideas.test.js",
+      "file": "project/app/api/parsers/ideas.test.js",
+      "line": 1
+    },
+    {
+      "node_id": "E44_S01",
+      "test_id": "tests/break-signal.bats",
+      "type": "unit",
+      "name": "tests/break-signal.bats",
+      "file": "tests/break-signal.bats",
+      "line": 2
+    },
+    {
+      "node_id": "E44_S02",
+      "test_id": "tests/break-signal.bats",
+      "type": "unit",
+      "name": "tests/break-signal.bats",
+      "file": "tests/break-signal.bats",
+      "line": 2
+    }
+  ]
+}

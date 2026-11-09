@@ -1,0 +1,210 @@
+$ commit-subject-check.sh 'chore: scaffold fixture project'
+exit=0
+--- stdout
+kind=non-board; no commit-format convention recorded
+--- stderr
+=== end
+$ commit-subject-check.sh 'epic(E01): add fixture epic'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'story(E01_S01): add fixture story'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'task(E01_S01_T01): add fixture task'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'task(E01_S01_T02): add fixture task'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'epic(E10): add fixture epic'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'story(E10_S01): add fixture story'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'task(E10_S01_T01): add fixture task'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'story(E10_S10): add fixture story'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'task(E10_S10_T10): add fixture task'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'epic(E11): add fixture epic'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'story(E11_S01): add fixture story'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'task(E11_S01_T01): add fixture task'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'epic(E99): add fixture epic'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'story(E99_S99): add fixture story'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'task(E99_S99_T99): add fixture task'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'chore(E99_S99_T99): add rapport - fixture sample problem'
+exit=0
+--- stdout
+kind=board; names a board item, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'merge: land E01_S01_T02-fixture-task into main (Passed)'
+exit=0
+--- stdout
+kind=board; names a board item, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'chore: add fixture todo, queue and event log samples'
+exit=0
+--- stdout
+kind=non-board; no commit-format convention recorded
+--- stderr
+=== end
+$ commit-subject-check.sh 'story(E01_S02): add fixture story'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'story(E01_S03): add fixture story'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'story(E01_S04): add fixture story'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'task(E01_S04_T02): add fixture task'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'epic(E02): add real-board slice'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'story(E02_S02): add real-board slice'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'epic(E03): add real-board slice'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'story(E03_S01): add real-board slice'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'task(E03_S01_T02): add real-board slice'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'task(E03_S01_T04): add real-board slice'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'task(E01_S01_T01): x'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'task(E01_S01_T1): x'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'chore(E01_S01_T): x'
+exit=0
+--- stdout
+kind=non-board; no commit-format convention recorded
+--- stderr
+=== end
+$ commit-subject-check.sh 'story(E99_S99): x'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'epic(E10): x'
+exit=0
+--- stdout
+kind=board; EST naming, the project commit-format convention is not applied
+--- stderr
+=== end
+$ commit-subject-check.sh 'fix: nothing to see'
+exit=0
+--- stdout
+kind=non-board; no commit-format convention recorded
+--- stderr
+=== end

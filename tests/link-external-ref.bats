@@ -545,6 +545,8 @@ today_matches() { # today_matches <file>: linked_on is today's UTC date (tolerat
   # A fake scripts dir whose with-lock.sh records that it was used, then delegates to the real one.
   mkdir -p "$spy/scripts"
   cp "$LINKER" "$REPO_ROOT/scripts/resolve-root.sh" "$REPO_ROOT/scripts/validate-board.sh" "$spy/scripts/"
+  # validate-board.sh resolves its board-ID shapes from scripts/lib/ next to itself (E86_S01_T02).
+  cp -R "$REPO_ROOT/scripts/lib" "$spy/scripts/lib"
   printf '#!/usr/bin/env bash\necho "$1" >> "%s/lock-used"\nexec bash "%s/scripts/with-lock.sh" "$@"\n' "$spy" "$REPO_ROOT" > "$spy/scripts/with-lock.sh"
   run --separate-stderr bash "$spy/scripts/link-external-ref.sh" "$TASK_ID" --system jira --kind issue --key PROJ-1
   [ "$status" -eq 0 ]
@@ -802,6 +804,8 @@ decline_note_matches() {
   local spy="$BATS_TEST_TMPDIR/spy-decline"
   mkdir -p "$spy/scripts"
   cp "$LINKER" "$REPO_ROOT/scripts/resolve-root.sh" "$REPO_ROOT/scripts/validate-board.sh" "$spy/scripts/"
+  # validate-board.sh resolves its board-ID shapes from scripts/lib/ next to itself (E86_S01_T02).
+  cp -R "$REPO_ROOT/scripts/lib" "$spy/scripts/lib"
   printf '#!/usr/bin/env bash\necho "$1" >> "%s/lock-used"\nexec bash "%s/scripts/with-lock.sh" "$@"\n' "$spy" "$REPO_ROOT" > "$spy/scripts/with-lock.sh"
   run --separate-stderr bash "$spy/scripts/link-external-ref.sh" "$TASK_ID" --decline
   [ "$status" -eq 0 ]

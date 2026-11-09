@@ -1,0 +1,7 @@
+$ render-ranked-list.sh
+exit=0
+--- stdout
+1. E10_S10_T10 — "Fixture task E10_S10_T10"
+2. E11_S01_T01 — "Fixture task E11_S01_T01"
+--- stderr
+=== end

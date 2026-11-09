@@ -5,6 +5,7 @@ import ErrorMessage from '../components/ErrorMessage'
 import TechStackGrid from '../components/architecture/TechStackGrid'
 import DependencyTable from '../components/architecture/DependencyTable'
 import SADMap from '../components/architecture/SADMap'
+import TestCoverageTable from '../components/architecture/TestCoverageTable'
 
 export default function ArchitectureTab() {
   const [loading, setLoading] = useState(true)
@@ -43,6 +44,13 @@ export default function ArchitectureTab() {
             <SADMap
               nodes={data.sad_map?.nodes}
               edges={data.sad_map?.edges}
+              coverage={data.sad_map?.coverage}
+            />
+          </section>
+          <section className="arch-section">
+            <h3>Test coverage</h3>
+            <TestCoverageTable
+              nodes={data.sad_map?.nodes}
               coverage={data.sad_map?.coverage}
             />
           </section>

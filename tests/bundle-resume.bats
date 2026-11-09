@@ -253,3 +253,82 @@ jq_() { printf '%s' "$output" | python3 -c "import json,sys; d=json.load(sys.std
   run grep -c 'git diff --name-only HEAD~1`' "$REPO_ROOT/skills/j-do/SKILL.md"
   [ "$output" -eq 0 ]
 }
+
+# --- E86_S02_T04: numeric ordering and the pinned trailing-underscore lookup ------------------------------------------
+
+story_file() {  # story_file <id> <suffix> <task ids...>   (suffix lets a decoy sort before or after the real file)
+  local id="$1" suffix="$2"; shift 2
+  { printf -- '---\nid: %s\nepic_id: E10\ntitle: s\nstatus: In Progress\ntasks:\n' "$id"; local t; for t in "$@"; do printf '  - %s\n' "$t"; done; printf -- '---\n'; } \
+    > "$PROJ/project/board/stories/${id}_${suffix}.md"
+}
+task_file() {  # task_file <id> <suffix> <status>
+  printf -- '---\nid: %s\nstory_id: E10_S1\nepic_id: E10\ntitle: t\nstatus: %s\n---\n' "$1" "$3" > "$PROJ/project/board/tasks/$1_$2.md"
+}
+
+@test "E86_S02_T04: story E10_S1 ignores a decoy E10_S10 story file that sorts first" {
+  story_file E10_S10 a E10_S10_T1 E10_S10_T2
+  story_file E10_S1 z E10_S1_T1
+  task_file E10_S1_T1 x Pending
+  task_file E10_S10_T1 x Pending; task_file E10_S10_T2 x Pending
+  resume E10_S1
+  [ "$status" -eq 0 ]
+  [ "$(jq_ 'd["story_id"]')" = "E10_S1" ]
+  [ "$(jq_ '",".join(d["run"])')" = "E10_S1_T1" ]
+  # with only the decoy present there is no E10_S1 story, so the lookup must not fall back to it
+  rm "$PROJ/project/board/stories/E10_S1_z.md"
+  resume E10_S1
+  [ "$status" -eq 4 ]
+}
+
+@test "E86_S02_T04: task E10_S1_T1 ignores E10_S1_T10 and E10_S1_T100 decoys carrying a different status" {
+  story_file E10_S1 z E10_S1_T1
+  task_file E10_S1_T1 x Pending
+  task_file E10_S1_T10 a Passed
+  task_file E10_S1_T100 a Merged
+  manifest_e10() { printf '{"story_id":"E10_S1","anchor_sha":"%s","tasks":["E10_S1_T1"],"task_changed_files":{}}\n' "$ANCHOR" > "$PROJ/project/queue/bundle-E10_S1.json"; }
+  manifest_e10
+  resume E10_S1
+  [ "$status" -eq 0 ]
+  [ "$(jq_ 'd["mode"]')" = "resume" ]
+  [ "$(jq_ '",".join(d["run"])')" = "E10_S1_T1" ]
+  [ "$(jq_ 'len(d["skipped"])')" = "0" ]
+}
+
+@test "E86_S02_T04: output on a two-digit story is byte-identical to the pre-change output" {
+  story_file E10_S12 z E10_S12_T1 E10_S12_T2 E10_S12_T10
+  task_file E10_S12_T1 x Passed; task_file E10_S12_T2 x Pending; task_file E10_S12_T10 x Failed
+  resume E10_S12
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"mode": "fresh", "story_id": "E10_S12", "anchor_sha": null, "run": ["E10_S12_T1", "E10_S12_T2", "E10_S12_T10"], "skipped": [], "notes": []}' ]
+  printf '{"story_id":"E10_S12","anchor_sha":"%s","tasks":["E10_S12_T1","E10_S12_T2"],"task_changed_files":{"E10_S12_T1":["a"]}}\n' "$ANCHOR" > "$PROJ/project/queue/bundle-E10_S12.json"
+  resume E10_S12
+  [ "$status" -eq 0 ]
+  local want
+  want="$(printf '{"mode": "resume", "story_id": "E10_S12", "anchor_sha": "%s", "run": ["E10_S12_T2", "E10_S12_T10"], "skipped": ["E10_S12_T1"], "notes": ["E10_S12_T10 is Failed and will be run again", "task list drift (story list wins): only in manifest [], only in story [%sE10_S12_T10%s]"]}' "$ANCHOR" "'" "'")"
+  [ "$output" = "$want" ]
+}
+
+@test "E86_S02_T04: the lookup uses board_id_sort_key and keeps the trailing underscore" {
+  [ "$(grep -c 'import board_id_sort_key' "$RESUME")" -eq 1 ]
+  [ "$(grep -c 'key=by_board_id' "$RESUME")" -eq 2 ]
+  grep -q 'story_id + "_\*.md"' "$RESUME"
+  grep -q 'tid + "_\*.md"' "$RESUME"
+}
+
+@test "E86_S02_T04: unlocatable board_ids.py exits 5 with a one-line cause; importing the helper leaves no bytecode" {
+  # a copy of the script under a tree that has resolve-root.sh but no scripts/lib/board_ids.py
+  local fake="$BATS_TEST_TMPDIR/fake"
+  mkdir -p "$fake/skills/j-do/scripts" "$fake/scripts"
+  cp "$RESUME" "$fake/skills/j-do/scripts/bundle-resume.sh"
+  cp "$REPO_ROOT/scripts/resolve-root.sh" "$fake/scripts/resolve-root.sh"
+  story_file E10_S1 z E10_S1_T1; task_file E10_S1_T1 x Pending
+  run --separate-stderr bash "$fake/skills/j-do/scripts/bundle-resume.sh" E10_S1
+  [ "$status" -eq 5 ]
+  [[ "$stderr" == *board_ids.py* ]]
+  [ "$(printf '%s\n' "$stderr" | wc -l | tr -d ' ')" = "1" ]
+  # real run: no __pycache__ appears next to the helper
+  local had=0; [ -d "$REPO_ROOT/scripts/lib/__pycache__" ] && had=1
+  resume E10_S1
+  [ "$status" -eq 0 ]
+  if [ "$had" -eq 0 ]; then [ ! -d "$REPO_ROOT/scripts/lib/__pycache__" ]; fi
+}

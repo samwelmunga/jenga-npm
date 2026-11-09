@@ -62,10 +62,38 @@ def _resolve_project_root() -> Path:
 
 
 ROOT_DIR = _resolve_project_root()
-BOARD_ID_RE = re.compile(r"^E\d{2}(?:_S\d{2})?(?:_T\d{2})?$")
-PLAN_RE = re.compile(r"^(E\d{2}_S\d{2}(?:_T\d{2})?)-plan$")
-SUMMARY_RE = re.compile(r"^(E\d{2}_S\d{2}(?:_T\d{2})?)-summary$")
-TODO_REF_AT_END_RE = re.compile(r"(E\d{2}_S\d{2}(?:_T\d{2})?)\s*$")
+
+# Board-ID shapes come from the shared module scripts/lib/board_ids.py (epic E86). In every layout this
+# script is deployed in (skills/index/scripts/, .claude/ and .agents/ mirrors, node_modules/@jenga-ai/agent/)
+# the module sits at <parents[3]>/scripts/lib. This only locates the module; ROOT_DIR above is unrelated.
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts" / "lib"))
+from board_ids import (  # noqa: E402
+    BOARD_ID_RE,
+    PLAN_RE,
+    SUMMARY_RE,
+    TODO_REF_AT_END_RE,
+    board_id_sort_key,
+)
+
+# Longest board-ID prefix of a name (bare ID, file name or plan/summary stem). Unlike board_ids' own ID rule it does not
+# require the ID to end at "_" or ".", so "E41_S14-copilot-research" and "E38-scenario-plan" still order by their IDs.
+_ID_PREFIX_RE = re.compile(r"E\d+(?:_S\d+(?:_T\d+)?)?", re.ASCII)
+
+
+def board_order_key(value: Any) -> tuple[str, tuple[int, ...], str]:
+    """Numeric order for anything that starts with a board ID, text order for everything else (epic E86).
+
+    The numbers come from the shared board_id_sort_key (scripts/lib/board_ids.py), so E10 < E11 < E100 < E1001 and
+    E10_S2 < E10_S10 < E10_S100. A value with no board-ID prefix keeps its plain text order, which is what lets one
+    key serve lists that mix board IDs with other names (plan and summary stems, edge endpoints). The "E0" head puts
+    every ID-prefixed value where its text would sit among them: after "E-x", before "Ex", and among the IDs by number.
+    On equal-width IDs (the existing two-digit board) the result equals the old text order exactly.
+    """
+    text = str(value)
+    match = _ID_PREFIX_RE.match(text)
+    if match is None:
+        return (text, (), text)
+    return ("E0", board_id_sort_key(match.group(0))[1:4], text)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -342,7 +370,7 @@ def extract_board_nodes_and_edges() -> tuple[list[dict[str, Any]], list[dict[str
     for node_type, directory, fields in board_specs:
         if not directory.exists():
             continue
-        for path in sorted(directory.glob("*.md")):
+        for path in sorted(directory.glob("*.md"), key=lambda p: board_order_key(p.name)):
             parsed = parse_markdown_with_frontmatter(path, required_frontmatter=True)
             if parsed is None:
                 continue
@@ -404,7 +432,7 @@ def extract_documentation_nodes_and_edges() -> tuple[list[dict[str, Any]], list[
 
     plan_dir = documentation_dir / "plans"
     if plan_dir.exists():
-        for path in sorted(plan_dir.glob("*.md")):
+        for path in sorted(plan_dir.glob("*.md"), key=lambda p: board_order_key(p.name)):
             parsed = parse_markdown_with_frontmatter(path, required_frontmatter=False)
             if parsed is None:
                 continue
@@ -420,7 +448,7 @@ def extract_documentation_nodes_and_edges() -> tuple[list[dict[str, Any]], list[
 
     summary_dir = documentation_dir / "summaries"
     if summary_dir.exists():
-        for path in sorted(summary_dir.glob("*.md")):
+        for path in sorted(summary_dir.glob("*.md"), key=lambda p: board_order_key(p.name)):
             parsed = parse_markdown_with_frontmatter(path, required_frontmatter=False)
             if parsed is None:
                 continue
@@ -604,11 +632,21 @@ def derive_optional_edges(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def sort_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return sorted(nodes, key=lambda node: (node.get("type", ""), node.get("id", ""), node.get("path", "")))
+    return sorted(
+        nodes,
+        key=lambda node: (node.get("type", ""), board_order_key(node.get("id", "")), node.get("path", "")),
+    )
 
 
 def sort_edges(edges: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return sorted(edges, key=lambda edge: (edge.get("type", ""), edge.get("from", ""), edge.get("to", "")))
+    return sorted(
+        edges,
+        key=lambda edge: (
+            edge.get("type", ""),
+            board_order_key(edge.get("from", "")),
+            board_order_key(edge.get("to", "")),
+        ),
+    )
 
 
 def filter_by_type(items: list[dict[str, Any]], type_filter: str | None, allowed: set[str]) -> list[dict[str, Any]]:

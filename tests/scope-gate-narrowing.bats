@@ -386,7 +386,7 @@ EOF
   for key in scope id mode effective_mode fallback_reason suites_run passed failed suites exit_code \
              test_files_run test_files_available excluded_test_files exclusion_reason \
              disabled_suites map_excluded_test_files map_exclusion_conflicts \
-             map_exclusions_superseded; do
+             map_exclusions_superseded refusal; do
     [ "$(printf '%s' "$output" | jq --arg k "$key" 'has($k)')" = "true" ]
   done
 }

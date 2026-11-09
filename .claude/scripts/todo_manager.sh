@@ -58,13 +58,39 @@ case "${1:-}" in
     if [ ! -f "$TODO_FILE" ]; then
       echo "Error: $TODO_FILE does not exist" >&2; exit 1
     fi
-    # Check for at least one match
-    if ! grep -qF "$2" "$TODO_FILE"; then
-      echo "Error: no line matching \"$2\" found in $TODO_FILE" >&2; exit 1
+    # Remove only the FIRST matching line atomically. A line matches when it contains <title> as a plain substring,
+    # with one extra rule (E86_S05_T01): when <title> ends in a board ID (`<mission title>: E10_S1`), the occurrence
+    # must also END at that ID, i.e. no [A-Za-z0-9_] may follow it. Without it `...: E10_S1` would also match
+    # `...: E10_S10` or `...: E10_S1_T01` (an ID is a string prefix of the longer ones once IDs have three or more
+    # digits) and the wrong entry would be removed. A title that does not end in an ID keeps the
+    # plain "first line containing <title>" meaning.
+    #
+    # awk exits 3 when no line matched; the temp file is then discarded, so a miss never rewrites the file.
+    if awk -v title="$2" '
+      function matches(line,    rest, pos, c) {
+        rest = line
+        while ((pos = index(rest, title)) > 0) {
+          if (!ends_in_id) return 1
+          c = substr(rest, pos + length(title), 1)
+          if (c == "" || c !~ /[A-Za-z0-9_]/) return 1
+          rest = substr(rest, pos + 1)
+        }
+        return 0
+      }
+      BEGIN { ends_in_id = (title ~ /E[0-9]+(_S[0-9]+(_T[0-9]+)?)?$/) }
+      found || !matches($0) { print; next }
+      { found = 1 }
+      END { exit (found ? 0 : 3) }
+    ' "$TODO_FILE" > "${TODO_FILE}.tmp"; then
+      mv "${TODO_FILE}.tmp" "$TODO_FILE"
+    else
+      rc=$?
+      rm -f "${TODO_FILE}.tmp"
+      if [ "$rc" -eq 3 ]; then
+        echo "Error: no line matching \"$2\" found in $TODO_FILE" >&2; exit 1
+      fi
+      exit "$rc"
     fi
-    # Remove only the FIRST matching line atomically
-    awk -v title="$2" 'found || !index($0, title) { print; next } { found=1 }' \
-      "$TODO_FILE" > "${TODO_FILE}.tmp" && mv "${TODO_FILE}.tmp" "$TODO_FILE"
     ;;
 
   list)

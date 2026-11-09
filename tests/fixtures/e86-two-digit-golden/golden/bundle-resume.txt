@@ -1,0 +1,42 @@
+$ bundle-resume.sh E01_S01
+exit=0
+--- stdout
+{"mode": "resume", "story_id": "E01_S01", "anchor_sha": "23b480c27cf2a969b582d848b851279472262f2d", "run": [], "skipped": ["E01_S01_T01", "E01_S01_T02"], "notes": ["E01_S01_T01 is Passed on the board but has no task_changed_files entry; board wins, skipped"]}
+--- stderr
+=== end
+$ bundle-resume.sh E01_S04
+exit=0
+--- stdout
+{"mode": "fresh", "story_id": "E01_S04", "anchor_sha": null, "run": ["E01_S04_T02"], "skipped": [], "notes": ["all_terminal: every task is already Passed/Merged on the board and there is no manifest; a fresh bundle would re-run finished work"]}
+--- stderr
+=== end
+$ bundle-resume.sh E10_S10
+exit=0
+--- stdout
+{"mode": "fresh", "story_id": "E10_S10", "anchor_sha": null, "run": ["E10_S10_T10"], "skipped": [], "notes": []}
+--- stderr
+=== end
+$ bundle-resume.sh E10_S01
+exit=0
+--- stdout
+{"mode": "fresh", "story_id": "E10_S01", "anchor_sha": null, "run": ["E10_S01_T01"], "skipped": [], "notes": ["all_terminal: every task is already Passed/Merged on the board and there is no manifest; a fresh bundle would re-run finished work"]}
+--- stderr
+=== end
+$ bundle-resume.sh E99_S99
+exit=0
+--- stdout
+{"mode": "fresh", "story_id": "E99_S99", "anchor_sha": null, "run": ["E99_S99_T99"], "skipped": [], "notes": ["all_terminal: every task is already Passed/Merged on the board and there is no manifest; a fresh bundle would re-run finished work"]}
+--- stderr
+=== end
+$ bundle-resume.sh E11_S01
+exit=0
+--- stdout
+{"mode": "fresh", "story_id": "E11_S01", "anchor_sha": null, "run": ["E11_S01_T01"], "skipped": [], "notes": []}
+--- stderr
+=== end
+$ bundle-resume.sh E50_S01
+exit=4
+--- stdout
+--- stderr
+bundle-resume.sh: story file not found for E50_S01
+=== end

@@ -1,3 +1,4 @@
+// arch-node: E06_S05 type=unit
 /**
  * @file project/app/api/parsers/todo.test.js
  * Plain Node `assert`-based test script for `parsers/todo.js` (E06_S05_T04).

@@ -100,6 +100,12 @@ command -v python3 >/dev/null 2>&1 || { err "python3 is required"; exit 4; }
 
 RESOLVE_ROOT="$(resolve_helper scripts/resolve-root.sh)" || { err "could not locate scripts/resolve-root.sh"; exit 3; }
 
+# Shared board-ID helpers (epic E86, E86_S02_T06): board_id_sort_key orders the epic, story and task lines below by
+# numeric value (E99 before E100), where plain text order would put E100 before E11. The library is resolved from this
+# script's own location and there is deliberately no fallback ordering if it is missing.
+BOARD_IDS_PY="$(resolve_helper scripts/lib/board_ids.py)" || { err "could not locate scripts/lib/board_ids.py"; exit 3; }
+BOARD_IDS_LIB="$(dirname -- "$BOARD_IDS_PY")"
+
 resolve_key() {
   local out
   out="$(bash "$RESOLVE_ROOT" get "$1" 2>/dev/null)" || { err "could not resolve '$1'"; exit 3; }
@@ -124,7 +130,7 @@ if [ -z "$SESSION_KEY" ]; then
   fi
 fi
 
-python3 - "$QUEUE_DIR" "$EPICS_DIR" "$STORIES_DIR" "$TASKS_DIR" "$CONFIGS_DIR" "$TODO_FILE" "$SESSION_KEY" <<'PY'
+python3 - "$QUEUE_DIR" "$EPICS_DIR" "$STORIES_DIR" "$TASKS_DIR" "$CONFIGS_DIR" "$TODO_FILE" "$SESSION_KEY" "$BOARD_IDS_LIB" <<'PY'
 import datetime
 import glob
 import json
@@ -132,7 +138,19 @@ import os
 import re
 import sys
 
-queue_dir, epics_dir, stories_dir, tasks_dir, configs_dir, todo_file, session_key = sys.argv[1:8]
+queue_dir, epics_dir, stories_dir, tasks_dir, configs_dir, todo_file, session_key, board_ids_lib = sys.argv[1:9]
+
+sys.path.insert(0, board_ids_lib)
+import board_ids  # shared ID shapes and sort key: scripts/lib/board_ids.py (epic E86)
+
+
+def id_order(item_id):
+    """Sort key for the rapport's lines: board IDs in numeric order. The placeholders the tree uses for an item with
+    no story ("-") or no epic ("?") are not board IDs; they keep the position plain text order gave them, before
+    every real ID."""
+    if board_ids.classify(item_id) is None:
+        return (0, (), item_id)
+    return (1, board_ids.board_id_sort_key(item_id), "")
 
 TERMINAL_OK = {"Passed", "Passed with remarks", "Merged", "Done", "Deployed to Stage", "Deployed to Prod", "Publicized"}
 TERMINAL_BAD = {"Failed", "Rejected"}
@@ -399,15 +417,15 @@ def mark(it):
 
 
 counts = {"done": 0, "ran this session": 0, "done earlier": 0, "in flight": 0, "queued": 0, "other": 0}
-for epic_id in sorted(tree):
+for epic_id in sorted(tree, key=id_order):
     e = board.get(epic_id)
     out.append("")
     out.append(f"{ICON['epic']} {epic_id} · {(e or {}).get('title') or '(epic file not found)'}  [{(e or {}).get('status', '?')}]")
-    for story_id in sorted(tree[epic_id]):
+    for story_id in sorted(tree[epic_id], key=id_order):
         s = board.get(story_id)
         if story_id != "-":
             out.append(f"   {ICON['story']} {story_id} · {(s or {}).get('title') or '(story file not found)'}  [{(s or {}).get('status', '?')}]")
-        for it in sorted(tree[epic_id][story_id], key=lambda x: x["id"]):
+        for it in sorted(tree[epic_id][story_id], key=lambda x: id_order(x["id"])):
             icon, tag = mark(it)
             counts[tag if tag in counts else "other"] += 1
             pad = "      " if story_id != "-" else "   "

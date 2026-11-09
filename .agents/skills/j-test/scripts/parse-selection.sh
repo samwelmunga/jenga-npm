@@ -3,7 +3,8 @@
 # parse-selection.sh — parse and validate the answer typed at the j.test prompt
 # (E72_S02_T03)
 #
-#   Enter selection (comma-separated, or 'all' for all, or blank for 1 through N):
+#   Enter selection (comma-separated, or 'all' for all, or 'probe' to only check whether this
+#   machine is slow, or blank for 1 through N):
 #
 # Per CLAUDE.md's "Scripts Over Inline Logic" principle the model never parses
 # or validates that answer itself: SKILL.md calls this script and relays the
@@ -21,7 +22,7 @@
 #
 # Exit codes
 #   0  valid selection (or --help): the selected suite numbers are on stdout,
-#      one per line, in the order the user gave them
+#      one per line, in the order the user gave them; or the single word `probe`
 #   1  invalid selection: NOTHING on stdout, one message per problem on stderr
 #   2  usage error (missing or non-positive <N>, more than two arguments):
 #      a usage line on stderr
@@ -31,6 +32,9 @@
 #      whitespace-only input means ALL: 1 through N.
 #   2. The word `all`, case-insensitive, means ALL. It is only valid alone:
 #      `all,2` and `2,all` are invalid.
+#   2a. The word `probe`, case-insensitive, means "only check whether this machine is slow, run
+#      no suite". It is only valid alone, like `all`, and is the one answer that prints a word
+#      instead of numbers: the single line `probe`, exit 0.
 #   3. Otherwise the input is a comma-separated list of positive integers.
 #      Whitespace around each token is ignored (`1, 3` is valid). A token must
 #      match ^[1-9][0-9]*$ once trimmed: `0`, `-1`, `01`, `1.5`, `abc` and an
@@ -121,6 +125,11 @@ if [ "$(printf '%s' "$INPUT" | tr '[:upper:]' '[:lower:]')" = "all" ]; then
   exit 0
 fi
 
+if [ "$(printf '%s' "$INPUT" | tr '[:upper:]' '[:lower:]')" = "probe" ]; then
+  printf 'probe\n'
+  exit 0
+fi
+
 RANGE_TEXT="choose 1 through $N"
 SELECTED=""   # newline-terminated accepted numbers, in the order given
 SEEN=" "      # space-delimited numbers already listed
@@ -149,6 +158,11 @@ while [ -n "$REST" ]; do
 
   if [ "$(printf '%s' "$TOKEN" | tr '[:upper:]' '[:lower:]')" = "all" ]; then
     add_problem "$TOKEN" "'all' cannot be combined with other entries"
+    continue
+  fi
+
+  if [ "$(printf '%s' "$TOKEN" | tr '[:upper:]' '[:lower:]')" = "probe" ]; then
+    add_problem "$TOKEN" "'probe' cannot be combined with other entries"
     continue
   fi
 

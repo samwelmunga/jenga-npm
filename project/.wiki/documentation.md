@@ -704,6 +704,33 @@ See [workflows](project/documentation/workflows.md) for the definition format an
 
 ---
 
+#### `/j-workflow-recorder`
+
+**Description:** Record a working session as it happens into a continuously-appended `_RECORDING.md` document, so a process performed once by hand becomes a document and, later, a replayable workflow definition.
+
+**Output type:** `any`
+
+**Invokes:** the Scrum Master agent (interpretation of captured steps); capture itself is done by a hook and shell scripts
+
+**When to use:** When you are about to perform a process by hand and want it written down as it happens, so it can later become a replayable workflow definition.
+
+**What it does:**
+- `start [<name>]` — creates the recording document, named after the process (derived from your opening interaction when no name is given), and sets the active-recording pointer
+- `status` — reports whether a recording is active, its path, title, step count and when the pointer expires
+- `stop` — after you confirm the process has ended, seals the recording and hands the closed document to workflow-definition emission
+- Bare `/j-workflow-recorder` starts a recording, or reports the one already running
+- Each user interaction is appended automatically by a hook; the Scrum Master annotates the captured steps with what they mean in the process
+
+**Example:**
+```
+/j-workflow-recorder start setting up the release pipeline
+→ Recording to <documentation>/…_RECORDING.md; capture is automatic on each interaction
+/j-workflow-recorder status
+/j-workflow-recorder stop
+```
+
+---
+
 ### Status & Review
 
 ---
@@ -948,7 +975,27 @@ Queue depth: 2 triggers pending
 
 **Exit code:** `0` when every selected suite passed, `1` otherwise.
 
-**Notes:** It never writes board status — that remains the Tester agent's exclusive responsibility. The Tester also runs the same discovery and run scripts as a per-scope test policy (`test_run_task`, `test_run_story`, `test_run_epic`) before it closes a task, story or epic. See [`project/documentation/test-runner.md`](https://github.com/samwelmunga/jenga-npm/blob/main/project/documentation/test-runner.md).
+**Notes:** It never writes board status — that remains the Tester agent's exclusive responsibility. Answering `probe` at the prompt only checks whether the machine is slow; when it is, `/j-test` offers continue anyway, cancel, return to selection, change what counts as slow, or other. The Tester also runs the same discovery and run scripts as a per-scope test policy (`test_run_task`, `test_run_story`, `test_run_epic`) before it closes a task, story or epic. See [`project/documentation/test-runner.md`](https://github.com/samwelmunga/jenga-npm/blob/main/project/documentation/test-runner.md).
+
+---
+
+#### `/j-tidy`
+
+**Description:** Report, and then reclaim, stale git worktrees and branches — enumerates every registered worktree and every local branch, classifies each one against four safety conditions, and states the disk each group represents.
+
+**Output type:** `any`
+
+**Invokes:** none
+
+**When to use:** When a long-lived project has accumulated worktrees and branches that nothing removes, when the machine is slowing down and `.git`/worktree disk is the suspect, or as part of a `/j-reconcile` run (which invokes this skill as a step, after its orphaned-branch merge).
+
+**Why it exists alongside `/j-reconcile`:** `/j-reconcile` walks the board and matches a worktree by its task-ID slug, so `agent-<hash>` worktrees — created by the native worktree tool and by worktree-isolated subagents — are invisible to it. This sweep enumerates from git and the filesystem instead, which is what lets it see them. Local branches with no worktree are covered too, because a branch outlives the worktree that created it.
+
+**The four safety conditions** (all must hold for an automatic reclaim): the entry carries no content that is not already in its target ref — **content-based, not an ancestry check**, so a squash-merged entry still qualifies; its working tree is clean, with untracked files counting as dirty; and no OS process has its cwd inside it. Any condition that cannot be evaluated yields "retained", never "reclaimable": wrongly retained costs disk, wrongly reclaimed destroys the only copy of someone's work.
+
+**Safety posture:** report-only by default — a bare invocation deletes nothing. Reclaiming removes provably-safe entries automatically and offers every other entry for an explicit, per-entry decision. Worktree removal always goes through the liveness guard; branches are deleted with `git branch -d`, never `-D`, and a refusal keeps the branch and is reported.
+
+**Notes:** Retention age and the count and disk ceilings are read at run time from `tidy-config.json`; no threshold value exists in the scripts, and an unresolvable config disables the ceiling checks rather than substituting a default.
 
 ---
 
@@ -1592,7 +1639,7 @@ Usage, exit codes, and the editable-versus-read-only split are in [`project/conf
 
 ---
 
-#### `/j-clearify`
+#### `/j-clarify`
 
 **Description:** Clarifies ambiguous, dense, or under-specified prompts and conversation on request — inspects an attached prompt or falls back to the current conversation and surfaces plain-language clarifications with examples.
 
@@ -1609,7 +1656,7 @@ Usage, exit codes, and the editable-versus-read-only split are in [`project/conf
 
 **Example:**
 ```
-/j-clearify "spin up the usual setup for the staging deploy"
+/j-clarify "spin up the usual setup for the staging deploy"
 ### 1. "the usual setup"
 Plain-language: ...
 Simplified restatement: ...
@@ -1618,20 +1665,38 @@ Example: ...
 
 ---
 
-#### `/j-wtf`
+#### `/j-clearify`
 
-**Description:** Alias of `/j-clearify` — identical behaviour, provided so `j.wtf` (and its `/j-wtf` directory form) resolves to a skill.
+**Description:** **Deprecated** legacy alias of `/j-clarify`, kept only because this skill was originally shipped under a misspelled name. Use `/j-clarify` instead; behaviour is identical.
 
 **Output type:** `any`
 
-**Invokes:** /j-clearify
+**Invokes:** /j-clarify
 
-**When to use:** Same as `/j-clearify` — invoke either name interchangeably.
+**When to use:** Never for new work — it exists so client projects that already invoke the misspelled name keep working. Prefer `/j-clarify`.
+
+**Example:**
+```
+/j-clearify the last message
+→ (identical to /j-clarify, preceded by a one-line deprecation notice)
+```
+
+---
+
+#### `/j-wtf`
+
+**Description:** Alias of `/j-clarify` — identical behaviour, provided so `j.wtf` (and its `/j-wtf` directory form) resolves to a skill.
+
+**Output type:** `any`
+
+**Invokes:** /j-clarify
+
+**When to use:** Same as `/j-clarify` — invoke either name interchangeably.
 
 **Example:**
 ```
 /j-wtf does this error mean
-→ (identical to /j-clearify)
+→ (identical to /j-clarify)
 ```
 
 ---
@@ -1808,7 +1873,8 @@ skills/                    ← Canonical skill source — invoke as j.<name> or 
 ├── j-btw/
 ├── j-check-in/
 ├── j-checklist/
-├── j-clearify/                (alias: j-wtf)
+├── j-clarify/                 (alias: j-wtf)
+├── j-clearify/                (deprecated alias of j-clarify)
 ├── j-close-story/
 ├── j-close-task/
 ├── j-cloud-connect/
@@ -1852,11 +1918,12 @@ skills/                    ← Canonical skill source — invoke as j.<name> or 
 ├── j-status/
 ├── j-strategy/
 ├── j-test/
+├── j-tidy/
 ├── j-todo/
 ├── j-tools/
 ├── j-train/
 ├── j-uncharted/
-├── j-wtf/                     (alias of j-clearify)
+├── j-wtf/                     (alias of j-clarify)
 ├── jenga/                     (permanent bare name — main skill)
 ├── jenga-config/              (permanent bare name — main skill)
 └── jenga-permission-level/    (permanent bare name — main skill)

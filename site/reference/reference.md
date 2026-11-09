@@ -34,7 +34,8 @@ skills/                    ← Canonical skill source — invoke as j.<name> or 
 ├── j-btw/
 ├── j-check-in/
 ├── j-checklist/
-├── j-clearify/                (alias: j-wtf)
+├── j-clarify/                 (alias: j-wtf)
+├── j-clearify/                (deprecated alias of j-clarify)
 ├── j-close-story/
 ├── j-close-task/
 ├── j-cloud-connect/
@@ -83,7 +84,7 @@ skills/                    ← Canonical skill source — invoke as j.<name> or 
 ├── j-tools/
 ├── j-train/
 ├── j-uncharted/
-├── j-wtf/                     (alias of j-clearify)
+├── j-wtf/                     (alias of j-clarify)
 ├── jenga/                     (permanent bare name — main skill)
 ├── jenga-config/              (permanent bare name — main skill)
 └── jenga-permission-level/    (permanent bare name — main skill)

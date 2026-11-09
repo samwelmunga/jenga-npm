@@ -1,0 +1,16 @@
+{
+  "paths": {
+    "board": "project/board",
+    "epics": "project/board/epics",
+    "stories": "project/board/stories",
+    "tasks": "project/board/tasks",
+    "rapports_problems": "project/rapports/problems",
+    "queue": "project/queue",
+    "scrum_triggers": "project/queue/scrum_triggers.jsonl",
+    "session_handoff": "project/queue/handoffs/",
+    "logs": "project/logs",
+    "documentation": "project/documentation",
+    "documentation_plans": "project/documentation/plans",
+    "documentation_summaries": "project/documentation/summaries"
+  }
+}

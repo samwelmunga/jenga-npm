@@ -23,6 +23,23 @@
 
 set -euo pipefail
 
+# Shared board-ID shapes (epic E86). Resolved relative to this script, then the installed package, then the
+# repo root; there is deliberately no fallback regex here, so a missing file is an error rather than a silent
+# return to a two-digit-only guard.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_BID_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)"
+for _bid_dir in "$SCRIPT_DIR/../../../scripts/lib" "$_BID_ROOT/node_modules/@jenga-ai/agent/scripts/lib" "$_BID_ROOT/scripts/lib"; do
+  if [[ -f "$_bid_dir/board-ids.sh" ]]; then
+    # shellcheck source=../../../scripts/lib/board-ids.sh
+    . "$_bid_dir/board-ids.sh"
+    break
+  fi
+done
+if [[ -z "$(type -t board_id_kind)" ]]; then
+  echo "ERROR: shared board-ID source scripts/lib/board-ids.sh not found" >&2
+  exit 1
+fi
+
 # ---------------------------------------------------------------------------
 # Argument validation
 # ---------------------------------------------------------------------------
@@ -35,8 +52,8 @@ if [[ -z "$TASK_ID" ]]; then
   exit 1
 fi
 
-# Validate EST format: E##_S##_T##
-if [[ ! "$TASK_ID" =~ ^E[0-9]{2}_S[0-9]{2}_T[0-9]{2}$ ]]; then
+# Validate EST format: E##_S##_T## (any digit width)
+if [[ ! "$TASK_ID" =~ $BOARD_ID_TASK_RE ]]; then
   echo "ERROR: Invalid task ID format '$TASK_ID'. Expected E##_S##_T## (e.g. E32_S06_T01)" >&2
   exit 1
 fi

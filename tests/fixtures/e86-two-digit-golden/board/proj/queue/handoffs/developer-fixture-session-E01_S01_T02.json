@@ -1,0 +1,11 @@
+{
+  "agent": "developer",
+  "session_id": "fixture-session",
+  "status": "implementation_complete",
+  "task_id": "E01_S01_T02",
+  "story_id": "E01_S01",
+  "epic_id": "E01",
+  "worktree": "/fixture/worktrees/E01_S01_T02",
+  "paths": ["23b480c27cf2a969b582d848b851279472262f2d"],
+  "date": "2026-01-03T00:00:00Z"
+}

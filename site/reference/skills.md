@@ -828,7 +828,7 @@ Queue depth: 2 triggers pending
 
 **Exit code:** `0` when every selected suite passed, `1` otherwise.
 
-**Notes:** It never writes board status — that remains the Tester agent's exclusive responsibility. The Tester also runs the same discovery and run scripts as a per-scope test policy (`test_run_task`, `test_run_story`, `test_run_epic`) before it closes a task, story or epic. See [`project/documentation/test-runner.md`](https://github.com/samwelmunga/jenga-npm/blob/main/project/documentation/test-runner.md).
+**Notes:** It never writes board status — that remains the Tester agent's exclusive responsibility. Answering `probe` at the prompt only checks whether the machine is slow; when it is, `/j-test` offers continue anyway, cancel, return to selection, change what counts as slow, or other. The Tester also runs the same discovery and run scripts as a per-scope test policy (`test_run_task`, `test_run_story`, `test_run_epic`) before it closes a task, story or epic. See [`project/documentation/test-runner.md`](https://github.com/samwelmunga/jenga-npm/blob/main/project/documentation/test-runner.md).
 
 ---
 
@@ -1492,7 +1492,7 @@ Usage, exit codes, and the editable-versus-read-only split are in [`project/conf
 
 ---
 
-#### `/j-clearify`
+#### `/j-clarify`
 
 **Description:** Clarifies ambiguous, dense, or under-specified prompts and conversation on request — inspects an attached prompt or falls back to the current conversation and surfaces plain-language clarifications with examples.
 
@@ -1509,7 +1509,7 @@ Usage, exit codes, and the editable-versus-read-only split are in [`project/conf
 
 **Example:**
 ```
-/j-clearify "spin up the usual setup for the staging deploy"
+/j-clarify "spin up the usual setup for the staging deploy"
 ### 1. "the usual setup"
 Plain-language: ...
 Simplified restatement: ...
@@ -1518,20 +1518,38 @@ Example: ...
 
 ---
 
-#### `/j-wtf`
+#### `/j-clearify`
 
-**Description:** Alias of `/j-clearify` — identical behaviour, provided so `j.wtf` (and its `/j-wtf` directory form) resolves to a skill.
+**Description:** **Deprecated** legacy alias of `/j-clarify`, kept only because this skill was originally shipped under a misspelled name. Use `/j-clarify` instead; behaviour is identical.
 
 **Output type:** `any`
 
-**Invokes:** /j-clearify
+**Invokes:** /j-clarify
 
-**When to use:** Same as `/j-clearify` — invoke either name interchangeably.
+**When to use:** Never for new work — it exists so client projects that already invoke the misspelled name keep working. Prefer `/j-clarify`.
+
+**Example:**
+```
+/j-clearify the last message
+→ (identical to /j-clarify, preceded by a one-line deprecation notice)
+```
+
+---
+
+#### `/j-wtf`
+
+**Description:** Alias of `/j-clarify` — identical behaviour, provided so `j.wtf` (and its `/j-wtf` directory form) resolves to a skill.
+
+**Output type:** `any`
+
+**Invokes:** /j-clarify
+
+**When to use:** Same as `/j-clarify` — invoke either name interchangeably.
 
 **Example:**
 ```
 /j-wtf does this error mean
-→ (identical to /j-clearify)
+→ (identical to /j-clarify)
 ```
 
 ---

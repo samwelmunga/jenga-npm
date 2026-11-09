@@ -1,0 +1,2 @@
+{"type":"story_rollup","story_id":"E01_S01","epic_id":"E01","date":"2026-01-03T00:00:00Z","sender":{"agent":"tester","session_id":"fixture-session","task_id":"E01_S01_T02","story_id":"E01_S01","epic_id":"E01","date":"2026-01-03","paths":["23b480c27cf2a969b582d848b851279472262f2d"],"worktree":"/fixture/worktrees/E01_S01_T02"},"message":"Synthetic story rollup for the mixed-width fixture."}
+{"type":"status_review","task_id":"E99_S99_T99","story_id":"E99_S99","epic_id":"E99","date":"2026-01-03T00:05:00Z"}

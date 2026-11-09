@@ -85,6 +85,8 @@
   --color-chart-label: #ffffff;
   --color-chart-stale: #f59e0b;
   --color-chart-stale-ring: #ffffff;
+  --color-chart-covered: #0e7490;
+  --color-chart-covered-ring: #ffffff;
 }
 
 /* Dark values. The media-query block and the [data-theme="dark"] block below
@@ -137,6 +139,8 @@
     --color-chart-label: #ffffff;
     --color-chart-stale: #f59e0b;
     --color-chart-stale-ring: #1a1d23;
+    --color-chart-covered: #0e7490;
+    --color-chart-covered-ring: #1a1d23;
   }
 }
 
@@ -186,4 +190,6 @@
   --color-chart-label: #ffffff;
   --color-chart-stale: #f59e0b;
   --color-chart-stale-ring: #1a1d23;
+  --color-chart-covered: #0e7490;
+  --color-chart-covered-ring: #1a1d23;
 }

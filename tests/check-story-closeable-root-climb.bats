@@ -64,6 +64,10 @@ install_script_at() {
   local dest_dir="$1"
   mkdir -p "$dest_dir"
   cp "$REPO_ROOT/$SCRIPT_REL" "$dest_dir/check-story-closeable.sh"
+  # The script sources the shared board-ID shapes from <dest_dir>/../../../scripts/lib (epic E86); copy them to the
+  # matching layout (<fixture>/scripts/lib for the source layout, <fixture>/.claude/scripts/lib for the mirror).
+  mkdir -p "$dest_dir/../../../scripts"
+  cp -R "$REPO_ROOT/scripts/lib" "$dest_dir/../../../scripts/lib"
   chmod +x "$dest_dir/check-story-closeable.sh"
 }
 

@@ -22,6 +22,12 @@
 #   sources and node_modules are available, dist/ is rebuilt first so a
 #   snapshot is never taken from a stale build.
 #
+# Budget view (E76_S03_T07): the Budget tab needs nothing from this script. The captured
+#   /v1/board data already carries every usage_* field of a task or story (the API passes
+#   frontmatter through), and the bundled UI renders the tab from that embedded JSON, so it works
+#   from a file:// snapshot. When the board has no usage fields the tab and view are simply absent;
+#   the snapshot builds exactly as before. --out, --project-root and --data-url are unaffected.
+#
 # project/app itself is located by resolve-app-dir.sh, which also knows to look
 #   inside node_modules/@jenga-ai/agent — this script previously assumed the
 #   repo root, which is wrong for every consumer install.

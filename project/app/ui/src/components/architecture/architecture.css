@@ -274,3 +274,46 @@
     min-height: 180px;
   }
 }
+
+/* E83_S03_T03: covered-node badge (read-only; never intercepts a click meant for the node) and its legend. */
+.sad-node-covered-badge {
+  pointer-events: none;
+}
+
+.sad-covered-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin: 0 0 0.6rem;
+}
+
+.sad-covered-legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-chart-covered);
+  border: 1.5px solid var(--color-chart-covered-ring);
+}
+
+/* E83_S03_T04: "Test coverage" table. Reuses the .dep-table look; read-only, so no hover or cursor affordance beyond it. */
+.test-cov-summary {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin: 0 0 0.5rem;
+}
+
+.test-cov-type {
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.test-cov-location {
+  font-family: monospace;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}

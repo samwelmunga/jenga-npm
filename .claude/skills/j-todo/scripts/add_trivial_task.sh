@@ -123,23 +123,47 @@ if [ ! -f "$UPDATE_STORY_SCRIPT" ]; then
   exit 1
 fi
 
-# Determine the next task number for this story by scanning existing task files.
-max_num=0
-shopt -s nullglob
-for f in "${TASKS_DIR}/${story_id}_T"*.md; do
-  base="$(basename "$f")"
-  num="$(printf '%s' "$base" | sed -nE "s/^${story_id}_T([0-9]+)_.*/\1/p")"
-  if [ -n "$num" ]; then
-    num=$((10#$num))
-    if [ "$num" -gt "$max_num" ]; then
-      max_num=$num
-    fi
+# Determine the next task ID for this story. The one allocator, scripts/next-board-id.sh (E86_S04_T01), owns the
+# numeric-maximum rule and the width rule (minimum two digits, no maximum), so this script carries neither. It is looked
+# up beside the other shared scripts this script already needs (scripts/with-lock.sh): in the project root, then next
+# to the skills/ directory this script is deployed under (the source tree, or the .claude/ / .agents/ mirror).
+ALLOCATOR=""
+for cand in "${REPO_ROOT}/scripts/next-board-id.sh" "${SCRIPT_DIR}/../../../scripts/next-board-id.sh"; do
+  if [ -f "$cand" ]; then
+    ALLOCATOR="$cand"
+    break
   fi
 done
-shopt -u nullglob
-next_num=$((max_num + 1))
-next_num_padded="$(printf '%02d' "$next_num")"
-task_id="${story_id}_T${next_num_padded}"
+
+if [ -n "$ALLOCATOR" ]; then
+  # The allocator scans all three board directories and requires each override to exist. A task ID is only ever derived
+  # from task files, so when this board has no epics directory the stories directory stands in for it.
+  alloc_epics_dir="project/board/epics"
+  [ -d "$alloc_epics_dir" ] || alloc_epics_dir="$STORIES_DIR"
+  if ! task_id="$(bash "$ALLOCATOR" --epics-dir "$alloc_epics_dir" --stories-dir "$STORIES_DIR" --tasks-dir "$TASKS_DIR" task "$story_id")"; then
+    echo "Error: the ID allocator ($ALLOCATOR) failed for $story_id." >&2
+    exit 1
+  fi
+else
+  # Degraded mode, only when the allocator is not deployed beside this script (a partial install): the same numeric
+  # maximum plus one, minimum two digits. Never taken when scripts/next-board-id.sh is present.
+  max_num=0
+  shopt -s nullglob
+  for f in "${TASKS_DIR}/${story_id}_T"*.md; do
+    base="$(basename "$f")"
+    num="$(printf '%s' "$base" | sed -nE "s/^${story_id}_T([0-9]+)_.*/\1/p")"
+    if [ -n "$num" ]; then
+      num=$((10#$num))
+      if [ "$num" -gt "$max_num" ]; then
+        max_num=$num
+      fi
+    fi
+  done
+  shopt -u nullglob
+  next_num=$((max_num + 1))
+  [ "${#next_num}" -ge 2 ] || next_num="0${next_num}"
+  task_id="${story_id}_T${next_num}"
+fi
 
 shopt -s nullglob
 existing_matches=("${TASKS_DIR}/${task_id}_"*.md)

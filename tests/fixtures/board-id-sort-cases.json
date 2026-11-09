@@ -1,0 +1,42 @@
+[
+  {
+    "input": ["E1001", "E99", "E2", "E101", "E10", "E01", "E100", "E11"],
+    "expected": ["E01", "E2", "E10", "E11", "E99", "E100", "E101", "E1001"]
+  },
+  {
+    "input": ["E10_S100", "E10_S2", "E10_S10"],
+    "expected": ["E10_S2", "E10_S10", "E10_S100"]
+  },
+  {
+    "input": ["E10_S1_T100", "E10_S1_T2", "E10_S1_T10"],
+    "expected": ["E10_S1_T2", "E10_S1_T10", "E10_S1_T100"]
+  },
+  {
+    "input": ["E10_S1_T1_x.md", "E10_S1_aaa.md", "E10_zzz.md", "E10_S1_T1.md"],
+    "expected": ["E10_zzz.md", "E10_S1_aaa.md", "E10_S1_T1.md", "E10_S1_T1_x.md"]
+  },
+  {
+    "input": ["README.md", "E100_a.md", "E99_z.md", "E10_aaa.md", "E9_zzz.md"],
+    "expected": ["E9_zzz.md", "E10_aaa.md", "E99_z.md", "E100_a.md", "README.md"]
+  },
+  {
+    "input": ["zeta.txt", "README.md", "alpha.md", "E1.md", "E10x.md"],
+    "expected": ["E1.md", "E10x.md", "README.md", "alpha.md", "zeta.txt"]
+  },
+  {
+    "input": ["E1.md", "E01.md", "E001.md"],
+    "expected": ["E001.md", "E01.md", "E1.md"]
+  },
+  {
+    "input": ["E10_S3", "E2_S1_T1", "E10", "E2_S1", "E2"],
+    "expected": ["E2", "E2_S1", "E2_S1_T1", "E10", "E10_S3"]
+  },
+  {
+    "input": ["E10_S1_a.md", "E10_a.md", "E10_S1x.md"],
+    "expected": ["E10_S1x.md", "E10_a.md", "E10_S1_a.md"]
+  },
+  {
+    "input": ["E10", "E2", "E10", "E2"],
+    "expected": ["E2", "E2", "E10", "E10"]
+  }
+]

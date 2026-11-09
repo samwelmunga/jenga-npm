@@ -104,7 +104,7 @@
 #     Notes:
 #     - detected tool not listed in test-config.json: npm
 #
-#     Enter selection (comma-separated, or 'all' for all, or blank for 1 through 2):
+#     Enter selection (comma-separated, or 'all' for all, or 'probe' to only check whether this machine is slow, or blank for 1 through 2):
 #
 #   `name (type)` is the label of every entry, except that when `name` already
 #   ends in ` (<type>)` it is printed as is. discover-tests.sh names its
@@ -246,7 +246,7 @@ def alsotxt: if ((.also // []) | length) > 0
      else empty end),
     (if ($w | length) > 0 then "Notes:\n" + ($w | map("- " + .) | join("\n")) else empty end),
     (if ($r | length) > 0
-     then "Enter selection (comma-separated, or 'all' for all, or blank for 1 through \($r | length)):"
+     then "Enter selection (comma-separated, or 'all' for all, or 'probe' to only check whether this machine is slow, or blank for 1 through \($r | length)):"
      else empty end)
   ] | join("\n\n")
 EOF

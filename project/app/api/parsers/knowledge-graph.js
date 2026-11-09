@@ -14,6 +14,7 @@
 const fs = require('fs');
 const path = require('path');
 const { resolveProjectRoot } = require('../lib/resolve-project-root');
+const { readTestLinks } = require('./test-links');
 
 // Resolved relative to the invoking project's own root, not a fixed __dirname climb — same fix as
 // the other 4 parsers (E47_S02_T01/T02). Not one of the 4 files originally named in E47_S02_T02's
@@ -63,7 +64,8 @@ function isVerifiedSource(node) {
  *
  * `status: superseded` nodes are also excluded, regardless of provenance (pre-existing behavior,
  * unchanged by E20_S10_T01). Never throws — returns `{ nodes: [], edges: [], coverage: {shown: 0,
- * hidden: 0, total: 0, needsRevalidation: 0} }` for a missing, empty, or malformed graph.json.
+ * hidden: 0, total: 0, needsRevalidation: 0, testCovered: 0, testLinksUnrendered: 0} }` for a
+ * missing, empty, or malformed graph.json.
  *
  * E20_S10_T05 staleness/revalidation: a verified node MAY carry `needs_revalidation: true` (set by
  * `scripts/populate-knowledge-graph.js`'s staleness check comparing a node's stored `content_hash`
@@ -82,10 +84,22 @@ function isVerifiedSource(node) {
  * `shown`, in `coverage` — they were never confirmed as architecture, only surfaced for edge
  * continuity.
  *
+ * E83_S03_T02 test-coverage overlay data: every node carries `tests`, the covering tests read from
+ * `project/knowledge-graph/test-links.json` through `readTestLinks()` (`[]` when the node has no
+ * links). Ghost stubs always carry `tests: []` — an unverified node is never presented as covered.
+ * Two counts join `coverage`, computed in the same pass as `shown` so they cannot drift from what
+ * is rendered: `testCovered` (verified rendered nodes with at least one test) and
+ * `testLinksUnrendered` (the number of link RECORDS whose node is not a full verified rendered
+ * node — board-sourced, ghost stub, or absent from the graph; the spike's decision, see
+ * `project/documentation/test-architecture-linking-spike.md` D4). Such links are never rendered and
+ * never turn a hidden node into a visible one. A missing or malformed links file gives
+ * `tests: []` everywhere, `testCovered: 0`, `testLinksUnrendered: 0` and no error; it never
+ * changes `shown`/`hidden`/`total`/`needsRevalidation`.
+ *
  * @returns {{
- *   nodes: Array<{id: string, label: string, type: string, verified: boolean, source: string, needsRevalidation: boolean}>,
+ *   nodes: Array<{id: string, label: string, type: string, verified: boolean, source: string, needsRevalidation: boolean, tests: Array<{name: string, type: string, file: string, line: number}>}>,
  *   edges: Array<{from: string, to: string, label: string}>,
- *   coverage: {shown: number, hidden: number, total: number, needsRevalidation: number}
+ *   coverage: {shown: number, hidden: number, total: number, needsRevalidation: number, testCovered: number, testLinksUnrendered: number}
  * }}
  */
 function readSADMap() {
@@ -118,6 +132,10 @@ function readSADMap() {
       if (candidate && !isVerifiedSource(candidate)) ghostIds.add(candidateId);
     }
 
+    // E83_S03_T02: one read of the derived links file (never throws; empty when missing/malformed).
+    const testLinks = readTestLinks();
+    const testsFor = (id) => (Array.isArray(testLinks.byNode[id]) ? testLinks.byNode[id].map((t) => ({ ...t })) : []);
+
     const nodes = [
       ...verifiedNodes.map((node) => ({
         id: node.id,
@@ -126,6 +144,7 @@ function readSADMap() {
         verified: true,
         source: node.source,
         needsRevalidation: node.needs_revalidation === true,
+        tests: testsFor(node.id),
       })),
       ...[...ghostIds].map((id) => {
         const node = activeNodeById.get(id);
@@ -136,6 +155,7 @@ function readSADMap() {
           verified: false,
           source: node.source,
           needsRevalidation: false, // staleness only applies to verified (non-board) nodes
+          tests: [], // E83_S03_T02: a ghost stub is never covered, even if a link names it
         };
       }),
     ];
@@ -155,9 +175,24 @@ function readSADMap() {
     // E20_S10_T05: counted from the same verifiedNodes pass — never separately cached.
     const needsRevalidation = verifiedNodes.filter((node) => node.needs_revalidation === true).length;
 
-    return { nodes, edges, coverage: { shown, hidden, total, needsRevalidation } };
+    // E83_S03_T02: derived from the rendered `nodes` of this same pass. `testLinksUnrendered` is the
+    // link records not landing on a full verified rendered node (total minus the ones that did).
+    const verifiedRendered = nodes.filter((node) => node.verified);
+    const testCovered = verifiedRendered.filter((node) => node.tests.length > 0).length;
+    // Unique ids, so a duplicated node id in a malformed graph cannot count the same records twice.
+    const linksOnRendered = [...new Set(verifiedRendered.map((node) => node.id))].reduce(
+      (sum, id) => sum + testsFor(id).length,
+      0
+    );
+    const testLinksUnrendered = testLinks.total - linksOnRendered;
+
+    return { nodes, edges, coverage: { shown, hidden, total, needsRevalidation, testCovered, testLinksUnrendered } };
   } catch {
-    return { nodes: [], edges: [], coverage: { shown: 0, hidden: 0, total: 0, needsRevalidation: 0 } };
+    return {
+      nodes: [],
+      edges: [],
+      coverage: { shown: 0, hidden: 0, total: 0, needsRevalidation: 0, testCovered: 0, testLinksUnrendered: 0 },
+    };
   }
 }
 

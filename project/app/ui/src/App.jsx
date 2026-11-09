@@ -6,6 +6,8 @@ import ArchitectureTab from './tabs/ArchitectureTab'
 import RapportsTab from './tabs/RapportsTab'
 import DocumentationTab from './tabs/DocumentationTab'
 import SecurityTab from './tabs/SecurityTab'
+import BudgetTab from './tabs/BudgetTab'
+import { hasUsageData } from './components/budget/budgetModel'
 import AppHeader from './components/AppHeader'
 import { dashboardTitle } from './projectTitle'
 import ThemeToggle from './components/ThemeToggle'
@@ -25,12 +27,16 @@ const TABS = [
   { id: 'security', label: 'Security' },
 ]
 
+// E76_S03_T07 - offered only when the board carries token-usage fields (public-mirror guard, epic decision 6).
+const BUDGET_TAB = { id: 'budget', label: 'Budget' }
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('board')
   // E47_S09 - resolved project name (null until /v1/health answers); `homeKey` remounts the tab content so
   // the logo always lands on a fresh Backlog landing view (no lingering in-tab selection).
   const [projectName, setProjectName] = useState(null)
   const [homeKey, setHomeKey] = useState(0)
+  const [showBudget, setShowBudget] = useState(false)
   const title = dashboardTitle(projectName)
   // E47_S08_T02 — confirm before browser Back leaves the dashboard (and native prompt on close/reload).
   const { confirming, stay, leave } = useLeaveGuard()
@@ -50,6 +56,14 @@ export default function App() {
       })
   }, [])
 
+  // E76_S03_T07 - decide once whether any task or story carries usage fields. Through `get()`, so a file://
+  // snapshot answers from its embedded data. A failed fetch or a board without usage leaves the tab out.
+  useEffect(() => {
+    get('/v1/board')
+      .then(epics => setShowBudget(hasUsageData(epics)))
+      .catch(() => setShowBudget(false))
+  }, [])
+
   useEffect(() => {
     document.title = title
   }, [title])
@@ -65,7 +79,7 @@ export default function App() {
       <AppHeader title={title} onHome={goHome} />
       <header className="app-header">
         <nav className="tabs">
-          {TABS.map(tab => (
+          {(showBudget ? [...TABS, BUDGET_TAB] : TABS).map(tab => (
             <button
               key={tab.id}
               className={`tab-btn${activeTab === tab.id ? ' active' : ''}`}
@@ -86,6 +100,7 @@ export default function App() {
         {activeTab === 'rapports' && <RapportsTab />}
         {activeTab === 'documentation' && <DocumentationTab />}
         {activeTab === 'security' && <SecurityTab />}
+        {showBudget && activeTab === 'budget' && <BudgetTab />}
       </div>
       {confirming && <LeaveGuardModal onStay={stay} onLeave={leave} />}
     </div>

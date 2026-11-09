@@ -41,7 +41,9 @@
 # OUTPUT SHAPE — binding
 # ---------------------------------------------------------------------------
 # 1-indexed "<id> — <title>" lines, one per eligible item, stories first then
-# tasks, each group in deterministic (sorted) board-file order. No trailing
+# tasks, each group in deterministic board-file order: numeric board-ID order
+# (E99 before E100; E86_S02_T06 before E86_S02_T10), never filename text order,
+# see project/documentation/board-ids.md "Ordering". No trailing
 # "Done" option, no prompt text — that is /dooo's own interactive framing,
 # added on top of this script's output, not part of it.
 #
@@ -68,6 +70,17 @@
 
 set -euo pipefail
 export LC_ALL=C
+
+# Shared board-ID helpers (epic E86, task E86_S02_T06): board_id_sort orders the board listings below by numeric
+# value, so E100 follows E99 instead of landing between E10 and E11. Resolved from this script's own location, and
+# there is deliberately no fallback ordering if it is missing (a missing shared source is an error).
+_RRL_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [ ! -f "$_RRL_DIR/lib/board-ids.sh" ]; then
+  echo "render-ranked-list.sh: shared board-ids.sh not found at $_RRL_DIR/lib/board-ids.sh" >&2
+  exit 1
+fi
+# shellcheck source=lib/board-ids.sh
+. "$_RRL_DIR/lib/board-ids.sh"
 
 TODO_FILE="${JENGA_TODO_FILE:-project/todo.md}"
 STORIES_DIR="${JENGA_BOARD_STORIES_DIR:-project/board/stories}"
@@ -223,9 +236,18 @@ add_eligible() {
   ELIGIBLE="${ELIGIBLE}${id}"$'\t'"${title}"$'\n'
 }
 
+# list_board_files <dir> — prints "<dir>/<name>" for every *.md directly under <dir>, in numeric board-ID order
+# (board_id_sort, never plain text order). The sort runs on the bare names, because the ID must be the start of
+# what is sorted; the directory prefix is put back afterwards.
+list_board_files() {
+  local dir="$1" name
+  find "$dir" -maxdepth 1 -name '*.md' 2>/dev/null | sed 's|.*/||' | board_id_sort \
+    | while IFS= read -r name; do printf '%s/%s\n' "$dir" "$name"; done
+}
+
 scan_stories() {
   local file id status title
-  for file in $(find "$STORIES_DIR" -maxdepth 1 -name '*.md' 2>/dev/null | sort); do
+  for file in $(list_board_files "$STORIES_DIR"); do
     id=$(frontmatter_scalar "$file" "id")
     [ -z "$id" ] && continue
     status=$(frontmatter_scalar "$file" "status")
@@ -239,7 +261,7 @@ scan_stories() {
 
 scan_tasks() {
   local file id story_id status title
-  for file in $(find "$TASKS_DIR" -maxdepth 1 -name '*.md' 2>/dev/null | sort); do
+  for file in $(list_board_files "$TASKS_DIR"); do
     id=$(frontmatter_scalar "$file" "id")
     [ -z "$id" ] && continue
     status=$(frontmatter_scalar "$file" "status")

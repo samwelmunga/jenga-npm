@@ -1,0 +1,8 @@
+{"type":"user","uuid":"u-t1","isSidechain":true,"message":{"role":"user","content":"Synthetic task prompt one."}}
+{"type":"assistant","uuid":"l1","requestId":"req_A","message":{"role":"assistant","model":"fixture-model","content":[{"type":"text","text":"synthetic reply"}],"usage":{"input_tokens":10,"output_tokens":100,"cache_creation_input_tokens":1000,"cache_read_input_tokens":5000}}}
+{"type":"assistant","uuid":"l2","requestId":"req_B","message":{"role":"assistant","model":"fixture-model","content":[{"type":"text","text":"synthetic reply"}],"usage":{"input_tokens":20,"output_tokens":50,"cache_creation_input_tokens":0,"cache_read_input_tokens":6000}}}
+{"type":"system","uuid":"l3","subtype":"synthetic","content":"synthetic system note"}
+{"type":"assistant","uuid":"l4","requestId":"req_A","message":{"role":"assistant","model":"fixture-model","content":[{"type":"text","text":"synthetic reply"}],"usage":{"input_tokens":10,"output_tokens":300,"cache_creation_input_tokens":1000,"cache_read_input_tokens":5000}}}
+{"type":"assistant","uuid":"l5","requestId":"req_B","message":{"role":"assistant","model":"fixture-model","content":[{"type":"text","text":"synthetic reply"}],"usage":{"input_tokens":20,"output_tokens":200,"cache_creation_input_tokens":0,"cache_read_input_tokens":6000}}}
+{"type":"assistant","uuid":"l6","requestId":"req_X","message":{"role":"assistant","model":"fixture-model","content":[{"type":"text","text":"synthetic reply without usage"}]}}
+{"type":"assistant","uuid":"l7","requestId":"req_A","message":{"role":"assistant","model":"fixture-model","content":[{"type":"text","text":"synthetic reply"}],"usage":{"input_tokens":10,"output_tokens":700,"cache_creation_input_tokens":1000,"cache_read_input_tokens":5000}}}

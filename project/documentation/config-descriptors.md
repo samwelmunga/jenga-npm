@@ -132,7 +132,7 @@ policy (`test_run_task`, `test_run_story`, `test_run_epic`):
 | `commit_scope_map_file` | string | `templates/test-scope-map.json` | a relative path ending in `.json` (enforced by `pattern`) |
 | `test_run_task` | string | `none` | `none`, `scoped`, `full` (enforced by `allowed`) |
 | `test_run_story` | string | `scoped` | `none`, `scoped`, `full` (enforced by `allowed`) |
-| `test_run_epic` | string | `full` | `none`, `scoped`, `full` (enforced by `allowed`) |
+| `test_run_epic` | string | `none` | `none`, `scoped`, `full` (enforced by `allowed`) |
 
 The three `test_run_*` keys say which test run must pass before a task, a story or an epic is closed; what each value
 runs and how the gate behaves is documented in the "Scope test policy" section of `project/documentation/test-runner.md`.

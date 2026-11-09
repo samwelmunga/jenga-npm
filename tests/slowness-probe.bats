@@ -237,3 +237,59 @@ write_catalogs() {
   assert_output_contains "✓ one (unit)"
   [ ! -e "$LOG" ]
 }
+
+# --- 6. the machine-local threshold --------------------------------------------------------------------------------
+
+print_threshold() {
+  run --separate-stderr env PATH="$STUBS:$PATH" SHELL=/bin/sh "$@" "$BASH_BIN" "$PROBE" --root "$PROJ" --print-threshold
+}
+
+@test "--print-threshold prints the default 2.5 when nothing else is set, and measures nothing" {
+  print_threshold
+  [ "$status" -eq 0 ]
+  [ "$output" = "2.5 default" ]
+  [ ! -e "$LOG" ]
+}
+
+@test "the threshold comes from the option, then the environment, then the saved file, then the default" {
+  mkdir -p "$PROJ/project/logs"
+  printf '4\n' > "$PROJ/project/logs/slowness-threshold"
+  print_threshold
+  [ "$output" = "4 saved" ]
+  print_threshold JENGA_SLOWNESS_THRESHOLD=9
+  [ "$output" = "9 environment" ]
+  run --separate-stderr "$BASH_BIN" "$PROBE" --root "$PROJ" --print-threshold --threshold 3
+  [ "$output" = "3 option" ]
+}
+
+@test "an unusable saved threshold is reported on stderr and the default applies" {
+  mkdir -p "$PROJ/project/logs"
+  printf 'abc\n' > "$PROJ/project/logs/slowness-threshold"
+  print_threshold
+  [ "$status" -eq 0 ]
+  [ "$output" = "2.5 default" ]
+  assert_contains "$stderr" "not a positive number"
+  printf '0\n' > "$PROJ/project/logs/slowness-threshold"
+  print_threshold
+  [ "$output" = "2.5 default" ]
+}
+
+@test "a saved threshold decides the verdict: the same slow stub is healthy under a large saved value" {
+  stub_bats 0 1
+  mkdir -p "$PROJ/project/logs"
+  printf '100000\n' > "$PROJ/project/logs/slowness-threshold"
+  probe
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.slow' "$LOG")" = "false" ]
+  [ "$(jq -r '.threshold' "$LOG")" = "100000" ]
+}
+
+@test "run-suites --no-probe skips the preflight on a full-catalog run" {
+  write_catalogs
+  stub_bats 0 1
+  run --separate-stderr env PATH="$STUBS:$PATH" SHELL=/bin/sh "$BASH_BIN" "$RUN" --root "$PROJ" --catalog "$BATS_TEST_TMPDIR/one.json" --no-probe 1
+  [ "$status" -eq 0 ]
+  assert_output_not_contains "slowness probe"
+  [ "$(cat "$RUN_MARK")" = "one" ]
+  [ ! -e "$LOG" ]
+}

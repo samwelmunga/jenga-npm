@@ -423,7 +423,7 @@ make_bin() {
 Notes:
 - detected tool not listed in test-config.json: npm
 
-Enter selection (comma-separated, or 'all' for all, or blank for 1 through 2):"
+Enter selection (comma-separated, or 'all' for all, or 'probe' to only check whether this machine is slow, or blank for 1 through 2):"
   [ "$output" = "$expected" ]
 }
 
@@ -442,7 +442,7 @@ Notes:
 - configured tool not detected on disk: semgrep (sast)
 - detected tool not listed in test-config.json: npm
 
-Enter selection (comma-separated, or 'all' for all, or blank for 1 through 2):"
+Enter selection (comma-separated, or 'all' for all, or 'probe' to only check whether this machine is slow, or blank for 1 through 2):"
   [ "$output" = "$expected" ]
 }
 
@@ -454,7 +454,7 @@ Enter selection (comma-separated, or 'all' for all, or blank for 1 through 2):"
 1. go test ./... (unit)
 2. pytest tests (unit)
 
-Enter selection (comma-separated, or 'all' for all, or blank for 1 through 2):"
+Enter selection (comma-separated, or 'all' for all, or 'probe' to only check whether this machine is slow, or blank for 1 through 2):"
   [ "$output" = "$expected" ]
   assert_output_not_contains "Not runnable"
   assert_output_not_contains "Notes:"

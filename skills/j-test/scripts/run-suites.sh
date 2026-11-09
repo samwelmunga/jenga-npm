@@ -43,8 +43,11 @@
 # slow, the probe collects diagnostics and logs them to its own JSON-lines log under the root,
 # and a note is printed after the summary. The probe never changes which suites run or the
 # exit code. Skipped (silently) when bats or the reference file is absent, inside a nested
-# suite run (JENGA_NESTED_SUITE_RUN set), and with JENGA_SLOWNESS_PROBE=0. It adds about a
-# minute to a full run on a healthy machine.
+# suite run (JENGA_NESTED_SUITE_RUN set), and with --no-probe or JENGA_SLOWNESS_PROBE=0. It adds
+# about a minute to a full run on a healthy machine. The j.test skill passes --no-probe: it
+# measures before the run through slowness-check.sh and lets the user decide what a slow
+# result means, which this unattended preflight cannot do. Non-interactive callers (the scope
+# test gate) keep the preflight as it is.
 #
 # SUMMARY (stdout, after the last suite; exact layout):
 #   Test Results
@@ -98,7 +101,7 @@ die_usage() {
 
 usage() {
   cat <<'EOF'
-Usage: run-suites.sh --catalog <catalog.json> [--root <dir>] <n> [<n> ...]
+Usage: run-suites.sh --catalog <catalog.json> [--root <dir>] [--no-probe] <n> [<n> ...]
        run-suites.sh --help
 
 Run the selected suites from a build-catalog.sh catalog, in the order given,
@@ -106,6 +109,7 @@ then print the result summary.
 
   --catalog <file>  catalog JSON printed by build-catalog.sh (required)
   --root <dir>      directory the commands run in (default: the resolved root)
+  --no-probe        skip the slowness preflight (same as JENGA_SLOWNESS_PROBE=0)
   <n> ...           suite numbers to run, in order; at least one, no repeats
   --help            show this help and exit 0
 
@@ -131,6 +135,7 @@ resolve_helper() {
 CATALOG=""
 ROOT=""
 ROOT_GIVEN=0
+NO_PROBE=0
 NUMS=()
 
 while [ "$#" -gt 0 ]; do
@@ -149,6 +154,10 @@ while [ "$#" -gt 0 ]; do
       ROOT="$2"
       ROOT_GIVEN=1
       shift 2
+      ;;
+    --no-probe)
+      NO_PROBE=1
+      shift
       ;;
     --)
       shift
@@ -261,7 +270,7 @@ done
 # absent (a consumer install, a synthetic root), inside a nested suite run, and when
 # JENGA_SLOWNESS_PROBE=0. It never changes the suites that run or this script's exit code.
 SLOW_NOTE=0
-if [ "$TOTAL" -eq "$RUNNABLE_COUNT" ] && [ "${JENGA_SLOWNESS_PROBE:-1}" != "0" ] \
+if [ "$TOTAL" -eq "$RUNNABLE_COUNT" ] && [ "$NO_PROBE" -eq 0 ] && [ "${JENGA_SLOWNESS_PROBE:-1}" != "0" ] \
   && [ -z "${JENGA_NESTED_SUITE_RUN:-}" ] && PROBE="$(resolve_helper scripts/slowness-probe.sh)"; then
   probe_rc=0
   bash "$PROBE" --root "$ROOT" --quiet-skip </dev/null || probe_rc=$?

@@ -698,3 +698,267 @@ EOF
   ! grep -q 'src="/assets/' "$out"
   ! grep -q 'href="/assets/' "$out"
 }
+
+# -----------------------------------------------------------------------------
+# Budget view (E76_S03_T07)
+#
+# These cases go through the REAL capture-snapshot.js (via a shim that requires it, because the default fixture
+# above replaces it with a stub), against a throwaway board whose files carry token-usage frontmatter, then the
+# real bundler. The view itself is rendered client-side, so the embedded JSON is pulled back out of the output
+# HTML and handed to the real BudgetView component (server-rendered by
+# project/app/ui/scripts/budget-view-render.cjs): the data path from frontmatter to rendered numbers is
+# exercised end to end without a browser.
+#
+# Shipping constraint (E76 epic decision 6): nothing here uses scripts/task-usage.sh or its fixtures. Every
+# usage value is written literally into a fixture board file, so the cases run on the public mirror too.
+# -----------------------------------------------------------------------------
+
+BUDGET_RENDER="$REPO_ROOT/project/app/ui/scripts/budget-view-render.cjs"
+
+budget_setup() {
+  command -v node >/dev/null 2>&1 || skip "node is not installed"
+  ( cd "$REPO_ROOT/project/app/api" && node -e "require.resolve('express'); require.resolve('cors'); require.resolve('gray-matter')" ) >/dev/null 2>&1 \
+    || skip "project/app/api dependencies are not installed"
+  ( cd "$REPO_ROOT/project/app/ui/scripts" && node -e "require.resolve('esbuild'); require.resolve('react-dom/server', { paths: ['$REPO_ROOT/project/app/ui'] })" ) >/dev/null 2>&1 \
+    || skip "project/app/ui dependencies (esbuild, react-dom) are not installed"
+
+  # Swap the stub capture for a shim that runs the real one with the same arguments.
+  cat > "$TMP_REPO/project/app/api/scripts/capture-snapshot.js" <<SHIM
+require('$REPO_ROOT/project/app/api/scripts/capture-snapshot.js');
+SHIM
+
+  BOARD_PROJ="$BATS_TEST_TMPDIR/board-proj"
+  mkdir -p "$BOARD_PROJ/project/board/epics" "$BOARD_PROJ/project/board/stories" "$BOARD_PROJ/project/board/tasks" \
+           "$BOARD_PROJ/project/configs" "$BOARD_PROJ/project/data" "$BOARD_PROJ/project/logs" \
+           "$BOARD_PROJ/project/rapports/problems"
+  BOARD_PROJ="$(cd "$BOARD_PROJ" && pwd -P)"
+  git -C "$BOARD_PROJ" init -q
+  cat > "$BOARD_PROJ/project/board/epics/E90_budget-fixture.md" <<'EOT'
+---
+id: E90
+title: Budget fixture epic
+status: In Progress
+stories:
+  - E90_S01
+  - E90_S02
+---
+
+# Epic: Budget fixture epic
+EOT
+}
+
+# $1 = story frontmatter extra lines (may be empty), $2 = story id suffix (01, 02)
+budget_story() {
+  cat > "$BOARD_PROJ/project/board/stories/E90_S$2_fixture-story.md" <<EOT
+---
+id: E90_S$2
+epic_id: E90
+title: Fixture story $2
+status: Passed
+tasks:
+  - E90_S$2_T01
+  - E90_S$2_T02
+$1
+---
+
+# Story: Fixture story $2
+EOT
+}
+
+# $1 = story number, $2 = task number, $3 = extra frontmatter lines (may be empty)
+budget_task() {
+  cat > "$BOARD_PROJ/project/board/tasks/E90_S$1_T$2_fixture-task.md" <<EOT
+---
+id: E90_S$1_T$2
+story_id: E90_S$1
+epic_id: E90
+title: Fixture task $1.$2
+status: Passed
+$3
+---
+
+# Task: Fixture task $1.$2
+EOT
+}
+
+run_budget_snapshot() {
+  BUDGET_OUT="$BATS_TEST_TMPDIR/budget.html"
+  run bash -c "cd '$INVOKE_DIR' && '$SNAPSHOT' --out '$BUDGET_OUT' --project-root '$BOARD_PROJ'"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ -f "$BUDGET_OUT" ]
+  run node "$BUDGET_RENDER" "$BUDGET_OUT"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  BUDGET_VIEW="$output"
+}
+
+# The board payload embedded in the snapshot, as JSON on stdout.
+embedded_board_json() {
+  node -e '
+    const { boardFromSnapshot } = require(process.argv[1]);
+    process.stdout.write(JSON.stringify(boardFromSnapshot(require("fs").readFileSync(process.argv[2], "utf8"))));
+  ' "$BUDGET_RENDER" "$BUDGET_OUT"
+}
+
+# The HTML of one row of the rendered view: $1 = data-row value, $2 = data-id (optional).
+view_row() {
+  printf '%s' "$BUDGET_VIEW" | node -e '
+    const html = require("fs").readFileSync(0, "utf8");
+    const [row, id] = process.argv.slice(1);
+    const re = new RegExp("<tr data-row=\"" + row + "\"" + (id ? " data-id=\"" + id + "\"" : "") + "[\\s\\S]*?</tr>");
+    const m = html.match(re);
+    if (!m) process.exit(3);
+    process.stdout.write(m[0]);
+  ' "$1" "${2:-}"
+}
+
+@test "budget view: a snapshot of a board with full usage fields shows the four-field breakdown and totals from frontmatter" {
+  budget_setup
+  budget_story "usage_tasks_input_tokens: 1210
+usage_tasks_output_tokens: 3420
+usage_tasks_cache_write_tokens: 56030
+usage_tasks_cache_read_tokens: 780040
+usage_tasks_total_tokens: 840700
+usage_overhead_input_tokens: 5
+usage_overhead_output_tokens: 6
+usage_overhead_cache_write_tokens: 7
+usage_overhead_cache_read_tokens: 8
+usage_overhead_total_tokens: 26
+usage_total_tokens: 840726
+usage_measured_on: 2026-10-25" 01
+  budget_task 01 01 "usage_input_tokens: 1200
+usage_output_tokens: 3400
+usage_cache_write_tokens: 56000
+usage_cache_read_tokens: 780000
+usage_total_tokens: 840600
+usage_transcripts: 2
+usage_measured_on: 2026-10-25"
+  budget_task 01 02 "usage_input_tokens: 10
+usage_output_tokens: 20
+usage_cache_write_tokens: 30
+usage_cache_read_tokens: 40
+usage_total_tokens: 100
+usage_transcripts: 1
+usage_measured_on: 2026-10-25"
+  run_budget_snapshot
+
+  # The embedded board data carries the frontmatter values as numbers.
+  [ "$(embedded_board_json | node -e 'const b=JSON.parse(require("fs").readFileSync(0,"utf8")); const t=b[0].stories[0].tasks.find(x=>x.id==="E90_S01_T01"); process.stdout.write([t.usage_input_tokens,t.usage_output_tokens,t.usage_cache_write_tokens,t.usage_cache_read_tokens,t.usage_total_tokens].join(","))')" = "1200,3400,56000,780000,840600" ]
+
+  assert_output_contains 'data-testid="budget-view"'
+  # Task row: four fields and total, thousands separators.
+  run view_row task E90_S01_T01
+  [ "$status" -eq 0 ]
+  for n in '>1,200<' '>3,400<' '>56,000<' '>780,000<' '>840,600<'; do assert_output_contains "$n"; done
+  run view_row task E90_S01_T02
+  for n in '>10<' '>20<' '>30<' '>40<' '>100<'; do assert_output_contains "$n"; done
+  # Story: task part, overhead part and total are separate numbers.
+  run view_row story-tasks-part
+  for n in '>1,210<' '>3,420<' '>56,030<' '>780,040<' '>840,700<'; do assert_output_contains "$n"; done
+  run view_row story-overhead-part
+  for n in '>5<' '>6<' '>7<' '>8<' '>26<'; do assert_output_contains "$n"; done
+  run view_row story-total
+  assert_output_contains '>840,726<'
+  # Unit stated; nothing in this fully measured board is "not measured".
+  run printf '%s' "$BUDGET_VIEW"
+  assert_output_contains 'in tokens'
+  assert_output_not_contains 'budget-not-measured'
+}
+
+@test "budget view: partial usage data shows 'not measured' for the rest, never zeros or an error" {
+  budget_setup
+  budget_story "" 01
+  budget_task 01 01 "usage_input_tokens: 100
+usage_output_tokens: 200
+usage_cache_write_tokens: 300
+usage_cache_read_tokens: 400
+usage_total_tokens: 1000"
+  budget_task 01 02 ""
+  # A second story with a half-measured task only.
+  budget_story "" 02
+  budget_task 02 01 "usage_input_tokens: 7"
+  budget_task 02 02 ""
+  run_budget_snapshot
+
+  assert_output_contains 'data-testid="budget-view"'
+  run view_row task E90_S01_T01
+  assert_output_contains '>1,000<'
+  # Unmeasured task: not measured, no zero.
+  run view_row task E90_S01_T02
+  assert_output_contains 'not measured'
+  assert_output_not_contains '>0<'
+  # Half-measured task: its one field shown, the other four cells say so.
+  run view_row task E90_S02_T01
+  assert_output_contains '>7<'
+  [ "$(printf '%s' "$output" | grep -o 'budget-not-measured' | wc -l | tr -d ' ')" = "4" ]
+  assert_output_not_contains '>0<'
+  # Neither story carries story-level fields, so each part and the total say "not measured".
+  run view_row story-total
+  assert_output_contains 'not measured'
+  run view_row story-tasks-part
+  assert_output_contains 'not measured'
+  # Rendered without leaking JS placeholders.
+  run printf '%s' "$BUDGET_VIEW"
+  assert_output_not_contains 'undefined'
+  assert_output_not_contains 'NaN'
+  assert_output_not_contains 'null'
+}
+
+@test "budget view: a snapshot of a board with no usage anywhere builds and renders no budget view at all" {
+  budget_setup
+  budget_story "" 01
+  budget_task 01 01 ""
+  budget_task 01 02 ""
+  run_budget_snapshot
+
+  # Builds, embeds the board, and the view renders nothing (no section, no heading, no placeholder).
+  [ -s "$BUDGET_OUT" ]
+  [ -z "$BUDGET_VIEW" ]
+  [ "$(embedded_board_json | node -e 'const b=JSON.parse(require("fs").readFileSync(0,"utf8")); process.stdout.write(String(b[0].stories[0].tasks.length))')" = "2" ]
+  # No usage key anywhere in the embedded board, and no budget markup baked into the file.
+  [ "$(embedded_board_json | grep -c '"usage_')" = "0" ]
+  run grep -c 'data-testid="budget-view"' "$BUDGET_OUT"
+  [ "$output" = "0" ]
+  run grep -c 'budget-intro' "$BUDGET_OUT"
+  [ "$output" = "0" ]
+}
+
+@test "budget view: no dollar or price figure in the rendered view or in the usage data of the snapshot" {
+  budget_setup
+  budget_story "usage_tasks_input_tokens: 1
+usage_tasks_output_tokens: 2
+usage_tasks_cache_write_tokens: 3
+usage_tasks_cache_read_tokens: 4
+usage_tasks_total_tokens: 10
+usage_overhead_input_tokens: 1
+usage_overhead_output_tokens: 1
+usage_overhead_cache_write_tokens: 1
+usage_overhead_cache_read_tokens: 1
+usage_overhead_total_tokens: 4
+usage_total_tokens: 14" 01
+  budget_task 01 01 "usage_input_tokens: 1
+usage_output_tokens: 2
+usage_cache_write_tokens: 3
+usage_cache_read_tokens: 4
+usage_total_tokens: 10"
+  budget_task 01 02 ""
+  run_budget_snapshot
+
+  assert_output_contains 'data-testid="budget-view"'
+  # The view: no currency symbol, code or price/cost wording.
+  run bash -c "printf '%s' \"\$1\" | grep -Eic '[$]|USD|EUR|price|cost|dollar'" _ "$BUDGET_VIEW"
+  [ "$output" = "0" ]
+  # The snapshot's usage data: every usage_* key is a token count or a date/count/flag, never money.
+  embedded_board_json > "$BATS_TEST_TMPDIR/board.json"
+  run node -e '
+    const b = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    const keys = new Set();
+    for (const s of b[0].stories) { for (const k of Object.keys(s)) keys.add(k); for (const t of s.tasks) for (const k of Object.keys(t)) keys.add(k); }
+    const usage = [...keys].filter(k => k.startsWith("usage_"));
+    const bad = [...keys].filter(k => /price|cost|dollar|usd|currency/i.test(k));
+    if (bad.length) { console.error("money keys: " + bad.join(",")); process.exit(1); }
+    if (!usage.every(k => /_tokens$|^usage_(transcripts|measured_on|possibly_incomplete)$/.test(k))) { console.error("unexpected usage key"); process.exit(1); }
+    process.stdout.write(String(usage.length));
+  ' "$BATS_TEST_TMPDIR/board.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" -gt 0 ]
+}

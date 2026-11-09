@@ -1,0 +1,2 @@
+{"type":"user","uuid":"u-t2","isSidechain":true,"message":{"role":"user","content":"Synthetic planning prompt."}}
+{"type":"assistant","uuid":"a-i1","requestId":"req_I1","message":{"role":"assistant","model":"fixture-model","content":[{"type":"text","text":"synthetic reply"}],"usage":{"input_tokens":8,"output_tokens":80,"cache_creation_input_tokens":600,"cache_read_input_tokens":2500}}}

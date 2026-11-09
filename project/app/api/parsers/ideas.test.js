@@ -1,3 +1,4 @@
+// arch-node: E35 type=unit
 /**
  * @file project/app/api/parsers/ideas.test.js
  * Plain Node `assert` test for `readIdeaItems()` / `readIdeas()` in `parsers/ideas.js` (E35_S04_T01).

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# arch-node: E20_S09 type=unit
 #
 # Test coverage for scripts/populate-knowledge-graph.js (E20_S09_T03), the mechanical
 # board-to-graph populator built in E20_S09_T02 (merged to main at c11c187, plus a
@@ -201,6 +202,7 @@ setup() {
 # 2. Epic -> Story containment edges
 # -----------------------------------------------------------------------------
 
+# arch-node: E20_S09,E20 type=integration
 @test "containment edge is written from a story's own epic_id" {
   write_epic "E90" "Test Epic Alpha" "Alpha purpose."
   write_story "E90_S01" "E90" "Test Story One" "Story body."

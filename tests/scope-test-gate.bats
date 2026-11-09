@@ -300,13 +300,19 @@ jq_ok() {
   [ "$(marks)" = "alpha,beta" ]
 }
 
-@test "without the board files the id prefix finds the same commits for an epic" {
+@test "without the board files the id prefix finds the same commits for an epic, and they select the whole catalog" {
+  # E72_S08_T03 FLIPPED THIS CASE'S OUTCOME, legitimately. The prefix has no epic membership list, so S03 (docs) and S04
+  # (delta) join and the change set maps to all four areas: that is the entire runnable catalog, which a scoped gate now
+  # refuses instead of running. The case still pins what its title says (the prefix finds the commits of the whole epic),
+  # through the derivation line, and the board-listed epic above is the strict-subset counterpart.
   rm -rf "$REPO/project/board"
   cfg_with test_run_epic scoped
-  gate --scope epic --id E99
-  [ "$status" -eq 0 ]
-  # the prefix has no epic membership list, so S03 (docs) and S04 (delta) join: all four areas but docs map to suites
-  [ "$(marks)" = "alpha,beta,delta,gamma" ]
+  gate --scope epic --id E99 --json
+  [ "$status" -eq 3 ]
+  jq_ok '.refusal == "scoped-equals-full" and .suites_run == 0'
+  assert_contains "$stderr" "commit(s) of E99"
+  assert_contains "$stderr" "src/alpha/a.sh"
+  [ "$(marks)" = "none" ]
 }
 
 @test "a malformed entry in a tasks: list is ignored with a warning" {
@@ -727,6 +733,294 @@ set_excl_map() { put project/scope-map.json "$EXCL_MAP"; }
   assert_not_contains "$stderr" "deliberately not selected by the scope map"
   assert_not_contains "$stderr" "NOT in force"
   [ "$(marks)" = "none" ]
+}
+
+# ---- the standing invariant: a scoped run is never the whole catalog (E72_S08_T03) -------------------------------------
+#
+# Every case here RUNS the gate against a fixture and asserts on its exit code, its output and what actually executed.
+# None reads the gate's source text: such guards were removed in c65b228f as wrong in both directions, and the previous
+# attempt at this task died by writing a checker and a test that matched only each other.
+#
+# What "the same as a full run" means is ONE definition (see the gate's header): the units of a catalog are the test files
+# its `bats` entries expand to, plus the command text of every entry that cannot be expanded. The test files are what is
+# compared whenever the full run has any (an opaque suite such as shellcheck cannot be selected by a scope map, so
+# requiring it would make the invariant vacuous); an all-opaque catalog is compared on its commands. A scoped run is
+# refused iff its compared units contain every one of the catalog a `full` policy would run. So the routes below are all
+# the same refusal reached through different data, and the controls beside each pin the opposite verdict:
+#   - a coarse rule, with the narrowed command spelled differently from the full one
+#   - an npm twin of a bats suite, resolved through package.json
+#   - an opaque suite selected as well, and one that is not and cannot be
+#   - a floor that equals the full run only AFTER the level-2 baseline exclusion
+#   - a catalog of opaque suites only
+# `bats` is a recording shim on PATH, so "which files ran" is the content of one file and no real bats ever runs.
+
+use_bats_shim() {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  BATS_ARGS_LOG="$BATS_TEST_TMPDIR/bats-args"
+  export BATS_ARGS_LOG
+  printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\n" "$*" >> "$BATS_ARGS_LOG"' > "$BATS_TEST_TMPDIR/bin/bats"
+  chmod +x "$BATS_TEST_TMPDIR/bin/bats"
+  export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+}
+
+# bats_ran: the arguments of the one `bats` call, or "none" when bats never ran.
+bats_ran() {
+  if [ -f "$BATS_ARGS_LOG" ]; then cat "$BATS_ARGS_LOG"; else printf 'none'; fi
+}
+
+# One bats suite over the four areas. Its command is a GLOB, so a narrowed run is spelled differently (explicit files).
+BATS_ALL='{"id":"bats:all","name":"all tests","type":"unit","ecosystem":"bats","command":"bats alpha/*.bats beta/*.bats delta/*.bats gamma/*.bats","paths":["alpha/*.bats","beta/*.bats","delta/*.bats","gamma/*.bats"]}'
+# An opaque suite: no paths, so no file universe can say what it runs. A .js test file maps to it by extension.
+NPM_OPAQUE='{"id":"npm:unit","name":"npm unit","type":"unit","ecosystem":"npm","command":"echo npm >> \"$RUN_MARK\"","paths":[]}'
+
+set_disc() { printf '{"suites":[%s],"warnings":[]}' "$1" > "$DISC_STUB_JSON"; }
+
+# set_rule_map <json array of test globs>: one rule, a change to src/alpha/*.sh selects those tests.
+set_rule_map() {
+  put project/scope-map.json "$(jq -cn --argjson t "$1" '{map_version:1, rules:[{source:"src/alpha/*.sh", tests:$t}]}')"
+}
+
+# tests_fixture: three test files under tests/ (the only place a baseline-marked file is looked for), one suite over them.
+tests_fixture() {
+  put tests/one.bats '@test one { true; }'
+  put tests/two.bats '@test two { true; }'
+  put tests/three.bats "# jenga:requires-baseline-permissions: needs the level-2 baseline
+x three"
+  set_disc '{"id":"bats:tests","name":"tests","type":"unit","ecosystem":"bats","command":"bats tests/*.bats","paths":["tests/*.bats"]}'
+}
+
+# elevate: the session sits off the level-2 baseline, so the marked file cannot pass and is excluded from every run.
+elevate() {
+  mkdir -p "$REPO/.claude"
+  cp "$REPO_ROOT/templates/permission-levels/level-5-unrestricted.json" "$REPO/.claude/settings.json"
+}
+
+@test "a coarse rule selecting every test file is refused: nothing runs, exit 3, and the cause is named" {
+  use_bats_shim
+  set_disc "$BATS_ALL"
+  set_rule_map '["alpha/*.bats","beta/*.bats","delta/*.bats","gamma/*.bats"]'
+  cfg_with test_run_task scoped
+  gate --scope task --id E99_S01_T01 --json
+  [ "$status" -eq 3 ]
+  jq_ok '.suites_run == 0 and .suites == [] and .passed == 0 and .failed == 0'
+  jq_ok '.mode == "scoped" and .effective_mode == "scoped" and .exit_code == 3'
+  jq_ok '.refusal == "scoped-equals-full" and .fallback_reason == null'
+  [ "$(bats_ran)" = "none" ]
+  [ "$(marks)" = "none" ]
+  # Said in words, with the cause pointing at the rule and the suite definition, not just stating a fact.
+  assert_contains "$stderr" "REFUSED"
+  assert_contains "$stderr" "rule 1: src/alpha/*.sh"
+  assert_contains "$stderr" "bats:all"
+  assert_contains "$stderr" "test_run_task"
+  # The refusal is reached without a second discovery pass.
+  [ "$(discovery_calls)" = "1" ]
+}
+
+@test "the same refusal in the human output: stdout carries the verdict and the gate does not claim satisfaction" {
+  use_bats_shim
+  set_disc "$BATS_ALL"
+  set_rule_map '["alpha/*.bats","beta/*.bats","delta/*.bats","gamma/*.bats"]'
+  cfg_with test_run_task scoped
+  gate --scope task --id E99_S01_T01
+  [ "$status" -eq 3 ]
+  assert_output_contains "REFUSED"
+  assert_output_not_contains "scope test gate: satisfied"
+  [ "$(bats_ran)" = "none" ]
+}
+
+@test "a scoped selection that is a strict subset of the files is unaffected: same files, exit 0, refusal null" {
+  use_bats_shim
+  set_disc "$BATS_ALL"
+  set_rule_map '["alpha/*.bats","beta/*.bats","delta/*.bats"]'
+  cfg_with test_run_task scoped
+  gate --scope task --id E99_S01_T01 --json
+  [ "$status" -eq 0 ]
+  jq_ok 'has("refusal") and .refusal == null'
+  jq_ok '.effective_mode == "scoped" and .suites_run == 1 and .exit_code == 0'
+  [ "$(bats_ran)" = "alpha/a.bats beta/b.bats delta/d.bats" ]
+}
+
+@test "policy full is never subject to the invariant: the same coarse map, the whole catalog runs" {
+  use_bats_shim
+  set_disc "$BATS_ALL"
+  set_rule_map '["alpha/*.bats","beta/*.bats","delta/*.bats","gamma/*.bats"]'
+  cfg_with test_run_task full
+  gate --scope task --id E99_S01_T01 --json
+  [ "$status" -eq 0 ]
+  jq_ok '.mode == "full" and .effective_mode == "full" and .refusal == null and .suites_run == 1'
+  [ "$(bats_ran)" = "alpha/a.bats beta/b.bats delta/d.bats gamma/g.bats" ]
+}
+
+@test "an opaque suite selected together with every test file is the whole catalog and is refused" {
+  use_bats_shim
+  put js/a.test.js 'x'
+  set_disc "$BATS_ALL,$NPM_OPAQUE"
+  set_rule_map '["alpha/*.bats","beta/*.bats","delta/*.bats","gamma/*.bats","js/a.test.js"]'
+  cfg_with test_run_task scoped
+  gate --scope task --id E99_S01_T01 --json
+  [ "$status" -eq 3 ]
+  jq_ok '.refusal == "scoped-equals-full" and .suites_run == 0 and .effective_mode == "scoped"'
+  [ "$(bats_ran)" = "none" ]
+  [ "$(marks)" = "none" ]
+}
+
+@test "every test file selected is refused even though an unselectable opaque suite never ran: the files are the measure" {
+  # This repository's own shape: bats:tests plus shellcheck:all. No scope-map rule can select shellcheck:all (it has no
+  # test files), so a comparison that required the opaque suite too would make the invariant vacuous here, and a rule
+  # selecting every test file would pass as "smaller" while being the hour-long run this story exists to remove.
+  # Refusing is the safe direction, and it is what the task's own example describes.
+  use_bats_shim
+  set_disc "$BATS_ALL"',{"id":"shellcheck:all","name":"shellcheck","type":"sast","ecosystem":"shellcheck","command":"echo shellcheck >> \"$RUN_MARK\"","paths":[]}'
+  set_rule_map '["alpha/*.bats","beta/*.bats","delta/*.bats","gamma/*.bats"]'
+  cfg_with test_run_task scoped
+  gate --scope task --id E99_S01_T01 --json
+  [ "$status" -eq 3 ]
+  jq_ok '.refusal == "scoped-equals-full" and .suites_run == 0'
+  assert_contains "$stderr" "4 test file(s)"
+  [ "$(bats_ran)" = "none" ]
+  [ "$(marks)" = "none" ]
+}
+
+@test "an all-opaque catalog is compared on its commands: selecting every one is refused, leaving one out is not" {
+  # With no test file in the reference there is nothing else to compare. Two npm suites are selected together by the
+  # .js -> npm extension fallback; a third suite of another ecosystem cannot be selected by any rule.
+  put js/a.test.js 'x'
+  local npm_a npm_b other
+  npm_a='{"id":"npm:a","name":"npm a","type":"unit","ecosystem":"npm","command":"echo a >> \"$RUN_MARK\"","paths":[]}'
+  npm_b='{"id":"npm:b","name":"npm b","type":"unit","ecosystem":"npm","command":"echo b >> \"$RUN_MARK\"","paths":[]}'
+  other='{"id":"make:c","name":"make c","type":"unit","ecosystem":"make","command":"echo c >> \"$RUN_MARK\"","paths":[]}'
+  set_rule_map '["js/a.test.js"]'
+  cfg_with test_run_task scoped
+  set_disc "$npm_a,$npm_b"
+  gate --scope task --id E99_S01_T01 --json
+  [ "$status" -eq 3 ]
+  jq_ok '.refusal == "scoped-equals-full" and .suites_run == 0'
+  assert_contains "$stderr" "2 opaque suite command(s)"
+  [ "$(marks)" = "none" ]
+  set_disc "$npm_a,$npm_b,$other"
+  gate --scope task --id E99_S01_T01 --json
+  [ "$status" -eq 0 ]
+  jq_ok '.refusal == null and .suites_run == 2'
+  [ "$(marks)" = "a,b" ]
+}
+
+@test "an npm twin is the same files as the bats suite it runs, so selecting them all is refused" {
+  # `npm test` is opaque text, but its package.json body is the bats command. Compared as text the full run would have
+  # one unit the narrowed run can never contain, and the whole catalog would pass as a subset.
+  use_bats_shim
+  printf '%s\n' '{"scripts":{"test":"bats alpha/*.bats beta/*.bats delta/*.bats gamma/*.bats"}}' > "$REPO/package.json"
+  set_disc "$BATS_ALL,"'{"id":"npm:test","name":"npm test","type":"unit","ecosystem":"npm","command":"npm test","paths":[]}'
+  set_rule_map '["alpha/*.bats","beta/*.bats","delta/*.bats","gamma/*.bats"]'
+  cfg_with test_run_task scoped
+  gate --scope task --id E99_S01_T01 --json
+  [ "$status" -eq 3 ]
+  jq_ok '.refusal == "scoped-equals-full" and .suites_run == 0'
+  [ "$(bats_ran)" = "none" ]
+}
+
+@test "a floor that is the whole catalog only AFTER the baseline exclusion is refused, naming test_default_suite_set" {
+  # Before exclusion the floor is 2 of 3 files, a strict subset, so the floor resolver accepts it. The session is off the
+  # level-2 baseline, tests/three.bats is marked and excluded from every run, and what is left IS what a full run
+  # executes. Nothing special-cases this: it is data (a config value, a marked file, a settings file).
+  use_bats_shim
+  tests_fixture
+  elevate
+  cfg_floor scoped "tests/one.bats,tests/two.bats"
+  gate --scope task --id E99_S03_T01 --json
+  [ "$status" -eq 3 ]
+  jq_ok '.refusal == "scoped-equals-full" and .suites_run == 0 and .effective_mode == "scoped"'
+  jq_ok '.fallback_reason == "no-mapped-suites"'
+  assert_contains "$stderr" "test_default_suite_set"
+  assert_not_contains "$stderr" "rule 1"
+  [ "$(bats_ran)" = "none" ]
+}
+
+@test "the same floor with the baseline satisfied is a strict subset of the 3 files a full run executes and runs" {
+  use_bats_shim
+  tests_fixture
+  cfg_floor scoped "tests/one.bats,tests/two.bats"
+  gate --scope task --id E99_S03_T01 --json
+  [ "$status" -eq 0 ]
+  jq_ok '.refusal == null and .effective_mode == "default-set" and .suites_run == 1'
+  [ "$(bats_ran)" = "tests/one.bats tests/two.bats" ]
+}
+
+@test "an opaque suite the full run had to disable cannot hide a run that covers every test file" {
+  # Off the baseline a full run has to disable the opaque suite (it cannot honour the exclusion), but a scoped run that
+  # never touches the marked file keeps it. The scoped run then contains everything the full run does, and more.
+  use_bats_shim
+  tests_fixture
+  put js/a.test.js 'x'
+  set_disc "$(jq -c '.suites[0]' "$DISC_STUB_JSON"),$NPM_OPAQUE"
+  elevate
+  set_rule_map '["tests/one.bats","tests/two.bats","js/a.test.js"]'
+  cfg_with test_run_task scoped
+  gate --scope task --id E99_S01_T01 --json
+  [ "$status" -eq 3 ]
+  jq_ok '.refusal == "scoped-equals-full" and .suites_run == 0'
+  [ "$(bats_ran)" = "none" ]
+  [ "$(marks)" = "none" ]
+}
+
+@test "a catalog with exactly one test file cannot be scoped: refused with the remedy, and policy full still runs it" {
+  # Decision: no exemption. scoped == full is unavoidable here, and the floor resolver refuses an entire-catalog floor
+  # whatever the catalog's size, so the same answer is given on both paths. `full` is the deliberate way to run it.
+  use_bats_shim
+  set_disc '{"id":"bats:alpha","name":"alpha","type":"unit","ecosystem":"bats","command":"bats alpha/*.bats","paths":["alpha/*.bats"]}'
+  set_rule_map '["alpha/*.bats"]'
+  cfg_with test_run_task scoped
+  gate --scope task --id E99_S01_T01 --json
+  [ "$status" -eq 3 ]
+  jq_ok '.refusal == "scoped-equals-full" and .suites_run == 0'
+  assert_contains "$stderr" "exactly one test file"
+  assert_contains "$stderr" "set test_run_task to full"
+  [ "$(bats_ran)" = "none" ]
+  cfg_with test_run_task full
+  gate --scope task --id E99_S01_T01 --json
+  [ "$status" -eq 0 ]
+  jq_ok '.effective_mode == "full" and .refusal == null'
+  [ "$(bats_ran)" = "alpha/a.bats" ]
+}
+
+@test "a bats command the gate cannot expand safely fails closed: exit 3, stdout empty, nothing runs" {
+  use_bats_shim
+  set_disc '{"id":"bats:dyn","name":"dyn","type":"unit","ecosystem":"bats","command":"bats $(echo alpha/*.bats)","paths":["alpha/*.bats"]},'"$NPM_OPAQUE"
+  set_rule_map '["alpha/*.bats"]'
+  cfg_with test_run_task scoped
+  gate --scope task --id E99_S01_T01
+  [ "$status" -eq 3 ]
+  assert_output_not_contains "satisfied"
+  assert_contains "$stderr" "cannot prove the scoped run is smaller than a full run"
+  [ "$(bats_ran)" = "none" ]
+}
+
+@test "the refusal still reports the map's declared omission as kept out, and keeps both map keys consistent" {
+  # The kept-out notice is printed before the catalog is reached. A refusal runs nothing, so the declared file is
+  # genuinely not verified and the statement stays true; this pins that the refusal path does not drop it.
+  use_bats_shim
+  set_disc "$BATS_ALL"
+  put project/scope-map.json '{"map_version":1,
+    "excluded_tests":[{"file":"nowhere/x.bats","reason":"a declared omission outside the catalog"}],
+    "rules":[{"source":"src/alpha/*.sh","tests":["alpha/*.bats","beta/*.bats","delta/*.bats","gamma/*.bats"]}]}'
+  cfg_with test_run_task scoped
+  gate --scope task --id E99_S01_T01 --json
+  [ "$status" -eq 3 ]
+  jq_ok '.refusal == "scoped-equals-full"'
+  jq_ok '[.map_excluded_test_files[].file] == ["nowhere/x.bats"] and .map_exclusion_conflicts == [] and .map_exclusions_superseded == []'
+  assert_contains "$stderr" "deliberately not selected by the scope map"
+}
+
+@test "a refusal is a verdict about the scope: it never touches the board and leaves no scratch directory" {
+  use_bats_shim
+  set_disc "$BATS_ALL"
+  set_rule_map '["alpha/*.bats","beta/*.bats","delta/*.bats","gamma/*.bats"]'
+  cfg_with test_run_task scoped
+  local before
+  before="$(board_snapshot)"
+  gate --scope task --id E99_S01_T01
+  [ "$status" -eq 3 ]
+  [ "$before" = "$(board_snapshot)" ]
+  [ -z "$(ls -A "$TMPDIR")" ]
 }
 
 # ---- usage and infrastructure errors ----------------------------------------------------------------------------------

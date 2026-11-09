@@ -89,7 +89,9 @@ test run must pass before a board scope is closed (the scope test policy, see th
 | `test_run_story` | `scoped` | `none`, `scoped`, `full` |
 | `test_run_epic` | `none` | `none`, `scoped`, `full` |
 
-An absent key reads as its default, and a present-but-invalid value reads as the default with a warning on stderr.
+An absent key reads as its default, and a present-but-invalid value reads as the default with a warning on stderr. The
+defaults are `none`, `scoped`, `none` (`E72_S08_T01`), so no automatic gate runs the full suite; `full` stays an accepted,
+deliberately settable value of all three keys.
 
 Editable too: `test_default_suite_set`, the **bounded default suite set** (`E72_S08_T06`) — see the next section.
 
@@ -175,9 +177,12 @@ selects is reported as "deliberately kept out" rather than being silently absent
 `tests/mirror-staging-branch-push.bats` — the first for its ~2 h runtime and its mutation of the real `.publicignore`,
 the other two because each drives the real `mirror.sh` end-to-end with real `git push`es. The declaration **subtracts
 nothing**: removing the file from every rule is what excludes it, and the declaration only makes that visible. It also
-holds **only on the `scoped` path** — under policy `full`, and on either fallback to the full catalog, all three run.
-`test_run_epic` is `none` in this project today, so no epic rollup takes either path. Both are documented in the "Suite granularity" and "Suites that cannot pass right now" sections of
-`project/documentation/test-runner.md`.
+holds **only on the `scoped` path** — under policy `full` all three run. `full` remains a settable value of
+`test_run_task`, `test_run_story` and `test_run_epic`, but no default selects it and no `scoped` run can reach it
+(`E72_S08_T02` removed the escalation). `test_run_epic` is `none` in this project, so no epic rollup runs a suite at all. Both
+are documented in the "Suite granularity" and "Suites that cannot pass right now" sections of
+`project/documentation/test-runner.md`; where the full suite does run, and what an epic rollup without a test run still
+relies on, is under "Where the full suite runs" there.
 
 Everything else is shown read-only, with a pointer to where to change it:
 

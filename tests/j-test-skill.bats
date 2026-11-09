@@ -244,3 +244,32 @@ marks() {
   [ "$status" -eq 2 ]
   [ ! -e "$RUN_MARK" ]
 }
+
+# --- the slowness check (step 5) -----------------------------------------------------------------------------------
+
+@test "SKILL.md puts the slowness check in the user's hands: probe answer, the five-option menu, --no-probe on the run" {
+  local body option
+  body="$(cat "$SKILL_MD")"
+  assert_contains "$body" "slowness-check.sh"
+  assert_contains "$body" "probe"
+  for option in "Continue anyway" "Cancel" "Return to test selection" "Change what counts as slow on this machine" "Other (describe below)"; do
+    assert_contains "$body" "$option"
+  done
+  assert_contains "$body" "run-suites.sh\" --catalog \"\$CATALOG\" --no-probe"
+  [ -x "$SCRIPTS/run-suites.sh" ]
+}
+
+@test "the probe answer is parsed to the word probe and runs no suite" {
+  build_catalog
+  run --separate-stderr "$BASH_BIN" "$SCRIPTS/parse-selection.sh" "$(runnable_count)" "probe"
+  [ "$status" -eq 0 ]
+  [ "$output" = "probe" ]
+  [ ! -e "$RUN_MARK" ]
+}
+
+@test "run-suites.sh accepts --no-probe in the position SKILL.md passes it" {
+  build_catalog
+  run --separate-stderr "$BASH_BIN" "$SCRIPTS/run-suites.sh" --catalog "$CATALOG" --root "$PIPE_ROOT" --no-probe 1
+  [ "$status" -eq 0 ]
+  assert_output_not_contains "slowness probe"
+}

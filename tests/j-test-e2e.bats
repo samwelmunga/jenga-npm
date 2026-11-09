@@ -206,7 +206,7 @@ marks() {
   assert_output_contains "1. npm test (unit)"
   assert_output_contains "2. pytest tests (unit)"
   assert_output_contains "3. shellcheck (sast)"
-  [ "$(printf '%s\n' "$output" | tail -n 1)" = "Enter selection (comma-separated, or 'all' for all, or blank for 1 through $(runnable_count)):" ]
+  [ "$(printf '%s\n' "$output" | tail -n 1)" = "Enter selection (comma-separated, or 'all' for all, or 'probe' to only check whether this machine is slow, or blank for 1 through $(runnable_count)):" ]
 }
 
 # --- 3. blank selection --------------------------------------------------------------------------------------------

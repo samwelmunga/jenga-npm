@@ -1,0 +1,20 @@
+$ validate-proposed-items.sh <epic> <task>
+exit=0
+--- stdout
+✅ 2 board file(s) valid (0 story file(s) additionally format-checked)
+--- stderr
+=== end
+$ validate-proposed-items.sh <story without sections>
+exit=1
+--- stdout
+--- stderr
+❌ 1 validation failure(s) across 1 file(s):
+❌ <TMP>/scratch/proposed/stories/E10_S10_fixture-story.md — story format (validate-story-format.sh exit 2)
+     ❌ E10_S10_fixture-story: missing '## Acceptance Criteria' section — <TMP>/scratch/proposed/stories/E10_S10_fixture-story.md
+=== end
+$ validate-proposed-items.sh <epic> <story with sections> <task>
+exit=0
+--- stdout
+✅ 3 board file(s) valid (1 story file(s) additionally format-checked)
+--- stderr
+=== end

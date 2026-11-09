@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# arch-node: E44_S01,E44_S02 type=unit
 #
 # Coverage for the /break signal and its orchestrator checkpoints (E44_S01, E44_S02).
 #

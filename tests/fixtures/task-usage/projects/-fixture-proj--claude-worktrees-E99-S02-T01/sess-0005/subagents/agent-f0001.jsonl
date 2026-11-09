@@ -1,0 +1,3 @@
+{"type":"user","uuid":"u-t8","isSidechain":true,"message":{"role":"user","content":"Synthetic worktree prompt."}}
+{"type":"assistant","uuid":"f1","requestId":"req_J1","message":{"role":"assistant","model":"fixture-model","content":[{"type":"text","text":"synthetic reply"}],"usage":{"input_tokens":9,"output_tokens":90,"cache_creation_input_tokens":700,"cache_read_input_tokens":3000}}}
+{"type":"assistant","uuid":"f2","requestId":"req_J2","message":{"role":"assistant","model":"fixture-model","content":[{"type":"text","text":"synthetic reply"}],"usage":{"input_tokens":1,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":3700}}}

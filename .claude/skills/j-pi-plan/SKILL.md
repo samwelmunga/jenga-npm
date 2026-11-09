@@ -49,6 +49,8 @@ Detect which mode you're in by checking whether `project/PROJECT_SUMMARY.md` alr
 
 Example: `./assets/epic.json`.
 
+**Epic IDs come from the allocator.** Obtain each new epic ID by running `bash "$([ -f scripts/next-board-id.sh ] && echo scripts/next-board-id.sh || echo node_modules/@jenga-ai/agent/scripts/next-board-id.sh)" epic` (and story and task IDs with `story <epic-id>` and `task <story-id>`), and use its output verbatim. Never derive an ID by counting or text-sorting file names.
+
 Story files created under `project/board/stories/` should follow `./assets/story_template.md`.
 ---
 

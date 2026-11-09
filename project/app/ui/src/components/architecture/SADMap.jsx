@@ -18,6 +18,7 @@ import dagre from 'dagre'
 import { select } from 'd3-selection'
 import { zoom as d3zoom, zoomIdentity } from 'd3-zoom'
 import { line as d3line, curveBasis } from 'd3-shape'
+import { isCoveredNode, nodeTests, titleWithTests } from './coverageOverlay.js'
 
 // E47_S07_T05: colours are theme tokens (tokens.css `--color-chart-*`), referenced as CSS `var()`
 // strings. They are applied through the `style` prop (never SVG presentation attributes, where
@@ -216,6 +217,18 @@ function GhostLegend({ hasGhosts }) {
   )
 }
 
+// E83_S03_T03: legend for the covered-node badge, shown only when at least one covered node is on
+// screen. Read-only: it explains the badge and never offers a control.
+function CoveredLegend({ hasCovered }) {
+  if (!hasCovered) return null
+  return (
+    <p className="sad-covered-legend">
+      <span className="sad-covered-legend-swatch" aria-hidden="true" /> The number on a node is how
+      many tests cover it. Hover a node to list them.
+    </p>
+  )
+}
+
 export default function SADMap({ nodes, edges, coverage }) {
   const [selectedId, setSelectedId] = useState(null)
   const [collapsedTypes, setCollapsedTypes] = useState(() => new Set())
@@ -356,6 +369,7 @@ export default function SADMap({ nodes, edges, coverage }) {
     <div>
       <CoverageIndicator coverage={coverage} />
       <GhostLegend hasGhosts={hasGhosts} />
+      <CoveredLegend hasCovered={visibleNodes.some(isCoveredNode)} />
       <div className="sad-map-toolbar" role="toolbar" aria-label="Architecture map controls">
         {allTypes.map(type => {
           const isCollapsed = collapsedTypes.has(type)
@@ -451,7 +465,7 @@ export default function SADMap({ nodes, edges, coverage }) {
                       ? `${n.label} — click to expand (${(clusterMembers[n.id] || []).length} nodes)`
                       : isGhost
                         ? `${n.label} — unverified (${n.source}-sourced); label only, no detail available`
-                        : `${n.label}${titleSuffix}`}
+                        : titleWithTests(`${n.label}${titleSuffix}`, n)}
                   </title>
                   <rect
                     width={NODE_W}
@@ -485,6 +499,29 @@ export default function SADMap({ nodes, edges, coverage }) {
                       style={{ fill: 'var(--color-chart-stale)', stroke: 'var(--color-chart-stale-ring)' }}
                       strokeWidth={1.5}
                     />
+                  )}
+                  {isCoveredNode(n) && (
+                    <g className="sad-node-covered-badge">
+                      <circle
+                        cx={8}
+                        cy={8}
+                        r={8}
+                        style={{ fill: 'var(--color-chart-covered)', stroke: 'var(--color-chart-covered-ring)' }}
+                        strokeWidth={1.5}
+                      />
+                      <text
+                        x={8}
+                        y={8}
+                        dominantBaseline="central"
+                        textAnchor="middle"
+                        style={{ fill: 'var(--color-chart-label)' }}
+                        fontSize={9}
+                        fontWeight={600}
+                        fontFamily="inherit"
+                      >
+                        {nodeTests(n).length}
+                      </text>
+                    </g>
                   )}
                 </g>
               )

@@ -10,11 +10,27 @@ if [[ "$#" -lt 1 ]]; then
   exit 1
 fi
 
+# The shared board-ID shapes live in scripts/lib/board_ids.py (epic E86). Resolve that directory from this
+# script's own location so the same code works in the monorepo (scripts/lib) and in a consumer install
+# (node_modules/@jenga-ai/agent/scripts/lib), and hand it to the embedded Python.
+JENGA_BOARD_IDS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+export JENGA_BOARD_IDS_LIB
+
 python3 - "$@" <<'PY'
 import datetime
+import os
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, os.environ.get("JENGA_BOARD_IDS_LIB", ""))
+try:
+    import board_ids as _board_ids
+except ImportError:
+    sys.stderr.write(
+        "validate-board.sh: cannot import board_ids from "
+        f"{os.environ.get('JENGA_BOARD_IDS_LIB', '')!r} (expected scripts/lib/board_ids.py next to this script)\n")
+    sys.exit(2)
 
 # The strict-YAML gate (assert_parses_as_yaml) needs PyYAML, which is not guaranteed present.
 # Imported ONCE here, rather than per file, so the warning below is emitted once per run instead
@@ -108,6 +124,21 @@ USAGE_KEYS = {
     "usage_measured_on", "usage_possibly_incomplete",
 }
 
+# E76_S03_T04 per-story token usage. Runtime-written, never authored by hand. STORY-ONLY: not
+# allow-listed for epics or tasks (the task group is USAGE_KEYS above; usage_total_tokens,
+# usage_measured_on and usage_possibly_incomplete appear in both groups on purpose, each scoped to
+# its own item type). Absence means "not measured", not zero. Names are checked by exact spelling,
+# so a misspelling such as usage_task_input_tokens is still rejected as an unknown key. The
+# allocation rule is owned by project/documentation/task-usage.md; see "Usage fields on stories"
+# in templates/SCRUM_BOARD_SCHEMA.md.
+STORY_USAGE_KEYS = {
+    "usage_tasks_input_tokens", "usage_tasks_output_tokens", "usage_tasks_cache_write_tokens",
+    "usage_tasks_cache_read_tokens", "usage_tasks_total_tokens",
+    "usage_overhead_input_tokens", "usage_overhead_output_tokens", "usage_overhead_cache_write_tokens",
+    "usage_overhead_cache_read_tokens", "usage_overhead_total_tokens",
+    "usage_total_tokens", "usage_measured_on", "usage_possibly_incomplete",
+}
+
 # E39 tiered item-level caution/escalation fields. OPTIONAL and story/task-only — epics do not
 # carry these; an epic's risk gating is already handled by epic_scope_approval. See
 # templates/SCRUM_BOARD_SCHEMA.md.
@@ -150,13 +181,17 @@ ALLOWED_KEYS = {
         # (value: backfilled). Absence means the epic was authored normally, so every existing
         # epic that omits it stays valid. See templates/SCRUM_BOARD_SCHEMA.md.
         "provenance",
+        # OPTIONAL. Records that one epic replaces another (E57 supersedes E19; E19 is
+        # superseded_by E57). Value: an epic id. Absence means no supersession. See
+        # templates/SCRUM_BOARD_SCHEMA.md.
+        "supersedes", "superseded_by",
         *DEPLOY_KEYS, *EXTERNAL_REFS_KEYS,
     },
     "story": {
         "id", "epic_id", "title", "status", "date_created", "date_started", "date_completed",
         "dates_previously_completed", "reopened_on", "reopened_reason", "tasks", "docs",
         "priority", "depends_on",
-        *CRUCIAL_KEYS, *DEPLOY_KEYS, *EXTERNAL_REFS_KEYS,
+        *STORY_USAGE_KEYS, *CRUCIAL_KEYS, *DEPLOY_KEYS, *EXTERNAL_REFS_KEYS,
     },
     "task": {
         "id", "story_id", "epic_id", "title", "status", "date_created", "date_started", "date_completed",
@@ -168,9 +203,9 @@ ALLOWED_KEYS = {
 }
 
 ID_PATTERNS = {
-    "epic": re.compile(r"^E\d{2}$"),
-    "story": re.compile(r"^E\d{2}_S\d{2}$"),
-    "task": re.compile(r"^E\d{2}_S\d{2}_T\d{2}$"),
+    "epic": _board_ids.EPIC_ID_RE,
+    "story": _board_ids.STORY_ID_RE,
+    "task": _board_ids.TASK_ID_RE,
 }
 
 ASSIGNEES = {"developer", "tester", "scrum-master"}

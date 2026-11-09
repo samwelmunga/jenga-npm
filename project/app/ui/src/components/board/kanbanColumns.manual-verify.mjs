@@ -461,3 +461,117 @@ assert.deepEqual(bucketIntoColumns(undefined)['backlog'], [], 'bucketIntoColumns
 
 console.log('idea card checks (none/promoted/rejected placement, passthrough, never pending/in-progress, real items unchanged, ordering, undefined input): PASS')
 console.log('\nAll E35_S04_T03 checks passed.')
+
+// ---------------------------------------------------------------------------------------------
+// E86_S02_T05 — numeric ID order survives into every kanban column.
+//
+// `parseBoard()` (project/app/api/parsers/board.js) now returns epics, stories and tasks in numeric ID
+// order (E101 before E1001, S10 before S100, T10 before T100). `bucketIntoColumns()` never sorts by id:
+// it appends in input order, and its only sort is the stable In Progress partition (native first,
+// promoted second). This section proves that on a mixed-width board, for every column, so a future
+// change that re-sorts by text (or by anything else) is caught here.
+//
+// Run (same invocation as the rest of this file):
+//   node project/app/ui/src/components/board/kanbanColumns.manual-verify.mjs
+// ---------------------------------------------------------------------------------------------
+
+// Built in the order the API now returns it. Numbers are listed in numeric order on purpose; the
+// expected id lists below are produced by the same nested loops, not by any comparator.
+const NUMERIC_EPICS = [1, 10, 11, 99, 100, 101, 1001]
+const NUMERIC_STORIES = { 10: [2, 10, 100], 100: [2, 10, 100], 11: [1], 1001: [1] }
+const NUMERIC_TASKS = [2, 10, 100]
+const epicId = (n) => (n < 10 ? `E0${n}` : `E${n}`)
+
+function buildMixedWidthEpics(statusFor) {
+  return NUMERIC_EPICS.map((en) => {
+    const eid = epicId(en)
+    const stories = (NUMERIC_STORIES[en] || []).map((sn) => {
+      const sid = `${eid}_S${sn}`
+      const tasks = (en === 10 || en === 100 ? NUMERIC_TASKS : []).map((tn) => {
+        const id = `${sid}_T${tn}`
+        return { id, story_id: sid, epic_id: eid, status: statusFor(id) }
+      })
+      return { id: sid, epic_id: eid, status: statusFor(sid), tasks }
+    })
+    return { id: eid, status: statusFor(eid), stories }
+  })
+}
+
+// Depth-first listing of every id in numeric order: the order flattenBoardItems() must keep.
+const EXPECTED_NUMERIC_IDS = []
+for (const en of NUMERIC_EPICS) {
+  EXPECTED_NUMERIC_IDS.push(epicId(en))
+  for (const sn of NUMERIC_STORIES[en] || []) {
+    EXPECTED_NUMERIC_IDS.push(`${epicId(en)}_S${sn}`)
+    if (en === 10 || en === 100) {
+      for (const tn of NUMERIC_TASKS) EXPECTED_NUMERIC_IDS.push(`${epicId(en)}_S${sn}_T${tn}`)
+    }
+  }
+}
+
+// Independent numeric-tuple read of an id, for the generic non-decreasing check.
+function idTuple(id) {
+  const m = /^E(\d+)(?:_S(\d+))?(?:_T(\d+))?$/.exec(id)
+  return [Number(m[1]), m[2] === undefined ? -1 : Number(m[2]), m[3] === undefined ? -1 : Number(m[3])]
+}
+function assertNonDecreasing(ids, label) {
+  for (let i = 1; i < ids.length; i += 1) {
+    const a = idTuple(ids[i - 1])
+    const b = idTuple(ids[i])
+    const cmp = a[0] - b[0] || a[1] - b[1] || a[2] - b[2]
+    assert.ok(cmp <= 0, `${label}: ${ids[i - 1]} must not come after ${ids[i]}`)
+  }
+}
+
+// The fixture really is lexically different from numeric order (E1001 sorts before E101 as text), so
+// a text re-sort would be detected.
+assert.notDeepEqual([...EXPECTED_NUMERIC_IDS].sort(), EXPECTED_NUMERIC_IDS, 'numeric-order fixture must differ from lexical order')
+
+// 1. Every column, one uniform status at a time: the whole mixed-width board lands in that column
+//    (Pending is excluded from the Active Sprint view by design) and keeps numeric order.
+const UNIFORM_STATUSES = [
+  'Backlog', 'In Progress', 'Blocked', 'Failed', 'Rejected', 'Passed', 'Merged',
+  'Publicized', 'Deployed to Stage', 'Deployed to Prod',
+]
+for (const status of UNIFORM_STATUSES) {
+  const buckets = bucketIntoColumns(flattenBoardItems(buildMixedWidthEpics(() => status)))
+  const populated = Object.keys(buckets).filter((k) => buckets[k].length > 0)
+  assert.equal(populated.length, 1, `uniform status "${status}" should fill exactly one column, got ${populated}`)
+  const ids = buckets[populated[0]].map((i) => i.id)
+  assert.deepEqual(ids, EXPECTED_NUMERIC_IDS, `column for "${status}" must keep numeric ID order`)
+  assertNonDecreasing(ids, `column for "${status}"`)
+}
+
+// 2. Mixed statuses on the same board: every column's ids stay non-decreasing, and merging the columns
+//    back loses nothing (Pending items are the only ones excluded; none are used here).
+const MIXED_CYCLE = ['Backlog', 'In Progress', 'Blocked', 'Failed', 'Rejected', 'Passed', 'Merged', 'Deployed to Stage']
+let cycleIdx = 0
+const mixedBuckets = bucketIntoColumns(flattenBoardItems(buildMixedWidthEpics(() => MIXED_CYCLE[cycleIdx++ % MIXED_CYCLE.length])))
+let mixedCount = 0
+for (const [key, items] of Object.entries(mixedBuckets)) {
+  assertNonDecreasing(items.map((i) => i.id), `mixed-status column ${key}`)
+  mixedCount += items.length
+}
+assert.equal(mixedCount, EXPECTED_NUMERIC_IDS.length, 'mixed-status board must lose no items')
+
+// 3. In Progress with todo.md promotion: native items first, promoted ones after, each group in numeric order.
+const queuedSet = new Set(['E10_S2', 'E10_S100', 'E100_S2', 'E1001', 'E101'])
+const promotedBoard = buildMixedWidthEpics((id) => (queuedSet.has(id) ? 'Pending' : id.endsWith('_T10') ? 'In Progress' : 'Passed'))
+const stampQueued = (epics) => epics.map((e) => ({
+  ...e,
+  ...(queuedSet.has(e.id) ? { _queued: true } : {}),
+  stories: e.stories.map((s) => ({
+    ...s,
+    ...(queuedSet.has(s.id) ? { _queued: true } : {}),
+    tasks: s.tasks.map((t) => ({ ...t, ...(queuedSet.has(t.id) ? { _queued: true } : {}) })),
+  })),
+}))
+const inProgress = bucketIntoColumns(flattenBoardItems(stampQueued(promotedBoard)))['in-progress']
+const nativeIds = inProgress.filter((i) => !i._promotedFromStatus).map((i) => i.id)
+const promotedIds = inProgress.filter((i) => i._promotedFromStatus).map((i) => i.id)
+assert.deepEqual(nativeIds, ['E10_S2_T10', 'E10_S10_T10', 'E10_S100_T10', 'E100_S2_T10', 'E100_S10_T10', 'E100_S100_T10'], 'native In Progress items keep numeric order')
+assert.deepEqual(promotedIds, ['E10_S2', 'E10_S100', 'E100_S2', 'E101', 'E1001'], 'promoted In Progress items keep numeric order')
+assert.deepEqual(inProgress.map((i) => i.id), [...nativeIds, ...promotedIds], 'native items first, promoted after')
+
+console.log('numeric-order checks (every column uniform + mixed statuses, In Progress native/promoted groups, fixture differs from lexical order): PASS')
+console.log('\nAll E86_S02_T05 checks passed.')

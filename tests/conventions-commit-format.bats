@@ -155,7 +155,7 @@ validate() { run --separate-stderr bash "$VALIDATE" "$@"; }
 }
 
 @test "schema: no string outside _comment and note carries a board id (the shipped files stay free of project provenance)" {
-  run jq -r '[paths(strings) as $p | {k: ($p | map(tostring) | last), v: getpath($p)} | select(.k != "_comment" and .k != "note") | .v | scan("E[0-9]{2}_S[0-9]{2}(_T[0-9]{2})?")] | unique | length' "$SCHEMA"
+  run jq -r '[paths(strings) as $p | {k: ($p | map(tostring) | last), v: getpath($p)} | select(.k != "_comment" and .k != "note") | .v | scan("E[0-9]+_S[0-9]+(_T[0-9]+)?")] | unique | length' "$SCHEMA"
   [ "$status" -eq 0 ]
   [ "$output" = "0" ]
 }

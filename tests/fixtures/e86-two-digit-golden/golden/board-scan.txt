@@ -1,0 +1,257 @@
+$ board-scan.sh
+exit=0
+--- stdout
+[
+  {
+    "id": "E01",
+    "type": "epic",
+    "epic_id": "E01",
+    "story_id": null,
+    "title": "Fixture epic E01",
+    "status": "Passed",
+    "summary": "",
+    "file": "project/board/epics/E01_fixture-epic.md"
+  },
+  {
+    "id": "E02",
+    "type": "epic",
+    "epic_id": "E02",
+    "story_id": null,
+    "title": "Agent Conversation Guardrails",
+    "status": "Done",
+    "summary": "Equip the Jenga agent system with conversation-awareness guardrails that detect when a user is diverging from the primary topic of a session. When divergence is detected, the agent surfaces a structured choice: capture the diverging topic as a `/todo` (and continue the primary discussion) or capture the primary topic as a `/todo` (and pivot to the diverging subject). Both paths preserve context and continuity without losing either thread.",
+    "file": "project/board/epics/E02_agent-conversation-guardrails.md"
+  },
+  {
+    "id": "E03",
+    "type": "epic",
+    "epic_id": "E03",
+    "story_id": null,
+    "title": "Parallel Workflow Orchestration",
+    "status": "Passed with remarks",
+    "summary": "Extend the Jenga skill system with orchestration capabilities that allow multiple implementation tasks to be executed in parallel by sub-agents. The orchestrator skill (`/dooo`) wraps `/do` with a feedback loop that returns to the scrum board after each implementation is kicked off, identifies tasks that can safely run in parallel with the already-running ones, and presents them to the user so they can choose to fan out further or call it done.",
+    "file": "project/board/epics/E03_parallel-workflow-orchestration.md"
+  },
+  {
+    "id": "E10",
+    "type": "epic",
+    "epic_id": "E10",
+    "story_id": null,
+    "title": "Fixture epic E10",
+    "status": "In Progress",
+    "summary": "",
+    "file": "project/board/epics/E10_fixture-epic.md"
+  },
+  {
+    "id": "E11",
+    "type": "epic",
+    "epic_id": "E11",
+    "story_id": null,
+    "title": "Fixture epic E11",
+    "status": "Pending",
+    "summary": "",
+    "file": "project/board/epics/E11_fixture-epic.md"
+  },
+  {
+    "id": "E99",
+    "type": "epic",
+    "epic_id": "E99",
+    "story_id": null,
+    "title": "Fixture epic E99",
+    "status": "Passed",
+    "summary": "",
+    "file": "project/board/epics/E99_fixture-epic.md"
+  },
+  {
+    "id": "E01_S01",
+    "type": "story",
+    "epic_id": "E01",
+    "story_id": "E01_S01",
+    "title": "Fixture story E01_S01",
+    "status": "Passed",
+    "summary": "Synthetic story under epic E01.",
+    "file": "project/board/stories/E01_S01_fixture-story.md"
+  },
+  {
+    "id": "E01_S02",
+    "type": "story",
+    "epic_id": "E01",
+    "story_id": "E01_S02",
+    "title": "Fixture story E01_S02",
+    "status": "Passed",
+    "summary": "Synthetic story under epic E01.",
+    "file": "project/board/stories/E01_S02_fixture-story.md"
+  },
+  {
+    "id": "E01_S03",
+    "type": "story",
+    "epic_id": "E01",
+    "story_id": "E01_S03",
+    "title": "Fixture story E01_S03",
+    "status": "Passed",
+    "summary": "Synthetic story under epic E01.",
+    "file": "project/board/stories/E01_S03_fixture-story.md"
+  },
+  {
+    "id": "E01_S04",
+    "type": "story",
+    "epic_id": "E01",
+    "story_id": "E01_S04",
+    "title": "Fixture story E01_S04",
+    "status": "Passed",
+    "summary": "Synthetic story under epic E01.",
+    "file": "project/board/stories/E01_S04_fixture-story.md"
+  },
+  {
+    "id": "E02_S02",
+    "type": "story",
+    "epic_id": "E02",
+    "story_id": "E02_S02",
+    "title": "/spinoff Skill",
+    "status": "Merged",
+    "summary": "As a user mid-conversation, I want to invoke `/spinoff` to formally declare a diverging topic \u2014 so that the agent captures it as a structured `/todo` with context gathered so far, and we can consciously continue one thread without losing the other.",
+    "file": "project/board/stories/E02_S02_spinoff-skill.md"
+  },
+  {
+    "id": "E03_S01",
+    "type": "story",
+    "epic_id": "E03",
+    "story_id": "E03_S01",
+    "title": "/dooo Skill \u2014 Parallel Execution Orchestrator",
+    "status": "Passed with remarks",
+    "summary": "",
+    "file": "project/board/stories/E03_S01_dooo-parallel-execution-orchestrator.md"
+  },
+  {
+    "id": "E10_S01",
+    "type": "story",
+    "epic_id": "E10",
+    "story_id": "E10_S01",
+    "title": "Fixture story E10_S01",
+    "status": "Passed",
+    "summary": "Synthetic story under epic E10.",
+    "file": "project/board/stories/E10_S01_fixture-story.md"
+  },
+  {
+    "id": "E10_S10",
+    "type": "story",
+    "epic_id": "E10",
+    "story_id": "E10_S10",
+    "title": "Fixture story E10_S10",
+    "status": "In Progress",
+    "summary": "Synthetic story under epic E10.",
+    "file": "project/board/stories/E10_S10_fixture-story.md"
+  },
+  {
+    "id": "E11_S01",
+    "type": "story",
+    "epic_id": "E11",
+    "story_id": "E11_S01",
+    "title": "Fixture story E11_S01",
+    "status": "Pending",
+    "summary": "Synthetic story under epic E11.",
+    "file": "project/board/stories/E11_S01_fixture-story.md"
+  },
+  {
+    "id": "E99_S99",
+    "type": "story",
+    "epic_id": "E99",
+    "story_id": "E99_S99",
+    "title": "Fixture story E99_S99",
+    "status": "Passed",
+    "summary": "Synthetic story under epic E99.",
+    "file": "project/board/stories/E99_S99_fixture-story.md"
+  },
+  {
+    "id": "E01_S01_T01",
+    "type": "task",
+    "epic_id": "E01",
+    "story_id": "E01_S01",
+    "title": "Fixture task E01_S01_T01",
+    "status": "Passed",
+    "summary": "",
+    "file": "project/board/tasks/E01_S01_T01_fixture-task.md"
+  },
+  {
+    "id": "E01_S01_T02",
+    "type": "task",
+    "epic_id": "E01",
+    "story_id": "E01_S01",
+    "title": "Fixture task E01_S01_T02",
+    "status": "Passed",
+    "summary": "",
+    "file": "project/board/tasks/E01_S01_T02_fixture-task.md"
+  },
+  {
+    "id": "E01_S04_T02",
+    "type": "task",
+    "epic_id": "E01",
+    "story_id": "E01_S04",
+    "title": "Fixture task E01_S04_T02",
+    "status": "Passed",
+    "summary": "",
+    "file": "project/board/tasks/E01_S04_T02_fixture-task.md"
+  },
+  {
+    "id": "E03_S01_T02",
+    "type": "task",
+    "epic_id": "E03",
+    "story_id": "E03_S01",
+    "title": "Scaffold skills/dooo/ directory with SKILL.md",
+    "status": "Passed",
+    "summary": "Create `skills/dooo/` following standard skill conventions (same structure as existing skills like `skills/do/`). Create `skills/dooo/SKILL.md` with the skill metadata header and a stub body. The skill is invocable as `/dooo`. Document the skill's purpose: wrapping `/do` to orchestrate parallel sub-agent implementations.",
+    "file": "project/board/tasks/E03_S01_T02_scaffold-dooo-skill.md"
+  },
+  {
+    "id": "E03_S01_T04",
+    "type": "task",
+    "epic_id": "E03",
+    "story_id": "E03_S01",
+    "title": "Update skills/help listing to include /dooo",
+    "status": "Rejected",
+    "summary": "Edit `skills/help/SKILL.md` (or whichever asset file lists available skills) to include `/dooo` with a short description: \"Parallel execution orchestrator \u2014 wraps /do to start multiple independent implementations concurrently.\" The entry must be consistent in format with the other skill entries in the listing.",
+    "file": "project/board/tasks/E03_S01_T04_update-help-skill-listing.md"
+  },
+  {
+    "id": "E10_S01_T01",
+    "type": "task",
+    "epic_id": "E10",
+    "story_id": "E10_S01",
+    "title": "Fixture task E10_S01_T01",
+    "status": "Passed",
+    "summary": "",
+    "file": "project/board/tasks/E10_S01_T01_fixture-task.md"
+  },
+  {
+    "id": "E10_S10_T10",
+    "type": "task",
+    "epic_id": "E10",
+    "story_id": "E10_S10",
+    "title": "Fixture task E10_S10_T10",
+    "status": "Pending",
+    "summary": "",
+    "file": "project/board/tasks/E10_S10_T10_fixture-task.md"
+  },
+  {
+    "id": "E11_S01_T01",
+    "type": "task",
+    "epic_id": "E11",
+    "story_id": "E11_S01",
+    "title": "Fixture task E11_S01_T01",
+    "status": "Pending",
+    "summary": "",
+    "file": "project/board/tasks/E11_S01_T01_fixture-task.md"
+  },
+  {
+    "id": "E99_S99_T99",
+    "type": "task",
+    "epic_id": "E99",
+    "story_id": "E99_S99",
+    "title": "Fixture task E99_S99_T99",
+    "status": "Passed",
+    "summary": "",
+    "file": "project/board/tasks/E99_S99_T99_fixture-task.md"
+  }
+]
+--- stderr
+=== end

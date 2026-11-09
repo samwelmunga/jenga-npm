@@ -16,6 +16,9 @@ setup() {
 
   mkdir -p "$FIXTURE_REPO/skills/j-close-story/scripts"
   cp "$SCRIPT" "$FIXTURE_REPO/skills/j-close-story/scripts/check-story-closeable.sh"
+  # The script sources the shared board-ID shapes from scripts/lib (epic E86); copy them to the matching layout.
+  mkdir -p "$FIXTURE_REPO/scripts"
+  cp -R "$REPO_ROOT/scripts/lib" "$FIXTURE_REPO/scripts/lib"
 
   cat > "$FIXTURE_REPO/project/board/stories/E99_S01_sample-story.md" <<'EOF'
 ---

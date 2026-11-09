@@ -34,6 +34,12 @@ examples:
    `/mirror-public` run having occurred.
 5. Updates the story's frontmatter `status` to `Done` (or `Privatized`, per step 4) and records
    `date_completed`.
+6. Persists each task's token usage totals next to the diff stats (non-blocking; E76_S03_T01) via
+   `scripts/task-usage.sh --persist`, and reports them, or "not measured", per task. Skipped silently when that
+   script is not installed.
+7. Rolls the story's task totals plus its allocated overhead up into the story record (non-blocking;
+   E76_S03_T05) via `scripts/task-usage.sh --report --stories`, as a separate task part, overhead part and total,
+   and reports them, or "not measured". Skipped silently when that script is not installed.
 
 ---
 
@@ -146,6 +152,20 @@ For **each task ID** listed in the story's `tasks:` frontmatter array:
    - Track any task that came back `PRIVATIZED` for the final report
      (Step 5).
 
+**After the per-task loop, persist the story's usage totals** (E76_S03_T01), once for the whole story:
+```bash
+bash "$([ -f skills/j-close-story/scripts/persist-task-usage.sh ] && echo skills/j-close-story/scripts/persist-task-usage.sh || echo node_modules/@jenga-ai/agent/skills/j-close-story/scripts/persist-task-usage.sh)" <story-id>
+```
+The helper locates the script with the same idiom as this skill's other scripts
+(`[ -f scripts/task-usage.sh ] && echo scripts/task-usage.sh || echo node_modules/@jenga-ai/agent/scripts/task-usage.sh`),
+runs `bash scripts/task-usage.sh --persist --story <story-id>`, and prints the ready-made `Usage (...)` block for Step 5. All
+measuring, locking and frontmatter writes are done by `task-usage.sh`; this step adds no persistence rules.
+- **Non-blocking.** Whatever the helper prints or however `task-usage.sh` exited, the close continues and no task or
+  story status changes because of it. Keep the helper's output verbatim for Step 5.
+- **Silent when absent.** If the helper prints nothing, `task-usage.sh` is installed in neither location (for
+  example the public mirror or an older install): skip the usage step entirely, with no warning, no "not measured"
+  lines and no `Usage` section in the report.
+
 ---
 
 ### Step 3 — Bundle task attribution
@@ -199,6 +219,24 @@ a story id is a literal string prefix of every one of its own tasks' ids.
 
 Use `update-task-frontmatter.sh` targeting the story file, or edit directly.
 
+**Then roll the story's usage up into the story record** (E76_S03_T05), once, after the status and `date_completed`
+writes above and after Step 2's per-task persist:
+```bash
+bash "$([ -f skills/j-close-story/scripts/write-story-usage.sh ] && echo skills/j-close-story/scripts/write-story-usage.sh || echo node_modules/@jenga-ai/agent/skills/j-close-story/scripts/write-story-usage.sh)" <story-id>
+```
+The helper locates `task-usage.sh` with the same idiom as `persist-task-usage.sh`, runs
+`bash scripts/task-usage.sh --report --stories <story-id>`, writes the story's usage fields (task part, allocated
+overhead part, total: see `templates/SCRUM_BOARD_SCHEMA.md`, "Usage fields on stories") with
+`update-task-frontmatter.sh`, and prints the ready-made `Story usage (...)` block for Step 5. It calculates nothing
+itself: the three numbers are `task-usage.sh`'s, and it refuses to write unless total = task part + overhead part.
+- **Non-blocking.** Whatever the helper prints, the close continues and the story's `status` and `date_completed` are
+  not touched by it. Keep its output verbatim for Step 5.
+- **Never a guess.** When the numbers cannot be produced the helper writes no story field and its block says
+  `not measured: <reason>`; never write a story usage field by hand from a guessed or zero value.
+- **Silent when absent.** If the helper prints nothing, `task-usage.sh` is installed in neither location (for example
+  the public mirror or an older install): skip the rollup entirely, with no warning, no "not measured" line and no
+  `Story usage` section in the report.
+
 ---
 
 ### Step 5 — Report
@@ -215,6 +253,41 @@ Tasks updated with actual diff stats:
 If any task had `0` for both fields, note it as potentially untracked:
 ```
   <task-id>: files_changed=0, lines_delta=0 (no EST-tagged commit found)
+```
+
+#### Usage
+
+If the Step 2 usage helper printed anything, include its block verbatim, after the diff-stat lines. It lists, per
+task, the persisted totals (`total=<N> tokens (...)`), or `not measured: <reason>` for a task nothing could be
+measured for (never a zero), flags a task whose persisted total is marked `usage_possibly_incomplete`, and shows any
+failure as a prominent `WARNING` naming the task and the reason. A usage failure never changes the closing status:
+say so in the report and carry on. If the helper printed nothing (`task-usage.sh` not installed), omit the section.
+
+```
+Usage (task-usage.sh --persist --story <story-id>):
+  <task-id>: total=<N> tokens (input=<N>, output=<N>, cache_write=<N>, cache_read=<N>), transcripts=<N>
+  <task-id>: total=<N> tokens (...), transcripts=<N> [usage_possibly_incomplete: the transcripts looked partly pruned]
+  <task-id>: not measured: <reason>
+```
+
+#### Story usage
+
+If the Step 4 story-usage helper printed anything, include its block verbatim, after the `Usage` section (or after
+the diff-stat lines when that section is omitted). It shows the story's task part, its allocated overhead part and
+their total (the total is always the task part plus the overhead part), the story's tasks that have no measurement
+(the task part is then a lower bound), and any unallocated overhead of the story's session, so the numbers' origin is
+visible. When the numbers could not be produced it shows `not measured: <reason>`, and no story field was written. A
+failure never changes the closing status: say so and carry on. If the helper printed nothing (`task-usage.sh` not
+installed), omit the section.
+
+```
+Story usage (task-usage.sh --report --stories <story-id>):
+  tasks:    total=<N> tokens (input=<N>, output=<N>, cache_write=<N>, cache_read=<N>)
+  overhead: total=<N> tokens (input=<N>, output=<N>, cache_write=<N>, cache_read=<N>)
+  story:    total=<N> tokens (tasks <N> + overhead <N>)
+  unallocated overhead in this story's session: none | <total and reason>
+  recorded in project/board/stories/<story-id>_<slug>.md
+  not measured: <reason>
 ```
 
 #### Privatized
@@ -280,4 +353,6 @@ Scope Divergence: skipped (scope-thresholds.json missing or malformed)
 | `scripts/extract-task-diff-stats.sh <task-id>` | Per-task diff stats from the task's commits, resolved by `scripts/commits-for-item.sh` |
 | `scripts/update-task-frontmatter.sh <file> <key> <value>` | Write/update a YAML field in task or story frontmatter |
 | `scripts/compute-scope-divergence.sh <execution_scope> <actual_files_changed> <actual_lines_delta>` | Compute scope divergence flag: prints `true` or `false` |
+| `scripts/persist-task-usage.sh <story-id>` | Persist the story's per-task token usage via `task-usage.sh --persist --story` and print the report's `Usage` block; non-blocking (always exits 0), silent when `task-usage.sh` is not installed |
+| `scripts/write-story-usage.sh <story-id>` | Roll the story's task totals plus allocated overhead up into the story record via `task-usage.sh --report --stories` (task part, overhead part, total, `usage_*` fields) and print the `Story usage` block; non-blocking (always exits 0), writes nothing and says `not measured: <reason>` when the numbers cannot be produced, silent when `task-usage.sh` is not installed |
 | `scripts/check-privatized.sh <id> <board-file-path>` | Static `.publicignore` membership check (task or story); prints `PRIVATIZED` (status written) or `UNCHANGED` — no `/mirror-public` run required |

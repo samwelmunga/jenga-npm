@@ -1,0 +1,398 @@
+$ node: JSON.stringify(await parseBoard(), null, 2)
+exit=0
+--- stdout
+[
+  {
+    "id": "E01",
+    "title": "Fixture epic E01",
+    "status": "Passed",
+    "date_created": "2026-01-01T00:00:00.000Z",
+    "date_started": "2026-01-02T00:00:00.000Z",
+    "date_completed": "2026-01-03T00:00:00.000Z",
+    "dates_previously_completed": null,
+    "reopened_on": null,
+    "reopened_reason": null,
+    "stories": [
+      {
+        "id": "E01_S01",
+        "epic_id": "E01",
+        "title": "Fixture story E01_S01",
+        "status": "Passed",
+        "date_created": "2026-01-01T00:00:00.000Z",
+        "date_started": "2026-01-02T00:00:00.000Z",
+        "date_completed": "2026-01-03T00:00:00.000Z",
+        "dates_previously_completed": null,
+        "reopened_on": null,
+        "reopened_reason": null,
+        "priority": "P1",
+        "tasks": [
+          {
+            "id": "E01_S01_T01",
+            "story_id": "E01_S01",
+            "epic_id": "E01",
+            "title": "Fixture task E01_S01_T01",
+            "status": "Passed",
+            "date_created": "2026-01-01T00:00:00.000Z",
+            "date_started": "2026-01-02T00:00:00.000Z",
+            "date_completed": "2026-01-03T00:00:00.000Z",
+            "dates_previously_completed": null,
+            "reopened_on": null,
+            "reopened_reason": null,
+            "assigned_to": "developer",
+            "_content": "# Task: Fixture task E01_S01_T01\n\nSynthetic task under story E01_S01.",
+            "_file": "E01_S01_T01_fixture-task.md"
+          },
+          {
+            "id": "E01_S01_T02",
+            "story_id": "E01_S01",
+            "epic_id": "E01",
+            "title": "Fixture task E01_S01_T02",
+            "status": "Passed",
+            "date_created": "2026-01-01T00:00:00.000Z",
+            "date_started": "2026-01-02T00:00:00.000Z",
+            "date_completed": "2026-01-03T00:00:00.000Z",
+            "dates_previously_completed": null,
+            "reopened_on": null,
+            "reopened_reason": null,
+            "assigned_to": "developer",
+            "depends_on": [
+              "E01_S01_T01"
+            ],
+            "_content": "# Task: Fixture task E01_S01_T02\n\nSynthetic task under story E01_S01.",
+            "_file": "E01_S01_T02_fixture-task.md"
+          }
+        ],
+        "_queued": true,
+        "_content": "# Story: Fixture story E01_S01\n\nSynthetic story under epic E01.",
+        "_file": "E01_S01_fixture-story.md"
+      },
+      {
+        "id": "E01_S02",
+        "epic_id": "E01",
+        "title": "Fixture story E01_S02",
+        "status": "Passed",
+        "date_created": "2026-01-01T00:00:00.000Z",
+        "date_started": "2026-01-02T00:00:00.000Z",
+        "date_completed": "2026-01-03T00:00:00.000Z",
+        "dates_previously_completed": null,
+        "reopened_on": null,
+        "reopened_reason": null,
+        "priority": "P1",
+        "tasks": [],
+        "_content": "# Story: Fixture story E01_S02\n\nSynthetic story under epic E01.",
+        "_file": "E01_S02_fixture-story.md"
+      },
+      {
+        "id": "E01_S03",
+        "epic_id": "E01",
+        "title": "Fixture story E01_S03",
+        "status": "Passed",
+        "date_created": "2026-01-01T00:00:00.000Z",
+        "date_started": "2026-01-02T00:00:00.000Z",
+        "date_completed": "2026-01-03T00:00:00.000Z",
+        "dates_previously_completed": null,
+        "reopened_on": null,
+        "reopened_reason": null,
+        "priority": "P1",
+        "tasks": [],
+        "_content": "# Story: Fixture story E01_S03\n\nSynthetic story under epic E01.",
+        "_file": "E01_S03_fixture-story.md"
+      },
+      {
+        "id": "E01_S04",
+        "epic_id": "E01",
+        "title": "Fixture story E01_S04",
+        "status": "Passed",
+        "date_created": "2026-01-01T00:00:00.000Z",
+        "date_started": "2026-01-02T00:00:00.000Z",
+        "date_completed": "2026-01-03T00:00:00.000Z",
+        "dates_previously_completed": null,
+        "reopened_on": null,
+        "reopened_reason": null,
+        "priority": "P1",
+        "tasks": [
+          {
+            "id": "E01_S04_T02",
+            "story_id": "E01_S04",
+            "epic_id": "E01",
+            "title": "Fixture task E01_S04_T02",
+            "status": "Passed",
+            "date_created": "2026-01-01T00:00:00.000Z",
+            "date_started": "2026-01-02T00:00:00.000Z",
+            "date_completed": "2026-01-03T00:00:00.000Z",
+            "dates_previously_completed": null,
+            "reopened_on": null,
+            "reopened_reason": null,
+            "assigned_to": "developer",
+            "depends_on": [
+              "E01_S04_T01"
+            ],
+            "_content": "# Task: Fixture task E01_S04_T02\n\nSynthetic task under story E01_S04.",
+            "_file": "E01_S04_T02_fixture-task.md"
+          }
+        ],
+        "_content": "# Story: Fixture story E01_S04\n\nSynthetic story under epic E01.",
+        "_file": "E01_S04_fixture-story.md"
+      }
+    ],
+    "_content": "# Epic: Fixture epic E01\n\nSynthetic epic written by tests/helpers/mixed-width-board.sh.",
+    "_file": "E01_fixture-epic.md"
+  },
+  {
+    "id": "E02",
+    "title": "Agent Conversation Guardrails",
+    "status": "Done",
+    "date_created": "2026-04-29T00:00:00.000Z",
+    "date_started": null,
+    "date_completed": "2026-05-10T00:00:00.000Z",
+    "stories": [
+      {
+        "id": "E02_S02",
+        "epic_id": "E02",
+        "title": "/spinoff Skill",
+        "status": "Merged",
+        "date_created": "2026-04-29T00:00:00.000Z",
+        "date_started": "2026-04-29T00:00:00.000Z",
+        "date_completed": "2026-04-29T00:00:00.000Z",
+        "tasks": [],
+        "_content": "# Story: /spinoff Skill\n\nAs a user mid-conversation, I want to invoke `/spinoff` to formally declare a diverging topic — so that the agent captures it as a structured `/todo` with context gathered so far, and we can consciously continue one thread without losing the other.\n\n## Acceptance Criteria\n- [ ] A skill file exists at `skills/spinoff/SKILL.md` and is invocable as `/spinoff`\n- [ ] When invoked, `/spinoff` asks the user to confirm or describe the diverging topic\n- [ ] The skill collects relevant context already discussed and pre-fills the `/todo` description\n- [ ] If Prerequisites are incomplete, the skill offers to invoke `/brainstorm` before finalising the todo\n- [ ] After the `/todo` is saved, the agent returns focus to the primary topic\n- [ ] `/spinoff` is referenced in `E02_S01` (Subject Divergence Detection) as the recommended invocation path when the agent detects a divergence\n\n## Definition of Done\n- [ ] Skill file exists and is invokable as `/spinoff`\n- [ ] Flow: detect divergence → `/spinoff` → (optional `/brainstorm`) → save `/todo` → resume primary topic\n- [ ] All acceptance criteria pass\n- [ ] `E02_S01` updated to reference `/spinoff` in its guardrail flow",
+        "_file": "E02_S02_spinoff-skill.md"
+      }
+    ],
+    "_content": "# Epic: Agent Conversation Guardrails\n\n## Purpose\nEquip the Jenga agent system with conversation-awareness guardrails that detect when a user is diverging from the primary topic of a session. When divergence is detected, the agent surfaces a structured choice: capture the diverging topic as a `/todo` (and continue the primary discussion) or capture the primary topic as a `/todo` (and pivot to the diverging subject). Both paths preserve context and continuity without losing either thread.\n\n## Definition of Done\n- [ ] `AGENT.md` includes a \"Subject Divergence Detection\" section describing the detection heuristic and the two-option response protocol\n- [ ] `agents/scrum-master.md` includes a matching section with scrum-master-specific guidance on when to trigger the guardrail and how to phrase the choice to the user\n- [ ] The guardrail uses `/brainstorm` to clarify Prerequisites before a `/todo` is finalised for either path\n- [ ] Behaviour is documented with examples in both files\n- [ ] A `/spinoff` skill exists that formalises the divergence-capture flow: collects context, optionally runs `/brainstorm` for Prerequisites, saves a `/todo`, and returns focus to the primary topic",
+    "_file": "E02_agent-conversation-guardrails.md"
+  },
+  {
+    "id": "E03",
+    "title": "Parallel Workflow Orchestration",
+    "status": "Passed with remarks",
+    "date_created": "2026-04-29T00:00:00.000Z",
+    "date_started": "2026-04-29T00:00:00.000Z",
+    "date_completed": "2026-10-15T00:00:00.000Z",
+    "stories": [
+      {
+        "id": "E03_S01",
+        "epic_id": "E03",
+        "title": "/dooo Skill — Parallel Execution Orchestrator",
+        "status": "Passed with remarks",
+        "date_created": "2026-04-29T00:00:00.000Z",
+        "date_started": "2026-04-29T00:00:00.000Z",
+        "date_completed": "2026-10-15T00:00:00.000Z",
+        "_content": "# Story: /dooo Skill — Parallel Execution Orchestrator\n\n## Goal\nCreate a `/dooo` skill that wraps `/do` and orchestrates parallel sub-agent implementations. After each implementation is kicked off, the skill returns to the scrum board, identifies tasks that can run in parallel with the currently running ones, and lets the user pick the next one to start (or exit).\n\n## Acceptance Criteria\n- [x] `/dooo` calls `/do` to start an implementation via a sub-agent (background mode)\n- [x] After launch, the skill reads the board and identifies tasks whose dependencies are all met and that don't conflict with running tasks\n- [x] A new status value `running` is introduced for tasks/stories to mark in-flight implementations (superseded: now In Progress) (commits d4c8bd5c, d31e4540)\n- [x] The user is shown a numbered list of parallelisable tasks; the last option is always **\"Done\"**\n- [x] Selecting \"Done\" exits the loop without starting a new implementation\n- [x] The loop repeats until the user selects \"Done\" or no more parallelisable tasks exist\n- [x] The skill is placed at `skills/dooo/` (now canonical `skills/j-dooo/`) following standard skill conventions\n\n## Tasks\n- [x] Define `running` status in the project's status conventions (AGENT.md or workflow.json) (superseded: now In Progress)\n- [x] Scaffold `skills/dooo/` directory with `skill.md`\n- [x] Implement orchestration loop logic in the skill body\n- [x] Test with at least two parallel-safe stories from the board — accepted via later /dooo usage (no separate test task)\n- [x] Update `skills/help/` listing to include `/dooo` — superseded: T04 closed Rejected (j-help renders from the live skill list)\n\n## Closure Notes (2026-10-15, tester)\n- Status `Passed with remarks`: T02 Passed; T01 and T03 Passed with remarks (the `running` wording is superseded by `In Progress`, commits d4c8bd5c E42_S01_T03 and d31e4540 E51_S01_T02); T04 Rejected (closed as superseded, `skills/j-help/SKILL.md` renders from the live skill list).\n- The \"Test with at least two parallel-safe stories\" item has no task file and will not get one: the project owner accepted /dooo's later real usage (`project/queue/concurrency-slots-dooo-*.json` files, many later commits touching `skills/j-dooo`) as proof.\n- This story has no `## Definition of Done` section (legacy story, `validate-story-format.sh` exits 3); closed on the owner's explicit instruction, no DoD boxes to tick.",
+        "_file": "E03_S01_dooo-parallel-execution-orchestrator.md",
+        "tasks": [
+          {
+            "id": "E03_S01_T02",
+            "story_id": "E03_S01",
+            "epic_id": "E03",
+            "title": "Scaffold skills/dooo/ directory with SKILL.md",
+            "status": "Passed",
+            "date_created": "2026-05-08T00:00:00.000Z",
+            "date_started": "2026-05-08T00:00:00.000Z",
+            "date_completed": "2026-05-08T00:00:00.000Z",
+            "assigned_to": "developer",
+            "_content": "# Task: Scaffold skills/dooo/ directory with SKILL.md\n\n## Description\nCreate `skills/dooo/` following standard skill conventions (same structure as existing skills like `skills/do/`). Create `skills/dooo/SKILL.md` with the skill metadata header and a stub body. The skill is invocable as `/dooo`. Document the skill's purpose: wrapping `/do` to orchestrate parallel sub-agent implementations.\n\n## Prerequisites\n- E03_S01_T01 (running status must be defined before referencing it in the skill)\n\n## Acceptance Criteria\n- [x] `skills/dooo/SKILL.md` exists and follows project skill conventions\n- [x] Skill is invocable as `/dooo`\n- [x] Skill header metadata is complete",
+            "_file": "E03_S01_T02_scaffold-dooo-skill.md"
+          },
+          {
+            "id": "E03_S01_T04",
+            "story_id": "E03_S01",
+            "epic_id": "E03",
+            "title": "Update skills/help listing to include /dooo",
+            "status": "Rejected",
+            "date_created": "2026-05-08T00:00:00.000Z",
+            "date_started": null,
+            "date_completed": "2026-10-15T00:00:00.000Z",
+            "assigned_to": "developer",
+            "_content": "# Task: Update skills/help listing to include /dooo\n\n## Description\nEdit `skills/help/SKILL.md` (or whichever asset file lists available skills) to include `/dooo` with a short description: \"Parallel execution orchestrator — wraps /do to start multiple independent implementations concurrently.\" The entry must be consistent in format with the other skill entries in the listing.\n\n## Prerequisites\n- E03_S01_T03 (skill must be fully implemented before documenting it)\n\n## Acceptance Criteria\n- [ ] `/dooo` appears in the help skill listing\n- [ ] Description is concise and consistent in format with other entries\n\n## Closure Note\n- Closed as superseded on 2026-10-15 (Rejected = deliberately rejected, not a test failure; the schema has no superseded status). `skills/j-help/SKILL.md` no longer holds a static skill listing: it renders from the live skill list, so there is no file to add `/dooo` to. The user (project owner) confirmed this closure during the E03 /reconcile. The acceptance criteria above were not met and are intentionally left unticked.",
+            "_file": "E03_S01_T04_update-help-skill-listing.md"
+          }
+        ]
+      }
+    ],
+    "_content": "# Epic: Parallel Workflow Orchestration\n\n## Purpose\nExtend the Jenga skill system with orchestration capabilities that allow multiple implementation tasks to be executed in parallel by sub-agents. The orchestrator skill (`/dooo`) wraps `/do` with a feedback loop that returns to the scrum board after each implementation is kicked off, identifies tasks that can safely run in parallel with the already-running ones, and presents them to the user so they can choose to fan out further or call it done.\n\n## Definition of Done\n- [x] `/dooo` skill exists and delegates each implementation to a sub-agent via `/do`\n- [x] After each implementation starts, the skill returns to the board and identifies parallelisable tasks\n- [x] A new task/story status (e.g. `running`) exists so the orchestrator can track in-flight implementations (superseded: tracked as `In Progress`, commits d4c8bd5c, d31e4540)\n- [x] User is presented with a list of parallelisable tasks plus a \"Done\" option at the end\n- [x] Selecting \"Done\" exits the loop cleanly\n- [x] Behaviour is documented in the skill's README / inline comments (satisfied by `skills/j-dooo/SKILL.md`, the skill's sole documentation; no separate README exists)\n\n## Rollup Remarks (2026-10-15)\n- E03_S01 closed `Passed with remarks`; E03_S02 and E03_S03 are `Merged`.\n- The `running` status named in the DoD was superseded by `In Progress` (commits d4c8bd5c, d31e4540); E03_S01_T04 (help-skill listing) was `Rejected` as superseded because `/j-help` renders from the live skill list.\n- The never-written \"test with two parallel-safe stories\" item is accepted as proven by later real `/dooo` usage (owner decision).",
+    "_file": "E03_parallel-workflow-orchestration.md"
+  },
+  {
+    "id": "E10",
+    "title": "Fixture epic E10",
+    "status": "In Progress",
+    "date_created": "2026-01-01T00:00:00.000Z",
+    "date_started": "2026-01-02T00:00:00.000Z",
+    "date_completed": null,
+    "dates_previously_completed": null,
+    "reopened_on": null,
+    "reopened_reason": null,
+    "stories": [
+      {
+        "id": "E10_S01",
+        "epic_id": "E10",
+        "title": "Fixture story E10_S01",
+        "status": "Passed",
+        "date_created": "2026-01-01T00:00:00.000Z",
+        "date_started": "2026-01-02T00:00:00.000Z",
+        "date_completed": "2026-01-03T00:00:00.000Z",
+        "dates_previously_completed": null,
+        "reopened_on": null,
+        "reopened_reason": null,
+        "priority": "P1",
+        "tasks": [
+          {
+            "id": "E10_S01_T01",
+            "story_id": "E10_S01",
+            "epic_id": "E10",
+            "title": "Fixture task E10_S01_T01",
+            "status": "Passed",
+            "date_created": "2026-01-01T00:00:00.000Z",
+            "date_started": "2026-01-02T00:00:00.000Z",
+            "date_completed": "2026-01-03T00:00:00.000Z",
+            "dates_previously_completed": null,
+            "reopened_on": null,
+            "reopened_reason": null,
+            "assigned_to": "developer",
+            "_content": "# Task: Fixture task E10_S01_T01\n\nSynthetic task under story E10_S01.",
+            "_file": "E10_S01_T01_fixture-task.md"
+          }
+        ],
+        "_content": "# Story: Fixture story E10_S01\n\nSynthetic story under epic E10.",
+        "_file": "E10_S01_fixture-story.md"
+      },
+      {
+        "id": "E10_S10",
+        "epic_id": "E10",
+        "title": "Fixture story E10_S10",
+        "status": "In Progress",
+        "date_created": "2026-01-01T00:00:00.000Z",
+        "date_started": "2026-01-02T00:00:00.000Z",
+        "date_completed": null,
+        "dates_previously_completed": null,
+        "reopened_on": null,
+        "reopened_reason": null,
+        "priority": "P1",
+        "tasks": [
+          {
+            "id": "E10_S10_T10",
+            "story_id": "E10_S10",
+            "epic_id": "E10",
+            "title": "Fixture task E10_S10_T10",
+            "status": "Pending",
+            "date_created": "2026-01-01T00:00:00.000Z",
+            "date_started": null,
+            "date_completed": null,
+            "dates_previously_completed": null,
+            "reopened_on": null,
+            "reopened_reason": null,
+            "assigned_to": "developer",
+            "_queued": true,
+            "_content": "# Task: Fixture task E10_S10_T10\n\nSynthetic task under story E10_S10.",
+            "_file": "E10_S10_T10_fixture-task.md"
+          }
+        ],
+        "_content": "# Story: Fixture story E10_S10\n\nSynthetic story under epic E10.",
+        "_file": "E10_S10_fixture-story.md"
+      }
+    ],
+    "_content": "# Epic: Fixture epic E10\n\nSynthetic epic written by tests/helpers/mixed-width-board.sh.",
+    "_file": "E10_fixture-epic.md"
+  },
+  {
+    "id": "E11",
+    "title": "Fixture epic E11",
+    "status": "Pending",
+    "date_created": "2026-01-01T00:00:00.000Z",
+    "date_started": null,
+    "date_completed": null,
+    "dates_previously_completed": null,
+    "reopened_on": null,
+    "reopened_reason": null,
+    "stories": [
+      {
+        "id": "E11_S01",
+        "epic_id": "E11",
+        "title": "Fixture story E11_S01",
+        "status": "Pending",
+        "date_created": "2026-01-01T00:00:00.000Z",
+        "date_started": null,
+        "date_completed": null,
+        "dates_previously_completed": null,
+        "reopened_on": null,
+        "reopened_reason": null,
+        "priority": "P1",
+        "tasks": [
+          {
+            "id": "E11_S01_T01",
+            "story_id": "E11_S01",
+            "epic_id": "E11",
+            "title": "Fixture task E11_S01_T01",
+            "status": "Pending",
+            "date_created": "2026-01-01T00:00:00.000Z",
+            "date_started": null,
+            "date_completed": null,
+            "dates_previously_completed": null,
+            "reopened_on": null,
+            "reopened_reason": null,
+            "assigned_to": "developer",
+            "_queued": true,
+            "_content": "# Task: Fixture task E11_S01_T01\n\nSynthetic task under story E11_S01.",
+            "_file": "E11_S01_T01_fixture-task.md"
+          }
+        ],
+        "_content": "# Story: Fixture story E11_S01\n\nSynthetic story under epic E11.",
+        "_file": "E11_S01_fixture-story.md"
+      }
+    ],
+    "_content": "# Epic: Fixture epic E11\n\nSynthetic epic written by tests/helpers/mixed-width-board.sh.",
+    "_file": "E11_fixture-epic.md"
+  },
+  {
+    "id": "E99",
+    "title": "Fixture epic E99",
+    "status": "Passed",
+    "date_created": "2026-01-01T00:00:00.000Z",
+    "date_started": "2026-01-02T00:00:00.000Z",
+    "date_completed": "2026-01-03T00:00:00.000Z",
+    "dates_previously_completed": null,
+    "reopened_on": null,
+    "reopened_reason": null,
+    "stories": [
+      {
+        "id": "E99_S99",
+        "epic_id": "E99",
+        "title": "Fixture story E99_S99",
+        "status": "Passed",
+        "date_created": "2026-01-01T00:00:00.000Z",
+        "date_started": "2026-01-02T00:00:00.000Z",
+        "date_completed": "2026-01-03T00:00:00.000Z",
+        "dates_previously_completed": null,
+        "reopened_on": null,
+        "reopened_reason": null,
+        "priority": "P1",
+        "tasks": [
+          {
+            "id": "E99_S99_T99",
+            "story_id": "E99_S99",
+            "epic_id": "E99",
+            "title": "Fixture task E99_S99_T99",
+            "status": "Passed",
+            "date_created": "2026-01-01T00:00:00.000Z",
+            "date_started": "2026-01-02T00:00:00.000Z",
+            "date_completed": "2026-01-03T00:00:00.000Z",
+            "dates_previously_completed": null,
+            "reopened_on": null,
+            "reopened_reason": null,
+            "assigned_to": "developer",
+            "_queued": true,
+            "_content": "# Task: Fixture task E99_S99_T99\n\nSynthetic task under story E99_S99.",
+            "_file": "E99_S99_T99_fixture-task.md"
+          }
+        ],
+        "_content": "# Story: Fixture story E99_S99\n\nSynthetic story under epic E99.",
+        "_file": "E99_S99_fixture-story.md"
+      }
+    ],
+    "_content": "# Epic: Fixture epic E99\n\nSynthetic epic written by tests/helpers/mixed-width-board.sh.",
+    "_file": "E99_fixture-epic.md"
+  }
+]
+--- stderr
+=== end

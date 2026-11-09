@@ -1,6 +1,6 @@
 ---
 name: j.wtf
-description: Alias of /clearify — clarifies ambiguous, dense, or under-specified prompts and conversation on request. This folder exists so `j.wtf` (and its `/j-wtf` directory form) resolves to a skill; behaviour is identical to `/clearify`.
+description: Alias of /clarify — clarifies ambiguous, dense, or under-specified prompts and conversation on request. This folder exists so `j.wtf` (and its `/j-wtf` directory form) resolves to a skill; behaviour is identical to `/clarify`.
 keywords:
   - wtf
   - confused
@@ -15,7 +15,7 @@ examples:
   - "j-wtf"
 ---
 
-# WTF — Alias of /clearify
+# WTF — Alias of /clarify
 
 `skills/j-wtf/` is the **canonical, hand-edited** directory for this skill, per CLAUDE.md's "The Canonical Naming Contract" (the `E50` reopening of 2026-09-09, which promoted `skills/j-wtf/` from generated twin to sole canonical form). The `j-` prefix is there for collision safety — a real directory under a distinct name, so a host tool shipping its own same-named built-in command cannot shadow it (Claude Code's native skill resolution is a literal-string, directory-name-based match; see `project/documentation/skill-authoring.md`'s "Invocation Convention").
 
@@ -23,4 +23,4 @@ examples:
 
 ## Instructions
 
-`/wtf` is an alias of `/clearify`. Follow `skills/j-clearify/SKILL.md` in full — do not duplicate or reimplement its ambiguity-detection logic here. Read that file's `## Instructions` section and execute it exactly as written, using whatever prompt or conversation context is attached to this `/wtf` invocation.
+`/wtf` is an alias of `/clarify`. Follow `skills/j-clarify/SKILL.md` in full — do not duplicate or reimplement its ambiguity-detection logic here. Read that file's `## Instructions` section and execute it exactly as written, using whatever prompt or conversation context is attached to this `/wtf` invocation.

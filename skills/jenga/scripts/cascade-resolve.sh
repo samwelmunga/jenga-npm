@@ -124,6 +124,23 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
+# Shared board-ID shapes (epic E86): scripts/lib/board_ids.py is the single definition. Resolved relative to this
+# script, so the same relative layout works in the repo (skills/ + scripts/ at the root), in a .claude/ or .agents/
+# mirror, and in node_modules/@jenga-ai/agent. There is deliberately no fallback regex if it is missing.
+BOARD_IDS_LIB=""
+for _cand in \
+  "$SCRIPT_DIR/../../../scripts/lib" \
+  "$SCRIPT_DIR/../../../node_modules/@jenga-ai/agent/scripts/lib"; do
+  if [ -f "$_cand/board_ids.py" ]; then
+    BOARD_IDS_LIB="$(cd "$_cand" && pwd)"
+    break
+  fi
+done
+if [ -z "$BOARD_IDS_LIB" ]; then
+  echo "Error: shared board_ids.py not found (looked in scripts/lib and node_modules/@jenga-ai/agent/scripts/lib relative to $SCRIPT_DIR)" >&2
+  exit 1
+fi
+
 BOARD_JSON_FILE="$(mktemp)"
 trap 'rm -f "$BOARD_JSON_FILE"' EXIT
 
@@ -132,13 +149,14 @@ if ! "$BOARD_SCAN" > "$BOARD_JSON_FILE"; then
   exit 1
 fi
 
-python3 - "$RAW_IDS" "$BOARD_JSON_FILE" <<'PY'
+python3 - "$RAW_IDS" "$BOARD_JSON_FILE" "$BOARD_IDS_LIB" <<'PY'
 import json
-import re
 import sys
 
 raw_ids_arg = sys.argv[1]
 board_json_file = sys.argv[2]
+sys.path.insert(0, sys.argv[3])
+import board_ids  # shared ID shapes: scripts/lib/board_ids.py (epic E86)
 
 try:
     with open(board_json_file, encoding="utf-8") as f:
@@ -158,10 +176,6 @@ TERMINAL_STATUSES = {
     "Blocked",
     "Done",
 }
-
-EPIC_RE = re.compile(r'^E\d{2}$')
-STORY_RE = re.compile(r'^E\d{2}_S\d{2}$')
-TASK_RE = re.compile(r'^E\d{2}_S\d{2}_T\d{2}$')
 
 by_id = {}
 stories_by_epic = {}
@@ -183,13 +197,7 @@ for item in board_items:
 
 
 def classify(item_id):
-    if TASK_RE.match(item_id):
-        return "task"
-    if STORY_RE.match(item_id):
-        return "story"
-    if EPIC_RE.match(item_id):
-        return "epic"
-    return None
+    return board_ids.classify(item_id)
 
 
 resolved = {}       # id -> item, dedup-preserving insertion order

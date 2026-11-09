@@ -34,6 +34,8 @@ metadata:
    - A new story inside an existing Epic
    - A new story inside a new Epic
 
+   For a new epic or story, obtain its ID by running `bash "$([ -f scripts/next-board-id.sh ] && echo scripts/next-board-id.sh || echo node_modules/@jenga-ai/agent/scripts/next-board-id.sh)" <epic|story> [parent-id]` (`epic` takes no parent, `story` takes the epic ID; a new task takes `task <story-id>`) and use its output verbatim. Never derive an ID by counting or text-sorting file names.
+
 3. **Update project documentation** — Add the mission to the appropriate board files:
    - **New story**: create a file in `project/board/stories/` using `../j-pi-plan/assets/story_template.md` as the structure.
    - **New epic**: append a new Epic object to `project/PROJECT_SUMMARY.md` using the schema in `../j-pi-plan/assets/epic.json`.

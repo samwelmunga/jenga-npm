@@ -1,0 +1,157 @@
+$ commits-for-item.sh E01
+exit=0
+--- stdout
+702d5a3086251da73d059a336243e6aabd9e2b59
+--- stderr
+=== end
+$ commits-for-item.sh E01_S01
+exit=0
+--- stdout
+23b480c27cf2a969b582d848b851279472262f2d
+--- stderr
+=== end
+$ commits-for-item.sh E01_S01_T01
+exit=0
+--- stdout
+989779c9fee55874c775ce425c3996672cc61b2e
+--- stderr
+=== end
+$ commits-for-item.sh E01_S01_T02
+exit=0
+--- stdout
+de6db31747adfe8d9ab1737066b214be078f7ad9
+7eb7b3a69bc509718178513d24aa334d9b692d68
+--- stderr
+=== end
+$ commits-for-item.sh E01_S02
+exit=0
+--- stdout
+9d0d09a2a397090310bcd2a713d61cea336c6db5
+--- stderr
+=== end
+$ commits-for-item.sh E01_S03
+exit=0
+--- stdout
+bb808a9ded6d1ffe3bf78b0ddc971f2fb7d2092c
+--- stderr
+=== end
+$ commits-for-item.sh E01_S04
+exit=0
+--- stdout
+9164164b5e7c766b51a1e86c3ca14e004deda158
+--- stderr
+=== end
+$ commits-for-item.sh E01_S04_T02
+exit=0
+--- stdout
+b0b7991de4bde1ec13d2d63807f40c07b33a0b86
+--- stderr
+=== end
+$ commits-for-item.sh E02
+exit=0
+--- stdout
+e6e386286ca160b41b2d49ce39fb39ee2f4892f6
+--- stderr
+=== end
+$ commits-for-item.sh E02_S02
+exit=0
+--- stdout
+f0e61588b3b4ff665560fd696696020e3253a6eb
+--- stderr
+=== end
+$ commits-for-item.sh E03
+exit=0
+--- stdout
+3bf0c38ee8d9486a3ebcf1f4469f416840b32cd0
+--- stderr
+=== end
+$ commits-for-item.sh E03_S01
+exit=0
+--- stdout
+67f77ff6214c7997e94512afbea460c12b5b5185
+--- stderr
+=== end
+$ commits-for-item.sh E03_S01_T02
+exit=0
+--- stdout
+7ea083adac4a874dcc3509f177e6be3d3a6447dc
+--- stderr
+=== end
+$ commits-for-item.sh E03_S01_T04
+exit=0
+--- stdout
+ecd1827658b79d9f58b5bf873c6c83144121cf04
+--- stderr
+=== end
+$ commits-for-item.sh E10
+exit=0
+--- stdout
+fa26713dfaf79defe388f8bb540ff42a1b5ffbd8
+--- stderr
+=== end
+$ commits-for-item.sh E10_S01
+exit=0
+--- stdout
+83941e0f643a0a874f609b6b58f0900313682db8
+--- stderr
+=== end
+$ commits-for-item.sh E10_S01_T01
+exit=0
+--- stdout
+05f78db1b7cb345a697eb69d436719626bbc77cc
+--- stderr
+=== end
+$ commits-for-item.sh E10_S10
+exit=0
+--- stdout
+69036b7489786aef4862b08426c1f2a7bb6faf48
+--- stderr
+=== end
+$ commits-for-item.sh E10_S10_T10
+exit=0
+--- stdout
+226750fb23b1d3a30b708bdda4a7082f7f4c9b20
+--- stderr
+=== end
+$ commits-for-item.sh E11
+exit=0
+--- stdout
+16564c4dba8774df578435d9a017d0fc45c4e38c
+--- stderr
+=== end
+$ commits-for-item.sh E11_S01
+exit=0
+--- stdout
+83280757fd5075894b0e6990b1e7da5244201a1e
+--- stderr
+=== end
+$ commits-for-item.sh E11_S01_T01
+exit=0
+--- stdout
+c272478122e8a86fa6bb762e31b99fbf8c84963b
+--- stderr
+=== end
+$ commits-for-item.sh E99
+exit=0
+--- stdout
+64940402f3ee4889b4e99603754feca7bf132b26
+--- stderr
+=== end
+$ commits-for-item.sh E99_S99
+exit=0
+--- stdout
+fb55af2936fec7254fda13bc997f79884f148358
+--- stderr
+=== end
+$ commits-for-item.sh E99_S99_T99
+exit=0
+--- stdout
+ab8585d0198fa800b4737c35f400bdfa6b64d851
+0db72211bc2ecb125f0767cf4a04c7431c8e41a9
+--- stderr
+=== end
+$ commits-for-item.sh E50_S01_T01
+exit=0
+--- stdout
+--- stderr
+=== end

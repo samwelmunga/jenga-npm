@@ -85,7 +85,7 @@ item() { printf '%s' "$output" | jq -c --arg id "$1" '.[] | select(.id == $id)';
 
 @test "ct map: nothing in the new sections is stronger than confirm and the new sections hold no board id outside metadata" {
   [ "$(jq -r '[.opt_in_categories[], (.opt_in_alternatives[][])] | map(.enforcement) | unique | join(",")' "$MAPFILE")" = "advisory" ]
-  [ "$(jq -r '[(.opt_in_categories, .opt_in_alternatives) | .. | strings | select(test("E[0-9]{2}_S[0-9]{2}"))] | length' "$MAPFILE")" = "0" ]
+  [ "$(jq -r '[(.opt_in_categories, .opt_in_alternatives) | .. | strings | select(test("E[0-9]+_S[0-9]+"))] | length' "$MAPFILE")" = "0" ]
 }
 
 # --- the template variant --------------------------------------------------------------------------------------

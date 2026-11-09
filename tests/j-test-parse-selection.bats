@@ -3,7 +3,7 @@
 # Coverage for skills/j-test/scripts/parse-selection.sh (E72_S02_T03).
 #
 # The script parses and validates the answer typed at the j.test prompt
-# ("Enter selection (comma-separated, or 'all' for all, or blank for 1 through N):"). This suite pins every row of the
+# ("Enter selection (comma-separated, or 'all' for all, or 'probe' to only check whether this machine is slow, or blank for 1 through N):"). This suite pins every row of the
 # grammar in the script's header with exact assertions: exact stdout, exact stderr and the exit code, never a substring.
 #
 # How the cases are written
@@ -525,4 +525,33 @@ invalid selection 'x': not a positive whole number, choose 1 through 12"
   cd "$BATS_TEST_TMPDIR"
   run --separate-stderr bash "$SCRIPT" 3 "2,3"
   expect_ok "2${NL}3"
+}
+
+# ---------------------------------------------------------------------------
+# Grammar rule 2a: the word "probe"
+# ---------------------------------------------------------------------------
+
+@test "'probe' prints the single word probe and no suite number" {
+  psel 3 probe
+  expect_ok "probe"
+}
+
+@test "'PROBE' and ' Probe ' (other case, whitespace) are the probe answer too" {
+  psel 3 PROBE
+  expect_ok "probe"
+  psel 3 " Probe "
+  expect_ok "probe"
+}
+
+@test "'probe,2' and '2,probe' are rejected like 'all' combined with other entries" {
+  psel 4 "probe,2"
+  expect_invalid "invalid selection 'probe': 'probe' cannot be combined with other entries, choose 1 through 4"
+  psel 4 "2,probe"
+  expect_invalid "invalid selection 'probe': 'probe' cannot be combined with other entries, choose 1 through 4"
+}
+
+@test "'probex' is not the word probe and is rejected as non-numeric" {
+  psel 4 probex
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
 }

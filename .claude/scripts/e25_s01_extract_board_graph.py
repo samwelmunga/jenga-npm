@@ -4,17 +4,20 @@
 import argparse
 import hashlib
 import json
-import re
 import sys
 import time
 from pathlib import Path
 
-PREFIXED_REF = r"(?:[A-Z0-9]+_)?"
-EPIC_ID_RE = re.compile(rf"^{PREFIXED_REF}E\d{{2}}$")
-STORY_ID_RE = re.compile(rf"^{PREFIXED_REF}E\d{{2}}_S\d{{2}}$")
-TASK_ID_RE = re.compile(rf"^{PREFIXED_REF}E\d{{2}}_S\d{{2}}_T\d{{2}}$")
-TARGET_REF_RE = re.compile(rf"^({PREFIXED_REF}E\d{{2}}_S\d{{2}}(?:_T\d{{2}})?)-(plan|summary)\.md$")
-TODO_REF_RE = re.compile(rf"\b({PREFIXED_REF}E\d{{2}}_S\d{{2}}(?:_T\d{{2}})?)\b")
+# Board-ID shapes (with the optional project-code prefix) come from the shared module
+# scripts/lib/board_ids.py (epic E86). This script lives in scripts/, so the module is a sibling lib/ directory.
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+from board_ids import (  # noqa: E402
+    PREFIXED_EPIC_ID_RE as EPIC_ID_RE,
+    PREFIXED_STORY_ID_RE as STORY_ID_RE,
+    PREFIXED_TARGET_REF_RE as TARGET_REF_RE,
+    PREFIXED_TASK_ID_RE as TASK_ID_RE,
+    PREFIXED_TODO_REF_RE as TODO_REF_RE,
+)
 
 
 def parse_args() -> argparse.Namespace:

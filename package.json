@@ -1,7 +1,7 @@
 {
   "name": "@jenga-ai/agent",
   "version": "4.7.0",
-  "description": "Jenga AI is an agentic framework for AI-driven development on large codebases — new projects and existing applications, across multiple repositories. Persistent Epic/Story/Task board, an isolated git worktree per task, and a separate tester agent that runs your test suite before anything is marked done. Works with Claude Code, Copilot, and Codex.",
+  "description": "Jenga AI is an agentic ai-framework for AI-driven development on large codebases — new projects and existing applications, across multiple repositories. Persistent Epic/Story/Task board, an isolated git worktree per task, and a separate tester agent that runs your test suite before anything is marked done. Works with Claude Code, Copilot, and Codex.",
   "type": "module",
   "publishConfig": {
     "access": "public"
@@ -81,6 +81,7 @@
     "agentic",
     "workflow",
     "framework",
+    "ai-framework",
     "engineering",
     "development",
     "coding",

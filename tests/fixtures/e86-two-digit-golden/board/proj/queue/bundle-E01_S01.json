@@ -1,0 +1,11 @@
+{
+  "story_id": "E01_S01",
+  "anchor_sha": "23b480c27cf2a969b582d848b851279472262f2d",
+  "started_at": "2026-01-02T00:00:00Z",
+  "tasks": ["E01_S01_T01", "E01_S01_T02"],
+  "task_changed_files": {
+    "E01_S01_T02": ["project/board/tasks/E01_S01_T02_fixture-task.md"]
+  },
+  "conflict_reports": [],
+  "cross_bundle_conflicts": {}
+}
