@@ -402,6 +402,12 @@ tests/mirror-never-public-refs.bats
 # exit 127 and bats exits 1, which check_test_subject_invariant keys on, refusing the next real push.
 # Caught by the E28_S20 verification pass on 2026-10-21 (E28_S20_T05 rework).
 tests/mirror-release-prep.bats
+# tests/mirror-test-gate-bypass.bats: runs skills/j-mirror-public/scripts/test-gate-bypass.sh and mirror.sh
+# (HELPER and MIRROR_SH, used by every @test case) out of the fully-private skills/j-mirror-public/
+# blocklisted above (both naming forms), so the file has no publicly-meaningful subset -- same reasoning
+# as the sibling tests/mirror-*.bats entries directly above. Added in the same commit that creates the
+# file (E28_S22), so it does not reproduce on its first run the defect check_test_subject_invariant exists to prevent.
+tests/mirror-test-gate-bypass.bats
 # tests/mirror-nested-suite-flag.bats: runs skills/j-mirror-public/scripts/mirror.sh (a copy of it in a
 # scratch fixture repo, invoked by every @test case that exercises the flag), which lives under the
 # fully-private skills/j-mirror-public/ blocklisted above (both naming forms). The file has no

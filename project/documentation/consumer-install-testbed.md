@@ -31,7 +31,7 @@ such defects were found by consumers in `E46`, and `scripts/mark-deployed.sh` in
 - The command `j-status` step 6.5 prescribes is extracted from `SKILL.md` (`testbed_skill_command`) and run
   from each shape: exits 0, and with `--diff-file` promotes `Publicized` tasks to `Deployed to Prod`.
 - The `j-close-story` `check-privatized.sh` command does the same and writes `Privatized`.
-- The README's "Verifying a Staged Release Against a Consumer Project" steps that can run offline: the skill
+- The staged-release consumer verification steps (formerly a README section, removed from the public README because it describes internal process; the procedure now lives only in `project/.workflows/scripts/st-test-run.sh`) that can run offline: the skill
   smoke test against the package root, and the package's `populate-knowledge-graph.*.test.js` files.
 - Every `node_modules/@jenga-ai/agent/<path>` that a skill or agent names exists in the package.
 - **Static sweep** (`testbed_sweep_package_root_paths`): no shipped `.sh`/`.js` builds a path into

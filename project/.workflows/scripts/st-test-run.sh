@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# st-test-run.sh - run the README's "Verifying a Staged Release Against a Consumer
-# Project" procedure against the ST-Test project, and print the results.
+# st-test-run.sh - run the staged-release consumer verification procedure (formerly the
+# README's "Verifying a Staged Release Against a Consumer Project" section, removed from the
+# public README because it describes internal process) against the ST-Test project, and
+# print the results.
 #
-# Mirrors README.md steps 3-9 in order: download the staged tarball to a temp
+# Follows the former README steps 3-9 in order: download the staged tarball to a temp
 # directory, check its shasum, install it in the consumer, approve and run the
 # postinstall, check .jenga-version, run the skill smoke test, run the package's own
 # two node tests, then run the consumer's own checks.
