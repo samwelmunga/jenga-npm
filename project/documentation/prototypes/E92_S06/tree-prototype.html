@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="sv" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beroendeträd – prototyp v2</title>
+<style>
+:root{
+  --color-bg:#f5f5f5;--color-surface:#fff;--color-surface-alt:#f9fafb;--color-text:#1f2937;--color-text-muted:#5b6472;
+  --color-border:#e5e7eb;--color-border-strong:#d1d5db;--color-accent:#2563eb;
+  --color-progress-done:#15803d;--color-progress-in-progress:#b88200;--color-progress-failed:#b91c1c;
+  --color-progress-pending:#6b7280;--color-progress-rejected:#5b8fc7;
+}
+:root[data-theme="dark"]{
+  --color-bg:#0f1115;--color-surface:#1a1d23;--color-surface-alt:#232830;--color-text:#e5e7eb;--color-text-muted:#9ca3af;
+  --color-border:#374151;--color-border-strong:#4b5563;--color-accent:#60a5fa;
+  --color-progress-done:#4ade80;--color-progress-in-progress:#facc15;--color-progress-failed:#f87171;
+  --color-progress-pending:#9ca3af;--color-progress-rejected:#7ba3d6;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--color-bg);color:var(--color-text);font:14px/1.4 Inter,system-ui,-apple-system,'Segoe UI',sans-serif}
+.topbar{display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--color-surface);border-bottom:1px solid var(--color-border)}
+.topbar .brand{font-weight:800}
+.topbar .sep{flex:1}
+.wrap{max-width:1200px;margin:0 auto;padding:16px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;color:var(--color-text-muted);font-size:13px}
+select{max-width:100%}
+button,select{font:inherit;color:var(--color-text);background:var(--color-surface);border:1px solid var(--color-border-strong);border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover{border-color:var(--color-accent)}
+.tbtn{display:inline-flex;gap:6px;align-items:center}
+.panel{background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;overflow:hidden}
+.head{padding:14px 18px 6px}
+.head h3{margin:0;font-size:17px}
+.head p{margin:2px 0 0;color:var(--color-text-muted)}
+.stage{position:relative;height:600px;border-top:1px solid var(--color-border);background:var(--color-surface-alt);touch-action:none;cursor:grab}
+.stage.dragging{cursor:grabbing}
+.stage svg{width:100%;height:100%;display:block;user-select:none}
+.zoom{position:absolute;right:12px;top:12px;display:flex;gap:4px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:8px;padding:4px}
+.zoom button{padding:3px 9px;min-width:32px}
+.zoom .pct{align-self:center;min-width:44px;text-align:center;color:var(--color-text-muted);font-size:12px}
+.hint{position:absolute;left:12px;bottom:10px;color:var(--color-text-muted);font-size:12px}
+.foot{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:14px 18px;border-top:1px solid var(--color-border)}
+.foot h4{margin:0 0 6px;font-size:13px}
+.foot ul{margin:0;padding-left:18px;color:var(--color-text-muted)}
+.foot .plus{color:var(--color-progress-pending);font-weight:700}
+.legend{display:flex;flex-wrap:wrap;gap:16px;padding:10px 18px;border-top:1px solid var(--color-border);color:var(--color-text-muted);font-size:12px;align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend .sw{width:10px;height:10px;border-radius:3px;background:var(--c)}
+.legend svg{width:18px;height:18px;overflow:visible}
+.notes{margin-top:14px;color:var(--color-text-muted);font-size:13px}
+.notes li{margin-bottom:4px}
+
+/* ---- tree ---- */
+.band{fill:var(--color-surface);stroke:var(--color-border)}
+.band.alt{fill:var(--color-surface-alt)}
+.story-node rect{fill:var(--color-surface);stroke:var(--color-border-strong);stroke-width:1.5}
+.story-node .sid{fill:var(--color-text);font-weight:700;font-size:13px}
+.story-node .stitle{fill:var(--color-text-muted);font-size:11px}
+.story-node .scount{fill:var(--color-text-muted);font-size:11px;font-weight:600}
+.story-node .sbar-bg{fill:var(--color-border)}
+.story-node .sbar{fill:var(--color-progress-done)}
+.story-node.complete rect.sbox{stroke:var(--color-progress-done)}
+
+.edge{fill:none;stroke-width:2;stroke-linecap:round}
+.edge.done{stroke:var(--color-progress-done);opacity:.85}
+.edge.active{stroke:var(--color-progress-in-progress)}
+.edge.ready{stroke:var(--color-progress-pending);stroke-dasharray:6 6}
+.edge.locked{stroke:var(--color-border-strong);opacity:.8}
+.edge.failed{stroke:var(--color-progress-failed)}
+.edge.cross{stroke-dasharray:2 5}
+.edge.goal{stroke-width:2.5}
+
+.card rect.box{fill:var(--color-surface);stroke-width:2}
+.card rect.stack{fill:var(--color-surface);stroke-width:1.5}
+.card .cid{fill:var(--color-text);font-weight:700;font-size:12px}
+.card .ctitle{fill:var(--color-text-muted);font-size:11px}
+.card .clink{fill:var(--color-accent);font-size:11px;font-weight:600}
+.card.done rect.box,.card.done rect.stack{stroke:var(--color-progress-done)}
+.card.in_progress rect.box,.card.in_progress rect.stack{stroke:var(--color-progress-in-progress)}
+.card.failed rect.box,.card.failed rect.stack{stroke:var(--color-progress-failed)}
+.card.ready rect.box,.card.ready rect.stack{stroke:var(--color-progress-pending);stroke-dasharray:5 3}
+.card.locked rect.box,.card.locked rect.stack{stroke:var(--color-border-strong)}
+.card.locked .cid,.card.locked .ctitle{opacity:.6}
+.card .mark{fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.card.done .mark{stroke:var(--color-progress-done)}
+.card.in_progress .mark{stroke:var(--color-progress-in-progress)}
+.card.in_progress .markfill{fill:var(--color-progress-in-progress)}
+.card.failed .mark{stroke:var(--color-progress-failed)}
+.card.ready .mark{stroke:var(--color-progress-pending)}
+.card .ring{fill:none;stroke:var(--color-progress-pending);stroke-width:2;opacity:0}
+.card.group{cursor:pointer}
+.card.group:hover rect.box{stroke-width:3}
+
+/* dependency gate badge on the left edge of a card */
+.gate circle{fill:var(--color-surface);stroke-width:2}
+.gate .lk{fill:none;stroke-width:1.8;stroke-linecap:round}
+.gate.closed circle{stroke:var(--color-border-strong)}
+.gate.closed .lk{stroke:var(--color-progress-pending)}
+.gate.closed .lkb{fill:var(--color-progress-pending)}
+.gate.open circle{stroke:var(--color-progress-done)}
+.gate.open .lk{stroke:var(--color-progress-done)}
+.gate.open .lkb{fill:var(--color-progress-done)}
+
+.collapse{cursor:pointer}
+.collapse rect{fill:var(--color-surface);stroke:var(--color-border-strong)}
+.collapse:hover rect{stroke:var(--color-accent)}
+.collapse text{fill:var(--color-accent);font-size:11px;font-weight:600}
+
+.card.dim,.collapse.dim{opacity:.25}
+.edge.dim{opacity:.1}
+.card.hl rect.box{stroke-width:3}
+
+.goal .disc{fill:var(--color-surface);stroke:var(--goal-c);stroke-width:2.5}
+.goal .star-o{fill:none;stroke:var(--goal-c);stroke-width:2;stroke-linejoin:round}
+.goal .star-f{fill:var(--goal-c)}
+.goal .gring-bg{fill:none;stroke:var(--color-border);stroke-width:5}
+.goal .gring{fill:none;stroke:var(--goal-c);stroke-width:5;stroke-linecap:round}
+.goal .gname{fill:var(--color-text);font-weight:800;font-size:15px}
+.goal .gtitle{fill:var(--color-text-muted);font-size:12px}
+.goal .gcount{fill:var(--goal-c);font-weight:700;font-size:12px}
+.goal{--goal-c:var(--color-progress-in-progress)}
+.goal.complete{--goal-c:var(--color-progress-done)}
+.goal .shimmer{transform:translateX(-60px)}
+.goal .spark{fill:var(--goal-c);transform-box:fill-box;transform-origin:center}
+
+@media (prefers-reduced-motion:no-preference){
+  :root:not([data-motion="off"]) .edge.ready{animation:flow 1s linear infinite}
+  :root:not([data-motion="off"]) .card.ready .ring{animation:pulse 2s ease-out infinite}
+  :root:not([data-motion="off"]) .goal .halo{animation:breathe 4.5s ease-in-out infinite}
+  :root:not([data-motion="off"]) .card.in_progress .markfill{animation:blink 1.4s ease-in-out infinite}
+  :root:not([data-motion="off"]) .goal .shimmer{animation:shimmer 3.4s ease-in-out infinite}
+  :root:not([data-motion="off"]) .goal .spark{animation:twinkle 2.6s ease-in-out infinite}
+}
+@keyframes flow{to{stroke-dashoffset:-12}}
+@keyframes pulse{0%{opacity:.8;transform:scale(1)}100%{opacity:0;transform:scale(1.25)}}
+@keyframes breathe{0%,100%{opacity:.55}50%{opacity:1}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes shimmer{0%{transform:translateX(-60px)}55%,100%{transform:translateX(60px)}}
+@keyframes twinkle{0%,100%{opacity:.15;transform:scale(.5)}50%{opacity:1;transform:scale(1.15)}}
+.card .ring{transform-box:fill-box;transform-origin:center}
+.tip{position:fixed;pointer-events:none;background:var(--color-surface);border:1px solid var(--color-border-strong);border-radius:8px;padding:8px 10px;font-size:12px;max-width:340px;box-shadow:0 6px 20px rgba(0,0,0,.25);display:none;z-index:5}
+.tip b{display:block;margin-bottom:2px}
+@media (max-width:700px){.foot{grid-template-columns:1fr}.stage{height:460px}.tlabel{display:none}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <span class="brand">Jenga dashboard</span><span class="sep"></span>
+  <button class="tbtn" id="theme" title="Tema"><span id="themeIcon" aria-hidden="true">☾</span><span class="tlabel" id="themeLabel">Mörkt</span></button>
+  <button class="tbtn" id="motion" title="Animationer"><span id="motionIcon" aria-hidden="true">✦</span><span class="tlabel" id="motionLabel">Animationer: Auto</span></button>
+</div>
+<div class="wrap">
+  <div class="controls">
+    Prototypdata:
+    <select id="ds">
+      <option value="mixed">Demo: blandade lägen (E37 + 7 extra klara tasks i S05 för gruppering)</option>
+      <option value="real">E37 – verklig data (allt klart, Mål nått)</option>
+      <option value="near">Demo: nästan klart (14 av 15)</option>
+    </select>
+  </div>
+
+  <div class="panel">
+    <div class="head"><h3 id="htitle"></h3><p id="hsub"></p></div>
+    <div class="stage" id="stage">
+      <svg id="svg" role="group"></svg>
+      <div class="zoom">
+        <button id="zout" title="Zooma ut" aria-label="Zooma ut">−</button>
+        <span class="pct" id="pct">100%</span>
+        <button id="zin" title="Zooma in" aria-label="Zooma in">+</button>
+        <button id="zfit" title="Anpassa till vyn">Anpassa</button>
+        <button id="z100" title="Återställ till 100 %">100%</button>
+      </div>
+      <div class="hint">Scrolla eller nyp för att zooma · dra för att panorera · hovra för beroendekedjan · klicka på en grupp för att fälla ut</div>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="foot">
+      <div><h4>Redo att ta</h4><ul id="ready"></ul></div>
+      <div><h4>Låses upp av</h4><ul id="unlocked"></ul></div>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>Ikoner på två platser:</b> statusmarkeringen (bock, pågår, plus, kryss) sitter till höger. Beroendet visas som en "grind" på kortets vänsterkant där linjen kommer in: stängt lås = väntar på beroende, öppet lås = beroendet är klart. Tasks utan beroende har ingen grind.</li>
+    <li><b>Grupper:</b> fler än 5 tasks med samma status i samma story och kolumn fälls ihop till ett staplat kort. Klicka (eller Enter) för att fälla ut och "Fäll ihop" för att stänga.</li>
+    <li><b>Målet:</b> glöden är svag i början och växer med andelen klara tasks. Stjärnan fylls nerifrån i samma takt. När allt är klart blir den grön, skimrar och gnistrar.</li>
+    <li><b>Animationsknappen</b> sitter bredvid temaknappen. "Auto" följer systemets reduced-motion, "Av" stänger av alla animationer. I dashboarden sparas valet som temat.</li>
+  </ul>
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+const BASE = {
+  epic:{id:'E37',title:'Agent-orkestrering utan kapplöpningar'},
+  stories:[
+    ['E37_S01','Race-free handoff signal'],
+    ['E37_S02','Tester Commit Discipline & Signal-Loop Prohibition'],
+    ['E37_S03','WorktreeRemove liveness precondition'],
+    ['E37_S04','In-Run Queue Draining for Long-Lived Orchestrations'],
+    ['E37_S05','Reliable Task-Completion Cleanup Across Execution Loops'],
+  ],
+  tasks:[
+    ['E37_S01_T01',[],'Replace single-slot session handoff file'],
+    ['E37_S01_T02',['E37_S01_T01'],'Update on_session_end.sh to consume all handoffs'],
+    ['E37_S01_T03',[],'Implement atomic board-file locking script'],
+    ['E37_S01_T04',['E37_S01_T03'],'Fix concurrent-invocation races in on_session_end'],
+    ['E37_S02_T01',[],'Install an automatic branch-guard pre-commit hook'],
+    ['E37_S02_T02',[],'Document the tester commit-target rule'],
+    ['E37_S02_T03',['E37_S02_T02','E37_S01_T01'],'Prohibit ad-hoc completion-polling loops'],
+    ['E37_S03_T01',[],'Write a deterministic worktree-liveness check'],
+    ['E37_S03_T02',['E37_S03_T01'],'Wire the liveness check into WorktreeRemove'],
+    ['E37_S04_T01',[],'Extract queue-processing into a reusable script'],
+    ['E37_S04_T02',['E37_S04_T01'],'Wire /jenga Phase 4 to drain the queue'],
+    ['E37_S05_T01',[],"Extract /do's task-completion cleanup logic"],
+    ['E37_S05_T02',['E37_S05_T01'],"Wire /jenga Phase 4's direct dispatch path"],
+    ['E37_S05_T03',['E37_S05_T01'],"Wire /do's story-bundle execution path"],
+    ['E37_S05_T04',['E37_S05_T01'],'Confirm /dooo inherits task-completion cleanup'],
+  ]
+};
+const EXTRA = [5,6,7,8,9,10,11].map(n=>['E37_S05_T'+String(n).padStart(2,'0'),['E37_S05_T01'],'Demo-task '+n+' (för att visa gruppering)']);
+const MIXED = {
+  E37_S01_T01:'done',E37_S01_T02:'in_progress',E37_S01_T03:'done',E37_S01_T04:'ready',
+  E37_S02_T01:'done',E37_S02_T02:'ready',E37_S02_T03:'locked',
+  E37_S03_T01:'failed',E37_S03_T02:'locked',
+  E37_S04_T01:'in_progress',E37_S04_T02:'locked',
+  E37_S05_T01:'done',E37_S05_T02:'ready',E37_S05_T03:'in_progress',E37_S05_T04:'ready',
+};
+const STATE_NAME={done:'Klar',in_progress:'Pågår',ready:'Redo att ta',locked:'Låst',failed:'Misslyckad'};
+const STATE_PLURAL={done:'klara',in_progress:'pågår',ready:'redo att ta',locked:'låsta',failed:'misslyckade'};
+const ORDER={in_progress:0,ready:1,failed:2,locked:3,done:4};
+const GROUP_MIN=6; // "fler än 5"
+
+function dataset(kind){
+  let rows=BASE.tasks, st=id=>MIXED[id]||'done';
+  if(kind==='mixed') rows=BASE.tasks.concat(EXTRA);
+  if(kind==='real') st=()=> 'done';
+  if(kind==='near') st=id=> id==='E37_S04_T02'?'ready':'done';
+  const tasks=rows.map(([id,deps,title])=>({id,deps,title,story:id.slice(0,7),state:st(id)}));
+  return {epic:BASE.epic,stories:BASE.stories.map(([id,title])=>({id,title})),tasks};
+}
+
+// ---------- layout ----------
+const L = {pad:20, storyW:210, colX0:280, colW:260, cardW:200, cardH:48, rowGap:18, headH:22, headGap:8, bandPad:20, bandGap:14, goalGap:100, gate:10};
+let expanded=new Set();
+
+function layout(d){
+  const byId=new Map(d.tasks.map(t=>[t.id,t]));
+  for(const t of d.tasks){
+    t.inner=t.deps.filter(x=>byId.has(x));
+    t.gate=t.inner.length?(t.inner.every(x=>byId.get(x).state==='done')?'open':'closed'):null;
+  }
+  const col=new Map(d.tasks.map(t=>[t.id,0]));
+  for(let i=0;i<d.tasks.length;i++) for(const t of d.tasks) for(const dep of t.inner) col.set(t.id,Math.max(col.get(t.id),col.get(dep)+1));
+  let maxCol=0; for(const v of col.values()) maxCol=Math.max(maxCol,v);
+
+  const nodes=new Map(), vidOf=new Map(), headers=[], bands=[];
+  let y=L.pad;
+  for(const s of d.stories){
+    const ts=d.tasks.filter(t=>t.story===s.id);
+    const cells=new Map();
+    for(const t of ts){const c=col.get(t.id);(cells.get(c)||cells.set(c,[]).get(c)).push(t);}
+    const cellSlots=new Map();
+    for(const [c,arr] of cells){
+      arr.sort((a,b)=>ORDER[a.state]-ORDER[b.state]);
+      const count={}; arr.forEach(t=>count[t.state]=(count[t.state]||0)+1);
+      const slots=[], emitted=new Set();
+      for(const t of arr){
+        if(count[t.state]>=GROUP_MIN){
+          const key=`${s.id}|${c}|${t.state}`, members=arr.filter(x=>x.state===t.state);
+          if(expanded.has(key)){
+            if(!emitted.has(key)){emitted.add(key);slots.push({type:'header',key,state:t.state,count:members.length});}
+            slots.push({type:'task',t});
+          } else if(!emitted.has(key)){emitted.add(key);slots.push({type:'group',key,state:t.state,members});}
+        } else slots.push({type:'task',t});
+      }
+      cellSlots.set(c,slots);
+    }
+    const slotH=sl=>sl.type==='header'?L.headH:L.cardH;
+    const gapAfter=sl=>sl.type==='header'?L.headGap:L.rowGap;
+    const cellH=slots=>slots.reduce((h,sl,i)=>h+slotH(sl)+(i<slots.length-1?gapAfter(sl):0),0);
+    const inner=Math.max(L.cardH+20,...[...cellSlots.values()].map(cellH));
+    const h=L.bandPad*2+inner;
+    for(const [c,slots] of cellSlots){
+      let cy=y+(h-cellH(slots))/2; const x=L.colX0+c*L.colW;
+      for(const sl of slots){
+        if(sl.type==='header') headers.push({...sl,x,y:cy});
+        else if(sl.type==='group'){
+          const vid='grp:'+sl.key, any=sl.members.find(m=>m.gate);
+          nodes.set(vid,{vid,kind:'group',key:sl.key,state:sl.state,members:sl.members,story:s.id,x,y:cy,gate:any?(sl.state==='locked'?'closed':'open'):null});
+          sl.members.forEach(m=>vidOf.set(m.id,vid));
+        } else {
+          nodes.set(sl.t.id,{vid:sl.t.id,kind:'task',t:sl.t,state:sl.t.state,story:s.id,x,y:cy,gate:sl.t.gate});
+          vidOf.set(sl.t.id,sl.t.id);
+        }
+        cy+=slotH(sl)+gapAfter(sl);
+      }
+    }
+    const done=ts.filter(t=>t.state==='done').length;
+    bands.push({s,y,h,done,total:ts.length,tasks:ts});
+    y+=h+L.bandGap;
+  }
+  const contentH=y-L.bandGap+L.pad;
+  const goalX=L.colX0+maxCol*L.colW+L.cardW+L.goalGap;
+  return {byId,nodes,vidOf,headers,bands,width:goalX+260,height:Math.max(contentH,300),goal:{x:goalX+70,y:contentH/2}};
+}
+
+// ---------- render ----------
+const NS='http://www.w3.org/2000/svg';
+const el=(tag,attrs={},parent)=>{const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);parent&&parent.appendChild(e);return e;};
+const clip=(s,n)=>s.length>n?s.slice(0,n-1)+'…':s;
+const curve=(x1,y1,x2,y2)=>{const m=(x1+x2)/2;return `M${x1} ${y1} C${m} ${y1} ${m} ${y2} ${x2} ${y2}`;};
+const STAR='M0 -22 L6.5 -7 L22.5 -6.8 L10 3.5 L14 19 L0 10 L-14 19 L-10 3.5 L-22.5 -6.8 L-6.5 -7Z';
+const SPARK='M0 -6 L1.4 -1.4 L6 0 L1.4 1.4 L0 6 L-1.4 1.4 L-6 0 L-1.4 -1.4Z';
+
+function edgeClass(depState,target){
+  if(target==='failed') return 'failed';
+  if(target==='done') return 'done';
+  if(target==='in_progress') return 'active';
+  if(target==='ready') return 'ready';
+  return depState==='done' ? 'done' : 'locked';
+}
+
+function statusMark(g,state,x,y){
+  const m=el('g',{transform:`translate(${x} ${y})`},g);
+  if(state==='done') el('path',{class:'mark',d:'M-6 0 L-2 4.5 L6.5 -5'},m);
+  else if(state==='in_progress'){el('circle',{class:'mark',r:7},m);el('path',{class:'markfill',d:'M0 -7 A7 7 0 0 1 0 7 Z'},m);}
+  else if(state==='ready') el('path',{class:'mark',d:'M0 -7 V7 M-7 0 H7'},m);
+  else if(state==='failed') el('path',{class:'mark',d:'M-5.5 -5.5 L5.5 5.5 M5.5 -5.5 L-5.5 5.5'},m);
+  // locked: no status mark – the closed gate on the left carries it
+}
+function lockIcon(g,open){
+  el('rect',{class:'lkb',x:-4.5,y:0,width:9,height:6.5,rx:1.5},g);
+  el('path',{class:'lk',d:open?'M-2.8 0 V-3.4 A2.8 2.8 0 0 1 2.8 -3.4 V-2.3':'M-2.8 0 V-2.6 A2.8 2.8 0 0 1 2.8 -2.6 V0'},g);
+}
+function gate(g,kind,x,y){
+  if(!kind) return;
+  const b=el('g',{class:`gate ${kind}`,transform:`translate(${x} ${y})`},g);
+  el('circle',{r:L.gate},b);
+  const i=el('g',{transform:'translate(0 -1)'},b); lockIcon(i,kind==='open');
+  el('title',{},b).textContent=kind==='open'?'Beroendet är klart (upplåst)':'Väntar på beroende (låst)';
+}
+
+let model, view, full, current='mixed';
+function render(kind,keepView){
+  current=kind;
+  const d=dataset(kind); model=layout(d);
+  const svg=document.getElementById('svg'); svg.innerHTML='';
+  const total=d.tasks.length, done=d.tasks.filter(t=>t.state==='done').length, p=total?done/total:0;
+  const goalComplete=done===total;
+  document.getElementById('htitle').textContent=`${d.epic.id} · ${d.epic.title}`;
+  document.getElementById('hsub').textContent=`${done} av ${total} tasks klara · ${Math.round(p*100)} %`;
+  svg.setAttribute('aria-label',`Beroendeträd för ${d.epic.id}: ${done} av ${total} klara`);
+  const defs=el('defs',{},svg);
+  const rg=el('radialGradient',{id:'halo'},defs);
+  const gc=goalComplete?'--color-progress-done':'--color-progress-in-progress';
+  el('stop',{offset:'0',style:`stop-color:var(${gc});stop-opacity:.9`},rg);
+  el('stop',{offset:'.55',style:`stop-color:var(${gc});stop-opacity:.35`},rg);
+  el('stop',{offset:'1',style:`stop-color:var(${gc});stop-opacity:0`},rg);
+  const lg=el('linearGradient',{id:'shine',x1:'0',x2:'1',y1:'0',y2:'0'},defs);
+  el('stop',{offset:'0',style:'stop-color:#fff;stop-opacity:0'},lg);
+  el('stop',{offset:'.5',style:'stop-color:#fff;stop-opacity:.85'},lg);
+  el('stop',{offset:'1',style:'stop-color:#fff;stop-opacity:0'},lg);
+  el('path',{d:STAR},el('clipPath',{id:'starclip'},defs));
+  const fillH=41*p; el('rect',{x:-25,y:19-fillH,width:50,height:fillH+1},el('clipPath',{id:'starfill'},defs));
+
+  const root=el('g',{id:'root'},svg);
+  const N=model.nodes, V=id=>model.vidOf.get(id);
+
+  // 1. bands
+  const gb=el('g',{},root);
+  model.bands.forEach((b,i)=>el('rect',{class:'band'+(i%2?' alt':''),x:L.pad/2,y:b.y,width:model.goal.x-70-L.goalGap/2,height:b.h,rx:12},gb));
+
+  // 2. edges (deduplicated between visible nodes)
+  const ge=el('g',{},root); const edges=[]; const seen=new Set();
+  const inX=n=>n.x-(n.gate?L.gate:0), midY=n=>n.y+L.cardH/2;
+  const addEdge=(from,to,cls,dpath)=>{const k=from+'>'+to;if(seen.has(k))return;seen.add(k);edges.push({p:el('path',{class:'edge '+cls,d:dpath},ge),from,to});};
+  for(const b of model.bands){
+    const sx=L.pad+L.storyW-10, sy=b.y+b.h/2;
+    for(const t of b.tasks){
+      const n=N.get(V(t.id));
+      if(t.inner.length===0) addEdge('story:'+b.s.id,n.vid,edgeClass('done',n.state),curve(sx,sy,inX(n),midY(n)));
+      for(const dep of t.inner){
+        const q=N.get(V(dep)), dt=model.byId.get(dep);
+        addEdge(q.vid,n.vid,edgeClass(dt.state,n.state)+(dt.story!==t.story?' cross':''),curve(q.x+L.cardW,midY(q),inX(n),midY(n)));
+      }
+    }
+  }
+  const dependedOn=new Set(); d.tasks.forEach(t=>t.inner.forEach(x=>dependedOn.add(x)));
+  for(const t of d.tasks) if(!dependedOn.has(t.id)){
+    const n=N.get(V(t.id));
+    addEdge(n.vid,'goal','goal '+(n.state==='done'?'done':'locked'),curve(n.x+L.cardW,midY(n),model.goal.x-46,model.goal.y));
+  }
+
+  // 3. story start nodes
+  for(const b of model.bands){
+    const g=el('g',{class:'story-node'+(b.done===b.total?' complete':''),transform:`translate(${L.pad} ${b.y+b.h/2-34})`},root);
+    el('rect',{class:'sbox',width:L.storyW-10,height:68,rx:10},g);
+    el('text',{class:'sid',x:12,y:20},g).textContent=b.s.id;
+    el('text',{class:'scount',x:L.storyW-22,y:20,'text-anchor':'end'},g).textContent=`${b.done}/${b.total}`;
+    el('text',{class:'stitle',x:12,y:37},g).textContent=clip(b.s.title,28);
+    el('rect',{class:'sbar-bg',x:12,y:50,width:L.storyW-34,height:6,rx:3},g);
+    el('rect',{class:'sbar',x:12,y:50,width:(L.storyW-34)*b.done/b.total,height:6,rx:3},g);
+    el('title',{},g).textContent=`${b.s.id} ${b.s.title} – ${b.done}/${b.total} klara`;
+  }
+
+  // 4. expanded-group headers ("Fäll ihop")
+  const heads=[];
+  for(const h of model.headers){
+    const g=el('g',{class:'collapse','data-toggle':h.key,transform:`translate(${h.x} ${h.y})`,tabindex:0,role:'button','aria-label':`Fäll ihop ${h.count} ${STATE_PLURAL[h.state]}`},root);
+    el('rect',{width:L.cardW,height:L.headH,rx:L.headH/2},g);
+    el('text',{x:12,y:15},g).textContent=`▾ Fäll ihop · ${h.count} ${STATE_PLURAL[h.state]}`;
+    bindToggle(g,h.key); heads.push({g,key:h.key});
+  }
+
+  // 5. cards (tasks and collapsed groups)
+  const cards=new Map();
+  for(const n of N.values()){
+    const g=el('g',{class:`card ${n.state}`+(n.kind==='group'?' group':''),transform:`translate(${n.x} ${n.y})`,tabindex:0},root);
+    if(n.kind==='group'){
+      el('rect',{class:'stack',x:8,y:-8,width:L.cardW,height:L.cardH,rx:9,opacity:.45},g);
+      el('rect',{class:'stack',x:4,y:-4,width:L.cardW,height:L.cardH,rx:9,opacity:.75},g);
+    }
+    if(n.state==='ready') el('rect',{class:'ring',x:-4,y:-4,width:L.cardW+8,height:L.cardH+8,rx:12},g);
+    el('rect',{class:'box',width:L.cardW,height:L.cardH,rx:9},g);
+    const tx=n.gate?18:12;
+    if(n.kind==='group'){
+      g.setAttribute('role','button'); g.setAttribute('data-toggle',n.key);
+      g.setAttribute('aria-label',`${n.members.length} ${STATE_PLURAL[n.state]} i ${n.story}, fäll ut`);
+      el('text',{class:'cid',x:tx,y:20},g).textContent=`${n.members.length} tasks · ${STATE_PLURAL[n.state]}`;
+      el('text',{class:'clink',x:tx,y:37},g).textContent=`▸ Visa alla ${n.members.length}`;
+      bindToggle(g,n.key);
+    } else {
+      g.setAttribute('role','img'); g.setAttribute('aria-label',`${STATE_NAME[n.state]}: ${n.t.id} ${n.t.title}`+(n.gate?` (${n.gate==='open'?'beroende klart':'väntar på beroende'})`:''));
+      el('text',{class:'cid',x:tx,y:20},g).textContent=n.t.id;
+      el('text',{class:'ctitle',x:tx,y:37},g).textContent=clip(n.t.title,n.gate?24:25);
+    }
+    statusMark(g,n.state,L.cardW-22,L.cardH/2);
+    gate(g,n.gate,0,L.cardH/2);
+    cards.set(n.vid,g);
+    g.addEventListener('pointerenter',e=>hover(n,true,e));
+    g.addEventListener('pointermove',e=>moveTip(e));
+    g.addEventListener('pointerleave',()=>hover(n,false));
+    g.addEventListener('focus',()=>hover(n,true));
+    g.addEventListener('blur',()=>hover(n,false));
+  }
+
+  // 6. goal
+  const G=model.goal;
+  const gg=el('g',{class:'goal'+(goalComplete?' complete':''),transform:`translate(${G.x} ${G.y})`,role:'img','aria-label':`Mål ${d.epic.id}: ${done} av ${total} klara`},root);
+  const haloWrap=el('g',{opacity:(0.07+0.38*p).toFixed(3)},gg);           // strength grows with progress
+  el('circle',{class:'halo',r:(54+26*p).toFixed(1),fill:'url(#halo)'},haloWrap);
+  el('circle',{class:'gring-bg',r:50},gg);
+  const C=2*Math.PI*50; el('circle',{class:'gring',r:50,'stroke-dasharray':`${C*p} ${C}`,transform:'rotate(-90)'},gg);
+  el('circle',{class:'disc',r:42},gg);
+  el('path',{class:'star-f',d:STAR,'clip-path':'url(#starfill)'},gg);  // star fills from the bottom
+  el('path',{class:'star-o',d:STAR},gg);
+  if(goalComplete){
+    const sh=el('g',{'clip-path':'url(#starclip)'},gg);
+    const rot=el('g',{transform:'rotate(20)'},sh);
+    el('rect',{class:'shimmer',x:-9,y:-40,width:18,height:80,fill:'url(#shine)'},rot);
+    [[-50,-46,0],[54,-38,.7],[60,28,1.4],[-58,34,2.0],[0,-68,1.1]].forEach(([x,y,dl])=>{
+      const s=el('g',{transform:`translate(${x} ${y})`},gg);
+      const sp=el('path',{class:'spark',d:SPARK},s); sp.style.animationDelay=dl+'s';
+    });
+  }
+  el('text',{class:'gname',y:80,'text-anchor':'middle'},gg).textContent=goalComplete?'Mål nått!':'Mål';
+  el('text',{class:'gtitle',y:98,'text-anchor':'middle'},gg).textContent=clip(d.epic.title,34);
+  el('text',{class:'gcount',y:116,'text-anchor':'middle'},gg).textContent=`${done} / ${total} klara · ${Math.round(p*100)} %`;
+
+  // hover highlight
+  function hover(n,on,e){
+    const tip=document.getElementById('tip');
+    if(!on){tip.style.display='none';cards.forEach(c=>c.classList.remove('dim','hl'));heads.forEach(h=>h.g.classList.remove('dim'));edges.forEach(x=>x.p.classList.remove('dim'));return;}
+    const start=n.kind==='group'?n.members.map(m=>m.id):[n.t.id];
+    const rel=new Set(start);
+    const up=id=>{const x=model.byId.get(id);x.inner.forEach(dd=>{if(!rel.has(dd)){rel.add(dd);up(dd);}})};
+    const down=id=>d.tasks.forEach(x=>{if(x.inner.includes(id)&&!rel.has(x.id)){rel.add(x.id);down(x.id);}});
+    start.forEach(id=>{up(id);down(id);});
+    const relV=new Set([...rel].map(V));
+    cards.forEach((c,vid)=>{c.classList.toggle('dim',!relV.has(vid));c.classList.toggle('hl',vid===n.vid);});
+    heads.forEach(h=>h.g.classList.add('dim'));
+    edges.forEach(x=>x.p.classList.toggle('dim',!(relV.has(x.to)&&(relV.has(x.from)||x.from.startsWith('story:')))&&!(x.to==='goal'&&relV.has(x.from))));
+    let html;
+    if(n.kind==='group'){
+      html=`<b>${n.members.length} tasks · ${STATE_PLURAL[n.state]}</b>${n.members.map(m=>m.id).join(', ')}<br><span style="color:var(--color-text-muted)">Klicka för att visa alla</span>`;
+    } else {
+      const t=n.t;
+      const deps=t.inner.length?`Beror på: ${t.inner.map(x=>x+(model.byId.get(x).state==='done'?' ✓':'')).join(', ')}`:'Inga beroenden – grenar från storyn';
+      const by=d.tasks.filter(x=>x.inner.includes(t.id)).map(x=>x.id);
+      html=`<b>${t.id} · ${STATE_NAME[t.state]}</b>${t.title}<br><span style="color:var(--color-text-muted)">${deps}${by.length?'<br>Låser upp: '+by.join(', '):'<br>Leder direkt till målet'}</span>`;
+    }
+    tip.innerHTML=html; tip.style.display='block'; if(e) moveTip(e);
+  }
+
+  // lists
+  const rs=d.tasks.filter(t=>t.state==='ready');
+  document.getElementById('ready').innerHTML=rs.length?rs.map(t=>`<li><span class="plus">+</span> ${t.id} ${t.title}${t.gate==='open'?' <span title="Beroendet är klart">(upplåst)</span>':''}</li>`).join(''):'<li>Inget redo att ta</li>';
+  const lk=d.tasks.filter(t=>t.state==='locked');
+  document.getElementById('unlocked').innerHTML=lk.length?lk.map(t=>`<li>${t.id} låses upp av ${t.inner.filter(x=>model.byId.get(x).state!=='done').join(', ')}</li>`).join(''):'<li>Inget är låst</li>';
+
+  full={x:-10,y:-10,w:model.width+20,h:model.height+20};
+  if(keepView&&view) apply(); else requestAnimationFrame(fit);
+}
+function bindToggle(g,key){
+  const t=()=>{expanded.has(key)?expanded.delete(key):expanded.add(key);document.getElementById('tip').style.display='none';render(current,true);};
+  g.addEventListener('click',t);
+  g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();t();}});
+}
+function moveTip(e){const tip=document.getElementById('tip');tip.style.left=Math.min(e.clientX+14,innerWidth-360)+'px';tip.style.top=(e.clientY+14)+'px';}
+
+// ---------- legend ----------
+function legend(){
+  const lgEl=document.getElementById('legend');
+  const sw=(c,t)=>`<span><i class="sw" style="--c:var(${c})"></i>${t}</span>`;
+  const icon=(svg,t)=>`<span><svg viewBox="-10 -10 20 20">${svg}</svg>${t}</span>`;
+  lgEl.innerHTML=sw('--color-progress-done','Klar')+sw('--color-progress-in-progress','Pågår')+sw('--color-progress-failed','Misslyckad')+
+    icon('<path d="M0 -7 V7 M-7 0 H7" fill="none" stroke="var(--color-progress-pending)" stroke-width="2.5" stroke-linecap="round"/>','Redo att ta')+
+    icon('<g class="gate open"><circle r="9"/><g transform="translate(0 -1)"><rect class="lkb" x="-4.5" y="0" width="9" height="6.5" rx="1.5"/><path class="lk" d="M-2.8 0 V-3.4 A2.8 2.8 0 0 1 2.8 -3.4 V-2.3"/></g></g>','Upplåst (beroendet klart)')+
+    icon('<g class="gate closed"><circle r="9"/><g transform="translate(0 -1)"><rect class="lkb" x="-4.5" y="0" width="9" height="6.5" rx="1.5"/><path class="lk" d="M-2.8 0 V-2.6 A2.8 2.8 0 0 1 2.8 -2.6 V0"/></g></g>','Låst (väntar på beroende)')+
+    `<span><svg viewBox="0 -10 30 20"><path d="M0 0 H30" stroke="var(--color-text-muted)" stroke-width="2" stroke-dasharray="2 5" stroke-linecap="round"/></svg>Beroende till annan story</span>`;
+}
+
+// ---------- zoom / pan ----------
+const stage=document.getElementById('stage'), svgEl=document.getElementById('svg');
+function apply(){svgEl.setAttribute('viewBox',`${view.x} ${view.y} ${view.w} ${view.h}`);
+  const r=stage.getBoundingClientRect(); const scale=Math.min(r.width/view.w,r.height/view.h);
+  document.getElementById('pct').textContent=Math.round(scale*100)+'%';}
+function fit(){const r=stage.getBoundingClientRect();const ar=r.width/r.height;let w=full.w,h=full.h;
+  if(w/h>ar)h=w/ar;else w=h*ar; view={x:full.x+(full.w-w)/2,y:full.y+(full.h-h)/2,w,h}; apply();}
+function actual(){const r=stage.getBoundingClientRect();const cx=view.x+view.w/2,cy=view.y+view.h/2;view={x:cx-r.width/2,y:cy-r.height/2,w:r.width,h:r.height};apply();}
+function zoomAt(f,px,py){const r=stage.getBoundingClientRect();const scale=Math.min(r.width/view.w,r.height/view.h);
+  const ns=Math.max(.25,Math.min(3,scale*f)); f=ns/scale;
+  const ux=view.x+(px??r.width/2)/r.width*view.w, uy=view.y+(py??r.height/2)/r.height*view.h;
+  view.w/=f;view.h/=f;view.x=ux-(px??r.width/2)/r.width*view.w;view.y=uy-(py??r.height/2)/r.height*view.h;apply();}
+stage.addEventListener('wheel',e=>{e.preventDefault();const r=stage.getBoundingClientRect();zoomAt(Math.exp(-e.deltaY*(e.ctrlKey?0.01:0.0025)),e.clientX-r.left,e.clientY-r.top);},{passive:false});
+const ptrs=new Map(); let last=null, pinch=null;
+stage.addEventListener('pointerdown',e=>{if(e.target.closest('.zoom')||e.target.closest('[data-toggle]'))return;stage.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,e);last={x:e.clientX,y:e.clientY};stage.classList.add('dragging');});
+stage.addEventListener('pointermove',e=>{if(!ptrs.has(e.pointerId))return;ptrs.set(e.pointerId,e);const r=stage.getBoundingClientRect();
+  if(ptrs.size===2){const [a,b]=[...ptrs.values()];const dd=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);if(pinch)zoomAt(dd/pinch,(a.clientX+b.clientX)/2-r.left,(a.clientY+b.clientY)/2-r.top);pinch=dd;return;}
+  view.x-=(e.clientX-last.x)/r.width*view.w;view.y-=(e.clientY-last.y)/r.height*view.h;last={x:e.clientX,y:e.clientY};apply();});
+const up=e=>{ptrs.delete(e.pointerId);pinch=null;if(!ptrs.size)stage.classList.remove('dragging');};
+stage.addEventListener('pointerup',up);stage.addEventListener('pointercancel',up);
+document.getElementById('zin').onclick=()=>zoomAt(1.25);
+document.getElementById('zout').onclick=()=>zoomAt(0.8);
+document.getElementById('zfit').onclick=fit;
+document.getElementById('z100').onclick=actual;
+addEventListener('resize',()=>apply());
+
+// ---------- top-bar toggles ----------
+const root=document.documentElement;
+function syncTheme(){const dark=root.dataset.theme==='dark';document.getElementById('themeIcon').textContent=dark?'☾':'☀';document.getElementById('themeLabel').textContent=dark?'Mörkt':'Ljust';}
+document.getElementById('theme').onclick=()=>{root.dataset.theme=root.dataset.theme==='dark'?'light':'dark';syncTheme();};
+const MOTION_KEY='jenga-dashboard-motion';
+function syncMotion(){
+  const off=root.dataset.motion==='off';
+  const osReduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.getElementById('motionIcon').textContent=off?'⏸':'✦';
+  document.getElementById('motionLabel').textContent=off?'Animationer: Av':`Animationer: Auto${osReduce?' (systemet: av)':''}`;
+  const b=document.getElementById('motion');
+  b.setAttribute('aria-pressed',String(!off));
+  b.setAttribute('aria-label',off?'Animationer avstängda. Aktivera för att följa systemet.':'Animationer följer systemet. Aktivera för att stänga av.');
+}
+document.getElementById('motion').onclick=()=>{
+  if(root.dataset.motion==='off'){delete root.dataset.motion;try{localStorage.removeItem(MOTION_KEY)}catch{}}
+  else{root.dataset.motion='off';try{localStorage.setItem(MOTION_KEY,'off')}catch{}}
+  syncMotion();
+};
+try{if(localStorage.getItem(MOTION_KEY)==='off')root.dataset.motion='off'}catch{}
+syncTheme(); syncMotion();
+document.getElementById('ds').onchange=e=>{expanded=new Set();render(e.target.value);};
+legend();
+render('mixed');
+</script>
+</body>
+</html>

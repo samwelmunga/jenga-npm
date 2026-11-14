@@ -1,0 +1,9 @@
+{
+  "single": [
+    { "argument": "src/linked", "kind": "path", "status": "linked", "items": ["E01_S01_T01"] },
+    { "argument": "src/linked/handler.js", "kind": "path", "status": "linked", "items": ["E01_S01_T01"] },
+    { "argument": "src/unlinked", "kind": "path", "status": "unlinked", "items": [] },
+    { "argument": "lib/quiet", "kind": "path", "status": "unlinked", "items": [] },
+    { "argument": ".", "kind": "path", "status": "not_checked", "items": [] }
+  ]
+}

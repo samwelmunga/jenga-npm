@@ -8,8 +8,10 @@
  * Starts the Jenga AI API server and serves the built UI from dashboard/dist/. Accepts:
  *   --port <number>   Port to listen on. Also respects JENGA_API_PORT env var; the CLI flag takes
  *                     precedence. An explicit port that is busy is an error (exit 1), never replaced.
- *                     Without either, the first verified-free port from 3001 is bound and its URL printed
- *                     (E47_S08_T03); it is recorded in project/queue/dashboard-port.json for
+ *                     Without either, the project's assigned port (scripts/dashboard-port.sh get, E47_S11_T03)
+ *                     is bound when free; when it is busy, missing or invalid a warning is printed and the
+ *                     first verified-free port from 3001 is bound instead (E47_S08_T03). The URL is printed and
+ *                     the port is recorded in project/queue/dashboard-port.json for
  *                     `dashboard open`.
  *   --api-only        Serve the API without the UI.
  *   --open            Open the dashboard in the default browser once listening.
@@ -27,8 +29,8 @@ const { execFile } = require('child_process');
 // Shared, dependency-free helpers (root scripts/ ships in the package; same relative depth in the monorepo
 // and in node_modules/@jenga-ai/agent/).
 const PKG_SCRIPTS = path.resolve(__dirname, '../../../../scripts');
-const { listenOnFreePort } = require(path.join(PKG_SCRIPTS, 'find-free-port.cjs'));
 const portState = require(path.join(PKG_SCRIPTS, 'dashboard-port-state.cjs'));
+const { listenPreferAssigned } = require(path.join(PKG_SCRIPTS, 'dashboard-assigned-port.cjs'));
 
 // ── Parse CLI flags ───────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -143,9 +145,9 @@ function launchBrowser(url) {
     }
   }
 
-  let server, port;
+  let server, port, warning = null, reason = null;
   try {
-    ({ server, port } = await listenOnFreePort(app, { explicit: explicitPort, start: portState.DEFAULT_PORT }));
+    ({ server, port, warning, reason } = await listenPreferAssigned(app, { explicit: explicitPort, projectRoot, start: portState.DEFAULT_PORT }));
   } catch (err) {
     if (err.code === 'EADDRINUSE') {
       console.error(`Error: port ${explicitPort} is already in use. Stop whatever is using it, or choose another with --port (or omit --port to pick a free one).`);
@@ -161,8 +163,12 @@ function launchBrowser(url) {
   if (serveApp) {
     console.log(`Dashboard app  running at ${url}`);
   }
-  if (explicitPort === null && port !== portState.DEFAULT_PORT) {
-    console.log(`(port ${portState.DEFAULT_PORT} was busy; using ${port})`);
+  if (warning) {
+    console.warn(warning);
+    // Fallback search starts at 3001: say so when it had to move on (not when the assigned port was merely busy).
+    if (reason !== 'busy' && port !== portState.DEFAULT_PORT) {
+      console.log(`(port ${portState.DEFAULT_PORT} was busy; using ${port})`);
+    }
   }
   if (projectRoot) {
     portState.writeState(projectRoot, { port });

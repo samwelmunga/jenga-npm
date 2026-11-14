@@ -732,6 +732,9 @@ SHIM
            "$BOARD_PROJ/project/configs" "$BOARD_PROJ/project/data" "$BOARD_PROJ/project/logs" \
            "$BOARD_PROJ/project/rapports/problems"
   BOARD_PROJ="$(cd "$BOARD_PROJ" && pwd -P)"
+  # /v1/progress runs board-progress.sh, which resolves the root from project/configs/workflow.json (E92_S03_T02);
+  # a real project always has one, and capture aborts on any route error.
+  printf '%s\n' '{}' > "$BOARD_PROJ/project/configs/workflow.json"
   git -C "$BOARD_PROJ" init -q
   cat > "$BOARD_PROJ/project/board/epics/E90_budget-fixture.md" <<'EOT'
 ---

@@ -59,6 +59,9 @@ setup() {
            "$PROJ/project/configs" "$PROJ/project/data" "$PROJ/project/logs" \
            "$PROJ/project/rapports/problems" "$PROJ/project/documentation/plans" "$PROJ/project/documentation/summaries"
   git -C "$PROJ" init -q
+  # /v1/progress runs board-progress.sh, which resolves the root from project/configs/workflow.json (E92_S03_T02);
+  # a real project always has one, and capture aborts on any route error.
+  printf '%s\n' '{}' > "$PROJ/project/configs/workflow.json"
 
   local e
   for e in E01 E10 E99 E100 E1001; do write_item epics "$e" "" "" "In Progress"; done

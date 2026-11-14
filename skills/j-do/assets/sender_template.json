@@ -7,6 +7,8 @@
     "epic_id": "",
     "date": "",
     "paths": [],
-    "worktree": ""
+    "worktree": "",
+    "checklist_run_id": "",
+    "progress_owner": ""
   }
 }

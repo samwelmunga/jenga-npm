@@ -28,6 +28,16 @@
 #   from a file:// snapshot. When the board has no usage fields the tab and view are simply absent;
 #   the snapshot builds exactly as before. --out, --project-root and --data-url are unaffected.
 #
+# Progress cards and graph (E92_S06_T06): the capture also embeds /v1/progress-cards (routes.progressCards) and
+#   /v1/progress-graph (routes.progressGraph, captured without a query, so the whole board). A snapshot has no server,
+#   so the UI filters the full payload client-side; no change to this script's flags or output is involved.
+#
+# Zoom controls and Animations toggle (E92_S06_T21): both are part of the bundled UI, so a snapshot contains them with no
+#   change here. Their words come from the `labels` object that the captured /v1/progress-cards and /v1/progress-graph
+#   routes already embed (scripts/progress-labels-json.sh prints every key of scripts/lib/progress-labels.sh, the zoom_* and
+#   motion_* ones included), and the inline pre-paint script in index.html (key jenga-dashboard-motion, guarded storage)
+#   survives the single-file inlining. Both work from file://.
+#
 # project/app itself is located by resolve-app-dir.sh, which also knows to look
 #   inside node_modules/@jenga-ai/agent — this script previously assumed the
 #   repo root, which is wrong for every consumer install.

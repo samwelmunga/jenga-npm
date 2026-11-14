@@ -224,11 +224,16 @@ assert_check() {
 # -----------------------------------------------------------------------------
 
 @test "consumer call site keeps reconcileDeletes false" {
+  # The mirror call moved from scripts/postinstall.js into the shared lib/sync.js (E26_S11_T02/T04), which
+  # both postinstall and `jenga sync` use, so that is the call site this guard now watches. postinstall.js
+  # itself must hold no mirror() call at all.
   # Match the CODE line (trailing comma), not the phrase -- the file's header
   # comment discusses `reconcileDeletes: false` in prose, so a bare phrase count
   # matches twice and would make this guard assert the wrong thing.
-  run grep -c 'reconcileDeletes: *false,' "$REPO_ROOT/scripts/postinstall.js"
+  run grep -c 'reconcileDeletes: *false,' "$REPO_ROOT/lib/sync.js"
   [ "$output" = "1" ]
-  run grep -n 'reconcileDeletes: *true' "$REPO_ROOT/scripts/postinstall.js"
+  run grep -n 'reconcileDeletes: *true' "$REPO_ROOT/lib/sync.js" "$REPO_ROOT/scripts/postinstall.js"
+  [ "$status" -ne 0 ]
+  run grep -n 'mirror(' "$REPO_ROOT/scripts/postinstall.js"
   [ "$status" -ne 0 ]
 }

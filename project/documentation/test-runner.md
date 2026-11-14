@@ -51,6 +51,9 @@ j.commit, full option     the same catalog j.test builds -----------------------
 `j.test` and the commit gate share the same discovery, catalog and execution scripts; the gate adds a decision layer
 around them (see "The `j.commit` test gate"). The configuration both read is in "Configuration".
 
+How the bats suite itself is run and how its tests are written (fixture trees, recorded expected results, and the
+two rules for assertions) is in [bats-fixture-convention.md](bats-fixture-convention.md).
+
 ## Discovery
 
 `skills/j-test/scripts/discover-tests.sh` finds the runnable test suites in a directory tree and prints one JSON
@@ -151,6 +154,18 @@ Two entries, not one entry per bats file: `npm test` (which runs `bats tests/*.b
 runnable` and `Notes` blocks are omitted when empty. `name (type)` labels every entry, except that a name already ending
 in ` (<type>)` is printed as is, so a config-only suite reads `semgrep (sast)` and not `semgrep (sast) (sast)`.
 
+### How `npm test` runs the bats suite (two-pass split)
+
+`package.json`'s `test` script is `bash scripts/run-tests.sh` (E43_S02_T01). When GNU `parallel` (or `rush`) is on `PATH`
+and `bats` supports `--jobs`, the script runs two passes: a parallel bulk pass (`bats --jobs N`) over every top-level
+`tests/*.bats` file except the shared-state ones, then a plain serial pass over those files (the two that mutate the real
+`.claude/settings.json`, `.agents/settings.json`, `.jenga-permission-level.json` and the shared `.mirror-worktrees/public`
+clone; `bats --jobs` has no per-file exclusion, hence two invocations). The serial pass always runs, and the exit status is
+the first non-zero one. Without a parallel binary, or with `RUN_TESTS_JOBS=1`, it is one plain `bats tests/*.bats`, the
+previous behaviour. The catalog treats `bash scripts/run-tests.sh` as the aggregate of `bats tests/*.bats` (see rule 2
+below), so the fold is unchanged. The wall-clock speedup has not been measured yet: it needs a machine with `parallel` or
+`rush` installed (`npm test` against `RUN_TESTS_JOBS=1 npm test`).
+
 ### The dedupe rule and `also covers`
 
 Suites that would run the same thing are folded into one entry before numbering, so a "run all" never runs the same
@@ -160,8 +175,8 @@ tests twice:
    `config:bats:integration` as `bats tests/*.bats`.
 2. **The npm alias.** `npm test` and `npm run <key>` are aliases for the body of that script in `package.json` (read
    with `jq`, never executed). For an npm suite the key is that script body when it is a non-empty string, otherwise its
-   command. Here `scripts.test` is `bats tests/*.bats`, so `npm:test` shares a key with `bats:tests`; without this, an
-   hour-long bats suite would run twice. A missing, unreadable or unparseable `package.json` just means no alias.
+   command. Here `scripts.test` is `bats tests/*.bats` (or the aggregate `bash scripts/run-tests.sh`, normalised to it), so
+   `npm:test` shares a key with `bats:tests`; without this, an hour-long bats suite would run twice. A missing, unreadable or unparseable `package.json` just means no alias.
 3. **The survivor** of a group is the first `npm` entry (the project's own declared entry point), else the first
    non-`config` entry, else the first `config` entry, "first" being `id` order. Everyone else is listed in the survivor's
    `also` array and rendered as `[also covers: ...]`. A group of one is not folded.

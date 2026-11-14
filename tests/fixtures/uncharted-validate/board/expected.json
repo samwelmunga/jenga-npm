@@ -1,0 +1,8 @@
+{
+  "valid-epic.md": 0,
+  "valid-story.md": 0,
+  "story-no-acceptance.md": 1,
+  "story-no-dod.md": 1,
+  "story-dod-no-checkbox.md": 1,
+  "bad-status-epic.md": 1
+}

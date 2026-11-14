@@ -14,6 +14,16 @@
         } catch (e) { /* storage can throw under file:// */ }
       })();
     </script>
+    <script>
+      // E92_S06_T21: resolve the stored Animations preference before first paint (no flash). Same technique as the theme
+      // script above, its own try so a failure there never skips this. Stored value: "off"; anything else = Auto, which
+      // leaves data-motion absent so prefers-reduced-motion decides. Classic inline script, no network access.
+      (function () {
+        try {
+          if (window.localStorage.getItem('jenga-dashboard-motion') === 'off') document.documentElement.dataset.motion = 'off';
+        } catch (e) { /* storage can throw under file:// */ }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

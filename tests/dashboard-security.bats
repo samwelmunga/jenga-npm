@@ -42,7 +42,12 @@ setup() {
   FIXTURE="$BATS_TEST_TMPDIR/proj"
   mkdir -p "$FIXTURE/project/board" "$FIXTURE/project/configs" "$FIXTURE/project/data" \
            "$FIXTURE/project/logs" "$FIXTURE/project/rapports/problems"
+  # board-progress.sh needs the registered board dirs to exist (E92_S06_T18).
+  mkdir -p "$FIXTURE/project/board/epics" "$FIXTURE/project/board/stories" "$FIXTURE/project/board/tasks"
   FIXTURE="$(cd "$FIXTURE" && pwd -P)"
+  # /v1/progress runs board-progress.sh, which resolves the root from project/configs/workflow.json (E92_S03_T02);
+  # a real project always has one, and capture aborts on any route error.
+  printf '%s\n' '{}' > "$FIXTURE/project/configs/workflow.json"
   SNAP="$BATS_TEST_TMPDIR/out/snapshot.json"
 }
 

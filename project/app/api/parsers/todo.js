@@ -204,8 +204,23 @@ function readTodoRefs(filePath) {
   return { exists: true, path: todoPath, refs, entries, unrecognized };
 }
 
+/**
+ * Every active entry of the project's `todo.md` as `{ref, title, line}` (E47_S10_T01), for the dashboard
+ * todo bubble (`GET /v1/todo`). A thin projection of `readTodoRefs()`: the same `TODO_ENTRY_PATTERN`, so
+ * comments, no-ref lines and epic-only refs are skipped exactly as for `_queued`. Duplicate refs are kept
+ * (one entry per line, in file order) so the UI can show where each was written. A missing or unreadable
+ * file yields an empty list, never a throw.
+ *
+ * @param {string} [filePath] explicit path; defaults to `<projectRoot>/project/todo.md`
+ * @returns {{ ref: string, title: string, line: number }[]}
+ */
+function listActiveTodoEntries(filePath) {
+  return readTodoRefs(filePath).entries.map(({ ref, title, line }) => ({ ref, title, line }));
+}
+
 module.exports = {
   readTodoRefs,
+  listActiveTodoEntries,
   parseTodoContent,
   stripComments,
   resolveTodoPath,

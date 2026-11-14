@@ -30,7 +30,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 
-const { readTodoRefs, parseTodoContent, stripComments } = require('./todo');
+const { readTodoRefs, parseTodoContent, stripComments, listActiveTodoEntries } = require('./todo');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 
@@ -369,6 +369,56 @@ if (!fs.existsSync(realTodoPath)) {
   });
 
   console.log(`  (parsed ${real.refs.length} queued refs from ${realTodoPath})`);
+}
+
+// ---------------------------------------------------------------------------------------------
+// listActiveTodoEntries (E47_S10_T01) - fixture file in a temp dir under the OS tmp root.
+{
+  const os = require('os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jenga-todo-entries-'));
+  try {
+    const f = path.join(dir, 'todo.md');
+    fs.writeFileSync(f, [
+      '# Todo',
+      '<!-- RECONCILED: old thing: E01_S01_T01 -->',
+      'Add the route: E47_S10_T01',
+      'Story level item: e47_s10',
+      'invoke /brainstorm something with no ref',
+      'Whole epic: E34',
+      'Again: E47_S10_T01',
+      '<!--',
+      'hidden: E02_S02_T02',
+      '-->',
+      'After comment: E03_S03_T03',
+    ].join('\n'));
+    const entries = listActiveTodoEntries(f);
+    check('listActiveTodoEntries returns task and story refs with line numbers', () => {
+      assert.deepEqual(entries[0], { ref: 'E47_S10_T01', title: 'Add the route', line: 3 });
+      assert.deepEqual(entries[1], { ref: 'E47_S10', title: 'Story level item', line: 4 });
+    });
+    check('listActiveTodoEntries upper-cases refs (case-insensitive match)', () => {
+      assert.strictEqual(entries[1].ref, 'E47_S10');
+    });
+    check('listActiveTodoEntries skips comments, no-ref lines and epic-only refs', () => {
+      const refs = entries.map((e) => e.ref);
+      assert.ok(!refs.includes('E01_S01_T01') && !refs.includes('E02_S02_T02') && !refs.includes('E34'));
+      assert.strictEqual(entries.length, 4);
+    });
+    check('listActiveTodoEntries keeps duplicate refs, one per line', () => {
+      assert.deepEqual(entries.filter((e) => e.ref === 'E47_S10_T01').map((e) => e.line), [3, 7]);
+    });
+    check('listActiveTodoEntries keeps true line numbers after a multi-line comment', () => {
+      assert.deepEqual(entries[3], { ref: 'E03_S03_T03', title: 'After comment', line: 11 });
+    });
+    check('readTodoRefs refs/_queued source is unchanged (de-duplicated refs)', () => {
+      assert.deepEqual(readTodoRefs(f).refs, ['E47_S10_T01', 'E47_S10', 'E03_S03_T03']);
+    });
+    check('listActiveTodoEntries returns [] for a missing file', () => {
+      assert.deepEqual(listActiveTodoEntries(path.join(dir, 'nope.md')), []);
+    });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 // ---------------------------------------------------------------------------------------------

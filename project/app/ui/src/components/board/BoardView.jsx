@@ -78,7 +78,7 @@ function filterEpicRange(epics, from, to) {
   })
 }
 
-export default function BoardView({ epics }) {
+export default function BoardView({ epics, cards }) {
   const [selectedStatuses, setSelectedStatuses] = useState(() => new Set())
   const [fromEpic, setFromEpic] = useState('')
   const [toEpic, setToEpic] = useState('')
@@ -110,6 +110,10 @@ export default function BoardView({ epics }) {
   // Range and status filters compose with AND — the range bounds which epics are
   // in play, then the status filter narrows what's shown within them.
   const epicOptions = epics.map(epic => epic.id).filter(Boolean)
+  // E92_S06_T08: index the progress-cards payload once; an epic without an entry gets no bar.
+  const cardEpics = new Map(((cards && Array.isArray(cards.epics)) ? cards.epics : []).map(e => [e.id, e]))
+  const cardStories = (cards && Array.isArray(cards.stories)) ? cards.stories : []
+  const cardLabels = (cards && cards.labels) || {}
   const visibleEpics = filterEpics(filterEpicRange(epics, fromEpic, toEpic), selectedStatuses)
 
   return (
@@ -149,7 +153,16 @@ export default function BoardView({ epics }) {
       {visibleEpics.length === 0 ? (
         <div className="empty-state">No items match the selected filters.</div>
       ) : (
-        visibleEpics.map(epic => <EpicCard key={epic.id} epic={epic} onSelect={onSelect} />)
+        visibleEpics.map(epic => (
+          <EpicCard
+            key={epic.id}
+            epic={epic}
+            onSelect={onSelect}
+            progressEpic={cardEpics.get(epic.id)}
+            progressStories={cardStories.filter(s => s.epic_id === epic.id)}
+            labels={cardLabels}
+          />
+        ))
       )}
       <EntryDetailPanel entry={selected} onClose={() => setSelected(null)} />
     </div>

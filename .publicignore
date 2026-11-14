@@ -351,6 +351,17 @@ tests/mirror-orphaned-twin-rewrite.bats
 tests/helpers/mirror-orphaned-twin-rewrite.sh
 # tests/helpers/router-route.mjs: drives the router that router-prefix-guard.bats imports
 tests/helpers/router-route.mjs
+# v5.1.0 release: ten tests that failed the mirror's test-subject gate in the public tree (stranded or broken there)
+tests/board-id-sort.bats
+tests/consumer-install-testbed.bats
+tests/dashboard-assigned-port.bats
+tests/dashboard-free-port.bats
+tests/dependency-audit-workflow.bats
+tests/e86-upgrade-and-go.bats
+tests/j-status-overview.bats
+tests/j-status-scope-view.bats
+tests/jenga-sync.bats
+tests/pages-workflow.bats
 # tests/dev-done-post-sync-commit.bats: runs skills/j-dev-done/scripts/commit-post-sync.sh,
 # which lives under the fully-private skills/j-dev-done/ blocklisted above. Synced to the
 # public mirror without its subject by the 2026-09-18 run (81b7f8b6), where all 14 of its
@@ -551,6 +562,14 @@ tests/workflow-pause-resume.bats
 # case needs both, and the workflow it also reads (project/.workflows/deploy-public.json) is private too.
 # No publicly-meaningful subset, so blocklist rather than skip (E88_S01_T03).
 tests/deploy-public-prep-features.bats
+# tests/deploy-public-prep-worktree.bats and its helper tests/helpers/deploy-public-clone.bash: copy and run the
+# private deploy-public-prep.sh, release-prep.sh and mirror-from-worktree.sh (and clone the private repo to run the
+# release worktree's mirror.sh), so no case can run in the mirror. Follows its private subjects (E88_S06_T02/T03).
+tests/deploy-public-prep-worktree.bats
+tests/helpers/deploy-public-clone.bash
+# tests/deploy-public-worktree-e2e.bats: clones the private repo and drives the private deploy-public workflow's
+# release steps end to end (E88_S06_T05); same private subjects, no publicly-meaningful subset.
+tests/deploy-public-worktree-e2e.bats
 # tests/epic-wrap-up-scripts.bats: tests 9, 10 and 12 read the repo's own .mcp.json and
 # project/.workflows/epic-wrap-up-framework.json, neither of which is in the shipped tree, so they fail in the
 # mirror-shaped tree while passing privately (found by the /mirror-public test gate on 2026-11-05). The file is

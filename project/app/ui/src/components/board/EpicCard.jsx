@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import StatusBadge from './StatusBadge'
 import StoryCard from './StoryCard'
+import EpicProgressBar from '../progress/EpicProgressBar'
 
-export default function EpicCard({ epic, onSelect }) {
+export default function EpicCard({ epic, onSelect, progressEpic, progressStories, labels }) {
   // E06_S04_T01 — plain in-memory state, deliberately not persisted anywhere
   // (no localStorage/sessionStorage/URL), so every reload starts collapsed.
   const [expanded, setExpanded] = useState(false)
@@ -44,6 +45,7 @@ export default function EpicCard({ epic, onSelect }) {
         </h3>
         <span className="epic-id">{epic.id}</span>
         <StatusBadge status={epic.status} />
+        {progressEpic && <EpicProgressBar epic={progressEpic} stories={progressStories} labels={labels} />}
       </div>
       {hasStories && expanded && (
         <div className="stories-list">

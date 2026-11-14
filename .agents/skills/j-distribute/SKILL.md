@@ -110,6 +110,8 @@ For each eligible target in sequence:
 bash skills/j-distribute/scripts/distribute-changes.sh <project_path>
 ```
 
+The script also checks the target's dashboard port through `scripts/ensure-dashboard-port.sh` and prints one `dashboard-port: kept|generated|repaired|skipped` line: a valid port is never overwritten, a missing or invalid one is generated in the target, and this repository's value is never copied. A failure there only warns. Relay that line in the per-target report.
+
 Record the exit code and any output. If a target fails (non-zero exit), record the failure and continue to the next target. Do not abort the run on partial failure.
 
 ### Step 7 — Report results

@@ -21,7 +21,7 @@
     "prepack": "npm run ui:build --prefix project/app --",
     "generate:legacy-paths": "node scripts/generate-legacy-shipped-paths.js",
     "graph:populate": "node scripts/populate-knowledge-graph.js",
-    "test": "bats tests/*.bats",
+    "test": "bash scripts/run-tests.sh",
     "validate:npm-metadata": "bash scripts/validate_npm_metadata.sh",
     "ui:dev": "npm run ui:dev --prefix project/app --",
     "ui:build": "npm run ui:build --prefix project/app --",

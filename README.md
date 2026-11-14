@@ -134,7 +134,8 @@ npm install -g @jenga-ai/agent
 > scripts by default (pnpm v8+) or you install with `--ignore-scripts`/`ignore-scripts=true`,
 > the install will silently produce none of the framework files with no error shown. See
 > [`project/documentation/distribution.md`](project/documentation/distribution.md#prerequisite--lifecycle-scripts-must-be-allowed-to-run-e26_s09)
-> for the exact npm/pnpm opt-in step.
+> for the exact npm/pnpm opt-in step, and [After upgrading](#after-upgrading) for the
+> `npx jenga sync` fallback that brings an already-installed project current.
 
 Or clone directly:
 
@@ -149,6 +150,33 @@ Run `j.status` at any time to see where the project stands.
 📖 **New to Jenga AI?** The [Intro Guide](https://samwelmunga.github.io/jenga-npm/getting-started.html) walks through the philosophy, the three pillars (role separation, board hierarchy, session continuity), and a full first-15-minutes walkthrough for both a new project and an existing codebase — mirrored at [project/.wiki/intro-guide.md](project/.wiki/intro-guide.md).
 
 **CLI commands.** The `jenga` binary installed alongside the package also ships a set of deterministic, agentless commands — see [The `jenga` CLI](#the-jenga-cli).
+
+---
+
+## After upgrading
+
+After you upgrade `@jenga-ai/agent`, run one command to bring the project in line with the installed version:
+
+```sh
+npx jenga sync              # apply
+npx jenga sync --dry-run    # preview what would change; writes nothing
+```
+
+`jenga sync` is non-interactive and idempotent — a second run changes nothing. It updates:
+
+- `.claude/` and `.agents/` — the skills and agents shipped with the installed version, plus the skill allow-list
+- the Copilot files — `.github/copilot-instructions.md` and `.github/hooks/jenga.json`
+- the Jenga block in `CLAUDE.md` and `AGENTS.md` (the list of available skills)
+
+It never touches text outside the `<!-- JENGA:START -->` / `<!-- JENGA:END -->` markers, your `jenga.cli.json`, or your own skills. It is not the `jenga init` wizard and asks no questions.
+
+Normally the package's `postinstall` hook does this for you during `npm install`. If the hook was blocked, the project can stay on the old version, often with no error shown:
+
+- **npm** (11.16+ keeps an `allowScripts` list in your `package.json`): if `@jenga-ai/agent` is denied there, or not yet approved on a setup that enforces the list, its `postinstall` is skipped. Run `npm approve-scripts @jenga-ai/agent`, or add `@jenga-ai/agent` to `allowScripts`.
+- **pnpm**: run `pnpm approve-builds` and select `@jenga-ai/agent`.
+- **`--ignore-scripts`** on the command line, or `ignore-scripts=true` in an `.npmrc`: drop it for this install.
+
+In every case, `npx jenga sync` brings the project current without reinstalling. The details of the opt-in steps are in [Prerequisite — lifecycle scripts must be allowed to run](project/documentation/distribution.md#prerequisite--lifecycle-scripts-must-be-allowed-to-run-e26_s09). `jenga status` and `jenga doctor` also warn when `.jenga-version` differs from the installed version, or when the skills list in the Jenga block is out of date, and point you to `jenga sync`.
 
 ---
 
@@ -249,10 +277,11 @@ Not every step needs a model. The `jenga` binary installed with the package (`je
 |---|---|
 | `jenga init` | Setup wizard — creates `jenga.cli.json` and registers the prompt-router hook. |
 | `jenga attach` | Write the MCP config for this project so new sessions route through Jenga. |
-| `jenga status` | Show router status and the active skill session. |
+| `jenga status` | Show router status and the active skill session. Warns when the project is out of step with the installed version (see [After upgrading](#after-upgrading)). |
+| `jenga sync` | Bring `.claude/`, `.agents/`, the Copilot files and the Jenga block in `CLAUDE.md` and `AGENTS.md` in line with the installed version. Non-interactive; run it after upgrading. `--dry-run` previews and writes nothing. |
 | `jenga config` | List and edit `project/configs/*.json` — interactively, or `jenga config get\|set <file-id>.<key> [value]`. A successful `set` bumps that file's version counter. |
 | `jenga dashboard start\|open` | Start the dashboard API (`--port <n>` or `JENGA_API_PORT`, a busy explicit port fails; otherwise the first free port from 3001 is bound and printed; `--serve-app` also serves the built UI), or health-check it and open it in your browser. |
-| `jenga doctor` (alias: `jenga clean`) | Scan `.agents/` and `.claude/` for orphaned package-owned files left behind by an upgrade, preview them, and delete only on confirmation. `--dry-run` previews only. |
+| `jenga doctor` (alias: `jenga clean`) | Scan `.agents/` and `.claude/` for orphaned package-owned files left behind by an upgrade, preview them, and delete only on confirmation. `--dry-run` previews only. Also warns on version or skills-list drift, like `jenga status`. |
 
 Same principle that pushes skill logic into scripts rather than prompts: editing a config key is a fixed sequence with one correct answer. `jenga config set` validates and writes through code, so a settings change can't be left half-applied — which is why it's a command, not a `j.<name>` skill.
 

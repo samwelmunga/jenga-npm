@@ -28,6 +28,10 @@ const SNAPSHOT_ROUTE_KEYS = {
   '/v1/todo-warnings': 'todoWarnings',
   '/v1/ideas': 'ideas',
   '/v1/security': 'security',
+  '/v1/progress': 'progress',
+  '/v1/pipeline': 'pipeline',
+  '/v1/progress-cards': 'progressCards',
+  '/v1/progress-graph': 'progressGraph',
 }
 
 let embeddedSnapshotLoaded = false
@@ -82,6 +86,15 @@ function getFromSnapshot(snapshot, path) {
   return envelope.data
 }
 
+/**
+ * E92_S04_T05: true when this page is a snapshot export, i.e. the `jenga-dashboard-data` element is embedded. Reuses the
+ * memoised lookup get() itself uses, so the answer is stable for the lifetime of the page. A live page has no such
+ * element and answers false.
+ */
+export function isEmbeddedSnapshot() {
+  return loadEmbeddedSnapshot() !== null
+}
+
 export function get(path) {
   const snapshot = loadEmbeddedSnapshot()
   if (snapshot) {
@@ -94,4 +107,4 @@ export function get(path) {
   return request(path)
 }
 
-export default { get, request }
+export default { get, request, isEmbeddedSnapshot }

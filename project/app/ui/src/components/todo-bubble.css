@@ -1,0 +1,118 @@
+/* E47_S10_T02 - floating todo bubble and its panel. Colour tokens only (see tokens.css). */
+.todo-bubble {
+  position: fixed;
+  right: var(--space-md);
+  bottom: var(--space-md);
+  z-index: 900;
+  width: 3rem;
+  height: 3rem;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-accent);
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 12px var(--color-shadow);
+}
+
+.todo-bubble-icon {
+  display: block;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.todo-bubble:focus-visible,
+.todo-bubble-close:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--color-focus-ring);
+}
+
+.todo-bubble-panel {
+  position: fixed;
+  right: var(--space-md);
+  bottom: calc(3rem + 2 * var(--space-md));
+  z-index: 900;
+  box-sizing: border-box;
+  width: 22rem;
+  max-width: calc(100vw - 2 * var(--space-md));
+  max-height: calc(100vh - 3rem - 4 * var(--space-md));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 8px 24px var(--color-shadow);
+}
+
+.todo-bubble-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+}
+
+.todo-bubble-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.todo-bubble-close {
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.todo-bubble-body {
+  padding: var(--space-md);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  color: var(--color-text-muted);
+}
+
+/* E47_S10_T03 - todo list rows. */
+.todo-panel-note { margin: 0; }
+.todo-panel-filter { display: flex; align-items: center; gap: var(--space-xs); margin-bottom: var(--space-sm); font-size: 0.875rem; cursor: pointer; }
+.todo-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-xs); }
+.todo-row { border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-surface); }
+.todo-row-unresolved { border-style: dashed; }
+.todo-row-label { display: grid; grid-template-columns: auto auto 1fr; gap: var(--space-xs) var(--space-sm); align-items: baseline; padding: var(--space-xs) var(--space-sm); cursor: pointer; color: var(--color-text); }
+.todo-row-label:focus-within { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+.todo-row-id { font-family: monospace; font-size: 0.8rem; color: var(--color-text-muted); }
+.todo-row-title { min-width: 0; }
+.todo-row-status { grid-column: 3; font-size: 0.75rem; color: var(--color-text-muted); }
+
+/* E47_S10_T04 - tags and group dropdown. */
+.todo-tags { display: flex; flex-direction: column; gap: var(--space-xs); margin-bottom: var(--space-sm); }
+.todo-tag-form { display: flex; gap: var(--space-xs); flex-wrap: wrap; }
+.todo-tag-input, .todo-group select { padding: var(--space-xs); border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-surface); color: var(--color-text); font: inherit; min-width: 0; }
+.todo-tag-input { flex: 1 1 8rem; }
+.todo-tag-add { padding: var(--space-xs) var(--space-sm); border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-surface); color: var(--color-text); font: inherit; cursor: pointer; }
+.todo-tag-add:focus-visible, .todo-tag-input:focus-visible, .todo-group select:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+.todo-tag-message { margin: 0; font-size: 0.8rem; color: var(--color-text); font-weight: 600; }
+.todo-group { display: flex; align-items: center; gap: var(--space-xs); font-size: 0.875rem; color: var(--color-text); }
+.todo-row-tags { grid-column: 3; display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+.todo-tag { font-size: 0.7rem; padding: 0 var(--space-xs); border: 1px solid var(--color-border); border-radius: 999px; color: var(--color-text-muted); }
+
+/* E47_S10_T05 - mark/unmark, apply and copy */
+.todo-mark { display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; margin-bottom: var(--space-sm); }
+.todo-mark select { padding: var(--space-xs); border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-surface); color: var(--color-text); font: inherit; min-width: 0; }
+.todo-copy { display: inline-flex; align-items: center; justify-content: center; padding: var(--space-xs); border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-surface); color: var(--color-text); cursor: pointer; }
+.todo-copy:disabled { opacity: 0.5; cursor: not-allowed; }
+.todo-copy:focus-visible, .todo-mark select:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+.todo-copy-status { font-size: 0.8rem; color: var(--color-text); font-weight: 600; }
+.todo-copy-failed { text-decoration: underline; }

@@ -24,6 +24,11 @@
  *   --color-border-strong                              stronger divider
  *   --color-shadow, --color-shadow-soft, --color-focus-ring   shadows and focus halo
  *   --color-chart-*                                    Architecture diagram node-type hues, edges, labels
+ *   --color-progress-{done,in-progress,failed,pending,rejected}
+ *                                                      progress pie/pipeline slices (E92_S03): green, yellow,
+ *                                                      red (Failed and Blocked), grey, and muted blue-grey for
+ *                                                      Rejected (never green/yellow/red/grey). Pairwise distinct
+ *                                                      and >= 3:1 on --color-surface, enforced by the guard.
  * A token missing from this list is appended here (light AND dark values),
  * not invented as a local colour. Contrast is checked by
  * `node scripts/check-theme-contrast.cjs`.
@@ -87,6 +92,12 @@
   --color-chart-stale-ring: #ffffff;
   --color-chart-covered: #0e7490;
   --color-chart-covered-ring: #ffffff;
+
+  --color-progress-done: #15803d;
+  --color-progress-in-progress: #b88200;
+  --color-progress-failed: #b91c1c;
+  --color-progress-pending: #6b7280;
+  --color-progress-rejected: #5b8fc7;
 }
 
 /* Dark values. The media-query block and the [data-theme="dark"] block below
@@ -141,6 +152,12 @@
     --color-chart-stale-ring: #1a1d23;
     --color-chart-covered: #0e7490;
     --color-chart-covered-ring: #1a1d23;
+
+    --color-progress-done: #4ade80;
+    --color-progress-in-progress: #facc15;
+    --color-progress-failed: #f87171;
+    --color-progress-pending: #9ca3af;
+    --color-progress-rejected: #7ba3d6;
   }
 }
 
@@ -192,4 +209,10 @@
   --color-chart-stale-ring: #1a1d23;
   --color-chart-covered: #0e7490;
   --color-chart-covered-ring: #1a1d23;
+
+  --color-progress-done: #4ade80;
+  --color-progress-in-progress: #facc15;
+  --color-progress-failed: #f87171;
+  --color-progress-pending: #9ca3af;
+  --color-progress-rejected: #7ba3d6;
 }

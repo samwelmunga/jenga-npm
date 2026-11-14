@@ -1,0 +1,23 @@
+{
+  "id": "quick-fix",
+  "name": "Quick Fix",
+  "description": "A brief discussion on what to build or fix, followed by implementing it through parallel task execution, and finally commits it.",
+  "keywords": [
+    "quick fix",
+    "small fix",
+    "fix and commit",
+    "patch it",
+    "quick implementation"
+  ],
+  "examples": [
+    "do a quick fix: talk through the bug, implement it in parallel, and commit",
+    "I need a quick implementation of this small change, then commit it",
+    "patch it fast: brainstorm briefly, build it, and commit"
+  ],
+  "steps": [
+    "j-brainstorm",
+    "j-todo",
+    "jenga",
+    "j-commit"
+  ]
+}

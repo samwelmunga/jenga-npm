@@ -27,6 +27,13 @@ body {
   min-width: 0;
 }
 
+.header-toggles {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-xs);
+  flex: 0 0 auto;
+}
+
 .theme-toggle {
   display: inline-flex;
   align-items: center;
@@ -70,6 +77,14 @@ body {
 
 .tab-content {
   padding: 1rem 0;
+}
+
+/* E92_S06_T21 - two toggles share the header row, so their words give way to the icons a little earlier than the
+   mobile breakpoint; each button keeps its accessible name. */
+@media (max-width: 640px) {
+  .header-toggles .theme-toggle-label {
+    display: none;
+  }
 }
 
 /* ── Mobile (<= 480px, matches tokens.css --breakpoint-mobile) ───────────────── */

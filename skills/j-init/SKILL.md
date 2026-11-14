@@ -192,7 +192,8 @@ This script handles all scaffolding in one step:
 12. Creates `CHANGELOG.md` from the shared template — a running log of notable changes, seeded with an `[Unreleased]` section
 13. Applies the chosen visibility mode via `scripts/apply-project-visibility.sh`, which records it as `project_files_visibility` in `jenga.config.json` and performs any `.gitignore` change
 14. Applies the chosen scaffold visibility mode via `scripts/apply-scaffold-visibility.sh`, which records it as `scaffold_visibility` in `jenga.config.json` and, when `ignored`, adds `.claude/` and `.agents/` to `.gitignore`
-15. Stages and commits all files with the message `init: scaffold project structure and workflow config`
+15. Generates the project's stable dashboard port into `project/configs/dashboard-config.json` through `scripts/ensure-dashboard-port.sh` (a valid existing port is kept, an invalid one repaired; the line `dashboard-port: generated|kept|repaired <port>` is printed; a failure only warns)
+16. Stages and commits all files with the message `init: scaffold project structure and workflow config`
 
 After it writes `project/configs/audit-config.json`, the script prints a one-time dependency-audit
 opt-in notice (sourced from `scripts/audit-notice.sh`, which decides whether it is due). Relay it as

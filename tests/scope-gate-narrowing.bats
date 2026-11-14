@@ -195,6 +195,22 @@ cmd_of() { jq -r --arg i "$1" '.suites[] | select(.id == $i) | .command' "$OUT";
   [ "$(printf '%s' "$output" | jq -r '.runnable | length')" = "1" ]
 }
 
+@test "the npm twin is recognised when scripts.test is the aggregate runner (bash scripts/run-tests.sh), excluded and still folded" {
+  # E43_S02_T01: package.json `test` became the parallel aggregate of `bats tests/*.bats`.
+  printf '{"scripts":{"test":"bash scripts/run-tests.sh"}}\n' > "$FX/package.json"
+  marked_test delta "needs the baseline"
+  elevate
+  run_narrow
+  [ "$status" -eq 0 ]
+  printf '%s' "$output" > "$OUT"
+  assert_not_contains "$(cmd_of npm:test)" "delta"
+  [ "$(cmd_of npm:test)" = "$(cmd_of bats:tests)" ]
+  [ "$(jq -r '.disabled | length' "$REPORT")" = "0" ]
+  run bash "$CATALOG" --root "$FX" --discovery-file "$OUT"
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | jq -r '.runnable | length')" = "1" ]
+}
+
 # the npm fold: both failure variants ---------------------------------------------------------------------------------
 
 @test "variant 1: the narrowed selection is numbered ONCE, not twice" {

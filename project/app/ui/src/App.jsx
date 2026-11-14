@@ -7,18 +7,23 @@ import RapportsTab from './tabs/RapportsTab'
 import DocumentationTab from './tabs/DocumentationTab'
 import SecurityTab from './tabs/SecurityTab'
 import BudgetTab from './tabs/BudgetTab'
+import ProgressTab from './tabs/ProgressTab'
 import { hasUsageData } from './components/budget/budgetModel'
 import AppHeader from './components/AppHeader'
 import { dashboardTitle } from './projectTitle'
 import ThemeToggle from './components/ThemeToggle'
+import MotionToggle from './components/MotionToggle'
 import TodoWarningsBanner from './components/TodoWarningsBanner'
 import LeaveGuardModal from './components/LeaveGuardModal'
+import TodoBubble from './components/TodoBubble'
 import useLeaveGuard from './hooks/useLeaveGuard'
 import { get } from './api/client'
+import { loadProgressLabels } from './api/progressLabels'
 import './App.css'
 
 const TABS = [
   { id: 'board', label: 'Backlog' },
+  { id: 'progress', label: 'Progress' },
   { id: 'active-sprint', label: 'Active Sprint' },
   { id: 'history', label: 'History' },
   { id: 'architecture', label: 'Architecture' },
@@ -37,6 +42,8 @@ export default function App() {
   const [projectName, setProjectName] = useState(null)
   const [homeKey, setHomeKey] = useState(0)
   const [showBudget, setShowBudget] = useState(false)
+  // E92_S06_T21 - the progress label table, for the top bar's Animations toggle; {} until it arrives (icon only meanwhile).
+  const [labels, setLabels] = useState({})
   const title = dashboardTitle(projectName)
   // E47_S08_T02 — confirm before browser Back leaves the dashboard (and native prompt on close/reload).
   const { confirming, stay, leave } = useLeaveGuard()
@@ -65,6 +72,12 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    let live = true
+    loadProgressLabels().then(l => { if (live) setLabels(l) })
+    return () => { live = false }
+  }, [])
+
+  useEffect(() => {
     document.title = title
   }, [title])
 
@@ -89,11 +102,15 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <ThemeToggle />
+        <div className="header-toggles">
+          <ThemeToggle />
+          <MotionToggle labels={labels} />
+        </div>
       </header>
       <TodoWarningsBanner />
       <div className="tab-content" key={homeKey}>
         {activeTab === 'board' && <BoardTab />}
+        {activeTab === 'progress' && <ProgressTab />}
         {activeTab === 'active-sprint' && <ActiveSprintTab />}
         {activeTab === 'history' && <HistoryTab />}
         {activeTab === 'architecture' && <ArchitectureTab />}
@@ -102,6 +119,7 @@ export default function App() {
         {activeTab === 'security' && <SecurityTab />}
         {showBudget && activeTab === 'budget' && <BudgetTab />}
       </div>
+      <TodoBubble activeTab={activeTab} />
       {confirming && <LeaveGuardModal onStay={stay} onLeave={leave} />}
     </div>
   )

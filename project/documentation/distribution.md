@@ -73,14 +73,19 @@ Opt in via either:
   to your `package.json` (or the equivalent `onlyBuiltDependencies` entry under
   `pnpm-workspace.yaml` for a workspace), then re-run `pnpm install`.
 
-**Already installed with scripts blocked?** Apply the opt-in step above and re-run
-`npm install` / `pnpm install` — the version gate in `postinstall.js` (see §2, step 3) still
-treats this as eligible to run, since no `.jenga-version` file was ever written. Alternatively,
-trigger the mirror manually without reinstalling:
+**Already installed with scripts blocked?** Run `npx jenga sync` (see §7) — it performs the
+same work as `postinstall` unconditionally, without reinstalling and without the version gate.
+Alternatively apply the opt-in step above and re-run `npm install` / `pnpm install` — the
+version gate in `postinstall.js` (see §2, step 3) still treats this as eligible to run, since no
+`.jenga-version` file was ever written. `jenga status` and `jenga doctor` warn about this state
+(§7), so it is not silent on the next command. The older manual route, which also works:
 
 ```bash
-node node_modules/@jenga-ai/agent/scripts/postinstall.js
+INIT_CWD="$PWD" node node_modules/@jenga-ai/agent/scripts/postinstall.js
 ```
+
+(`INIT_CWD` is what npm sets for the real hook; without it the script treats the current
+directory as the consumer root, which is the same thing when run from the project root.)
 
 **Verified (`E26_S09_T03`, 2026-09-17, pnpm 12.4.2 / npm 11.16.0 / node v24.18.0):** a real
 `npm pack` tarball of this package was installed into a scratch pnpm project with pnpm's
@@ -208,7 +213,8 @@ every script and template the shipped example uses classify PUBLIC. The reasonin
    classifying every file as `added`, `overwritten`, or `skipped` (byte-identical, left
    alone).
 5. **Reconcile stale files.** See §3.
-6. **Write the manifest.** See §3.
+6. **Write the manifest.** See §3. It is rewritten only when its content would differ, so a
+   run that changes nothing leaves every file byte-identical.
 7. **Regenerate `lib/skill-allow-list.json`** by scanning the freshly mirrored
    `.agents/skills`. This runs *after* the cleanup in step 5 so the allow-list reflects the
    post-cleanup tree, not a stale one.
@@ -218,9 +224,21 @@ every script and template the shipped example uses classify PUBLIC. The reasonin
    `sessionEnd`/`userPromptSubmitted` to `hooks/copilot_session_end.sh`/`hooks/prompt_router.sh`
    inside the installed package (`lib/generate-copilot-hooks.js`, E16_S03_T04). Entirely
    package-owned output, so this is a plain deterministic overwrite each run — no marker-merge.
-10. **Write `.jenga-version`** with the installed version.
+10. **Regenerate the Jenga block in `CLAUDE.md` and `AGENTS.md`** (`lib/generate-agent-context.js`,
+    `E26_S11`). Only the text between `<!-- JENGA:START -->` and `<!-- JENGA:END -->` is
+    rewritten; a pre-existing file without markers takes the `J-<NAME>.md` collision path. This
+    runs after step 7 because the block renders the allow-list. Before `E26_S11` only the
+    interactive `jenga init` did this, so a postinstall-only upgrade left the skills list in the
+    block on the old version.
+11. **Repair a legacy array-shaped `project/logs/events.json`** (`lib/events-log-repair.js`).
+12. **Write `.jenga-version`** with the installed version.
+13. **Print the closing hint** `If anything looks stale, or this hook did not run, run: npx jenga sync`
+    — also on the "Nothing to do" path.
 
-Steps 5–9 are all best-effort: a failure there logs a warning but never fails the install.
+Steps 4–12 are not in `scripts/postinstall.js` itself: they are `syncConsumer` in `lib/sync.js`,
+shared with `jenga sync` (§7). `postinstall.js` keeps only steps 1–3 and 13.
+
+Steps 5–12 are all best-effort: a failure there logs a warning but never fails the install.
 
 ---
 
@@ -360,6 +378,9 @@ or, on a first install:
   ℹ  .agents/ — no previous install manifest; additive copy only (no deletes)
 ```
 
+Both `postinstall` and `jenga sync` print these lines (they share `lib/sync.js`), followed by a
+line per generated file, for example `✓ CLAUDE.md — Jenga block updated (direct-update)`.
+
 ### Consumer-facing notes
 
 - **Do not hand-edit or delete the manifest.** Deleting it does not cause data loss — it
@@ -464,6 +485,9 @@ candidates on any future upgrade through the manifest path alone (§4 above clos
 automatically for future releases). `jenga doctor` is the manual remedy that works *today*, for
 any consumer already stuck with orphans on a version older than §4's fix, and for any other cause
 of mirror drift — a hand-copied file, an interrupted install, a manually deleted manifest.
+It is a different tool from `jenga sync` (§7): `doctor` removes orphans after a confirmation,
+while `sync` brings the project current with the installed version and never asks. `doctor` also
+prints sync's drift warnings first, but it never runs a sync itself.
 
 ### What it scans
 
@@ -564,6 +588,27 @@ pruning, decline, the empty-candidate-list path, and symlink refusal — against
 `tests/postinstall-delete-reconciliation.bats` drives §3's harness, asserting each named check
 individually.
 
+`tests/jenga-sync.bats` covers §7's `jenga sync`: a second run changes nothing, `--dry-run` writes
+nothing (also against a stale project), text outside the JENGA markers is byte-identical, a
+consumer's own skill, `jenga.cli.json` and an extra file inside a package skill directory survive,
+a stale Jenga block becomes current, `postinstall` produces the same block and ends with the
+`npx jenga sync` line, and running inside the package refuses. `tests/jenga-sync-drift.bats` covers
+the drift warnings of `jenga status` / `jenga doctor` (version mismatch, stale skills list, the
+`J-CLAUDE.md` collision case, and no false positive on a fresh sync, with no block, or inside the
+package). Every test uses a copy of the package and a `$BATS_TEST_TMPDIR` consumer, because a real
+sync regenerates `lib/skill-allow-list.json` inside the package root.
+
+Hand check of `jenga sync` and the drift warnings, against a packed tarball in a scratch consumer
+(install with scripts blocked, for example `--ignore-scripts`):
+
+```bash
+npx jenga status            # warns: .jenga-version not found ... Run `npx jenga sync`
+npx jenga sync --dry-run    # lists the pending changes, writes nothing
+npx jenga sync              # mirrors, regenerates the allow-list, Copilot files and the Jenga block
+npx jenga sync              # second run: "Nothing changed"
+npx jenga status            # no drift warning
+```
+
 A separate, one-off hybrid-tree rehearsal (not part of the repeatable bats suite, performed once
 during this task's own manual verification) built a real `@jenga-ai/agent@3.0.0` tarball pulled
 via `npm pack`, overlaid this task's modified files on top of the *extracted tarball tree* — not
@@ -575,11 +620,78 @@ survived. See `project/documentation/summaries/E26_S08_T03-summary.md` for the t
 
 ---
 
+## 7. Post-upgrade sync — `jenga sync` (`E26_S11`)
+
+### The gap it closes
+
+A consumer upgraded `@jenga-ai/agent` 4.2.0 to 5.0.1. npm installed the package but never ran
+`postinstall` (the package was not approved for install scripts), and nothing said so. Running the
+hook by hand then still left `CLAUDE.md` / `AGENTS.md` on the 4.2.0 skills list, because only the
+interactive `jenga init` regenerated the block, and `jenga init` is a wizard that also rewrites
+`jenga.cli.json`, not something to run after every upgrade.
+
+### One implementation, two entry points
+
+`lib/sync.js` (`syncConsumer`) holds every step of §2 from the mirror to `.jenga-version`. Both
+callers use it, so they cannot drift apart and report the same per-step lines:
+
+| | `scripts/postinstall.js` | `jenga sync` (`lib/commands/sync.js`) |
+|---|---|---|
+| Trigger | npm lifecycle hook, automatic | run by the user: `npx jenga sync [--dry-run]` |
+| Version gate | yes: first install or strictly newer only | no: always runs |
+| Consumer root | `INIT_CWD` | the current directory |
+| Inside the package itself | skips | refuses, exit 1 |
+| Jenga block in `CLAUDE.md` / `AGENTS.md` | regenerated | regenerated |
+| Closing hint `npx jenga sync` | printed | not needed |
+
+`jenga sync` never runs the `jenga init` wizard, never modifies `jenga.cli.json`, rewrites only the
+text between the JENGA markers (everything before and after stays byte-identical), and never
+deletes a consumer-owned file (the manifest and legacy-seeding rules of §3 and §4 apply
+unchanged). It is idempotent: a second run reports "Nothing changed" and leaves every file
+byte-identical, which is why the manifest and `.jenga-version` are rewritten only when their
+content would differ.
+
+Exit codes: 0 on success (including a no-op), 1 when a step failed, when run inside the package,
+or on an unknown argument. `jenga sync --help` prints the usage.
+
+### The dry-run contract
+
+`--dry-run` computes exactly what a real run would do and prints one line per file that would be
+added, overwritten, removed or regenerated (or "Nothing to do"). It writes nothing and creates no
+directory in the consumer project. A real run regenerates `lib/skill-allow-list.json` inside the
+*installed package*, a dry run does not. Steps that depend on the mirror (the allow-list and the
+skill list in the Jenga block) are computed from a simulation of the post-mirror `skills/` tree
+kept in a throwaway directory under the OS temp directory, so a dry run on a stale project reports
+the changes the real run will make. Each generator (`lib/generate-agent-context.js`,
+`lib/generate-copilot-instructions.js`, `lib/generate-copilot-hooks.js`,
+`lib/generate-skill-allow-list.js`) takes `{ dryRun }` and returns `changed`.
+
+### Drift warnings
+
+`lib/sync-drift.js` backs a warning in `jenga status` (before its router check, so also when the
+router is not running) and in `jenga doctor` (before the orphan scan):
+
+- **Version drift:** `<consumer>/.jenga-version` is missing or differs from the installed package
+  version. Skipped inside the package itself.
+- **Skills-list drift:** the skills named in the Jenga block of `CLAUDE.md` / `AGENTS.md` (of
+  `J-CLAUDE.md` / `J-AGENTS.md` when the collision rule put the block there) differ from the skill
+  directories on disk. A file without a block is not drift. The comparison uses the same skill
+  scan as the generator (`.claude/skills`, else `.agents/skills`), so it cannot disagree with what
+  `jenga sync` would write.
+
+Both end with ``Run `npx jenga sync` to bring them in line.`` Drift is a warning only: it never
+changes an exit code and neither command modifies a file because of it.
+
+---
+
 ## Reference
 
 | Path | Role |
 |---|---|
-| `scripts/postinstall.js` | Consumer install hook; version gate, mirror, cleanup, manifest, seeding. |
+| `scripts/postinstall.js` | Consumer install hook; root resolution, version gate, banner and summary. Delegates the work to `lib/sync.js`. |
+| `lib/sync.js` | `syncConsumer`: mirror, cleanup, manifest, seeding, allow-list, Copilot files, Jenga block, event-log repair, `.jenga-version`. Shared by `postinstall` and `jenga sync` (§7). |
+| `lib/commands/sync.js` | `jenga sync [--dry-run]` — non-interactive, unconditional post-upgrade command. |
+| `lib/sync-drift.js` | Version and skills-list drift detection behind the warnings in `jenga status` / `jenga doctor`. |
 | `lib/mirror.js` | Shared copy helper. `reconcileDeletes` stays `false` on the consumer path. |
 | `lib/postinstall-manifest.js` | Manifest read/write, provenance-scoped delete pass, legacy-path seeding. |
 | `scripts/generate-legacy-shipped-paths.js` | Generates `lib/legacy-shipped-paths.json` (bootstrap + incremental). |
@@ -588,6 +700,7 @@ survived. See `project/documentation/summaries/E26_S08_T03-summary.md` for the t
 | `scripts/verify-postinstall-reconcile.sh` | Fixture rehearsal harness (manifest-based path, §3). |
 | `scripts/verify-legacy-seed-reconcile.sh` | Fixture rehearsal harness (legacy-path seeding, §4). |
 | `tests/postinstall-doctor-cleanup.bats` | Automated coverage for `jenga doctor` / `jenga clean`. |
+| `tests/jenga-sync.bats`, `tests/jenga-sync-drift.bats` | Automated coverage for `jenga sync` and the drift warnings. |
 | `tests/postinstall-legacy-seed.bats` | Automated coverage for legacy-path seeding. |
 | `<consumer>/.jenga-version` | Last installed version; drives the upgrade gate. |
 | `<consumer>/.{agents,claude}/.jenga-postinstall-manifest.json` | Per-root provenance record. |
@@ -596,7 +709,8 @@ Board provenance: `E26` (NPM-Compatible Distribution) owns the consumer install 
 `E26_S08` / `E26_S08_T01` added the manifest mechanism, `E26_S08_T02` added `jenga doctor` as the
 manual stopgap for pre-manifest and other drift, `E26_S08_T03` added legacy-path seeding as the
 permanent automatic fix for the same pre-manifest gap, `E26_S09` documents the lifecycle-script
-(`allowScripts`) requirement that all of the above depends on. `E27` owns `j.self-sync` and
+(`allowScripts`) requirement that all of the above depends on, `E26_S11` added `jenga sync` and the
+drift warnings (§7) for the case where that hook did not run. `E27` owns `j.self-sync` and
 explicitly scopes out consumer install behaviour.
 
 ---

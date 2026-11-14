@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# End-to-end get/set coverage for `jenga config` across all six project/configs files (E68_S03_T01).
+# End-to-end get/set coverage for `jenga config` across all seven project/configs files (E68_S03_T01).
 #
 # tests/config-command.bats (E68_S02_T04) pins the command's mechanics with hand-picked keys. This file is the
 # story-level matrix: it is DATA-DRIVEN over the shipped descriptors (templates/config-descriptors/*.json, read with
@@ -9,7 +9,7 @@
 #
 # Contract under test: project/documentation/config-descriptors.md (exit codes 0/2/3/4/5/6, descriptor fields) and
 # the E68_S03 acceptance criteria:
-#   - get and set against a scratch copy of each of the six config files, asserting resulting file contents,
+#   - get and set against a scratch copy of each of the seven config files, asserting resulting file contents,
 #     stdout, exit codes and version bumps
 #   - a failed validation (wrong type, below min, above max, outside allowed, failing pattern) leaves EVERY config
 #     file byte-identical (cmp)
@@ -34,7 +34,7 @@ load helpers/assertions
 REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd -P)"
 JENGA="$REPO_ROOT/bin/jenga.js"
 DESCRIPTORS="$REPO_ROOT/templates/config-descriptors"
-CONFIG_FILES="scope-thresholds playbook-config checklists workflow test-config audit-config"
+CONFIG_FILES="scope-thresholds playbook-config checklists workflow test-config audit-config dashboard-config"
 
 setup() {
   PROJ="$BATS_TEST_TMPDIR/proj"
@@ -129,7 +129,7 @@ make_fixture_descriptors() {
 # The matrix is real: the descriptors cover all five files, and the scratch copy is a copy
 # ================================================================================================================
 
-@test "the shipped descriptors cover the six config files that have an instance plus conventions, and the scratch project holds copies of the six" {
+@test "the shipped descriptors cover the seven config files that have an instance plus conventions, and the scratch project holds copies of the seven" {
   for f in $CONFIG_FILES; do
     [ -f "$DESCRIPTORS/$f.json" ]
     if [ "$f" = audit-config ]; then
@@ -141,14 +141,14 @@ make_fixture_descriptors() {
   # conventions.json is described but has no instance in this repo, so it is not in the get/set matrix
   [ -f "$DESCRIPTORS/conventions.json" ]
   [ ! -e "$CFG/conventions.json" ]
-  [ "$(ls "$DESCRIPTORS" | grep -v '^_' | wc -l | tr -d ' ')" -eq 7 ]
-  [ "$(ls "$CFG" | wc -l | tr -d ' ')" -eq 6 ]
+  [ "$(ls "$DESCRIPTORS" | grep -v '^_' | wc -l | tr -d ' ')" -eq 8 ]
+  [ "$(ls "$CFG" | wc -l | tr -d ' ')" -eq 7 ]
 }
 
 @test "the editable keys are audit-config's mode, severity_threshold, offline_behavior and production_only, the integer settings of scope-thresholds and playbook-config plus test-config's two commit_* and three test_run_* strings; checklists and workflow have none" {
   run editable_keys "$DESCRIPTORS"
   [ "$status" -eq 0 ]
-  [ "$(echo "$output" | cut -d' ' -f1 | sort -u | tr '\n' ' ')" = "audit-config playbook-config scope-thresholds test-config " ]
+  [ "$(echo "$output" | cut -d' ' -f1 | sort -u | tr '\n' ' ')" = "audit-config dashboard-config playbook-config scope-thresholds test-config " ]
   [ "$(echo "$output" | grep '^test-config ' | cut -d' ' -f2 | sort | tr '\n' ' ')" = "commit_prompt_default commit_scope_map_file test_default_suite_set test_run_epic test_run_story test_run_task " ]
   for f in checklists workflow; do
     [ "$(jq '[.keys[] | select(.editable)] | length' "$DESCRIPTORS/$f.json")" -eq 0 ]
@@ -164,7 +164,7 @@ make_fixture_descriptors() {
 # get: every key of every file reads back what is in the file
 # ================================================================================================================
 
-@test "get prints the file's own value for every key of all six configs, exit 0, nothing on stderr" {
+@test "get prints the file's own value for every key of all seven configs, exit 0, nothing on stderr" {
   local n=0 f key
   for f in $CONFIG_FILES; do
     for key in $(jq -r '.keys[].key' "$DESCRIPTORS/$f.json"); do
@@ -190,7 +190,8 @@ make_fixture_descriptors() {
     [ "$(dkey "$DESCRIPTORS" "$f" "$key" '.type')" = "integer" ] || continue
     snap
     counter=$(dkey "$DESCRIPTORS" "$f" "$key" '.bump_on_change // empty')
-    [ -n "$counter" ]
+    # an integer key without bump_on_change (dashboard-config.dashboard_port) has no counter; it has its own cases
+    [ -n "$counter" ] || continue
     before=$(cfgval "$f" "$counter")
     new=$(other_value_for "$f" "$key")
     jc set "$f.$key" "$new"
@@ -297,7 +298,7 @@ make_fixture_descriptors() {
   jc set scope-thresholds.inline_max_files 0
   [ "$status" -eq 4 ]
   [ "$(find "$CFG" -name '*.tmp' -o -name '.*.tmp' | wc -l | tr -d ' ')" -eq 0 ]
-  [ "$(ls -A "$CFG" | wc -l | tr -d ' ')" -eq 6 ]
+  [ "$(ls -A "$CFG" | wc -l | tr -d ' ')" -eq 7 ]
   [ "$(cfgval scope-thresholds threshold_version)" = "$(jq -r '.threshold_version' "$BATS_TEST_TMPDIR/snap/scope-thresholds.json")" ]
 }
 
@@ -662,7 +663,7 @@ make_fixture_descriptors() {
   all_unchanged
 }
 
-@test "exit 6: a malformed config file fails get for each of the six files, and set for each editable one, leaving it untouched" {
+@test "exit 6: a malformed config file fails get for each of the seven files, and set for each editable one, leaving it untouched" {
   local f key
   for f in $CONFIG_FILES; do
     printf '{ "broken": ' > "$CFG/$f.json"
@@ -696,7 +697,7 @@ make_fixture_descriptors() {
   jc set scope-thresholds.inline_max_files 4
   [ "$status" -eq 6 ]
   [ ! -e "$CFG/scope-thresholds.json" ]
-  [ "$(ls -A "$CFG" | wc -l | tr -d ' ')" -eq 5 ]
+  [ "$(ls -A "$CFG" | wc -l | tr -d ' ')" -eq 6 ]
 }
 
 @test "exit 6: a config file whose version counter is missing is refused, because a bump cannot be applied" {

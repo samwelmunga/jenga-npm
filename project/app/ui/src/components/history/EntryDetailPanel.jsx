@@ -1,7 +1,48 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { get, isEmbeddedSnapshot } from '../../api/client'
+import LoadingSpinner from '../LoadingSpinner'
+import DependencyTree from '../progress/DependencyTree'
+import { buildDependencyTreeModel } from '../progress/dependencyTreeModel'
 import './history.css'
+
+// E92_S06_T11 — the epic dependency tree, shown in the epic overlay only. `loadEpicGraph` is what the effect calls:
+// live it asks the API for just this epic (`?within=`); in a snapshot `get` returns the whole embedded payload and the
+// model selects the epic itself.
+export function loadEpicGraph(epicId, fetcher = get, snapshot = isEmbeddedSnapshot()) {
+  const path = '/v1/progress-graph' + (snapshot ? '' : `?within=${encodeURIComponent(epicId)}`)
+  return fetcher(path)
+}
+
+/** What the epic section renders from its state: spinner, one muted line on failure, or the tree. */
+export function EpicTreeBody({ status, graph, epicId }) {
+  if (status === 'loading') return <LoadingSpinner />
+  if (status === 'error') return <p className="panel-empty epic-tree-error">Dependency tree unavailable.</p>
+  const model = buildDependencyTreeModel(graph, epicId)
+  return <DependencyTree model={model} labels={graph && graph.labels} />
+}
+
+// Keyed on the epic id; a response that arrives after the entry changed is dropped (`cancelled`), so epic A's tree is
+// never shown under epic B. Mounted only for epic entries, so no other entry kind ever makes the request.
+export function EpicTreeSection({ epicId, fetcher }) {
+  const [state, setState] = useState({ id: epicId, status: 'loading', graph: null })
+  useEffect(() => {
+    let cancelled = false
+    setState({ id: epicId, status: 'loading', graph: null })
+    loadEpicGraph(epicId, fetcher).then(
+      graph => { if (!cancelled) setState({ id: epicId, status: 'ok', graph }) },
+      () => { if (!cancelled) setState({ id: epicId, status: 'error', graph: null }) },
+    )
+    return () => { cancelled = true }
+  }, [epicId, fetcher])
+  const current = state.id === epicId ? state : { status: 'loading', graph: null }
+  return (
+    <section className="epic-tree" aria-label="Dependency tree">
+      <EpicTreeBody status={current.status} graph={current.graph} epicId={epicId} />
+    </section>
+  )
+}
 
 function formatDate(iso) {
   if (!iso) return '—'
@@ -107,6 +148,7 @@ export default function EntryDetailPanel({ entry, onClose }) {
               <dd>{entry.status || '—'}</dd>
             </dl>
             <h4>{entry.title}</h4>
+            {entry.kind === 'epic' && <EpicTreeSection epicId={entry.id} />}
             {entry._content ? (
               <div
                 className="markdown-body"

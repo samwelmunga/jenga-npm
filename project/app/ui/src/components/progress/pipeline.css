@@ -1,0 +1,65 @@
+/*
+ * PipelineDiagram styling — E92_S04_T04.
+ * Every colour comes from ../../tokens.css through var(--color-*); the active box's fill is set inline from
+ * --color-progress-in-progress, and its thicker outline is the stroke-width attribute, so no colour literal appears
+ * here (check-theme-contrast.cjs scans this file).
+ */
+
+.pipeline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text);
+}
+
+.pipeline-title { margin: 0; font-size: 1rem; }
+
+.pipeline-svg {
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+}
+
+.pipeline-box {
+  fill: var(--color-surface);
+  stroke: var(--color-border-strong);
+}
+
+/* the active box keeps its inline fill; only the outline colour changes (width is the stroke-width attribute) */
+.pipeline-box-active { stroke: var(--color-text); }
+
+.pipeline-label {
+  fill: var(--color-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.pipeline-count {
+  fill: var(--color-text);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pipeline-marker {
+  fill: var(--color-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pipeline-arrow line {
+  stroke: var(--color-text-muted);
+  stroke-width: 2;
+}
+
+.pipeline-arrow polygon { fill: var(--color-text-muted); }
+
+.pipeline-caption {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}

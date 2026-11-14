@@ -5,7 +5,7 @@
  * E47_S04_T02 — capture step for `j.dashboard --snapshot`.
  *
  * Calls the dashboard API's `/v1/board`, `/v1/history`, `/v1/architecture`, `/v1/health`,
- * `/v1/documentation`, `/v1/rapports`, `/v1/todo-warnings`, `/v1/ideas`, and `/v1/security` routes exactly once each and writes
+ * `/v1/documentation`, `/v1/rapports`, `/v1/todo-warnings`, `/v1/ideas`, `/v1/security`, `/v1/progress`, `/v1/pipeline`, `/v1/progress-cards`, and `/v1/progress-graph` routes exactly once each and writes
  * their combined JSON to a single artifact, consumable by the
  * bundling/inlining step in `E47_S04_T03` (implemented) and, for `/v1/health` specifically, by
  * `E47_S06_T02`'s snapshot `<title>` rewrite in `../../ui/scripts/build-snapshot-html.cjs`, which
@@ -53,7 +53,11 @@
  *     "rapports":      <full API envelope from GET /v1/rapports,      i.e. { data, meta, error }>,
  *     "todoWarnings":  <full API envelope from GET /v1/todo-warnings, i.e. { data, meta, error }>,
  *     "ideas":         <full API envelope from GET /v1/ideas,         i.e. { data, meta, error }>,
- *     "security":      <full API envelope from GET /v1/security,      i.e. { data, meta, error }>
+ *     "security":      <full API envelope from GET /v1/security,      i.e. { data, meta, error }>,
+ *     "progress":      <full API envelope from GET /v1/progress,      i.e. { data, meta, error }>,
+ *     "pipeline":      <full API envelope from GET /v1/pipeline,      i.e. { data, meta, error }>,
+ *     "progressCards": <full API envelope from GET /v1/progress-cards, i.e. { data, meta, error }>,
+ *     "progressGraph": <full API envelope from GET /v1/progress-graph (no query: whole board), i.e. { data, meta, error }>
  *   }
  * }
  * Each `routes.<name>` value is the *full* envelope exactly as the route returned it (see
@@ -98,7 +102,7 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 
-const ROUTES = ['/v1/board', '/v1/history', '/v1/architecture', '/v1/health', '/v1/documentation', '/v1/rapports', '/v1/todo-warnings', '/v1/ideas', '/v1/security'];
+const ROUTES = ['/v1/board', '/v1/history', '/v1/architecture', '/v1/health', '/v1/documentation', '/v1/rapports', '/v1/todo-warnings', '/v1/ideas', '/v1/security', '/v1/progress', '/v1/pipeline', '/v1/progress-cards', '/v1/progress-graph'];
 const ROUTE_KEYS = {
   '/v1/board': 'board',
   '/v1/history': 'history',
@@ -109,6 +113,10 @@ const ROUTE_KEYS = {
   '/v1/todo-warnings': 'todoWarnings',
   '/v1/ideas': 'ideas',
   '/v1/security': 'security',
+  '/v1/progress': 'progress',
+  '/v1/pipeline': 'pipeline',
+  '/v1/progress-cards': 'progressCards',
+  '/v1/progress-graph': 'progressGraph',
 };
 
 function printUsage() {

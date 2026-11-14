@@ -1,0 +1,21 @@
+{
+  "dependencies": {
+    "unrecognised": false,
+    "counts": { "internal": 1, "external": 2 },
+    "languages": [ { "language": "python", "files": 3 } ],
+    "external": [
+      { "name": "os", "kind": "stdlib" },
+      { "name": "requests", "kind": "package" }
+    ],
+    "manifests": [ { "name": "package.json", "declared_dependencies": ["left-pad"] } ]
+  },
+  "tests": { "coverage_status": "no_tests_in_repo", "repo_has_tests": false },
+  "enumeration": {
+    "total_files": 4,
+    "total_lines": 9,
+    "extensions": [
+      { "extension": ".py", "files": 3, "lines": 5 },
+      { "extension": ".json", "files": 1, "lines": 4 }
+    ]
+  }
+}

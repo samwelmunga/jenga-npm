@@ -1,0 +1,226 @@
+/* DependencyTree — E92_S06_T10, v2 look by E92_S06_T20 (copied from the approved prototype), zoom and pan by E92_S06_T21. Colours are theme tokens only
+   (tokens.css); no colour literals. Every animation is declared only inside prefers-reduced-motion: no-preference and
+   only for a root without data-motion="off", so reduce and the Animations toggle (E92_S06_T21, which only flips that
+   attribute) both show the final, static state. */
+.dep-tree { color: var(--color-text); --dt-shine: var(--color-surface); }
+/* zoom and pan viewport (E92_S06_T21): the viewport clips and owns the size of the drawing; the tooltip and the controls
+   are siblings of it inside .dt-zoom, so the viewport's clipping never cuts the tooltip. touch-action none hands every
+   touch gesture to the pinch and drag code. The SVG fits the drawing itself (viewBox) until the first measured fit. */
+.dep-tree .dt-zoom { position: relative; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface-alt); }
+.dep-tree .dt-stage { position: relative; }
+.dep-tree .dt-viewport {
+  height: clamp(18rem, 55vh, 40rem); overflow: hidden; border-radius: inherit; touch-action: none; cursor: grab;
+  overscroll-behavior: contain;
+}
+.dep-tree .dt-viewport[data-dragging="true"] { cursor: grabbing; }
+.dep-tree .dt-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.dep-tree .dt-zoom-controls {
+  position: absolute; top: 8px; right: 8px; z-index: 6; display: flex; align-items: center; gap: 4px; padding: 4px;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px;
+}
+.dep-tree .dt-zbtn {
+  min-width: 32px; padding: 3px 9px; font: inherit; font-size: 12px; cursor: pointer; color: var(--color-text);
+  background: var(--color-surface); border: 1px solid var(--color-border-strong); border-radius: 6px;
+}
+.dep-tree .dt-zbtn:hover { background: var(--color-surface-alt); border-color: var(--color-accent); }
+.dep-tree .dt-zbtn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.dep-tree .dt-zpct { min-width: 44px; text-align: center; color: var(--color-text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.dep-tree .dt-zoom-hint { position: absolute; left: 10px; bottom: 6px; z-index: 4; margin: 0; max-width: calc(100% - 20px); color: var(--color-text-muted); font-size: 12px; pointer-events: none; }
+.dep-tree .dt-svg text { user-select: none; }
+.dep-tree .dt-empty { color: var(--color-text-muted); margin: 0; }
+
+/* story bands and start nodes */
+.dep-tree .dt-band { fill: var(--color-surface); stroke: var(--color-border); }
+.dep-tree .dt-band-alt { fill: var(--color-surface-alt); }
+.dep-tree .dt-start-box { fill: var(--color-surface); stroke: var(--color-border-strong); stroke-width: 1.5; }
+.dep-tree .dt-start-id { fill: var(--color-text); font-weight: 700; font-size: 13px; }
+.dep-tree .dt-start-title { fill: var(--color-text-muted); font-size: 11px; }
+.dep-tree .dt-start-count { fill: var(--color-text-muted); font-size: 11px; font-weight: 600; }
+.dep-tree .dt-start-bar-bg { fill: var(--color-border); }
+.dep-tree .dt-start-bar { fill: var(--color-progress-done); }
+.dep-tree .dt-start-complete .dt-start-box { stroke: var(--color-progress-done); }
+
+/* edges: dependency right edge to dependent left edge, painted above the bands */
+.dep-tree .dt-edge { fill: none; stroke-width: 2; stroke-linecap: round; }
+.dep-tree .dt-edge-done { stroke: var(--color-progress-done); opacity: 0.85; }
+.dep-tree .dt-edge-active { stroke: var(--color-progress-in-progress); }
+.dep-tree .dt-edge-ready { stroke: var(--color-progress-pending); stroke-dasharray: 6 6; }
+.dep-tree .dt-edge-locked { stroke: var(--color-border-strong); opacity: 0.8; }
+.dep-tree .dt-edge-failed { stroke: var(--color-progress-failed); }
+.dep-tree .dt-edge-rejected { stroke: var(--color-progress-rejected); opacity: 0.8; }
+.dep-tree .dt-edge-cross { stroke-dasharray: 2 5; }
+.dep-tree .dt-edge-goal { stroke-width: 2.5; }
+
+/* cards */
+.dep-tree .dt-node-box { fill: var(--color-surface); stroke: var(--color-border-strong); stroke-width: 2; }
+.dep-tree .dt-box-stack { fill: var(--color-surface); stroke: var(--color-border-strong); stroke-width: 1.5; }
+.dep-tree .dt-cid { fill: var(--color-text); font-weight: 700; font-size: 12px; }
+.dep-tree .dt-ctitle { fill: var(--color-text-muted); font-size: 11px; }
+.dep-tree .dt-clink { fill: var(--color-accent); font-size: 11px; font-weight: 600; }
+.dep-tree .dt-state-done .dt-node-box, .dep-tree .dt-state-done .dt-box-stack { stroke: var(--color-progress-done); }
+.dep-tree .dt-state-in_progress .dt-node-box, .dep-tree .dt-state-in_progress .dt-box-stack { stroke: var(--color-progress-in-progress); }
+.dep-tree .dt-state-failed .dt-node-box, .dep-tree .dt-state-failed .dt-box-stack { stroke: var(--color-progress-failed); }
+.dep-tree .dt-state-ready .dt-node-box, .dep-tree .dt-state-ready .dt-box-stack { stroke: var(--color-progress-pending); stroke-dasharray: 5 3; }
+.dep-tree .dt-state-locked .dt-node-box, .dep-tree .dt-state-locked .dt-box-stack { stroke: var(--color-border-strong); }
+.dep-tree .dt-state-locked .dt-cid, .dep-tree .dt-state-locked .dt-ctitle { opacity: 0.6; }
+.dep-tree .dt-state-rejected .dt-node-box, .dep-tree .dt-state-rejected .dt-box-stack { stroke: var(--color-progress-rejected); stroke-dasharray: 2 3; }
+.dep-tree .dt-state-rejected .dt-ctitle { text-decoration: line-through; }
+.dep-tree .dt-boundary .dt-node-box { stroke: var(--color-border-strong); stroke-dasharray: 3 3; }
+.dep-tree .dt-card { outline: none; }
+.dep-tree .dt-card:focus-visible .dt-node-box { stroke: var(--color-accent); }
+.dep-tree .dt-group { cursor: pointer; }
+.dep-tree .dt-group:hover .dt-node-box { stroke-width: 3; }
+
+/* status mark, on the right of the card */
+.dep-tree .dt-mark-line { fill: none; stroke: var(--color-text); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.dep-tree .dt-mark-fill { fill: var(--color-text); stroke: none; }
+.dep-tree .dt-state-done .dt-mark-line { stroke: var(--color-progress-done); }
+.dep-tree .dt-state-in_progress .dt-mark-line { stroke: var(--color-progress-in-progress); }
+.dep-tree .dt-state-in_progress .dt-mark-fill { fill: var(--color-progress-in-progress); }
+.dep-tree .dt-state-failed .dt-mark-line { stroke: var(--color-progress-failed); }
+.dep-tree .dt-state-ready .dt-mark-line { stroke: var(--color-progress-pending); }
+.dep-tree .dt-state-rejected .dt-mark-line { stroke: var(--color-progress-rejected); }
+.dep-tree .dt-ring { fill: none; stroke: var(--color-progress-pending); stroke-width: 2; opacity: 0; transform-box: fill-box; transform-origin: center; }
+
+/* dependency gate badge, on the left edge of the card where the incoming line enters */
+.dep-tree .dt-gate-disc { fill: var(--color-surface); stroke-width: 2; }
+.dep-tree .dt-lock-shackle { fill: none; stroke-width: 1.8; stroke-linecap: round; }
+.dep-tree .dt-gate-closed .dt-gate-disc { stroke: var(--color-border-strong); }
+.dep-tree .dt-gate-closed .dt-lock-shackle { stroke: var(--color-progress-pending); }
+.dep-tree .dt-gate-closed .dt-lock-body { fill: var(--color-progress-pending); }
+.dep-tree .dt-gate-open .dt-gate-disc { stroke: var(--color-progress-done); }
+.dep-tree .dt-gate-open .dt-lock-shackle { stroke: var(--color-progress-done); }
+.dep-tree .dt-gate-open .dt-lock-body { fill: var(--color-progress-done); }
+
+/* collapse header of an expanded group */
+.dep-tree .dt-collapse { cursor: pointer; outline: none; }
+.dep-tree .dt-collapse rect { fill: var(--color-surface); stroke: var(--color-border-strong); }
+.dep-tree .dt-collapse:hover rect, .dep-tree .dt-collapse:focus-visible rect { stroke: var(--color-accent); }
+.dep-tree .dt-collapse text { fill: var(--color-accent); font-size: 11px; font-weight: 600; }
+
+/* hover and focus: the chain stays, the rest recedes */
+.dep-tree .dt-dim { opacity: 0.25; }
+.dep-tree .dt-edge-dim { opacity: 0.1; }
+.dep-tree .dt-hl .dt-node-box { stroke-width: 3; }
+
+/* tooltip, anchored to the card in percent of the drawing */
+.dep-tree .dt-tip {
+  position: absolute; pointer-events: none; z-index: 5; max-width: 340px; padding: 8px 10px; font-size: 12px;
+  background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border-strong); border-radius: 8px;
+  transform: translate(8px, 6px);
+}
+.dep-tree .dt-tip-left { transform: translate(calc(-100% - 8px), 6px); }
+.dep-tree .dt-tip-head, .dep-tree .dt-tip-body, .dep-tree .dt-tip-row { display: block; }
+.dep-tree .dt-tip-head { margin-bottom: 2px; }
+.dep-tree .dt-tip-row { color: var(--color-text-muted); }
+.dep-tree .dt-tip-key { color: var(--color-text); font-weight: 600; }
+
+/* goal: a star in a disc with a progress ring */
+.dep-tree .dt-goal { --goal-c: var(--color-progress-in-progress); }
+.dep-tree .dt-goal.dt-complete { --goal-c: var(--color-progress-done); }
+.dep-tree .dt-halo-wrap { opacity: var(--goal-halo-opacity, 0.07); }
+.dep-tree .dt-halo { transform: scale(var(--goal-halo-scale, 1)); transform-box: fill-box; transform-origin: center; }
+.dep-tree .dt-halo-grad stop { stop-color: var(--color-progress-in-progress); }
+.dep-tree .dt-halo-grad.dt-complete stop { stop-color: var(--color-progress-done); }
+.dep-tree .dt-halo-stop-0 { stop-opacity: 0.9; }
+.dep-tree .dt-halo-stop-1 { stop-opacity: 0.35; }
+.dep-tree .dt-halo-stop-2 { stop-opacity: 0; }
+.dep-tree .dt-goal-disc { fill: var(--color-surface); stroke: var(--goal-c); stroke-width: 2.5; }
+.dep-tree .dt-star-outline { fill: none; stroke: var(--goal-c); stroke-width: 2; stroke-linejoin: round; }
+.dep-tree .dt-star-fill { fill: var(--goal-c); }
+.dep-tree .dt-goal-ring-bg { fill: none; stroke: var(--color-border); stroke-width: 5; }
+.dep-tree .dt-goal-ring { fill: none; stroke: var(--goal-c); stroke-width: 5; stroke-linecap: round; }
+.dep-tree .dt-goal-name { fill: var(--color-text); font-weight: 800; font-size: 15px; }
+.dep-tree .dt-goal-title { fill: var(--color-text-muted); font-size: 12px; }
+.dep-tree .dt-goal-count { fill: var(--goal-c); font-weight: 700; font-size: 12px; }
+.dep-tree .dt-shine-stop { stop-color: var(--dt-shine); }
+.dep-tree .dt-shine-edge { stop-opacity: 0; }
+.dep-tree .dt-shine-mid { stop-opacity: 0.85; }
+.dep-tree .dt-shimmer { transform: translateX(-60px); }
+.dep-tree .dt-spark { fill: var(--goal-c); transform-box: fill-box; transform-origin: center; }
+
+/* the sheen is a lighter sweep: surface in the light theme, text in the dark one (same selectors as tokens.css) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .dep-tree { --dt-shine: var(--color-text); }
+}
+:root[data-theme="dark"] .dep-tree { --dt-shine: var(--color-text); }
+
+.dep-tree .dt-ready { margin-top: 12px; }
+.dep-tree .dt-ready-title { margin: 0 0 4px; font-size: 13px; color: var(--color-text); }
+.dep-tree .dt-nothing-ready { margin: 0; color: var(--color-text-muted); font-size: 13px; }
+.dep-tree .dt-ready-list, .dep-tree .dt-unlocked { margin: 0; padding-left: 0; list-style: none; font-size: 13px; }
+.dep-tree .dt-ready-plus { color: var(--color-progress-pending); font-weight: 700; }
+.dep-tree .dt-unlocked { margin-top: 8px; color: var(--color-text-muted); }
+
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion="off"]) .dep-tree .dt-edge-ready { animation: dt-flow 1s linear infinite; }
+  :root:not([data-motion="off"]) .dep-tree .dt-state-ready .dt-ring { animation: dt-ring-pulse 2s ease-out infinite; }
+  :root:not([data-motion="off"]) .dep-tree .dt-halo { animation: dt-breathe 4.5s ease-in-out infinite; }
+  :root:not([data-motion="off"]) .dep-tree .dt-state-in_progress .dt-blink { animation: dt-blink 1.4s ease-in-out infinite; }
+  :root:not([data-motion="off"]) .dep-tree .dt-shimmer { animation: dt-shimmer 3.4s ease-in-out infinite; }
+  :root:not([data-motion="off"]) .dep-tree .dt-spark { animation: dt-twinkle 2.6s ease-in-out infinite; }
+  :root:not([data-motion="off"]) .dep-tree .dt-twinkles > g:nth-child(2) .dt-spark { animation-delay: 0.7s; }
+  :root:not([data-motion="off"]) .dep-tree .dt-twinkles > g:nth-child(3) .dt-spark { animation-delay: 1.4s; }
+  :root:not([data-motion="off"]) .dep-tree .dt-twinkles > g:nth-child(4) .dt-spark { animation-delay: 2s; }
+  :root:not([data-motion="off"]) .dep-tree .dt-twinkles > g:nth-child(5) .dt-spark { animation-delay: 1.1s; }
+}
+@keyframes dt-flow { to { stroke-dashoffset: -12; } }
+@keyframes dt-ring-pulse { 0% { opacity: 0.8; transform: scale(1); } 100% { opacity: 0; transform: scale(1.25); } }
+@keyframes dt-breathe { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+@keyframes dt-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes dt-shimmer { 0% { transform: translateX(-60px); } 55%, 100% { transform: translateX(60px); } }
+@keyframes dt-twinkle { 0%, 100% { opacity: 0.15; transform: scale(0.5); } 50% { opacity: 1; transform: scale(1.15); } }
+
+/* E92_S07_T06 - the large view of the tree (E92_S07). The element that becomes large is the tree's own root, never moved
+   or copied: while it is open the root carries data-fullscreen="native" (Fullscreen API) or data-fullscreen="fallback"
+   (a fixed layer over the viewport), and the fallback also sets data-dt-fullscreen on <html>. Additions only: the overlay
+   rules above are not edited, the large view overrides them by specificity. Colours are tokens (tokens.css) and nothing
+   here picks a colour of its own. The one motion declaration is the button hover below, inside the same guard as the six
+   tree animations; the layer itself appears without any fade (no new keyframes: the set of tree animations stays six). */
+
+/* fallback layer: above the epic overlay (.panel-backdrop 100, .detail-panel 101 in history.css; the panel is a stacking
+   context and has no transform once its slide-in has ended, so this fixed layer covers the whole viewport) and below the
+   leave-guard modal (1000), so that dialog still shows on top. Opaque, so nothing of the page shows through. */
+.dep-tree[data-fullscreen="fallback"] {
+  position: fixed; inset: 0; z-index: 200; box-sizing: border-box; padding: 1rem;
+  background: var(--color-surface);
+}
+/* page scroll lock while the fallback layer is open */
+html[data-dt-fullscreen] { overflow: hidden; }
+
+/* real fullscreen: the top layer does not inherit the page background; separate rules so a browser that does not know
+   one pseudo-class keeps the other */
+.dep-tree:fullscreen { box-sizing: border-box; padding: 1rem; background: var(--color-surface); }
+.dep-tree:-webkit-full-screen { box-sizing: border-box; padding: 1rem; background: var(--color-surface); }
+
+/* layout of the large view, both modes: the root is a column, the drawing takes the height that is left and the two
+   lists become a compact strip below it that scrolls on its own and so never covers the drawing. The zoom controls and the
+   tooltip stay inside .dt-zoom with the z-index they have above (5-6). */
+.dep-tree[data-fullscreen] { display: flex; flex-direction: column; gap: 0.5rem; overflow: auto; }
+.dep-tree[data-fullscreen] .dt-zoom { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.dep-tree[data-fullscreen] .dt-viewport { flex: 1 1 0; height: auto; min-height: 10rem; }
+.dep-tree[data-fullscreen] .dt-ready { flex: 0 0 auto; margin-top: 0; max-height: min(7rem, 18vh); overflow: auto; }
+.dep-tree[data-fullscreen] .dt-ready-list, .dep-tree[data-fullscreen] .dt-unlocked { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; }
+.dep-tree[data-fullscreen] .dt-unlocked { flex: 0 0 auto; margin-top: 0; max-height: min(5rem, 14vh); overflow: auto; }
+@media (max-width: 480px) {
+  .dep-tree[data-fullscreen="fallback"] { padding: 0.5rem; }
+  .dep-tree:fullscreen { padding: 0.5rem; }
+  .dep-tree:-webkit-full-screen { padding: 0.5rem; }
+}
+
+/* the enter and exit button, next to the zoom controls: the zoom buttons' look, a 32px target, a ring for the keyboard */
+.dep-tree .dt-fs-btn {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 32px; min-height: 32px; padding: 3px 9px;
+  font: inherit; font-size: 12px; line-height: 1; cursor: pointer; color: var(--color-text);
+  background: var(--color-surface); border: 1px solid var(--color-border-strong); border-radius: 6px;
+}
+.dep-tree .dt-fs-btn svg { display: block; width: 16px; height: 16px; }
+.dep-tree .dt-fs-btn:hover { background: var(--color-surface-alt); border-color: var(--color-accent); }
+.dep-tree .dt-fs-btn:focus-visible, .dep-tree .dt-fs-hint:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+/* the visible Esc hint */
+.dep-tree .dt-fs-hint { padding: 0 4px; color: var(--color-text-muted); font-size: 12px; white-space: nowrap; user-select: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion="off"]) .dep-tree .dt-fs-btn { transition: background-color 0.12s ease, border-color 0.12s ease; }
+}
+/* end E92_S07_T06 */

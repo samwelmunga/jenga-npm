@@ -1,0 +1,18 @@
+{
+  "dependencies": {
+    "unrecognised": true,
+    "counts": { "internal": 0, "external": 0 },
+    "languages": [],
+    "external": [],
+    "manifests": []
+  },
+  "tests": { "coverage_status": "no_tests_in_repo", "repo_has_tests": false },
+  "enumeration": {
+    "total_files": 2,
+    "total_lines": 3,
+    "extensions": [
+      { "extension": ".md", "files": 1, "lines": 2 },
+      { "extension": ".txt", "files": 1, "lines": 1 }
+    ]
+  }
+}

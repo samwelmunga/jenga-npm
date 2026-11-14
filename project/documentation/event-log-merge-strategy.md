@@ -80,6 +80,17 @@ The known in-flight branch is `bundle-E67_S08`. The migrator refuses to touch a 
 
 The main checkout's `project/logs/events.json` carries four uncommitted extra entries (1617 lines against `HEAD`'s 1612). Those entries must be reconciled into the JSONL file before this branch is merged. They are not part of this change and were not touched by it.
 
+### 5.6 Installed projects: automatic repair and `jenga doctor` (E75_S02_T01)
+
+A project installed before E75_S01_T02 keeps its array-shaped `project/logs/events.json`, and `scripts/events-append.sh` refuses it (exit 4). Two entry points repair it, both through the same helper, `lib/events-log-repair.js`, which classifies the file as `missing`, `empty`, `jsonl`, `array` or `other` (one read, at most one parse, never a write) and, for `array` only, runs the existing `scripts/events-log-migrate.sh` from the installed package. The conversion is not reimplemented in JavaScript.
+
+| Entry point | When | Prompt | On failure |
+|---|---|---|---|
+| `scripts/postinstall.js` | First install and upgrade, against the consumer root (`INIT_CWD`). Does nothing when `INIT_CWD` is the package itself. | None; the migration script verifies before it writes. Prints one line saying the log was migrated. | Prints the script's message and the file path, leaves the original untouched and carries on. A failed repair never fails the install. |
+| `jenga doctor` (`jenga clean`) | Run by the user, for a log postinstall missed. | Lists the path and element count, then asks for an explicit yes. A "no", `--dry-run` or a non-TTY stdin never migrates. | Prints the script's message and path; the original is untouched. |
+
+A `missing`, `empty` or `jsonl` log is never touched by either route (no finding in `doctor`). A file that is neither an array nor JSONL is reported with its path and reason and left alone; the migration script would refuse it too (exit 2). If the migration script exits 3 (verification failed) or 4 (lock or runtime failure, including a missing `python3`), the message goes to the output and the file stays as it was. Tests: `tests/events-log-repair.bats` (fixtures only).
+
 ## 6. Readers and writers
 
 ### 6.1 Readers

@@ -230,6 +230,39 @@ make_bin() {
   done
 }
 
+# E43_S02_T01: package.json `test` is now `bash scripts/run-tests.sh`, the parallel aggregate of `bats tests/*.bats`.
+# Each case builds its own isolated fixture root under BATS_TEST_TMPDIR (no shared repo state).
+@test "npm alias: an aggregate-runner body (bash scripts/run-tests.sh) folds npm test with the bats suites exactly as the literal bats form does" {
+  local body
+  for body in "bash scripts/run-tests.sh" "sh scripts/run-tests.sh" "./scripts/run-tests.sh" "scripts/run-tests.sh" "  bash ./scripts/run-tests.sh  "; do
+    mkdir -p "$BATS_TEST_TMPDIR/agg"
+    jq -n --arg b "$body" '{scripts:{test:$b}}' > "$BATS_TEST_TMPDIR/agg/package.json"
+    catalog_ok --root "$BATS_TEST_TMPDIR/agg" --discovery-file "$FIX/npm-alias/discovery.json"
+    json_check '(.runnable | length) == 2 and .runnable[0].id == "npm:test" and .runnable[0].command == "npm test"'
+    json_check '(.runnable[0].also | map(.id)) == ["bats:tests","config:bats:integration"]'
+  done
+}
+
+@test "npm alias: the aggregate-runner body yields the same catalog as the literal bats tests/*.bats body" {
+  mkdir -p "$BATS_TEST_TMPDIR/agg" "$BATS_TEST_TMPDIR/lit"
+  printf '%s' '{"scripts":{"test":"bash scripts/run-tests.sh"}}' > "$BATS_TEST_TMPDIR/agg/package.json"
+  printf '%s' '{"scripts":{"test":"bats tests/*.bats"}}' > "$BATS_TEST_TMPDIR/lit/package.json"
+  catalog_ok --root "$BATS_TEST_TMPDIR/agg" --discovery-file "$FIX/npm-alias/discovery.json"
+  local agg="$output"
+  catalog_ok --root "$BATS_TEST_TMPDIR/lit" --discovery-file "$FIX/npm-alias/discovery.json"
+  [ "$agg" = "$output" ]
+}
+
+@test "npm alias: a body that merely mentions run-tests.sh (extra command or argument) does not fold" {
+  local body
+  for body in "bash scripts/run-tests.sh && echo done" "bash scripts/run-tests.sh tests/a.bats" "bash scripts/other-run-tests.sh"; do
+    mkdir -p "$BATS_TEST_TMPDIR/agg"
+    jq -n --arg b "$body" '{scripts:{test:$b}}' > "$BATS_TEST_TMPDIR/agg/package.json"
+    catalog_ok --root "$BATS_TEST_TMPDIR/agg" --discovery-file "$FIX/npm-alias/discovery.json"
+    json_check '[.runnable[].id] == ["bats:tests","npm:test","shellcheck:all"]'
+  done
+}
+
 @test "npm alias: without --root, package.json is read from the root scripts/resolve-root.sh resolves" {
   local anchor="$BATS_TEST_TMPDIR/anchor"
   mkdir -p "$anchor/project/configs"

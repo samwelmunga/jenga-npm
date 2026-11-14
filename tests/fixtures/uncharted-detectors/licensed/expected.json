@@ -1,0 +1,6 @@
+{
+  "license": { "found": true, "files": [ { "path": "LICENSE", "type": "unknown" } ] },
+  "spdx": [ { "id": "MIT", "sources": ["a.js"] } ],
+  "copyright_found": true,
+  "any_signal_found": true
+}

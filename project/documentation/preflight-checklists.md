@@ -616,9 +616,11 @@ A `remind` or `advisory` item never defers. It is passed to the developer subage
 block in the context payload (and shown directly on the inline path, which has no subagent).
 
 **Known gap.** `preflight_deferred` has no consecutive-wave counter and no escalation trigger, unlike
-`capacity_blocked`. `/jenga` Phase 4's Pending rescan may therefore re-dispatch a deferred unit on each wave
-and defer it again until a user acts. Closing that is a change to `/jenga` and `/j-dooo`, which this task does
-not make.
+`capacity_blocked`. Within one `/jenga` run this no longer causes a re-dispatch loop: Phase 4 step 5b records each
+deferred unit in a run-scoped deferred set and step 1 stops collecting it for the rest of the run (`E67_S03_T06`).
+Across runs, and in `/j-dooo`, a deferred unit is simply offered again until a user acts. Deferral is also now the
+fallback rather than the normal outcome of a `/jenga` run: see "Foreground check-in and cost/cadence confirmation
+(`E67_S11`)" below.
 
 ### Automatic `j.check-in` at the `pre-task` gate (`E44_S07`)
 
@@ -724,6 +726,122 @@ The automatic path runs the collector with `--no-agents`, because a hook-adjacen
 the same terms `skills/j-check-in/assets/output_format.md` specifies for that variant. The automatic layer
 is a weaker instrument than a manual `j.check-in`, and being honest about the blind spot is the whole
 reason `visibility` is mandatory in the collector's output.
+
+### Foreground check-in and cost/cadence confirmation (`E67_S11`)
+
+Two `pre-task` items defer every background unit that has no answer for them: `checkin-run-before-dispatch`
+(`machine`) and `dispatch-cost-and-cadence` (`judgment`). A background sub-agent never self-certifies a judgment
+item (`/j-do` `### 4.4` case (b)), and both items are `tick_scope: run`, while each unit mints its own run id, so a
+tick the user gave earlier is invisible to a unit that mints a different one. Under `/jenga` Phase 4 every unit is
+such a sub-agent, so before this story every unit deferred and nothing ran. The fix is not a weaker gate. It is a
+foreground step that asks the user once, up front, and a run id that carries that answer to the units, where each
+unit verifies it before believing it.
+
+The deterministic work lives in one script, `scripts/foreground-preflight.sh` (subcommands `mint`, `gate`,
+`verify`; the header is the contract). It builds on `scripts/checklist.sh tick` and `checklist.sh list` and changes
+neither.
+
+#### The foreground step: where it runs and why it must be the host session
+
+| Caller | Where | When |
+|---|---|---|
+| `/jenga` (bare or scoped) | Phase 0.8 in `skills/jenga/SKILL.md` | once, after Phase 0.75's confirmation, before Phase 0.9 |
+| standalone `/do` | `### 1.4` in `skills/j-do/SKILL.md` | once per invocation, before the first `### 4.1.2` gate, not once per task |
+| `/dooo` | `### 0` in `skills/j-dooo/SKILL.md` | once per invocation, before the first inner `/do` call |
+
+Each runs the same four steps: `foreground-preflight.sh mint` (a fresh `fg-<UTC time>-<8 hex>` run id); `j.check-in`;
+the prompt in `skills/j-do/assets/foreground-prompt.md` (the one home of the wording: units, scope mix, concurrency
+cap, the ~30 minute cap with a mid-run report, no rework round without asking again, numbered Proceed / Cancel /
+Other with free text last); then, on Proceed only, `foreground-preflight.sh gate --run <id> --via <jenga|do|dooo>
+--user-yes`. Cancel halts with nothing dispatched and `dispatch-cost-and-cadence` unticked, and `gate` is never
+called on that path. Other, or any free text, is unresolved: answer, ask again, never tick.
+
+**`j.check-in` runs in the host session, never in a sub-agent.** `checkin-run-before-dispatch` verifies with
+`skills/j-check-in/scripts/checkin-gate.sh`, which looks for a `checkin` event keyed by this session's key (the
+`scripts/checklist-marker.sh session-key` probe). A check-in run in any other session records a different key and
+does not satisfy the gate. A delegated sub-agent also cannot see its siblings, so it could not report on them
+either (`skills/j-check-in/SKILL.md`). The same reasoning puts `gate` in the host session: it runs `checkin-gate.sh`
+itself and ticks nothing when it fails (exit `10`).
+
+A `/do` that is itself a background sub-agent (a caller-supplied `session_id`, `### 4.4` case (b)) does nothing
+here: it never mints, prompts, gates or ticks.
+
+#### The run-id handoff
+
+The foreground step's run id travels in the sender object as `checklist_run_id`
+(`skills/j-do/assets/sender_template.json`, empty string by default), the same way `orchestrator_session_id` already
+travels as `session_id`:
+
+- `/jenga` mints it once in Phase 0.8 and passes it verbatim through Phase 3.5 step 7b (the bundle `/do <E##_S##>`
+  call), through every Phase 4 wave, and through step 5c's loop-back, which reuses it unchanged and never re-runs
+  Phase 0.8.
+- `/dooo` mints it once in `### 0` and passes it verbatim in every inner `/do` call on every iteration.
+- A standalone `/do` mints it in `### 1.4` and carries it to `### 4.1.2` and `### 5` for every task the invocation
+  runs.
+- A unit adopts it as its `RUN_ID` **only after** `foreground-preflight.sh verify --run <id>` exits `0`
+  (`### 4.1.2`, "Where `RUN_ID` comes from", and the bundle paragraph in `### 1.5`). Any non-zero exit means the
+  field is treated as absent: the unit mints its own `do-<UTC time>-<rand>` id and defers or asks exactly as before.
+  Its per-task `check` then reports both items `already_ticked` and asks nothing more.
+- Nothing mints the id in a unit, nothing ticks on a supplied id, and `JENGA_CHECKLIST_RUN_ID` is never a source for
+  it. Presence of the field proves nothing.
+
+#### Trust boundary: what `verify` checks, and its honest limit
+
+`verify --run <id>` exits `0` only when `checklist.sh list pre-task --run <id>` shows **both** items as
+`ticked(run) by user:<non-empty actor> at <time>` for exactly that run id. It prints nothing on stdout in any
+outcome, only reads, and fails closed (exit `20` to `24`: bad or missing id, unticked or absent item, actor not
+`user:*`, persistent scope instead of run scope, unreadable or unexpectedly shaped state). A tick for run A is not
+visible to `verify --run B`, so the run scope of `checklist.sh` is not weakened, and `checklist.sh` is not
+modified.
+
+**The limit, stated plainly.** The `user:` actor prefix is **checked, not proven.** `checklist.sh tick --by user:x`
+can be typed by anyone with shell access, so an agent that ignores its instructions could forge it, and
+`tests/foreground-preflight.bats` pins that a hand-typed `user:forged` is accepted. What the check does is narrow
+the exposure from an accidental default to deliberate forgery: an agent's own tick carries the actor it passes
+(`agent:developer`) or the operating-system default (`os-user:<login>`), and both are refused. No claim of
+cryptographic non-repudiation is made anywhere, and none should be added.
+
+Tick state is rooted at the resolved project root. A unit running from a worktree resolves its own tree and does not
+see ticks the foreground made in the main tree unless `JENGA_PROJECT_ROOT` names one shared root. This is the
+pre-existing limit of the tick store, not something this story changes.
+
+#### `/jenga *`: no prompt, no tick, no run id
+
+The wildcard keeps its zero-prompt contract (decided and approved 2026-11-11). Phase 0.8 does not run under
+`/jenga *`: it never prompts, never ticks, never supplies a run id, and passes no `checklist_run_id` anywhere. Its
+units therefore defer at `### 4.1.2` as before (see "`/j-do`: firing points and deferral" above). The only addition
+is exactly one hint line printed once when the wildcard branch starts, pointing at bare or scoped `/jenga`, or at
+`j.check-in` followed by a foreground `/do`. Deferral is the intended outcome of this path, not a defect.
+
+#### What did not change
+
+- `checkin-run-before-dispatch` stays `enforcement: confirm`. It must never become `block`, for the reason in its own
+  text and in "`enforcement` must never be `block`" above.
+- Neither item's `enforcement` or `kind` changed, and neither item's `text` or `verify`, so no existing tick is
+  invalidated.
+- `scripts/checklist.sh`, `scripts/checklist-marker.sh` and `skills/j-check-in/**` are unmodified. The foreground
+  step only calls `checklist.sh tick` and `checklist.sh list`, and only `foreground-preflight.sh gate` ticks, in the
+  host session, with `--by user:<via>`.
+- Deferral still happens, and is now the fallback: when a unit's `checklist_run_id` is absent or fails `verify`
+  (`/jenga *`, a run started before this step existed, an unticked or other-run id), and for any other `confirm` or
+  judgment item a background unit meets.
+
+#### Counting limits recorded by the callers
+
+- **Phase 0.8's `<N>` is a floor.** It runs before decomposition (Phases 1 and 2), so epics or stories not yet broken
+  down have no tasks to count. The prompt says "at least <N>" when the confirmed scope's `undecomposed` list is
+  non-empty. The scope mix is read from task files by the agent; no script computes it.
+- **`/dooo`'s `<N>` is an upper bound for the first wave.** The ask must precede the first selection, so `<N>` is the
+  size of the eligible pool `scripts/render-ranked-list.sh` prints, which is at least what the first wave will
+  start. Standalone `/do` says "at least" too, because its step 8 loop can add tasks under the same answer.
+- An empty `/dooo` pool skips the ask and passes an empty field, so an inner `/do` asks for itself.
+
+#### Tests
+
+`tests/foreground-preflight.bats` (script), `tests/do-supplied-checklist-run-id.bats` (adopt only after `verify`),
+`tests/jenga-phase-08-foreground.bats` (Phase 0.8, the asset, the `*` path, run-id threading) and
+`tests/do-dooo-once-per-invocation.bats` (once per invocation). The text-asserting suites check that the prose says
+what is described here; they cannot show an agent follows it.
 
 ### Situation marker (`E67_S04_T01`)
 

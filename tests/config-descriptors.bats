@@ -102,19 +102,19 @@ EOF
 # Validator: shipped descriptors
 # ================================================================================================================
 
-@test "the seven shipped descriptors validate against scratch copies of the real configs" {
+@test "the eight shipped descriptors validate against scratch copies of the real configs" {
   run bash "$VALIDATE" --all
   [ "$status" -eq 0 ]
   assert_output_not_contains "FAIL"
-  [ "$(printf '%s\n' "$output" | grep -c '^PASS ')" -eq 7 ]
-  for f in audit-config workflow scope-thresholds test-config playbook-config checklists conventions; do
+  [ "$(printf '%s\n' "$output" | grep -c '^PASS ')" -eq 8 ]
+  for f in audit-config workflow scope-thresholds test-config playbook-config checklists conventions dashboard-config; do
     assert_output_contains "PASS $SHIPPED/$f.json"
   done
 }
 
 @test "every key of every real config file is covered by exactly one editable-or-read-only entry" {
   local f key n
-  for f in audit-config workflow scope-thresholds test-config playbook-config checklists; do
+  for f in audit-config workflow scope-thresholds test-config playbook-config checklists dashboard-config; do
     for key in $(jq -r 'keys[]' "$REPO_ROOT/project/configs/$f.json"); do
       n="$(jq --arg k "$key" '[.keys[] | select(.key == $k)] | length' "$SHIPPED/$f.json")"
       [ "$n" -eq 1 ] || { echo "$f.json key $key has $n descriptor entries" >&2; return 1; }
@@ -502,7 +502,7 @@ EOF
   assert_output_contains "node_modules/@jenga-ai/agent/templates/config-descriptors/scope-thresholds.json"
   run --separate-stderr bash "$pkg/scripts/render-config-list.sh"
   [ "$status" -eq 0 ]
-  assert_ranked_list 7
+  assert_ranked_list 8
 }
 
 @test "lib/config has no project/ path literal outside comments, no post-Node-14 API and no non-built-in import" {
@@ -537,11 +537,11 @@ EOF
   run --separate-stderr bash "$RENDER"
   [ "$status" -eq 0 ]
   [ -z "$stderr" ]
-  assert_ranked_list 7
+  assert_ranked_list 8
   assert_starts_with "$output" "1. audit-config — "
   assert_starts_with "$(printf '%s\n' "$output" | sed -n 2p)" "2. checklists — "
   assert_starts_with "$(printf '%s\n' "$output" | sed -n 3p)" "3. conventions — "
-  assert_output_contains "5. scope-thresholds — "
+  assert_output_contains "6. scope-thresholds — "
   assert_output_contains "(9 editable keys)"
   assert_output_contains "(4 editable keys)"
   assert_output_contains "(1 editable key)"
@@ -628,12 +628,12 @@ EOF
   printf '{bad' > "$PROJ/project/configs/playbook-config.json"
   run --separate-stderr bash "$RENDER"
   [ "$status" -eq 0 ]
-  assert_ranked_list 7
+  assert_ranked_list 8
   # test-config (removed here) and conventions (no instance in this repo) are both not present
   [ "$(printf '%s\n' "$output" | grep -c '\[not present\]$')" -eq 2 ]
   [ "$(printf '%s\n' "$output" | grep -c '\[unreadable\]$')" -eq 1 ]
-  assert_contains "$(printf '%s\n' "$output" | grep '^6\. ')" "[not present]"
-  assert_contains "$(printf '%s\n' "$output" | grep '^4\. ')" "[unreadable]"
+  assert_contains "$(printf '%s\n' "$output" | grep '^7\. ')" "[not present]"
+  assert_contains "$(printf '%s\n' "$output" | grep '^5\. ')" "[unreadable]"
 }
 
 @test "conventions.json is listed read-only with both keys non-editable, no bump rule, and [not present] when the project has no instance" {
@@ -664,7 +664,7 @@ EOF
 @test "an unknown file id exits 3 and names the known ids; surplus arguments or flags exit 2" {
   run --separate-stderr bash "$RENDER" nope
   [ "$status" -eq 3 ]
-  assert_contains "$stderr" 'unknown config file "nope"; known: audit-config, checklists, conventions, playbook-config, scope-thresholds, test-config, workflow'
+  assert_contains "$stderr" 'unknown config file "nope"; known: audit-config, checklists, conventions, dashboard-config, playbook-config, scope-thresholds, test-config, workflow'
   run --separate-stderr bash "$RENDER" a b
   [ "$status" -eq 2 ]
   run --separate-stderr bash "$RENDER" --bogus

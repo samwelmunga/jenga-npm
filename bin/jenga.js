@@ -19,6 +19,11 @@ Usage:
   jenga init      Run the setup wizard (creates jenga.cli.json, registers hook)
   jenga attach    Write MCP config for this project so new sessions route through Jenga
   jenga status    Show router status and active session
+  jenga sync [--dry-run]
+                  Bring .claude/, .agents/, the Copilot files and the Jenga block in CLAUDE.md
+                  and AGENTS.md in line with the installed version. Non-interactive; run it
+                  after upgrading (or when npm/pnpm blocked the postinstall script).
+                  --dry-run prints what would change and writes nothing.
   jenga doctor    Scan .agents/ and .claude/ for orphaned package files and clean up
                   interactively (alias: jenga clean). Add --dry-run to preview only.
   jenga config    List and edit Jenga settings (also: config get|set <file>.<key> [value])
@@ -63,6 +68,11 @@ async function main() {
     case "status": {
       const { runStatus } = await import("../lib/commands/status.js");
       await runStatus(args);
+      break;
+    }
+    case "sync": {
+      const { runSync } = await import("../lib/commands/sync.js");
+      await runSync(args);
       break;
     }
     case "doctor":

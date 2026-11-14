@@ -43,7 +43,12 @@ const rapportsRouter      = require('./routes/rapports');
 const ideasRouter         = require('./routes/ideas');
 const documentationRouter = require('./routes/documentation');
 const todoWarningsRouter  = require('./routes/todo-warnings');
+const todoRouter          = require('./routes/todo');
 const securityRouter      = require('./routes/security');
+const progressRouter      = require('./routes/progress');
+const progressCardsRouter = require('./routes/progress-cards');
+const progressGraphRouter = require('./routes/progress-graph');
+const pipelineRouter      = require('./routes/pipeline');
 
 const { API_VERSION } = require('./response');
 
@@ -65,7 +70,12 @@ app.use('/v1/rapports',      rapportsRouter);
 app.use('/v1/ideas',         ideasRouter);
 app.use('/v1/documentation', documentationRouter);
 app.use('/v1/todo-warnings', todoWarningsRouter);
+app.use('/v1/todo',          todoRouter);
 app.use('/v1/security',      securityRouter);
+app.use('/v1/progress',      progressRouter);
+app.use('/v1/progress-cards', progressCardsRouter);
+app.use('/v1/progress-graph', progressGraphRouter);
+app.use('/v1/pipeline',      pipelineRouter);
 
 // ── Fallback routes ────────────────────────────────────────────────────────────
 // Registered on demand (not at require-time) so callers that mount additional

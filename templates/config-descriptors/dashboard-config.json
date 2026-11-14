@@ -1,0 +1,17 @@
+{
+  "descriptor_version": 1,
+  "file": "dashboard-config.json",
+  "description": "The dashboard's stable per-project port, generated once by scripts/dashboard-port.sh ensure (port = PP*1000+NNN, PP 50..64) so browser state tied to the dashboard origin survives restarts.",
+  "keys": [
+    {
+      "key": "dashboard_port",
+      "label": "Dashboard port",
+      "type": "integer",
+      "description": "TCP port the dashboard prefers for this project (50000-64999). Generated per project by scripts/dashboard-port.sh ensure; change it here only to pick a different fixed port.",
+      "editable": true,
+      "default": 50000,
+      "min": 50000,
+      "max": 64999
+    }
+  ]
+}

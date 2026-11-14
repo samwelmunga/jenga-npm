@@ -7,7 +7,7 @@ This directory holds version-controlled configuration files consumed by Jenga AI
 ## Changing settings: `jenga config`
 
 `jenga config` is the supported way to change the settings in this directory. It is a plain terminal command: it runs
-no model and costs no tokens. It lists the six config files below, shows each key with its current value, and edits the
+no model and costs no tokens. It lists the config files below, shows each key with its current value, and edits the
 scalar (integer, string, boolean) settings with type and range validation. From a chat session, use `/jenga-config`
 instead (see "Changing settings from a chat session: `/jenga-config`" below); it runs this same command.
 
@@ -37,7 +37,7 @@ three things:
 
 | Action | What it runs | Result |
 |--------|--------------|--------|
-| list | `jenga config` | The interactive picker over the six config files and their keys. It needs a terminal; with none, use `get` or `set`, or run `jenga config` in a terminal. |
+| list | `jenga config` | The interactive picker over the config files and their keys. It needs a terminal; with none, use `get` or `set`, or run `jenga config` in a terminal. |
 | get | `jenga config get <file-id>.<key>` | Prints one value (read-only keys can be read too). |
 | set | `jenga config set <file-id>.<key> <value>` | Validates, writes, and bumps the version counter where the file has one. |
 
@@ -76,7 +76,7 @@ and shared with everyone on the project. There is no local override layer and no
 ### What is editable
 
 Editable: the integer settings of `scope-thresholds.json` (every key except `threshold_version`), of
-`playbook-config.json` (`max_composition_depth`), the string and boolean settings of `audit-config.json` (every key except
+`playbook-config.json` (`max_composition_depth`), `dashboard-config.json` (`dashboard_port`, 50000-64999), the string and boolean settings of `audit-config.json` (every key except
 `config_version`; see the "audit-config.json" section below), and the string settings of `test-config.json`: the two that control the
 commit-time test prompt (`commit_prompt_default`: empty, `skip`, `scoped` or `full`, empty meaning always prompt;
 `commit_scope_map_file`: a relative `.json` path, default `templates/test-scope-map.json`) and the three that set which
@@ -290,6 +290,56 @@ playbook nesting-depth safety limits. Read by `skills/jenga/scripts/load-playboo
   existing `JENGA_PLAYBOOKS_TEST_ROOT` fixture override is reused for this lookup too — see that
   script's own header). Missing or invalid config is a soft fallback to the default, never a halt
   (composition depth-limiting is a safety default, not a required setup file).
+
+---
+
+## dashboard-config.json
+
+The dashboard's **stable per-project port** (`E47_S11_T01`). `localStorage` is scoped per origin, port included, so a
+dashboard that binds a different port every run loses its browser state; this file gives each project one port that is
+generated once and remembered. It is **generated per project** by `scripts/dashboard-port.sh ensure`: no shipped
+template carries a value, and a value is never copied from one project into another.
+
+### Fields
+
+| Field | Type | Range | Description |
+|-------|------|-------|-------------|
+| `dashboard_port` | integer | 50000-64999 | The port the dashboard prefers for this project. Editable with `jenga config set dashboard-config.dashboard_port <n>` (the descriptor rejects anything outside the range). |
+
+### The scheme
+
+Port = `PP*1000 + NNN`, with `PP` in 50..64 and `NNN` a random 000..999 (approved 2026-11-12). Every possible value is
+inside 1024-65535. Further ports for the same project count the prefix up with the same `NNN` (`50123`, `51123`,
+`52123`, ...) and stop at `PP` = 64; `next` refuses beyond that. The range overlaps the macOS/Windows ephemeral range
+(49152-65535), so `ensure` prefers a port that is free at the moment it generates, and the dashboard start keeps its
+own free-port fallback.
+
+### `scripts/dashboard-port.sh`
+
+| Command | Result |
+|---------|--------|
+| `get` | Prints the stored port. Exit `1` (reason on stderr) when it is missing, not an integer, or outside the range. |
+| `ensure` | Prints the stored port; when it is missing or invalid, generates one, writes it atomically under `scripts/with-lock.sh`, and prints it. A valid stored port is never changed, so a second run is a no-op. |
+| `next <n>` | Prints the n-th additional port (`n` >= 1) for the stored port. Exit `3` when it would pass prefix 64; exit `1` when the stored port is invalid. |
+
+Exit codes: `0` ok, `1` stored port missing or invalid, `2` usage, `3` cap exceeded, `6` configs directory unresolvable
+or file not writable. The configs directory is resolved through `scripts/resolve-root.sh`. The file is not created by
+`jenga config` (which needs it to exist, exit `6`); run `ensure` first. The record of the port actually bound by a
+running dashboard stays in `project/queue/dashboard-port.json`; this file is the preference, not that record.
+
+### Consuming Skills
+
+- `scripts/dashboard-port.sh` (the only writer); the dashboard start follows in `E47_S11_T03`.
+- `j.init` (`skills/j-init/scripts/init.sh`) and `j.distribute` (`skills/j-distribute/scripts/distribute-changes.sh`, once
+  per target) call `scripts/ensure-dashboard-port.sh <project_root>`, a thin wrapper around `ensure` that reports
+  `kept <port>` (valid, untouched), `generated <port>` (missing) or `repaired <port>` (invalid value replaced), or
+  `skipped (...)` for a target with no Jenga registry. `--dry-run` reports `would generate` / `would repair` and writes
+  nothing. `project/configs` is not in the distribution include list, so this repository's port is never copied to a
+  target. The wrapper finds `dashboard-port.sh` next to itself, then under `node_modules/@jenga-ai/agent/scripts/`
+  (consumer install). A failure warns and never fails the scaffold or the distribution.
+
+To change the port: `jenga config set dashboard-config.dashboard_port <n>` (50000-64999); an out-of-range or
+non-integer value is rejected and the file is left unchanged.
 
 ---
 

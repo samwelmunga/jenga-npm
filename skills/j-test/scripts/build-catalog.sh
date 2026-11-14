@@ -64,7 +64,11 @@
 #      suite (ecosystem `npm`, id `npm:<key>`) the key is that script body when
 #      it is a non-empty string, else its command. Here scripts.test is
 #      `bats tests/*.bats`, so `npm:test` shares a key with `bats:tests`; without
-#      this a run-all would run the hour-long bats suite twice. A missing,
+#      this a run-all would run the hour-long bats suite twice. Since E43_S02_T01
+#      `scripts.test` may instead be `bash scripts/run-tests.sh` (also `sh`, with or
+#      without `./`, and nothing else on the line), the parallel aggregate that runs
+#      the same files; that body is normalised to `bats tests/*.bats` before keying,
+#      so the fold is unchanged. A missing,
 #      unreadable or unparseable package.json just means no alias (no error).
 #   3. SURVIVOR of a group: the first `npm` entry (the project's own declared entry
 #      point), else the first non-`config` entry, else the first `config` entry;
@@ -262,7 +266,13 @@ read_scripts() {
     return 0
   fi
   jq -c 'if type == "object" and (.scripts | type) == "object"
-         then .scripts | with_entries(select(.value | type == "string")) else {} end' \
+         then .scripts | with_entries(select(.value | type == "string"))
+              # The aggregate runner (E43_S02_T01) runs exactly the files of
+              # `bats tests/*.bats`, in parallel where safe. Its body is therefore
+              # the same key as the literal command, so npm:test still folds.
+              | with_entries(.value |= if test("^\\s*(?:(?:bash|sh)\\s+)?(?:\\./)?scripts/run-tests\\.sh\\s*$")
+                                       then "bats tests/*.bats" else . end)
+         else {} end' \
     "$manifest" 2>/dev/null || printf '{}'
 }
 

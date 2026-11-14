@@ -108,6 +108,18 @@ else
   echo "Note: $AUDIT_NOTICE_SCRIPT not found; skipping the audit opt-in notice." >&2
 fi
 
+# ─── 6.7. Generate the stable dashboard port (E47_S11_T02) ──────────────────
+# Stored in project/configs/dashboard-config.json. The logic lives in
+# scripts/dashboard-port.sh (via the ensure-dashboard-port.sh wrapper); this only calls it and reports
+# generated / kept / repaired. A fresh scaffold has no file, so it generates; a failure never fails the scaffold.
+PORT_WRAPPER="$PKG_ROOT/scripts/ensure-dashboard-port.sh"
+if [[ -f "$PORT_WRAPPER" ]]; then
+  echo "→ Ensuring the dashboard port..."
+  bash "$PORT_WRAPPER" "$PWD" || echo "Warning: could not set up the dashboard port (see above); run scripts/dashboard-port.sh ensure later." >&2
+else
+  echo "Note: $PORT_WRAPPER not found; skipping the dashboard port." >&2
+fi
+
 # ─── 7. Create project/data/baselines.json ───────────────────────────────────
 echo "→ Creating baselines.json..."
 echo '{}' > project/data/baselines.json

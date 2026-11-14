@@ -15,6 +15,7 @@
 #   4. Rsyncs each included item to both <target_dir>/ and .claude/ in the project.
 #   5. Copies AGENTS.md, CLAUDE.md, WARP.md to the project root.
 #   6. Writes jenga.config.json atomically (temp + mv).
+#   7. Ensures the target has a valid dashboard port in its own project/configs (never copied from here).
 #
 # Exit codes:
 #   0   Success
@@ -370,6 +371,26 @@ else
   fi
 
   info "Wrote jenga.config.json (version $MONOREPO_VERSION)"
+fi
+
+# ---------------------------------------------------------------------------
+# Step 8: Ensure the target has a stable dashboard port (E47_S11_T02)
+# The target's own project/configs/dashboard-config.json is the only file read or written: a valid port is
+# kept, a missing or invalid one is generated, and this repository's value is never copied (project/configs
+# is not in the include list). Logic lives in scripts/ensure-dashboard-port.sh; a failure only warns.
+# ---------------------------------------------------------------------------
+
+PORT_WRAPPER="$REPO_ROOT/scripts/ensure-dashboard-port.sh"
+if [ -f "$PORT_WRAPPER" ]; then
+  _port_args=()
+  [ "$DRY_RUN" -eq 1 ] && _port_args+=(--dry-run)
+  if _port_out="$(bash "$PORT_WRAPPER" ${_port_args[@]+"${_port_args[@]}"} "$PROJECT_PATH" 2>&1)"; then
+    info "$_port_out"
+  else
+    warn "dashboard port not set for $PROJECT_NAME: $_port_out"
+  fi
+else
+  warn "scripts/ensure-dashboard-port.sh not found at $PORT_WRAPPER — dashboard port not checked."
 fi
 
 # ---------------------------------------------------------------------------

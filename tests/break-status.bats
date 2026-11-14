@@ -283,13 +283,18 @@ render() { run bash "$RENDER"; }
   # Every open() in the script must be a read of a path built from the resolved board, queue, configs, todo or ledger inputs.
   [[ "$output" == *"scope-thresholds.json"* ]]
   [[ "$output" == *"todo_file"* ]]
-  [[ "$output" == *"ledger_file"* ]]
   [[ "$output" != *"/etc/"* ]]
   # Exactly the known set of open() sites, and no other: any new read must be added here deliberately.
   local allowed bad
-  allowed='path, encoding|scope-thresholds\.json|todo_file|ledger_file'
+  allowed='path, encoding|scope-thresholds\.json|todo_file'
   bad=$(printf '%s\n' "$output" | grep -vE "$allowed" || true)
   [ -z "$bad" ] || { echo "unexpected open(): $bad" >&2; return 1; }
+  # The ledger is read through the shared reader (E92_S02_T04), not by an open() of its own in this script; the shared
+  # reader opens exactly one thing, the ledger file.
+  grep -q 'ledger_reader.read_session_ledger' "$RENDER"
+  run grep -nE "open\(" "$REPO_ROOT/skills/j-break/scripts/lib/ledger_reader.py"
+  [[ "$output" == *"ledger_file"* ]]
+  [ "$(printf '%s\n' "$output" | grep -c .)" -eq 1 ]
   # And no reference to any other .md file than the board's and todo.md.
   run bash -c "grep -vE '^\s*#' '$RENDER' | grep -oE '[A-Za-z_./*-]+\.md' | sort -u | grep -vxE '\*\.md|/?todo\.md' || true"
   [ -z "$output" ]

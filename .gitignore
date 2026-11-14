@@ -155,6 +155,15 @@ project/data/audit-notice-shown.*
 # (.publicignore). Rotation is a deferred follow-up.
 project/queue/execution-ledger.jsonl
 
+# After-story announcement ledger (project/queue/story-finished-ledger.tsv and its .lock directory,
+# skills/j-break/scripts/story-finished.sh — E92_S06_T23): one line per story whose "finished" progress line was
+# already printed, keyed by story id plus a signature of its final bucket counts, so the line fires once per
+# completion. Machine-local transient state, never a durable git artifact. Already blocklisted for the public mirror
+# via project/queue/ (.publicignore).
+project/queue/story-finished-ledger.tsv
+project/queue/story-finished-ledger.tsv.lock/
+project/queue/.story-finished-ledger.*
+
 # Transient per-session queue files (project/queue/) — concurrency slot
 # holders, conflict notes, bundle and epic-lock state, and the session handoff
 # scratch file. Each is written for one live session or dispatch and removed

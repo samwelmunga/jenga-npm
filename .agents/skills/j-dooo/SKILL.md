@@ -24,14 +24,40 @@ metadata:
 
 ## Instructions
 
+### 0. Front-loaded foreground ask (once per `/dooo` invocation)
+
+Before the first `/do` call, `/dooo` asks the `pre-task` judgment item **once for the whole invocation** (`E67_S11_T04`), so no inner `/do` asks again. It is the same mechanism as `/jenga` Phase 0.8 and `skills/j-do/SKILL.md` `### 1.4`, not a second design. The deterministic work lives in `scripts/foreground-preflight.sh`; this section holds only the branch decisions, the prompt reference and the threading rule. Write `FG` for `bash "$([ -f scripts/foreground-preflight.sh ] && echo scripts/foreground-preflight.sh || echo node_modules/@jenga-ai/agent/scripts/foreground-preflight.sh)"`.
+
+1. **Empty pool.** If `scripts/render-ranked-list.sh` prints no eligible item there is no cost to state: skip the rest of this section, show no prompt, mint no id and pass an empty `checklist_run_id`. An inner `/do` then answers for itself as a standalone invocation (`skills/j-do/SKILL.md` `### 1.4`), and `/dooo` still never mints a second id.
+2. **Mint.** Run `FG mint` and keep its single line as this invocation's `checklist_run_id`. This is the **only** place `/dooo` mints one: never mint a second id mid-invocation, on any later iteration, after a deferral or after a break check.
+3. **Check in, in the host session.** Run `j.check-in` yourself, in this session, never in a sub-agent.
+4. **Show the prompt.** Read `skills/j-do/assets/foreground-prompt.md` (or `node_modules/@jenga-ai/agent/skills/j-do/assets/foreground-prompt.md`) and show its **Prompt** section verbatim with the placeholders filled: `<N>` is the number of items `scripts/render-ranked-list.sh` prints now (the pool this invocation draws from; the user has not chosen yet, so this is an upper bound for the first wave, which is the safe direction for a cost statement), `<scope mix>` is those items' `execution_scope` read from their board files, and `<cap>` is `max_concurrent_developers` from `project/configs/scope-thresholds.json`. Do not copy the wording into this file; the asset owns it.
+5. **Branch on the answer** (free text is the last option):
+   - **Proceed** (option 1): run `FG gate --run "<checklist_run_id>" --via dooo --user-yes`. This is the only call in this section that passes that flag. Exit `0` means both items are ticked for this id: continue to step 1. Any non-zero exit is reported verbatim and ends the `/dooo` invocation with nothing started.
+   - **Cancel** (option 2): end the `/dooo` invocation and say so. No `/do` is called, nothing is started and no status is touched, and `dispatch-cost-and-cadence` stays unticked. `gate` is never called on this path, so the flag is never passed.
+   - **Other** (option 3), or any free text: unresolved. Answer what was asked, then show the prompt again. Free text is never read as a yes, and `gate` is not called on this path.
+
+**Threading.** The id obtained here is the `checklist_run_id` of the sender object of **every** inner `/do` call, on **every** iteration of the loop (step 1 to step 4), verbatim and unchanged. An inner `/do` is a standalone invocation (`skills/j-do/SKILL.md` `### 4.4` case (a)): its `### 1.4` runs `verify` on the supplied id, finds both items ticked and does not ask a second time. A `/do` that cannot verify the id does not use it. `/dooo` itself never ticks anything except through the one `gate` call above, and never from a sub-agent.
+
 ### 1. Invoke `/do`
-Call the `/do` skill to let the user select and start an implementation. `/do` will launch a background sub-agent to handle the implementation. Once the sub-agent is launched, `/do` returns control here.
+Call the `/do` skill to let the user select and start an implementation, passing this invocation's `checklist_run_id` from step 0 in the sender object of the call, on every iteration of this loop and unchanged (never re-minted; it is what lets `/do` skip its own ask). `/do` will launch a background sub-agent to handle the implementation. Once the sub-agent is launched, `/do` returns control here.
+
+**Progress ownership (`E92`).** Every `/do` call this loop makes, on every iteration including each loop-back from step 4, passes `progress_owner: "caller"` in its sender object, next to the `checklist_run_id`. An inner `/do` then prints no progress line and does not resolve the scope; `/dooo` owns the print, once per wave, in `### 1.1`.
 
 After `/do` hands back control, mark the story/task that was just started as **In Progress** in its board file (update the `status:` field in the YAML front-matter).
 
 **Exception — a deferred unit is not started.** If `/do` reports the unit was **deferred** ("deferred: pre-flight checklist needs a user decision", per `skills/j-do/SKILL.md` step 4.1.2), do **not** mark it `In Progress`: nothing was started and `/do` has already left (or reverted) it at `Pending`. Say so explicitly to the user — that the unit was deferred, which checklist items need their decision, and that it will be offered again once resolved — then carry on to step 2 as usual.
 
 **Task-completion cleanup is inherited, not re-implemented here.** `/dooo` never dispatches developer sub-agents itself; every task it starts goes through this step's `/do` call, so each one reaches `/do`'s own step 7 and its **Task-Completion Cleanup Procedure** (`skills/j-do/SKILL.md` `### 7.1`) unmodified. No separate wiring is needed in `/dooo` (`E37_S05_T04`). If `/dooo` ever gains a dispatch path that bypasses `/do`, that path must call the procedure by name.
+
+### 1.1. Progress line (`E92`), once per wave
+
+Shows the invocation's one-line progress bar. This section says only **when** to call `skills/j-break/scripts/run-progress.sh`; which tasks the bar covers, the counting and the drawing all live in that script and the scripts it calls, never here. Write `RP` for `bash "$([ -f skills/j-break/scripts/run-progress.sh ] && echo skills/j-break/scripts/run-progress.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/run-progress.sh)"`.
+
+**What a wave is here.** One pass through step 1: the `/do` call that pass made and its hand-back to `/dooo`, before step 2. A pass that launched several background sub-agents is still one wave. This step runs between step 1 and step 2 on every pass, the deferral path included, so it always comes before the break check and before step 3 offers the next wave.
+
+1. **Resolve the scope once.** On the first pass only, once `/do` has handed back and the user's first selection is final, run `RP --resolve-scope --ids <ids of that selection>` and keep the single word it prints for the whole `/dooo` invocation. It is never re-resolved on a later pass, after a deferral or after a break check. An empty answer means show no bar for the whole invocation: skip step 2 below on every pass.
+2. **Print once per wave.** On every pass, the first included, run `RP --scope <kept answer> --ids <the ids of every unit this invocation has started so far>` when the kept answer is `run`, or `RP --scope <kept answer> --task <the task id this wave started>` when it is `story`, and show the single line it prints. Print once per wave, never once per task of the wave and never from an inner `/do`. It is best-effort: it never blocks, fails or re-statuses anything, and a warning on stderr is not an error.
 
 ### 2. Return to the board — identify parallelisable tasks
 

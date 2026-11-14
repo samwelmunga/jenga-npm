@@ -42,8 +42,11 @@ self-contained, it can be base64-encoded into a `data:text/html;base64,...` URI 
 open directly — no shared filesystem, hosting, or git round-trip needed, which matters when the
 agent is running remotely (e.g. a cloud/remote session) and cannot hand the user a local path.
 
-**Ports (E47_S08_T03).** With no `--port` the dashboard binds the first port verified free by actually binding
-it, starting at 3001, and prints the URL it really bound (`Dashboard API running at http://localhost:<port>`; relay
+**Ports (E47_S08_T03, E47_S11_T03).** With no `--port` the dashboard first tries the project's assigned port
+(`scripts/dashboard-port.sh get`, stored in `project/configs/dashboard-config.json`) and binds exactly it when free.
+When it is busy, missing or invalid it prints a `Warning:` naming the assigned port, why it was not used and the port
+used instead (a missing value suggests `scripts/dashboard-port.sh ensure`; relay the warning), then binds the first
+port verified free by actually binding it, starting at 3001, and prints the URL it really bound (`Dashboard API running at http://localhost:<port>`; relay
 that URL, never assume 3001). An explicit `--port <n>` or `JENGA_API_PORT` that is busy exits non-zero with
 "port <n> is already in use" and is never replaced. The chosen port is recorded in
 `project/queue/dashboard-port.json` (removed on a graceful stop), so `open` needs no port flag: if this project's

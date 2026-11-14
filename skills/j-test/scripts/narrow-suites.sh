@@ -60,7 +60,8 @@
 #
 # THE npm TWIN. build-catalog.sh folds suites that would run the same thing, and
 # for an npm suite it keys on the BODY of the npm script read from package.json.
-# Here `scripts.test` is `bats tests/*.bats`, so `npm:test` currently folds onto
+# Here `scripts.test` is `bats tests/*.bats` (or, since E43_S02_T01, the aggregate
+# `bash scripts/run-tests.sh`, normalised to it), so `npm:test` currently folds onto
 # `bats:tests`; its header warns that without this "a run-all would run the
 # hour-long bats suite twice". Rewriting only the bats suite would therefore
 # UN-FOLD them and run the catalog twice. So when an npm suite's script body is
@@ -324,7 +325,12 @@ if [ -f "$ROOT/package.json" ]; then
   jq -n --slurpfile pkg "$ROOT/package.json" '
     ($pkg[0].scripts // {}) as $s
     | [ $s | to_entries[] | select((.value | type) == "string" and .value != "")
-        | {key: ("npm:" + .key), value: .value} ] | from_entries
+        | {key: ("npm:" + .key),
+           # Same aggregate-runner normalisation as build-catalog.sh read_scripts
+           # (E43_S02_T01): `bash scripts/run-tests.sh` runs the files of
+           # `bats tests/*.bats`, so it is the same twin key.
+           value: (.value | if test("^\\s*(?:(?:bash|sh)\\s+)?(?:\\./)?scripts/run-tests\\.sh\\s*$")
+                            then "bats tests/*.bats" else . end)} ] | from_entries
   ' > "$NPM_BODIES_FILE" 2>/dev/null || printf '{}\n' > "$NPM_BODIES_FILE"
 fi
 

@@ -86,6 +86,26 @@ Do not read the flag file yourself. Branch on the exit code and use the record t
 ### 1. Check for `project/todo.md`
 Run `bash "$([ -f scripts/todo_manager.sh ] && echo scripts/todo_manager.sh || echo node_modules/@jenga-ai/agent/scripts/todo_manager.sh)" exists`. If it exits non-zero, inform the user there are no queued tasks and exit. If this invocation already executed tasks, run `### 8.1` first.
 
+### 1.4. Front-loaded foreground ask (once per invocation)
+
+The two `pre-task` checklist items `checkin-run-before-dispatch` and `dispatch-cost-and-cadence` are asked **once per `/do` invocation**, here, not once per task at `### 4.1.2` (`E67_S11_T04`). It is the same mechanism as `/jenga` Phase 0.8 (`skills/jenga/SKILL.md`), not a second design. The deterministic work (minting the id, running the check-in gate, recording the ticks, verifying an id) lives in `scripts/foreground-preflight.sh`; this section holds only the branch decisions, the prompt reference and the threading rule. Write `FG` for `bash "$([ -f scripts/foreground-preflight.sh ] && echo scripts/foreground-preflight.sh || echo node_modules/@jenga-ai/agent/scripts/foreground-preflight.sh)"`.
+
+**When it runs.** At most once per invocation: at the first moment the invocation knows what it will execute, and before the first `### 4.1.2` gate of any kind. For a story id that is the head of `### 1.5` (after step 1 has read the story file); otherwise it is after the first selection in steps 2 and 3 resolves to a task, before step 4. Remember the outcome for the rest of the invocation: the step 8 loop back to step 1 never runs this section again, and a later task picked in the same invocation reuses the id.
+
+**Decision path.**
+
+1. **Case (b) does nothing here.** If this `/do` was handed a `session_id` by its caller (`### 4.4` case (b), such as `/jenga` Phase 3.5 and Phase 4), or you cannot tell whether a user can answer a prompt in this session, skip the rest of this section: never mint, never prompt, never run `gate`, never tick. Its only use of a supplied `checklist_run_id` is `### 4.1.2`'s verify-then-adopt.
+2. **Case (a), already asked.** If the sender object carries a non-empty `checklist_run_id`, run `FG verify --run "<checklist_run_id>"`. Exit `0` means a caller such as `/dooo` already asked the user and both items are ticked for that id: adopt it as this invocation's `checklist_run_id` and ask nothing. Any non-zero exit: treat the field as absent and continue.
+3. **Mint.** Run `FG mint` and keep its single output line as this invocation's `checklist_run_id`. This is the only place a standalone `/do` mints it.
+4. **Check in, in the host session.** Run `j.check-in` yourself, in this session, never in a sub-agent: the check-in gate is keyed by this session's key.
+5. **Show the prompt.** Read `skills/j-do/assets/foreground-prompt.md` (or `node_modules/@jenga-ai/agent/skills/j-do/assets/foreground-prompt.md`) and show its **Prompt** section verbatim with the placeholders filled: `<N>` is the number of units already selected (one for a task, one for a story bundle), said as "at least" because the step 8 loop can add more under this same answer; `<scope mix>` is those units' `execution_scope` read from their task files; `<cap>` is `max_concurrent_developers` from the file `### 0` loaded. Do not copy the wording into this file and add no forecast; the asset owns it, including its plug-in point.
+6. **Branch on the answer** (free text is the last option):
+   - **Proceed** (option 1): run `FG gate --run "<checklist_run_id>" --via do --user-yes`. This is the only call in this section that passes that flag. Exit `0` means both items are ticked for this id: continue. Any non-zero exit is reported verbatim and halts the invocation with nothing started.
+   - **Cancel** (option 2): halt the invocation and say so. Nothing is started, no status or `project/todo.md` entry is touched, and `dispatch-cost-and-cadence` stays unticked. `gate` is never called on this path, so the flag is never passed.
+   - **Other** (option 3), or any free text: unresolved. Answer what was asked, then show the prompt again. Free text is never read as a yes, and `gate` is not called on this path.
+
+**Threading.** The resulting `checklist_run_id` is the one every unit this invocation runs carries: `### 4.1.2` reads it from the sender object and still verifies it before adopting it (`### 4.1.2`'s per-task `check` then reports both items `already_ticked` and asks nothing), and `### 5` copies it into the developer's sender object. A bundle (`### 1.5`) carries it the same way. When no id was obtained here (case (b)), `### 4.1.2` behaves exactly as before: it mints its own `do-<UTC time>-<rand>` id and asks or defers per task.
+
 ### 1.5. Story-Bundle Execution Mode
 
 When `/do` is invoked with a story ID (e.g., `/do E##_S##`), skip steps 2–4 and enter story-bundle execution mode:
@@ -96,7 +116,9 @@ When `/do` is invoked with a story ID (e.g., `/do E##_S##`), skip steps 2–4 an
    ```
    and halt.
 
-**Pre-task gate — once per bundle dispatch.** This mode skips steps 2–4, so it does not reach `### 4.1.2` by falling through; run that gate here instead, once, with the story as the unit (`<id>` = `<E##_S##>`) and never once per task inside the bundle. It runs **before** the epic lock below is acquired, so a halt or deferral leaves no lock, manifest or slot to clean up and no task status touched. Pass any `remind` items to the shared subagent in step 3 alongside the task context.
+**Foreground ask first (`### 1.4`).** After step 1 has read the story file and before the gate below, run `### 1.4` if it has not yet been decided in this invocation; the bundle's sender object then carries its `checklist_run_id`.
+
+**Pre-task gate — once per bundle dispatch.** This mode skips steps 2–4, so it does not reach `### 4.1.2` by falling through; run that gate here instead, once, with the story as the unit (`<id>` = `<E##_S##>`) and never once per task inside the bundle. Its run id follows `### 4.1.2`'s "Where `RUN_ID` comes from" rule, applied once to the bundle's own sender object: a non-empty `checklist_run_id` is adopted only after `scripts/foreground-preflight.sh verify --run <checklist_run_id>` exits `0`; an absent, empty, unverifiable or failed one mints `do-<UTC time>-<rand>` and defers as today. It runs **before** the epic lock below is acquired, so a halt or deferral leaves no lock, manifest or slot to clean up and no task status touched. Pass any `remind` items to the shared subagent in step 3 alongside the task context.
 
 #### Epic-Level Bundle Lock
 
@@ -391,6 +413,7 @@ Before resolving a task for execution, inspect the selected entry's ID:
 Each todo entry uses the format: `<mission title>: <E##_S##_T##>` (or `E##_S##` if no task ID).
 
 Before starting:
+0. If `### 1.4` has not yet been decided in this invocation, run it now (after the first selection, before the first `### 4.1.2`); it runs at most once per invocation.
 1. Locate and read the matching file from `$(bash "$([ -f scripts/board_resolver.sh ] && echo scripts/board_resolver.sh || echo node_modules/@jenga-ai/agent/scripts/board_resolver.sh)")tasks/` (or `$(bash "$([ -f scripts/board_resolver.sh ] && echo scripts/board_resolver.sh || echo node_modules/@jenga-ai/agent/scripts/board_resolver.sh)")stories/` if story-level)
 2. If the file does not exist, warn the user and skip — do not proceed with a task that has no scrum board definition
 3. Present a brief summary of the task: title, acceptance criteria, parent story, parent epic
@@ -427,18 +450,28 @@ worktree creation and every `### 4.4` slot acquisition. 4.1.5 and the locked gua
 firing first means a halt leaves the item exactly as it was: still `Pending`, no status write, no
 `execution_scope` rewrite, no slot consumed, nothing to release, `project/todo.md` entry kept.
 
-Follow "Calling the checker from a skill" in that document: mint a run id for this unit (`do-<UTC time>-<rand>`),
-call `checklist.sh check pre-task --run "$RUN_ID"`, and branch on the exit code and each item's `action`. Exit
+**Where `RUN_ID` comes from.** Read the sender object's `checklist_run_id` (`### 5`). It is a claim, not proof:
+
+- Empty or absent: mint `do-<UTC time>-<rand>` and continue exactly as before.
+- Non-empty: verify it first with `bash "$([ -f scripts/foreground-preflight.sh ] && echo scripts/foreground-preflight.sh || echo node_modules/@jenga-ai/agent/scripts/foreground-preflight.sh)" verify --run "<checklist_run_id>"`. Exit `0` means a user ticked both `pre-task` items under that exact run id: adopt the value as this unit's `RUN_ID` (verbatim, never regenerated) and continue; the check below then reports both items `already_ticked`. Any non-zero exit: treat the field as absent, mint `do-<UTC time>-<rand>` and defer exactly as today.
+- When `### 1.4` obtained an id for this invocation, that id is the sender object's `checklist_run_id` for every unit it runs, so the bullets above apply to it unchanged (`verify` exits `0`, both items are `already_ticked`, nothing is asked per task).
+- Adopt only after `verify` exits `0`. Never tick on the supplied id, never retry `verify` in a loop, and never decide an item is satisfied because the field is present. The tick logic lives in the script, not here.
+
+Follow "Calling the checker from a skill" in that document with that `RUN_ID`: call
+`checklist.sh check pre-task --run "$RUN_ID"`, and branch on the exit code and each item's `action`. Exit
 `3` from this base phase is a genuine error, not "no items". Keep `RUN_ID` for the rest of the unit,
-including any Fallback; each pass through the step 8 loop is a new unit and mints a new one. A `block` halt
-stops here, before any work begins.
+including any Fallback; each pass through the step 8 loop is a new unit and takes its run id from that
+unit's own sender object, or mints a new one. A `block` halt stops here, before any work begins.
 
 **Who answers a judgment or `confirm` item.** This `/do` execution's own session, never the developer
 subagent. If the user can answer a prompt in this session now (a standalone `/do`, including one run by
 `/dooo`, per `### 4.4` case (a)), put the item to the user with the numbered prompt and tick it only on their
-explicit confirmation. If `/do` is itself a background sub-agent (a caller-supplied session id, `### 4.4` case
+explicit confirmation. The two items `### 1.4` already asked for (`checkin-run-before-dispatch`, `dispatch-cost-and-cadence`) are `already_ticked` by then and are not asked again per task; this paragraph covers any other item the check returns. If `/do` is itself a background sub-agent (a caller-supplied session id, `### 4.4` case
 (b), such as `/jenga` Phase 4) or you cannot tell, there is no live user channel: **never self-certify.** An
-exit `10` or `11` outcome **defers** the unit instead:
+exit `10` or `11` outcome **defers** the unit instead. Deferral is the fallback path, not the normal one: a unit
+whose `checklist_run_id` passed `verify` (obtained by `/jenga` Phase 0.8, `/dooo` `### 0` or `### 1.4`) finds the
+two foreground items `already_ticked` and does not defer on them, so a deferral means the id was absent or failed
+`verify` (the whole of `/jenga *`), or the unit met another `confirm` or judgment item:
 
 - Start nothing: no worktree, no slot, no subagent; write no status. If the caller already marked the item
   `In Progress`, revert it to `Pending` with `### 4.4` step 1a's locking protocol.
@@ -472,6 +505,14 @@ Items whose `action` is `remind` never halt or defer: show them, and pass them t
 "Pre-flight reminders" block in the context payload (`### 5`, `### 4.3`, bundle spawn, Fallback). The inline
 path has no subagent, so they are simply shown. With no registry, or an empty one, the gate is silent and
 `/do` behaves exactly as before.
+
+### 4.1.3. Progress bar (E92)
+
+Shows a one-line progress bar after each finished task. This section says only **when** to call `skills/j-break/scripts/run-progress.sh`; which story the bar covers, the counting and the drawing all live in that script and in the scripts it calls, never here. Write `RP` for `bash "$([ -f skills/j-break/scripts/run-progress.sh ] && echo skills/j-break/scripts/run-progress.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/run-progress.sh)"`.
+
+1. **Who prints.** Read the sender object's `progress_owner` (`### 4.4`). Empty or absent: this `/do` is the top-level caller and prints. `caller`: `/jenga` or `/dooo` owns the print, so this `/do` prints nothing and skips the print in step 2.
+2. **Print after each finished task.** Immediately after the ledger record in `### 7`, run `RP --scope story --task <the finished task id> --after-story` and show the lines it prints: the task's bar first, then, only when that task just finished its story, the story's own line. It is best-effort exactly like the ledger call: it never blocks, fails or re-statuses a task, and a warning on stderr is not an error.
+3. **Bundle mode prints once.** A story bundle (`### 1.5`) does not print per task. It prints once, when the bundle finishes, after step 6's cleanup, with `RP --scope story --task <the ids of the bundle's finished tasks> --after-story`.
 
 ### 4.1.5. `--trivial` Dispatch-Time Override
 
@@ -608,7 +649,7 @@ After resolving the task context (step 4), passing override validation (step 4.1
 
 #### Fallback to Full Task-Scope Pipeline
 
-**The pre-task gate does not fire here.** A fallback is a re-route of a unit already gated once at `### 4.1.2`, not a new unit. Reuse that gate's `RUN_ID` and result: do not call `checklist.sh check pre-task` again, and do not re-ask any judgment item the user already confirmed. Its `remind` items go to this fallback's developer subagent too.
+**The pre-task gate does not fire here.** A fallback is a re-route of a unit already gated once at `### 4.1.2`, not a new unit. Reuse that gate's `RUN_ID` and result, whether the id was minted or adopted from a verified `checklist_run_id` (no second verification either): do not call `checklist.sh check pre-task` again, and do not re-ask any judgment item the user already confirmed. Its `remind` items go to this fallback's developer subagent too.
 
 This is a self-contained, reusable procedure with two current callers — `### 4.2`'s `--trivial`-forced inline failure branches (origin: `trivial`) and `### 4.3`'s `light`-scope smoke-harness failure (origin: `light`) — given a task that was attempted under a reduced-overhead execution scope and failed its smoke-harness check (or, for `trivial`, showed detected scope creep mid-run), do the following. The only thing that varies by caller is the notice text in step 5; steps 1–4 and 6 are identical regardless of origin.
 
@@ -642,6 +683,10 @@ This is a self-contained, reusable procedure with four current callers — the S
 - **(b) Caller-supplied invocation.** `/do` was invoked by another orchestrator that already has its own session identity and passes it along as part of the dispatch context — for example `/jenga` Phase 4 threading its own `orchestrator_session_id` (generated once in `skills/jenga/SKILL.md` Phase 0.9) into each sub-agent's sender object, or Phase 3.5 step 7b's bundle `/do <E##_S##>` call doing the same. In this case `/do` **MUST reuse that caller-supplied value verbatim** as this invocation's `session_id` — it must never generate a new one. This is what lets every `/do` sub-agent a single `/jenga` run (or any other orchestrator) dispatches share one `project/queue/concurrency-slots-<id>.json` counter file, which is the entire point of `<orchestrator_session_id>` in this section.
 
 Detecting which case applies is mechanical: if the dispatch context already contains a `session_id` populated by the calling skill/agent, this is case (b) and that value is used as-is; if it does not, this is case (a) and `/do` mints its own. Once decided, that single value is what gets copied into `assets/sender_template.json`'s `session_id` field in `### 5` below and referenced everywhere in this document as `<orchestrator_session_id>`.
+
+**`checklist_run_id` (optional, caller-supplied).** The sender object's other caller-supplied field, `assets/sender_template.json`'s `checklist_run_id` (empty string by default), carries the run id under which a foreground caller already ticked the `pre-task` items: `/jenga` Phase 3.5 and Phase 4, `/dooo`, or a standalone `/do` through its own front-loaded foreground step (`### 1.4`). It is passed through verbatim into each dispatched unit's sender object and never regenerated. Its presence alone proves nothing: `### 4.1.2` adopts it as `RUN_ID` only after `scripts/foreground-preflight.sh verify --run <checklist_run_id>` exits `0`, and otherwise ignores it.
+
+**`progress_owner` (optional, caller-supplied).** The sender object's third caller-supplied field, `assets/sender_template.json`'s `progress_owner` (empty string by default), says who prints the progress line (`### 4.1.3`). Empty means this `/do` prints it. `caller` means `/jenga` or `/dooo` owns the print, per wave, and this `/do` prints nothing. Pass it through verbatim into each dispatched unit's sender object; a top-level `/do` leaves it empty.
 
 1. **Acquire.** Before spawning the developer subagent (or the bundle's shared developer subagent), run:
    ```
@@ -706,7 +751,7 @@ On a successful acquire, invoke the developer Agent tool with the following para
 - `name: "<task_id>"` ← **Load-bearing identifier:** this name is consumed by `j.check-in`'s liveness probe to join running agents to board items via `ListAgents` output. It must match the task ID format (`E##_S##_T##`) and stay stable. This is not cosmetic — do not change the naming convention without coordinating with `j.check-in` implementation.
 - Full context and sender object (see below)
 
-**Sender object**: Copy `assets/sender_template.json` and populate all known fields — `session_id` per `### 4.4`'s standalone-vs-caller-supplied cases immediately above (generate one if this is a standalone invocation, case (a); reuse the caller-supplied value verbatim if one was already passed into the dispatch context, case (b) — never regenerate in that case), plus `task_id`, `story_id`, `epic_id`, and the current ISO 8601 UTC date.
+**Sender object**: Copy `assets/sender_template.json` and populate all known fields — `session_id` per `### 4.4`'s standalone-vs-caller-supplied cases immediately above (generate one if this is a standalone invocation, case (a); reuse the caller-supplied value verbatim if one was already passed into the dispatch context, case (b) — never regenerate in that case), plus `task_id`, `story_id`, `epic_id`, and the current ISO 8601 UTC date. Leave `checklist_run_id` as the caller supplied it (verbatim, empty when none), per `### 4.4`; in case (a) set it to the invocation's id from `### 1.4` when that step obtained one, the same value for every unit in the invocation.
 
 **Context payload** (plain text alongside the sender object):
 - Full task/story file content (title, description, acceptance criteria)
@@ -779,6 +824,7 @@ Additionally, if the completed work introduces user-facing changes, update `READ
   bash "$([ -f skills/j-break/scripts/record-execution.sh ] && echo skills/j-break/scripts/record-execution.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/record-execution.sh)" <task_id> <status> --source do
   ```
   This call is best-effort and never blocks or fails a task: `record-execution.sh` warns on stderr and exits `0` on any ledger problem. It feeds `/break status`'s "ran this session" marker.
+- **Show the progress line** (`E92`). Immediately after that ledger call, follow `### 4.1.3` step 2 (best-effort, silent when `progress_owner` is `caller`, once per bundle in `### 1.5`).
 - Check for any `_INSTRUCTIONS.md` files in `project/instructions/` whose ID matches the completed task. If found, present them to the user and explain that these actions must be completed before the feature will work correctly.
 - Invoke the `/commit` skill to commit the work (if not already committed by the developer)
 - Run the **Task-Completion Cleanup Procedure** (`### 7.1` below) with this task's title, to remove the completed task from `project/todo.md` and delete the file if it is now effectively empty

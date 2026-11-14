@@ -620,6 +620,30 @@ The framework repo's own variant, `epic-wrap-up-framework` in `project/.workflow
 `j.dev-done` and uses root-relative commands. It has a different id because a builtin wins over a project definition
 with the same id. <!-- check-doc-refs: ignore -->
 
+### Project workflow: `deploy-public` (the checkout never moves)
+
+The framework repo's private `deploy-public` workflow ships a picked set of commits to the public mirror: it resolves
+the baseline from the latest public tag, lets the maintainer pick features or commits, builds a
+`release/<version>-<YYYYMMDD>` branch, previews and runs the mirror from that branch, then finishes. Since `E88_S06`
+the **main checkout never moves** during a run: no step runs `git switch`, `git checkout <branch>` or `git cherry-pick`
+in the main working tree, so a run works on a dirty tree and leaves its branch, `HEAD` and uncommitted or untracked
+changes exactly as they were. The release steps:
+
+| Step | Type | What it does |
+|------|------|--------------|
+| `create_branch` | compute | Builds the release branch in a **dedicated git worktree** (`release-prep.sh branch --worktree`) at `.claude/worktrees/<branch with / turned into ->`, a deterministic, gitignored path. Then records the release branch as the session's **perceived branch** with `scripts/perceived-branch.sh set` (what `j.checkout` does), after reading the previous one. Outputs `report`, `worktree`, `perceived` (`set` or `unset: <reason>`) and `previous_perceived`. A missing session key leaves the perceived branch unset and is reported, never fatal. A cherry-pick conflict fails the step (nothing is mirrored) and prints the worktree path and the recovery commands. |
+| `check_worktree` | compute | Refuses, naming the expected path, when the release worktree is missing, is not a worktree root or is on another branch, so no mirror step runs. |
+| `preview` | skill | `j.mirror-public` dry run, executed by `mirror-from-worktree.sh` from the release worktree: the worktree's own `mirror.sh` and `.publicignore`, so the preview shows the release branch, not `main` `HEAD`. The public scratch clone is the main tree's, not a new one inside the worktree. |
+| `approve` | confirm | Names the release branch and the worktree the preview came from. |
+| `mirror` | skill | The real run with the mandatory `--here`, from the release worktree in the same way. |
+| `finish` | compute | Never switches: it reports the main checkout's branch as information. Restores the perceived branch `create_branch` replaced (or clears it when none was set), but only while it still points at the release branch; one the user changed during the run is left alone. Removes the release worktree through `scripts/worktree-remove-guard.sh` (a live process inside it, or uncommitted changes in it, leave it in place with the reason) and **keeps the release branch**, which is the next run's baseline. Then prints the "main vs branch" report. |
+
+**Side effect while a run is in progress.** Between `create_branch` and `finish` the session's perceived branch is the
+release branch, so task worktrees created in the same session (for example work dispatched with `j.do` during the
+run) start from the release branch, not from the branch the main checkout is on. `finish` puts the previous perceived
+branch back. A run cancelled before `finish` (for example "Stop here" at `approve`) leaves the worktree and the
+perceived branch in place; run the workflow's `finish` step by hand, or `j.checkout --clear` and remove the worktree.
+
 
 ### Git treatment
 

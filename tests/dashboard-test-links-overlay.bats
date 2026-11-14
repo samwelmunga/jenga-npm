@@ -51,6 +51,9 @@ setup() {
            "$PROJ/project/configs" "$PROJ/project/data" "$PROJ/project/logs" \
            "$PROJ/project/rapports/problems" "$PROJ/project/knowledge-graph"
   git -C "$PROJ" init -q
+  # /v1/progress runs board-progress.sh, which resolves the root from project/configs/workflow.json (E92_S03_T02);
+  # a real project always has one, and capture aborts on any route error.
+  printf '%s\n' '{}' > "$PROJ/project/configs/workflow.json"
 
   # One verified (`human`) node, one hidden (`board`) node that is NOT an edge endpoint of a verified node, so it
   # stays hidden rather than becoming a ghost stub.

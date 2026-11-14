@@ -130,7 +130,7 @@ if [ -z "$SESSION_KEY" ]; then
   fi
 fi
 
-python3 - "$QUEUE_DIR" "$EPICS_DIR" "$STORIES_DIR" "$TASKS_DIR" "$CONFIGS_DIR" "$TODO_FILE" "$SESSION_KEY" "$BOARD_IDS_LIB" <<'PY'
+python3 - "$QUEUE_DIR" "$EPICS_DIR" "$STORIES_DIR" "$TASKS_DIR" "$CONFIGS_DIR" "$TODO_FILE" "$SESSION_KEY" "$BOARD_IDS_LIB" "$SCRIPT_DIR/lib" <<'PY'
 import datetime
 import glob
 import json
@@ -138,10 +138,13 @@ import os
 import re
 import sys
 
-queue_dir, epics_dir, stories_dir, tasks_dir, configs_dir, todo_file, session_key, board_ids_lib = sys.argv[1:9]
+queue_dir, epics_dir, stories_dir, tasks_dir, configs_dir, todo_file, session_key, board_ids_lib, ledger_lib = sys.argv[1:10]
 
 sys.path.insert(0, board_ids_lib)
 import board_ids  # shared ID shapes and sort key: scripts/lib/board_ids.py (epic E86)
+
+sys.path.insert(0, ledger_lib)
+import ledger_reader  # shared ledger reader and terminal status sets: lib/ledger_reader.py (E92_S02_T04)
 
 
 def id_order(item_id):
@@ -152,8 +155,8 @@ def id_order(item_id):
         return (0, (), item_id)
     return (1, board_ids.board_id_sort_key(item_id), "")
 
-TERMINAL_OK = {"Passed", "Passed with remarks", "Merged", "Done", "Deployed to Stage", "Deployed to Prod", "Publicized"}
-TERMINAL_BAD = {"Failed", "Rejected"}
+TERMINAL_OK = ledger_reader.TERMINAL_OK
+TERMINAL_BAD = ledger_reader.TERMINAL_BAD
 ICON = {"epic": "📦", "story": "📖"}
 
 now = datetime.datetime.now(datetime.timezone.utc)
@@ -332,27 +335,9 @@ queued_in_scope = [i for i in dict.fromkeys(queued_all) if i not in scope_ids an
 queued_elsewhere = len([i for i in dict.fromkeys(queued_all) if i not in scope_ids and epic_of(board[i]) not in scope_epics])
 
 # --- the execution ledger (E44_S09): item ids with a terminal entry under this session key ---
-ledger_file = os.path.join(queue_dir, "execution-ledger.jsonl")
-ledger_present = os.path.isfile(ledger_file)
-ran_this_session, ledger_bad = set(), 0
-if ledger_present:
-    try:
-        with open(ledger_file, encoding="utf-8", errors="replace") as fh:
-            for raw in fh:
-                raw = raw.strip()
-                if not raw:
-                    continue
-                try:
-                    entry = json.loads(raw)
-                    if not isinstance(entry, dict):
-                        raise ValueError("not an object")
-                except ValueError:
-                    ledger_bad += 1
-                    continue
-                if session_key and entry.get("session_key") == session_key and entry.get("status") in TERMINAL_OK | TERMINAL_BAD:
-                    ran_this_session.add(entry.get("item_id"))
-    except OSError:
-        ledger_present = False
+# Read by the shared reader (lib/ledger_reader.py), which run-progress.sh uses as well (E92_S02_T04).
+ledger_present, ran_this_session, ledger_bad = ledger_reader.read_session_ledger(queue_dir, session_key)
+ran_this_session = set(ran_this_session)
 
 nothing_in_flight = not inflight and not live_bundles and not live_locks
 

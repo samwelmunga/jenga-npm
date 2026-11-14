@@ -1,0 +1,9 @@
+{
+  "framework_excluded": false,
+  "candidate_paths": ["agents", "docs-site", "hooks", "project", "services/auth", "services/billing", "skills", "src/api", "src/web", "templates", "tools"],
+  "excluded_paths": [],
+  "containers": [
+    { "path": "services", "expanded_into": ["services/auth", "services/billing"] },
+    { "path": "src", "expanded_into": ["src/api", "src/web"] }
+  ]
+}

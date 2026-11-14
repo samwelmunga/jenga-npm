@@ -297,3 +297,9 @@
     overflow-x: auto;
   }
 }
+
+/* E92_S06_T11 — dependency tree under the epic overlay's meta list. Tokens only; the tree brings its own css. */
+.epic-tree { margin: 0.75rem 0 1rem; }
+.epic-tree .epic-tree-error { margin: 0; font-size: 0.85rem; }
+/* The overlay is narrow: the tree has its own zoom and pan viewport (E92_S06_T21, dependency-tree.css) that fits the
+   drawing and lets the reader zoom in, so no minimum width is forced on the drawing and the section needs no sideways scroll. */

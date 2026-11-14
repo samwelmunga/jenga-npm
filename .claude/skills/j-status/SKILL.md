@@ -69,7 +69,17 @@ directly rather than adding a third skill-local wrapper script:
    It is read-only (no audit is run, no npm call, no file written) and always exits `0`; capture its
    stdout verbatim for step 7 and add nothing to it. Do not parse or reinterpret its output here.
 
-7. **Print the summary** following the layout and icon conventions in `assets/output_format.md`. After the
+6.9. **Collect the progress bars** — invoke, once,
+   ```
+   bash "$([ -f skills/j-status/scripts/render-status-bars.sh ] && echo skills/j-status/scripts/render-status-bars.sh || echo node_modules/@jenga-ai/agent/skills/j-status/scripts/render-status-bars.sh)"
+   ```
+   (add `--root <dir>` when the board is not under the current directory). It prints one `<id><TAB><bar>` line
+   per epic, then per story, and is the **only** source of the bars: this skill counts nothing and draws
+   nothing, it only copies each returned bar. When the script prints nothing, is missing or fails, step 7 prints every
+   epic and story row exactly as it did before bars existed, and no error is shown for it.
+
+7. **Print the summary** following the layout and icon conventions in `assets/output_format.md`, adding each
+   step 6.9 bar at the end of the epic or story row whose id it carries. After the
    queue section, add a `Dependency audit` heading (same banner style as the other sections) and print step
    6.8's output under it unchanged.
 
