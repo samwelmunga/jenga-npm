@@ -1022,5 +1022,21 @@
     "dist_tag": "latest",
     "result": null,
     "reason": "Staged via direct gh workflow dispatch, run 42591476306 (public test gate red; /publish stage bypassed)"
+  },
+  {
+    "id": "300afcd9-f958-48b9-9c67-26dcd3580379",
+    "version": "v5.1.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-11-14T20:21:09Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "staged",
+    "git_tag": "v5.1.0",
+    "commit_sha": "a9813df75e31cc270fb7071948340cb2c7e973da",
+    "stage_id": "a7b4ced9-1507-429f-865e-3afce8cc2d48",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": "Staged via direct dispatch of npm-publish.yml run 43636977495 (j.publish stage blocked by red public test gate)"
   }
 ]
