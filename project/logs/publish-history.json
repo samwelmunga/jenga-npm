@@ -1038,5 +1038,37 @@
     "dist_tag": "latest",
     "result": null,
     "reason": "Staged via direct dispatch of npm-publish.yml run 43636977495 (j.publish stage blocked by red public test gate)"
+  },
+  {
+    "id": "ce903a7a-2704-4e03-ac7b-bf9a25824317",
+    "version": "v5.1.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-11-14T20:40:10Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "stage_tested",
+    "git_tag": "v5.1.0",
+    "commit_sha": "73874d002124da6df2482c5ff38c0b1b1f844edc",
+    "stage_id": "a7b4ced9-1507-429f-865e-3afce8cc2d48",
+    "dist_tag": null,
+    "result": "pass",
+    "reason": "Manual run of the consumer procedure against st-test via st-test-run.sh (not via /publish stage test): shasum 83ab9e5e matched, postinstall ok, .jenga-version 5.1.0, skill smoke test PASS, package tests 2/2. Script verdict was fail only because st-test npm test: 107 passed, 23 failed, all ENOENT on absent project/data/kallor (untracked consumer data, unrelated to the package; same pattern as v4.7.0; not re-run against 5.0.1)."
+  },
+  {
+    "id": "0e6114de-046b-4ab5-bbce-5f5d930660e2",
+    "version": "v5.1.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-11-15T01:50:18Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "approved",
+    "git_tag": "v5.1.0",
+    "commit_sha": "73874d002124da6df2482c5ff38c0b1b1f844edc",
+    "stage_id": "a7b4ced9-1507-429f-865e-3afce8cc2d48",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": "Approved on npm by the user (2FA); npm dist-tag latest verified as 5.1.0, shasum 83ab9e5e matches the staged tarball."
   }
 ]
