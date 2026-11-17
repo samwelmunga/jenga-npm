@@ -1102,5 +1102,53 @@
     "dist_tag": "latest",
     "result": null,
     "reason": "Approved on npm by the user (2FA); npm dist-tag latest verified as 5.1.0, shasum 83ab9e5e matches the staged tarball."
+  },
+  {
+    "id": "d2a61845-9520-4fb8-a8ab-87fa6ee0fb53",
+    "version": "v5.2.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-11-17T12:28:50Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "staged",
+    "git_tag": "v5.2.0",
+    "commit_sha": "c701c9816578150ce440e5772339ceda65f87d76",
+    "stage_id": "5e93d089-ea01-4b55-8382-b3f9f357d35c",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": null
+  },
+  {
+    "id": "b35103bd-6c53-48d1-9929-1aec5c1f18ea",
+    "version": "v5.2.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-11-17T12:33:42Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "stage_tested",
+    "git_tag": "v5.2.0",
+    "commit_sha": "c701c9816578150ce440e5772339ceda65f87d76",
+    "stage_id": "5e93d089-ea01-4b55-8382-b3f9f357d35c",
+    "dist_tag": null,
+    "result": "fail",
+    "reason": "ST-Test via deploy-stage workflow (run wf-deploy-stage-20261117T074450Z-4db774): 10 passed, 1 failed. Failed check: consumer npm test (23 failed, 107 passed, 34 skipped of 164). Package-level checks (download, shasum, install, .jenga-version, both skill smoke tests, package tests) all passed. stage test not re-run."
+  },
+  {
+    "id": "d4dd5f3f-98c7-44e8-8ce5-ee58ae7d3d08",
+    "version": "v5.2.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-11-17T15:55:27Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "approved",
+    "git_tag": "v5.2.0",
+    "commit_sha": "c701c9816578150ce440e5772339ceda65f87d76",
+    "stage_id": "5e93d089-ea01-4b55-8382-b3f9f357d35c",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": "Approved manually by the user outside this session (stage approve with 2FA). Verified afterwards on the registry: @jenga-ai/agent@5.2.0 published 2026-11-17T15:51:50Z, dist-tag latest, shasum c29b76017183843e82b9e9f4bc5b1c7590c02e1f identical to the staged tarball. Preceding stage_tested entry is result fail (consumer npm test: 23 failures from missing gitignored project/data/kallor in st-test, unrelated to the package)."
   }
 ]
