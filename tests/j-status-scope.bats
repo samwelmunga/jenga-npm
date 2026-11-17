@@ -20,7 +20,8 @@ setup() {
   mkdir -p "$STUB_DIR"
 }
 
-# mk_stub <variant>: "full" has edges, a ready task and two unlocked_by; "empty" has no edges and nothing ready.
+# mk_stub <variant>: "full" has edges, a ready task and two unlocked_by; "empty" has no edges and nothing ready;
+# "notasks" has a story but no task at all (E92_S09_T01: only that one shows tree_empty).
 mk_stub() {
   local variant="${1:-full}"
   {
@@ -36,6 +37,14 @@ mk_stub() {
           {"id":"E07_S02_T01","story_id":"E07_S02","title":"Third task","state":"locked","depends_on":["E07_S01_T02"],"unlocked_by":null},
           {"id":"E07_S02_T02","story_id":"E07_S02","title":"Fourth task","state":"failed","depends_on":[],"unlocked_by":null},
           {"id":"E07_S02_T03","story_id":"E07_S02","title":"Fifth task","state":"in_progress","depends_on":["E07_S01_T01"],"unlocked_by":"E07_S01_T01"}],
+ "warnings":[]}
+JSON
+    elif [ "$variant" = "notasks" ]; then
+      cat <<'JSON'
+{"schema_version":1,"scope":{"type":"graph","within":"E07"},"external":[],"ready":[],
+ "epics":[{"id":"E07","title":"Epic seven","depends_on":[]}],
+ "stories":[{"id":"E07_S01","epic_id":"E07","title":"Story one","depends_on":[],"complete":false,"stop":"pending"}],
+ "tasks":[],
  "warnings":[]}
 JSON
     else
@@ -147,13 +156,27 @@ JSON
   [[ "$output" != *"━"* && "$output" != *"╌"* ]]
 }
 
-@test "no dependencies shows tree_empty; nothing ready shows nothing_ready" {
+@test "no dependency edge still draws the tree (E92_S09_T01); nothing ready shows nothing_ready" {
   mk_stub empty
   run bash "$S" E07 --color never
   [ "$status" -eq 0 ]
-  [[ "$output" == *"No dependencies in this scope"* ]]
+  [[ "$output" == *"Story one"* ]]
+  [[ "$output" == *"E07_S01_T01"*"Locked"*"First task"* ]]
+  [[ "$output" != *"No tasks in this scope"* ]]
+  [[ "$output" != *"No dependencies"* ]]
   [[ "$output" == *"Nothing is ready to take right now"* ]]
   [[ "$output" != *"unlocked by"* ]]
+}
+
+@test "only a scope with no tasks shows tree_empty, in English and Swedish (E92_S09_T01)" {
+  mk_stub notasks
+  run bash "$S" E07 --color never
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"No tasks in this scope"* ]]
+  [[ "$output" != *"Story one"* ]]
+  JENGA_PROGRESS_LANG=sv run bash "$S" E07 --color never
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Inga uppgifter i detta omfång"* ]]
 }
 
 @test "failing board-progress.sh: one stderr warning, empty stdout, exit 0" {

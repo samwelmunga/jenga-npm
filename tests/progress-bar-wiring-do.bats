@@ -158,3 +158,38 @@ new_section() {
   [ "$p" -gt "$l" ]
   [ $((p - l)) -le 8 ]
 }
+
+# --- E92_S08_T07: the lines are copied into the reply; the colour rule lives once, in skills/j-break/SKILL.md ----------
+
+@test "E92_S08_T07: both calls run with --charset utf8 --color never and the lines are copied into the reply as a fenced code block" {
+  sec="$(new_section)"
+  grep -qF 'RP --scope story --task <the finished task id> --after-story --charset utf8 --color never' <<<"$sec"
+  grep -qF "RP --scope story --task <the ids of the bundle's finished tasks> --after-story --charset utf8 --color never" <<<"$sec"
+  [ "$(grep -c -- 'RP --scope story [^`]*--after-story --charset utf8 --color never' <<<"$sec")" -eq 2 ]
+  grep -qF 'copy the lines it prints into your reply as a fenced code block' <<<"$sec"
+  run grep -F 'show the lines it prints' "$SKILL"
+  [ "$status" -ne 0 ]
+  # the rest of the rule is one pointer to j.break, not repeated here
+  grep -qF '`skills/j-break/SKILL.md` ("Progress lines")' <<<"$sec"
+}
+
+@test "E92_S08_T07: the colour sentence is not in this section; it appears once, in skills/j-break/SKILL.md" {
+  run grep -F -- '--color always' <<<"$(new_section)"
+  [ "$status" -ne 0 ]
+  [ "$(grep -c -- 'Colour needs `--color always` in a real terminal' "$REPO_ROOT/skills/j-break/SKILL.md")" -eq 1 ]
+  for f in "$REPO_ROOT/skills/j-do/SKILL.md" "$REPO_ROOT/skills/j-dooo/SKILL.md" "$REPO_ROOT/skills/jenga/SKILL.md"; do
+    run grep -iF 'needs `--color always`' "$f"
+    [ "$status" -ne 0 ] || { echo "colour sentence repeated in $f" >&2; return 1; }
+  done
+}
+
+@test "E92_S08_T07: skills/j-break/SKILL.md documents the copy rule, the Node default and --legacy" {
+  B="$REPO_ROOT/skills/j-break/SKILL.md"
+  sec="$(awk '/^## Progress lines/{f=1; print; next} f && /^## /{exit} f{print}' "$B")"
+  [ -n "$sec" ]
+  grep -qF -- '--charset utf8 --color never' <<<"$sec"
+  grep -qF 'fenced code block' <<<"$sec"
+  grep -qF -- '`--legacy`' <<<"$sec"
+  grep -qF 'JENGA_PROGRESS_RENDERER=legacy' <<<"$sec"
+  grep -qF 'lib/progress/cli.js' <<<"$sec"
+}

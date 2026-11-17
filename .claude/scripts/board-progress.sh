@@ -12,6 +12,57 @@
 #   board-progress.sh --backlog [--items] [--root <dir>]              (the items queued in project/todo.md, see below)
 #   board-progress.sh <scope> --summary [--root <dir>]                (compact plain-text block instead of JSON, see below)
 #   board-progress.sh --by-parent [--root <dir>]                      (totals per epic and per story in one pass, see below)
+#   board-progress.sh --graph [--counts-only] [--within <id>] [--root <dir>]   (counts plus depends_on edges in one pass)
+#
+# --graph (E92_S06_T01): the batch call behind the epic cards, the overlay dependency tree and the scoped j.status block.
+# Prints {"schema_version":1,"scope":{"type":"graph"},"epics":[...],"stories":[...],"tasks":[...],"warnings":[]} in numeric
+# id order. epics[] carry id, title, depends_on, stories {totals, complete} (totals over the epic's stories, complete = the
+# number of stories whose complete flag is true), tasks {totals} (over every task under the epic, by each task's own
+# epic_id) and epic_progress (the epic percent, see below). stories[] carry id, epic_id, title, depends_on, totals (over
+# the story's tasks), complete (task denominator > 0 and done == denominator; rejected tasks are excluded as everywhere)
+# and stop, the story's single
+# colour bucket: rejected (the story's own status is Rejected), done (complete), failed (any failed task), in_progress (any
+# task in progress, or some but not all done), else pending. tasks[] carry id, story_id, epic_id, title, status, bucket and
+# depends_on. The totals are the very objects --epic/--story print: the same load stage, status table and bucket
+# arithmetic, no second implementation. --counts-only leaves out the tasks array and changes nothing else (the card
+# payload). depends_on is parsed in every form found on the board (empty, scalar, comma separated, inline list, YAML block
+# list); an id that matches a board file by numeric value (E1 is E01) is printed as that file's own id, any other id stays
+# as written (reported as an unknown_dependency warning, see below). An edge points from an item to each id in its depends_on. It is a scope
+# of its own (combining it with another scope flag, --items or --summary is a usage error, exit 2) and exits 3 only when
+# the board has no epic file at all.
+#
+# --graph states (E92_S06_T02). Every task also carries state, blocked_by and unlocked_by, and the payload gains ready,
+# ready_count and (with --within) external, so no consumer re-derives the dependency semantics.
+#   state: done, in_progress, failed (the failed bucket: Failed and Blocked), rejected, unknown (a status outside the table),
+#     or, for a task in the pending bucket, ready when every id in its own depends_on AND in its story's depends_on is
+#     satisfied, else locked. An id is satisfied when the item it names (task, story or epic) is in the done bucket through its
+#     OWN status, or is rejected (rejected work is excluded everywhere). A dependency that is failed, in progress, pending or
+#     of unknown status is not satisfied, so a task depending on a failed item stays locked. An id that names no board item
+#     does not block and gives an unknown_dependency warning ({kind, id, detail}, id = the dependent).
+#   blocked_by: the unsatisfied ids (the task's own, then its story's, each once); [] unless state is locked.
+#   waiting_on (E92_S10_T01): the same unsatisfied ids, by the same rule, for EVERY task that is not in the done bucket (in
+#     progress, failed, rejected and unknown too, not only pending); [] for a done task and for a task whose effective
+#     dependencies are all satisfied. For a pending task it equals blocked_by. It is what the padlock gate reads (closed
+#     exactly when the task is not done and waiting_on is not empty), so no consumer re-derives satisfaction; an added key
+#     (blocked_by keeps its meaning), so schema_version stays 1.
+#   unfinished_deps (E92_S11_T02): the same unsatisfied ids, by the same rule, for a task IN the done bucket; [] for every
+#     other task and for a done task whose effective dependencies are all satisfied. A done task with a non-empty list is
+#     a board contradiction (user decision 2026-11-15: a task done before its dependency did not really depend on it): a
+#     dependency reopened after the task was done, or a wrong depends_on. It changes nothing else: the task stays in the
+#     done bucket and counts as done everywhere, its state stays done and its padlock gate open (E92_S10_T01). The views
+#     mark it with a yellow "?" and j.reconcile reports it (skills/j-reconcile/scripts/detect-done-before-dependency.sh).
+#     waiting_on and unfinished_deps never both hold ids for one task. An added key; schema_version stays 1.
+#   unlocked_by: for a ready, in_progress or done task with at least one depends_on, the done dependency of its OWN
+#     depends_on that finished last: the larger date_completed wins, a tie or missing dates fall back to the larger id by
+#     numeric order (E10 > E9); null when there is none.
+#   ready: top level, the ids of the ready tasks in numeric order. ready_count: per story and per epic entry, its ready tasks.
+#   A dependency cycle terminates: its members stay locked and each gets a dependency_cycle warning.
+#   --within <id> (only with --graph; an epic or a story id, any width): epics, stories, tasks and warnings are restricted to
+#     that scope (an epic scope lists that epic only; a story scope lists no epic). depends_on keeps its edges to items
+#     outside the scope, and every outside board item the scope references through them is listed once under a top-level
+#     external array of {id, status, bucket} in numeric order (the key is present, possibly empty, only with --within) and
+#     scope gains "within". State computation is done over the whole board first, so it does not depend on --within. A
+#     malformed id, a task id, an unknown id, or --within without --graph exits 2.
 #
 # --by-parent (E92_S05_T02): one pass for j.status, which needs a bar for every epic and every story and must not re-read
 # the board once per item. Prints {"schema_version":1,"scope":{"type":"by-parent"},"epics":[{"id","level":"stories",
@@ -20,7 +71,36 @@
 # same totals object and the same status table and denominator rule as every other mode (it reuses the load stage and the
 # bucket/total arithmetic; there is no second implementation). An epic with no stories and a story with no tasks are
 # listed with all-zero totals; the mode exits 3 only when the board has no epic file at all. It is a scope of its own: it
-# cannot be combined with another scope flag, --items or --summary (usage error, exit 2).
+# cannot be combined with another scope flag, --items or --summary (usage error, exit 2). Each epic entry also carries
+# epic_progress (below), after its totals; story entries do not.
+#
+# epic_progress (E92_S09_T03): the epic percent that counts undecomposed stories, the one figure every view shows as an
+# epic's percent. {stories, decomposed, tasks_done, tasks_denominator, percent, goal_reached,
+# failed_stories}:
+#   stories            the epic's counted stories: own bucket not rejected and not unknown (= its stories denominator)
+#   decomposed         counted stories with at least one counted task (task denominator > 0; a story whose tasks are all
+#                      rejected or of unknown status is not decomposed)
+#   tasks_done, tasks_denominator   done and denominator over the tasks of the decomposed stories; a task counts under
+#                      its story when its own story_id names the story AND its own epic_id names the story's epic
+#   percent            floor(100 * tasks_done * decomposed / (tasks_denominator * stories)), exact integer arithmetic;
+#                      0 when stories or decomposed is 0 (no division by zero). The user's formula: the task fraction of
+#                      the decomposed stories times decomposed / stories. At most 99 while failed_stories is not empty.
+#   goal_reached       true exactly when stories > 0, decomposed == stories, tasks_done == tasks_denominator AND
+#                      failed_stories is empty (E92_S10_T02, user decision 2026-11-15: no goal while a story has failed)
+#   failed_stories     (E92_S10_T02) the ids of the epic's counted stories whose OWN status is in the failed bucket
+#                      (Failed and Blocked; the user named Failed, Blocked follows the bucket by default and can be
+#                      narrowed later), numeric id order, [] when none. While it is not empty the goal is not reached and
+#                      percent is capped at 99 (below 100 unchanged), so a view never shows 100 without the goal; a view
+#                      names these stories where it would have shown the congratulation (labels goal_failed and
+#                      goal_failed_more). A story whose tasks include a failed task is already below 100 (that task is not
+#                      done); this rule is about the story's own status only.
+# Printed in --graph (every epic entry, with --counts-only and --within too), --by-parent (every epic entry), --epic <id>
+# (top level, between levels and warnings) and --epic <id> --summary (one `epic` line after the level lines:
+# `epic     30% · 3/5 stories decomposed · 3/6 tasks done`, with ` · failed stories: <ids>` appended only while
+# failed_stories is not empty). --story, --ids, --all and --backlog do not carry it.
+# tasks.totals, stories.totals and stories.complete keep their meaning; an added key, so schema_version stays 1. A view
+# that shows percent shows tasks_done/tasks_denominator beside it (not tasks.totals) and decomposed/stories whenever
+# decomposed < stories, so the numbers next to the percent never contradict it.
 #
 # --summary (E92_S05_T01): replaces the JSON with a compact plain-text overview, one line per level the scope holds
 # (tasks, stories, epics, in that order), built by the same render pass from the same totals and the same status table as
@@ -30,7 +110,8 @@
 # when greater than 0. The rejected count is a note and is never part of done/denominator. The words in progress, failed,
 # unknown and the rejected note come from scripts/lib/progress-labels.sh in the effective language (JENGA_PROGRESS_LANG;
 # default en); `done` and `pending` and the level names are fixed words because that library has no key for them. The
-# block carries no colour and no ESC byte, and is byte-identical across runs. Warnings follow the block as
+# block carries no colour and no ESC byte, and is byte-identical across runs. --epic adds the epic_progress line after
+# the level lines (its words are fixed English too, for the same reason). Warnings follow the block as
 # `warning: <kind> <id>: <detail>` lines (control bytes in the detail become `?`). Exit codes are those of the JSON
 # mode (empty scope 3, unknown id 2); --items has no meaning here and is ignored.
 #
@@ -88,6 +169,7 @@ usage() {
   cat >&2 <<'USAGE'
 Usage: board-progress.sh <scope> [--items] [--root <dir>]
        board-progress.sh --by-parent [--root <dir>]
+       board-progress.sh --graph [--counts-only] [--within <id>] [--root <dir>]
   --epic <id>     one epic: its stories and its tasks
   --story <id>    one story: its tasks
   --ids <list>    explicit ids, comma separated (a space after a comma is fine; the flag may repeat); any mix of
@@ -97,6 +179,9 @@ Usage: board-progress.sh <scope> [--items] [--root <dir>]
   --items        also list {id, status} per counted item, in numeric id order
   --summary       print a compact plain-text block (one line per level, then warning lines) instead of JSON
   --by-parent     totals per epic (over its stories) and per story (over its tasks), one pass; no --items or --summary
+  --graph         counts per epic, story and task plus their depends_on edges, one pass; no --items or --summary
+  --counts-only   with --graph: leave out the tasks array
+  --within <id>   with --graph: restrict to an epic or story id; outside items they reference go under external
   --root <dir>    working-file anchor (default: scripts/resolve-root.sh)
 Prints JSON (schema_version 1), or with --summary a plain-text block, on stdout. Exit: 0 ok, 1 internal, 2 usage or
 unknown id, 3 empty scope.
@@ -115,7 +200,7 @@ die_usage() {
 }
 
 # ---- arguments --------------------------------------------------------------------------------------------------
-SCOPE="" TARGET="" ITEMS=0 SUMMARY=0 ROOT_OVERRIDE="" IDS_FLAGS=""
+SCOPE="" TARGET="" ITEMS=0 SUMMARY=0 ROOT_OVERRIDE="" IDS_FLAGS="" COUNTS_ONLY=0 WITHIN="" WITHIN_SET=0
 while [ $# -gt 0 ]; do
   case "$1" in
     -h|--help) usage; exit 0 ;;
@@ -146,6 +231,14 @@ while [ $# -gt 0 ]; do
     --by-parent)
       [ -z "$SCOPE" ] || die_usage "exactly one scope flag is allowed (got --$SCOPE and --by-parent)"
       SCOPE="by-parent"; shift ;;
+    --graph)
+      [ -z "$SCOPE" ] || die_usage "exactly one scope flag is allowed (got --$SCOPE and --graph)"
+      SCOPE="graph"; shift ;;
+    --counts-only) COUNTS_ONLY=1; shift ;;
+    --within)
+      [ $# -ge 2 ] || die_usage "--within needs an id argument"
+      WITHIN="$2"; WITHIN_SET=1; shift 2 ;;
+    --within=*) WITHIN="${1#*=}"; WITHIN_SET=1; shift ;;
     --items) ITEMS=1; shift ;;
     --summary) SUMMARY=1; shift ;;
     --root)
@@ -156,11 +249,24 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ -n "$SCOPE" ] || die_usage "a scope flag is required (--epic, --story, --ids, --backlog, --all or --by-parent)"
+[ -n "$SCOPE" ] || die_usage "a scope flag is required (--epic, --story, --ids, --backlog, --all, --by-parent or --graph)"
 if [ "$SCOPE" = "by-parent" ]; then
   [ "$ITEMS" -eq 0 ] || die_usage "--by-parent cannot be combined with --items"
   [ "$SUMMARY" -eq 0 ] || die_usage "--by-parent cannot be combined with --summary"
 fi
+if [ "$SCOPE" = "graph" ]; then
+  [ "$ITEMS" -eq 0 ] || die_usage "--graph cannot be combined with --items"
+  [ "$SUMMARY" -eq 0 ] || die_usage "--graph cannot be combined with --summary"
+fi
+[ "$COUNTS_ONLY" -eq 0 ] || [ "$SCOPE" = "graph" ] || die_usage "--counts-only is only valid with --graph"
+
+if [ "$WITHIN_SET" -eq 1 ]; then
+  [ "$SCOPE" = "graph" ] || die_usage "--within is only valid with --graph"
+  WITHIN_KIND="$(board_id_kind "$WITHIN")" \
+    || die 2 "malformed --within id '$WITHIN' (expected E<digits> or E<digits>_S<digits>)"
+  [ "$WITHIN_KIND" != "task" ] || die 2 "--within takes an epic or a story id, not a task id ('$WITHIN')"
+fi
+
 case "$SCOPE" in
   epic)  [[ $TARGET =~ $BOARD_ID_EPIC_RE ]]  || die 2 "malformed epic id '$TARGET' (expected E<digits>)" ;;
   story) [[ $TARGET =~ $BOARD_ID_STORY_RE ]] || die 2 "malformed story id '$TARGET' (expected E<digits>_S<digits>)" ;;
@@ -271,13 +377,33 @@ function val(line, klen,   v, a) {
   }
   return v
 }
-function load(file,   line, n, id, st, sid, eid, base, level, key, i) {
-  n = 0; id = ""; st = ""; sid = ""; eid = ""
+# Collect the board ids found in one depends_on fragment (any form: scalar, comma list, [inline list], a block-list item)
+# into the global dep (comma separated, upper-cased, first mention wins). Anything that is not an id is ignored.
+function add_deps(v,   a, m, i, t) {
+  gsub(/[\[\]]/, " ", v); gsub(/\042/, " ", v); gsub(/\047/, " ", v); gsub(/,/, " ", v)
+  m = split(v, a, /[ \t]+/)
+  for (i = 1; i <= m; i++) {
+    t = a[i]
+    if (t !~ /^[Ee][0-9]+(_[Ss][0-9]+(_[Tt][0-9]+)?)?$/) continue
+    t = toupper(t)
+    if (index("," dep ",", "," t ",") == 0) dep = dep (dep == "" ? "" : ",") t
+  }
+}
+function load(file,   line, n, id, st, sid, eid, base, level, key, i, ttl, inblk, v) {
+  n = 0; id = ""; st = ""; sid = ""; eid = ""; ttl = ""; dep = ""; dcm = ""; inblk = 0
   while ((getline line < file) > 0) {
     n++
     sub(/\r$/, "", line)
     if (n == 1) { if (line !~ /^---[ \t]*$/) break; continue }
     if (line ~ /^---[ \t]*$/) break
+    if (inblk) {
+      if (line ~ /^[ \t]*-([ \t]|$)/) { v = line; sub(/^[ \t]*-/, "", v); add_deps(v); continue }
+      if (line ~ /^[ \t]*(#.*)?$/) continue
+      inblk = 0
+    }
+    if (line ~ /^depends_on:/) { v = val(line, 11); if (v == "") inblk = 1; else add_deps(v); continue }
+    if (line ~ /^date_completed:/) { dcm = val(line, 15); continue }
+    if (line ~ /^title:/) { ttl = val(line, 6); gsub(/[\t]/, " ", ttl); continue }
     if (line ~ /^id:/) id = val(line, 3)
     else if (line ~ /^status:/) st = val(line, 7)
     else if (line ~ /^story_id:/) sid = val(line, 9)
@@ -296,7 +422,7 @@ function load(file,   line, n, id, st, sid, eid, base, level, key, i) {
   if (level != "epic" && eid == "") { i = index(id, "_S"); eid = substr(id, 1, i - 1) }
   key = norm(id)
   if (key in lv) { if (file >= fl[key]) return }
-  lv[key] = level; iid[key] = id; stat[key] = st; fl[key] = file
+  lv[key] = level; iid[key] = id; stat[key] = st; fl[key] = file; tt[key] = ttl; dp[key] = dep; dcl[key] = dcm
   rs[key] = sid; re[key] = eid
   ps[key] = (sid ~ /^E[0-9]+_S[0-9]+$/) ? norm(sid) : ""
   pe[key] = (eid ~ /^E[0-9]+$/) ? norm(eid) : ""
@@ -304,11 +430,14 @@ function load(file,   line, n, id, st, sid, eid, base, level, key, i) {
 function fail(code, msg) { print "E\t" code "\t" msg; failed = 1; exit }
 # The 5th field is the id of the item's parent (a story's epic, a task's story) when that parent has a board file at the
 # right level, else empty; only the by-parent render reads it.
-function member(k,   d, par) {
+function member(k,   d, par, dl, nd, dpa, x) {
   par = ""
   if (lv[k] == "task" && (ps[k] in lv) && lv[ps[k]] == "story") par = iid[ps[k]]
   else if (lv[k] == "story" && (pe[k] in lv) && lv[pe[k]] == "epic") par = iid[pe[k]]
-  print "M\t" lv[k] "\t" iid[k] "\t" stat[k] "\t" par
+  dl = ""
+  nd = split(dp[k], dpa, ",")
+  for (d = 1; d <= nd; d++) { x = dpa[d]; if (x == "") continue; if (norm(x) in lv) x = iid[norm(x)]; dl = dl (dl == "" ? "" : ",") x }
+  print "M\t" lv[k] "\t" iid[k] "\t" stat[k] "\t" par "\t" k "\t" pe[k] "\t" ps[k] "\t" rs[k] "\t" re[k] "\t" tt[k] "\t" dl "\t" dcl[k]
   count++
   if (lv[k] == "task") {
     d = ""
@@ -364,7 +493,12 @@ END {
     for (i = 1; i <= n; i++) { k = norm(tl[i]); if (!(k in seen)) { seen[k] = 1; member(k) } }
   } else if (scope == "all") {
     for (k in lv) member(k)
-  } else if (scope == "by-parent") {
+  } else if (scope == "by-parent" || scope == "graph") {
+    if (scope == "graph" && within != "") {
+      t = norm(within)
+      want = (within ~ /_S/) ? "story" : "epic"
+      if (!(t in lv) || lv[t] != want) fail(2, "unknown " want " id: " within)
+    }
     for (k in lv) { member(k); if (lv[k] == "epic") ne++ }
     if (ne == 0) fail(3, "empty scope: the board has no epic")
   } else if (scope == "backlog") {
@@ -405,18 +539,38 @@ function jesc(s,   i, c, o) {
   return o
 }
 function bucket(s) { return (s in tbuck) ? tbuck[s] : "unknown" }
+function nz(s) { sub(/^0+/, "", s); if (s == "") s = "0"; return s }
+function norm(id,   n, p, r) {
+  n = split(id, p, "_")
+  r = "E" nz(substr(p[1], 2))
+  if (n >= 2) r = r "_S" nz(substr(p[2], 2))
+  return r
+}
+# --within membership (always true without it). An epic scope holds the epic, its stories and its tasks; a story scope the
+# story and its tasks (no epic).
+function inscope(id) {
+  if (within == "") return 1
+  if (!(id in lvl)) return 0
+  if (wl == "epic") return (lvl[id] == "epic") ? (gkey[id] == wkey) : (gpe[id] == wkey)
+  if (lvl[id] == "story") return gkey[id] == wkey
+  if (lvl[id] == "task") return gps[id] == wkey
+  return 0
+}
 # Plain text for the summary: control bytes (ESC included) become "?".
 function plain(s,   i, c, o) {
   o = ""
   for (i = 1; i <= length(s); i++) { c = substr(s, i, 1); o = o ((c < " " || c == "\177") ? "?" : c) }
   return o
 }
-BEGIN { FS = "\t"; sec = 0 }
+BEGIN { FS = "\t"; sec = 0; if (within != "") { wkey = norm(within); wl = (within ~ /_[Ss]/) ? "story" : "epic" } }
 $0 == "@@" { sec++; next }
 sec == 0 { split($0, a, "|"); tn++; tstat[tn] = a[1]; tbuck[a[1]] = a[2]; next }
 sec == 1 { no++; order[no] = $0; next }
 sec == 2 {
-  if ($1 == "M") { lvl[$3] = $2; st[$3] = $4; ism[$3] = 1; par[$3] = $5 }
+  if ($1 == "M") {
+    lvl[$3] = $2; st[$3] = $4; ism[$3] = 1; par[$3] = $5
+    gkey[$3] = $6; gpe[$3] = $7; gps[$3] = $8; gsid[$3] = $9; geid[$3] = $10; gttl[$3] = $11; gdep[$3] = $12; gdc[$3] = $13
+  }
   else if ($1 == "W") { nw[$3]++; wk[$3, nw[$3]] = $2; wd[$3, nw[$3]] = $4 }
   next
 }
@@ -470,6 +624,64 @@ function render_levels(   nl, ls, i, j, p, present, fl) {
   }
   return fl
 }
+# The epic percent (E92_S09_T03), computed once per run for every epic key from the member records, with the same bucket()
+# and the denominator rule. A counted story is a story whose own bucket is not rejected and not unknown; a decomposed story
+# is a counted story with at least one counted task. A task counts toward a story when its own story_id names that story
+# AND its own epic_id names the story's epic, so --epic <id> (whose records are selected by each item's own epic_id) and
+# --graph / --by-parent give the same object for the same epic.
+function epic_progress_calc(   i, id, b, sk, ek) {
+  if (epc_ran) return
+  epc_ran = 1
+  for (i = 1; i <= no; i++) {
+    id = order[i]
+    if (lvl[id] != "task") continue
+    b = bucket(st[id])
+    if (b == "rejected" || b == "unknown") continue
+    sk = gps[id] SUBSEP gpe[id]
+    epc_den[sk]++
+    if (b == "done") epc_dn[sk]++
+  }
+  for (i = 1; i <= no; i++) {
+    id = order[i]
+    if (lvl[id] != "story") continue
+    b = bucket(st[id])
+    if (b == "rejected" || b == "unknown") continue
+    ek = gpe[id]; sk = gkey[id] SUBSEP ek
+    ep_st[ek]++
+    # E92_S10_T02: a counted story whose own status is in the failed bucket (Failed and Blocked) blocks the goal; ids in
+    # the numeric id order of the run (order[] is board_id_sort order).
+    if (b == "failed") { ep_nf[ek]++; ep_fl[ek] = ep_fl[ek] (ep_nf[ek] > 1 ? "," : "") id }
+    if (epc_den[sk] > 0) { ep_dec[ek]++; ep_td[ek] += epc_dn[sk]; ep_tden[ek] += epc_den[sk] }
+  }
+}
+# The figures of one epic key into ev_*. percent = floor(100 * tasks_done * decomposed / (tasks_denominator * stories)), in
+# exact integer arithmetic, 0 when there is no counted story or no decomposed one (no division by zero); goal_reached is true
+# exactly when percent is 100: every counted story decomposed, every counted task of them done, and (E92_S10_T02) no
+# counted story in the failed bucket by its own status. While there is such a story the percent is capped at 99, so 100 is
+# never printed without the goal; below 100 the formula is unchanged. ev_fl is the comma list of those story ids.
+function epic_progress_vals(ek,   num, den) {
+  epic_progress_calc()
+  ev_s = ep_st[ek] + 0; ev_d = ep_dec[ek] + 0; ev_td = ep_td[ek] + 0; ev_tden = ep_tden[ek] + 0; ev_pct = 0
+  ev_nf = ep_nf[ek] + 0; ev_fl = ep_fl[ek]
+  if (ev_s > 0 && ev_d > 0) { num = 100 * ev_td * ev_d; den = ev_tden * ev_s; ev_pct = (num - num % den) / den }
+  if (ev_nf > 0 && ev_pct > 99) ev_pct = 99
+  ev_goal = (ev_s > 0 && ev_d == ev_s && ev_td == ev_tden && ev_nf == 0) ? "true" : "false"
+}
+# The epic_progress object of one epic key, indented like totals_obj().
+function epic_progress_obj(ek, ind) {
+  epic_progress_vals(ek)
+  printf "{\n%s  \"stories\": %d,\n%s  \"decomposed\": %d,\n%s  \"tasks_done\": %d,\n%s  \"tasks_denominator\": %d,\n", ind, ev_s, ind, ev_d, ind, ev_td, ind, ev_tden
+  printf "%s  \"percent\": %d,\n%s  \"goal_reached\": %s,\n", ind, ev_pct, ind, ev_goal
+  printf "%s  \"failed_stories\": %s\n%s}", ind, deps_json(ev_fl), ind
+}
+# The --epic --summary line of the same figures: `epic     30% · 3/5 stories decomposed · 3/6 tasks done`, plus
+# ` · failed stories: E92_S08` (E92_S10_T02) only while failed_stories is not empty (the line is otherwise unchanged).
+function epic_progress_line(ek,   fl) {
+  epic_progress_vals(ek)
+  printf "%-8s %d%% \302\267 %d/%d stories decomposed \302\267 %d/%d tasks done", "epic", ev_pct, ev_d, ev_s, ev_td, ev_tden
+  if (ev_nf > 0) { fl = ev_fl; gsub(/,/, ", ", fl); printf " \302\267 failed stories: %s", plain(fl) }
+  printf "\n"
+}
 # The totals object, as block() prints it: same keys, same bucket arithmetic, the denominator rule of the contract.
 function totals_obj(t, ind) {
   printf "{\n%s  \"done\": %d,\n%s  \"in_progress\": %d,\n%s  \"failed\": %d,\n%s  \"pending\": %d,\n", ind, t["done"] + 0, ind, t["in_progress"] + 0, ind, t["failed"] + 0, ind, t["pending"] + 0
@@ -493,6 +705,7 @@ function parent_list(key, L, CL, clabel,   i, id, p, b, first, k) {
     for (k in bk) tt[k] = ptot[id, k] + 0
     printf "%s\n    {\n      \"id\": \"%s\",\n      \"level\": \"%s\",\n      \"totals\": ", (first ? "" : ","), jesc(id), clabel
     totals_obj(tt, "      ")
+    if (L == "epic") { printf ",\n      \"epic_progress\": "; epic_progress_obj(gkey[id], "      ") }
     printf "\n    }"
     first = 0
   }
@@ -503,10 +716,14 @@ function by_parent_end(   i, j, id, fw) {
   printf "{\n  \"schema_version\": 1,\n  \"scope\": {\n    \"type\": \"by-parent\"\n  },\n"
   parent_list("epics", "epic", "story", "stories")
   parent_list("stories", "story", "task", "tasks")
+  warn_tail()
+}
+function warn_tail(   i, j, id, fw) {
   printf "  \"warnings\": ["
   fw = 1
   for (i = 1; i <= no; i++) {
     id = order[i]
+    if (!inscope(id)) continue
     for (j = 1; j <= nw[id]; j++) {
       printf "%s\n    {\n      \"kind\": \"%s\",\n      \"id\": \"%s\",\n      \"detail\": \"%s\"\n    }", (fw ? "" : ","), wk[id, j], jesc(id), jesc(wd[id, j]); fw = 0
     }
@@ -516,8 +733,178 @@ function by_parent_end(   i, j, id, fw) {
   }
   printf "%s]\n}\n", (fw ? "" : "\n  ")
 }
+# --graph: the by-parent tallies (same bucket() and totals_obj()) plus the per-item fields. Tasks are tallied once under
+# their story's key and once under their epic's key, stories under their epic's key; a parent is read by its own key.
+function deps_json(d,   a, n, i, o) {
+  if (d == "") return "[]"
+  n = split(d, a, ","); o = "["
+  for (i = 1; i <= n; i++) o = o (i > 1 ? ", " : "") "\"" jesc(a[i]) "\""
+  return o "]"
+}
+function sum_den(arr, k) { return arr[k, "done"] + arr[k, "in_progress"] + arr[k, "failed"] + arr[k, "pending"] }
+# a > b by numeric id order (E10 is after E9, a story after its epic's lower-numbered stories).
+function idgt(a, b,   pa, pb, na, nb, i, x, y) {
+  na = split(a, pa, "_"); nb = split(b, pb, "_")
+  for (i = 1; i <= 3; i++) {
+    x = (i <= na) ? substr(pa[i], 2) + 0 : 0; y = (i <= nb) ? substr(pb[i], 2) + 0 : 0
+    if (x != y) return (x > y) ? 1 : 0
+  }
+  return 0
+}
+# Depth-first walk of every depends_on edge between board items; a back edge marks the members of the cycle it closes.
+function dfs(u,   a, n, i, v, j) {
+  col[u] = 1; stk[++sp] = u
+  n = split(gdep[u], a, ",")
+  for (i = 1; i <= n; i++) {
+    v = a[i]
+    if (v == "" || !(v in lvl)) continue
+    if (col[v] == 1) { for (j = sp; j >= 1; j--) { incyc[stk[j]] = 1; if (stk[j] == v) break } }
+    else if (col[v] == 0) dfs(v)
+  }
+  sp--; col[u] = 2
+}
+# One dependency list: append every id that is a board item but not yet satisfied (not done, not rejected) to blk, once.
+function collect_blockers(list,   a, n, i, v, bb) {
+  n = split(list, a, ",")
+  for (i = 1; i <= n; i++) {
+    v = a[i]
+    if (v == "" || !(v in lvl)) continue
+    bb = bucket(st[v])
+    if (bb == "done" || bb == "rejected") continue
+    if (index("," blk ",", "," v ",") == 0) blk = blk (blk == "" ? "" : ",") v
+  }
+}
+function derive_states(   i, id, b, n, a, j, v, best, sidk, sj, d, w) {
+  for (i = 1; i <= no; i++) { id = order[i]; if (id in lvl) kid[gkey[id]] = id }
+  for (i = 1; i <= no; i++) {
+    id = order[i]
+    if (!(id in lvl)) continue
+    n = split(gdep[id], a, ",")
+    for (j = 1; j <= n; j++) if (a[j] != "" && !(a[j] in lvl)) {
+      nw[id]++; wk[id, nw[id]] = "unknown_dependency"; wd[id, nw[id]] = "depends_on names " a[j] ", which is not a board item"
+    }
+    if (col[id] == 0) dfs(id)
+  }
+  for (i = 1; i <= no; i++) {
+    id = order[i]
+    if (incyc[id]) { nw[id]++; wk[id, nw[id]] = "dependency_cycle"; wd[id, nw[id]] = "depends_on closes a dependency cycle" }
+    if (lvl[id] != "task") continue
+    b = bucket(st[id]); blk = ""
+    # The unsatisfied effective ids (own depends_on, then the story's, each once), one rule for every task (E92_S10_T01):
+    # blocked_by for a pending task, waiting_on for any task not in the done bucket, unfinished_deps (E92_S11_T02) for a
+    # task in the done bucket (the same ids it would wait on if it were not done: a board contradiction to flag).
+    collect_blockers(gdep[id])
+    if ((gps[id] in kid) && lvl[kid[gps[id]]] == "story") collect_blockers(gdep[kid[gps[id]]])
+    twait[id] = (b == "done") ? "" : blk
+    tunf[id] = (b == "done") ? blk : ""
+    if (b == "pending") {
+      tstate[id] = (blk == "") ? "ready" : "locked"
+      tblk[id] = blk
+      if (blk == "") { rdy[++nrdy] = id; rcs[gps[id]]++; rce[gpe[id]]++ }
+    } else tstate[id] = b
+    best = ""
+    if (tstate[id] == "ready" || tstate[id] == "in_progress" || tstate[id] == "done") {
+      n = split(gdep[id], a, ",")
+      for (j = 1; j <= n; j++) {
+        v = a[j]
+        if (v == "" || !(v in lvl) || bucket(st[v]) != "done") continue
+        if (best == "") { best = v; continue }
+        d = gdc[v] ""; w = gdc[best] ""
+        if (d > w || (d == w && idgt(v, best))) best = v
+      }
+    }
+    tunl[id] = best
+  }
+}
+function graph_end(   i, id, b, k, first, tt, den, ek, v, n, a, j, ex) {
+  bk["done"] = 1; bk["in_progress"] = 1; bk["failed"] = 1; bk["pending"] = 1; bk["rejected"] = 1; bk["unknown"] = 1
+  derive_states()
+  for (i = 1; i <= no; i++) {
+    id = order[i]; b = bucket(st[id])
+    if (lvl[id] == "task") { stt[gps[id], b]++; ett[gpe[id], b]++ }
+    else if (lvl[id] == "story") est[gpe[id], b]++
+  }
+  for (i = 1; i <= no; i++) {
+    id = order[i]
+    if (lvl[id] != "story") continue
+    den = sum_den(stt, gkey[id])
+    scomp[id] = (den > 0 && stt[gkey[id], "done"] == den) ? 1 : 0
+    if (scomp[id]) ecomp[gpe[id]]++
+  }
+  printf "{\n  \"schema_version\": 1,\n  \"scope\": {\n    \"type\": \"graph\""
+  if (within != "") { for (i = 1; i <= no; i++) if (lvl[order[i]] != "task" && gkey[order[i]] == wkey && ((wl == "story") == (lvl[order[i]] == "story"))) { printf ",\n    \"within\": \"%s\"", jesc(order[i]); break } }
+  printf "\n  },\n  \"epics\": ["
+  first = 1
+  for (i = 1; i <= no; i++) {
+    id = order[i]
+    if (lvl[id] != "epic" || !inscope(id)) continue
+    ek = gkey[id]
+    printf "%s\n    {\n      \"id\": \"%s\",\n      \"title\": \"%s\",\n      \"depends_on\": %s,\n      \"stories\": {\n        \"totals\": ", (first ? "" : ","), jesc(id), jesc(gttl[id]), deps_json(gdep[id])
+    split("", tt); for (k in bk) tt[k] = est[ek, k] + 0
+    totals_obj(tt, "        ")
+    printf ",\n        \"complete\": %d\n      },\n      \"tasks\": {\n        \"totals\": ", ecomp[ek] + 0
+    split("", tt); for (k in bk) tt[k] = ett[ek, k] + 0
+    totals_obj(tt, "        ")
+    printf "\n      },\n      \"epic_progress\": "
+    epic_progress_obj(ek, "      ")
+    printf ",\n      \"ready_count\": %d\n    }", rce[ek] + 0
+    first = 0
+  }
+  printf "%s],\n  \"stories\": [", (first ? "" : "\n  ")
+  first = 1
+  for (i = 1; i <= no; i++) {
+    id = order[i]
+    if (lvl[id] != "story" || !inscope(id)) continue
+    split("", tt); for (k in bk) tt[k] = stt[gkey[id], k] + 0
+    if (bucket(st[id]) == "rejected") stop = "rejected"
+    else if (scomp[id]) stop = "done"
+    else if (tt["failed"] > 0) stop = "failed"
+    else if (tt["in_progress"] > 0 || tt["done"] > 0) stop = "in_progress"
+    else stop = "pending"
+    printf "%s\n    {\n      \"id\": \"%s\",\n      \"epic_id\": \"%s\",\n      \"title\": \"%s\",\n      \"depends_on\": %s,\n      \"totals\": ", (first ? "" : ","), jesc(id), jesc(geid[id]), jesc(gttl[id]), deps_json(gdep[id])
+    totals_obj(tt, "      ")
+    printf ",\n      \"complete\": %s,\n      \"stop\": \"%s\",\n      \"ready_count\": %d\n    }", (scomp[id] ? "true" : "false"), stop, rcs[gkey[id]] + 0
+    first = 0
+  }
+  printf "%s],\n", (first ? "" : "\n  ")
+  if (!counts_only) {
+    printf "  \"tasks\": ["
+    first = 1
+    for (i = 1; i <= no; i++) {
+      id = order[i]
+      if (lvl[id] != "task" || !inscope(id)) continue
+      printf "%s\n    {\n      \"id\": \"%s\",\n      \"story_id\": \"%s\",\n      \"epic_id\": \"%s\",\n      \"title\": \"%s\",\n      \"status\": \"%s\",\n      \"bucket\": \"%s\",\n      \"state\": \"%s\",\n      \"depends_on\": %s,\n      \"blocked_by\": %s,\n      \"waiting_on\": %s,\n      \"unfinished_deps\": %s,\n      \"unlocked_by\": %s\n    }", (first ? "" : ","), jesc(id), jesc(gsid[id]), jesc(geid[id]), jesc(gttl[id]), jesc(st[id]), bucket(st[id]), tstate[id], deps_json(gdep[id]), deps_json(tblk[id]), deps_json(twait[id]), deps_json(tunf[id]), (tunl[id] == "" ? "null" : "\"" jesc(tunl[id]) "\"")
+      first = 0
+    }
+    printf "%s],\n", (first ? "" : "\n  ")
+  }
+  printf "  \"ready\": ["
+  first = 1
+  for (i = 1; i <= nrdy; i++) if (inscope(rdy[i])) { printf "%s\"%s\"", (first ? "" : ", "), jesc(rdy[i]); first = 0 }
+  printf "],\n"
+  if (within != "") {
+    split("", ex)
+    for (i = 1; i <= no; i++) {
+      id = order[i]
+      if (!(id in lvl) || !inscope(id)) continue
+      n = split(gdep[id], a, ",")
+      for (j = 1; j <= n; j++) if ((a[j] in lvl) && !inscope(a[j])) ex[a[j]] = 1
+    }
+    printf "  \"external\": ["
+    first = 1
+    for (i = 1; i <= no; i++) {
+      id = order[i]
+      if (!(id in ex)) continue
+      printf "%s\n    {\n      \"id\": \"%s\",\n      \"status\": \"%s\",\n      \"bucket\": \"%s\"\n    }", (first ? "" : ","), jesc(id), jesc(st[id]), bucket(st[id])
+      first = 0
+    }
+    printf "%s],\n", (first ? "" : "\n  ")
+  }
+  warn_tail()
+}
 function summary_end(   i, j, id, line) {
   render_levels()
+  if (scope_type == "epic") epic_progress_line(norm(scope_ids))
   for (i = 1; i <= no; i++) {
     id = order[i]
     for (j = 1; j <= nw[id]; j++) {
@@ -530,12 +917,15 @@ function summary_end(   i, j, id, line) {
 END {
   if (summary) { summary_end(); exit }
   if (scope_type == "by-parent") { by_parent_end(); exit }
+  if (scope_type == "graph") { graph_end(); exit }
   printf "{\n  \"schema_version\": 1,\n  \"scope\": {\n    \"type\": \"%s\",\n    \"ids\": [", scope_type
   ni = split(scope_ids, sid, ","); fi = 1
   for (i = 1; i <= ni; i++) if (sid[i] != "") { printf "%s\"%s\"", (fi ? "" : ", "), jesc(sid[i]); fi = 0 }
   printf "]\n  },\n  \"levels\": {"
   fl = render_levels()
-  printf "%s},\n  \"warnings\": [", (fl ? "" : "\n  ")
+  printf "%s},\n", (fl ? "" : "\n  ")
+  if (scope_type == "epic") { printf "  \"epic_progress\": "; epic_progress_obj(norm(scope_ids), "  "); printf ",\n" }
+  printf "  \"warnings\": ["
   fw = 1
   for (i = 1; i <= no; i++) {
     id = order[i]
@@ -555,7 +945,7 @@ raw="$({ printf '%s' "$LIST_DIRS" | while IFS= read -r _d; do
            find "$_d" -maxdepth 1 -type f -name '*.md' -print
          done
          if [ -n "$TODO_RECORDS" ]; then printf '%s\n' "$TODO_RECORDS"; fi
-       } | LC_ALL=C awk -v scope="$SCOPE" -v target="$TARGET" "$LOAD_AWK")" \
+       } | LC_ALL=C awk -v scope="$SCOPE" -v target="$TARGET" -v within="$WITHIN" "$LOAD_AWK")" \
   || die 1 "failed to read the board"
 
 TAB="$(printf '\t')"
@@ -587,7 +977,7 @@ esac
 
 json="$({
   printf '%s\n@@\n%s\n@@\n%s\n' "$STATUS_TABLE" "$ids" "$raw"
-} | LC_ALL=C awk -v scope_type="$SCOPE" -v scope_ids="$TARGET" -v items="$ITEMS" -v force_levels="$FORCE_LEVELS" -v summary="$SUMMARY" -v lbl_prog="$SUM_PROG" -v lbl_fail="$SUM_FAIL" -v lbl_unk="$SUM_UNK" -v lbl_rej="$SUM_REJ" "$RENDER_AWK")" \
+} | LC_ALL=C awk -v scope_type="$SCOPE" -v scope_ids="$TARGET" -v items="$ITEMS" -v force_levels="$FORCE_LEVELS" -v summary="$SUMMARY" -v counts_only="$COUNTS_ONLY" -v within="$WITHIN" -v lbl_prog="$SUM_PROG" -v lbl_fail="$SUM_FAIL" -v lbl_unk="$SUM_UNK" -v lbl_rej="$SUM_REJ" "$RENDER_AWK")" \
   || die 1 "failed to render the progress output"
 
 [ -n "$json" ] || die 1 "empty progress output"

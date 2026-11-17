@@ -171,6 +171,10 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+# Package root (scripts/, lib/, templates/): resolved so it also works from a consumer's .claude/skills mirror.
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 REPO_ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)
 
 if [ -z "$REPO_ROOT" ]; then
@@ -186,8 +190,8 @@ fi
 # Mirrors skills/j-init/scripts/init.sh's PKG_ROOT fallback: prefer a monorepo
 # checkout's sibling scripts/ dir, else fall back to the installed npm
 # package under node_modules/@jenga-ai/agent.
-if [ -f "$SCRIPT_DIR/../../../scripts/with-lock.sh" ]; then
-  WITH_LOCK="$SCRIPT_DIR/../../../scripts/with-lock.sh"
+if [ -f "$PACKAGE_ROOT/scripts/with-lock.sh" ]; then
+  WITH_LOCK="$PACKAGE_ROOT/scripts/with-lock.sh"
 elif [ -f "$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/with-lock.sh" ]; then
   WITH_LOCK="$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/with-lock.sh"
 else

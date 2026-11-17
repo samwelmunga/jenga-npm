@@ -123,7 +123,8 @@ export function readConfig(fileId, ctx) {
 
 /**
  * Read one key. Reading is safe, so read-only keys are readable. Returns { code: 0, descriptorKey, value } or
- * { code, message }; a key the descriptor lists but the file lacks is code 3.
+ * { code, message }; a key the descriptor lists but the file lacks is code 3, except an `optional: true` key,
+ * which reads as its descriptor `default` (the same value its consumers fall back to).
  */
 export function getValue(fileId, key, ctx) {
   const c = ctx || loadContext();
@@ -135,6 +136,9 @@ export function getValue(fileId, key, ctx) {
   const cur = readCurrent(c, found.descriptor);
   if (cur.code !== EXIT.ok) return cur;
   if (!has(cur.value, key)) {
+    if (k.entry.optional === true && has(k.entry, "default")) {
+      return { code: EXIT.ok, descriptorKey: k.entry, value: k.entry.default };
+    }
     return fail(EXIT.unknown_file_or_key, `${fileId}.${key} is listed by its descriptor but not set in ${cur.path}`);
   }
   return { code: EXIT.ok, descriptorKey: k.entry, value: cur.value[key] };

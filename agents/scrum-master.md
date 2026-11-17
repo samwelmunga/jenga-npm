@@ -282,18 +282,18 @@ Assign `inline` when **all** of the following are true:
 
 ### `light` scope
 
-`light` sits between `inline` and `task`: a single developer subagent pass with no worktree, self-verified via `$([ -f scripts/smoke-harness.sh ] && echo scripts/smoke-harness.sh || echo node_modules/@jenga-ai/agent/scripts/smoke-harness.sh)` in lieu of a separate tester invocation. If the smoke harness fails, execution falls back to `task` scope automatically at runtime — see `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s Execution Scope Fields section for the full runtime contract.
+`light` sits between `inline` and `task`: a single developer subagent pass with no worktree, self-verified via `$([ -f scripts/smoke-harness.sh ] && echo scripts/smoke-harness.sh || echo node_modules/@jenga-ai/agent/scripts/smoke-harness.sh)` in lieu of a separate tester invocation. That self-check runs only `scripts/smoke.sh` or the test files the project's own scope map selects for the change, never the project's whole suite, and it may verify nothing (exit 3, "nothing verified"). If the smoke harness fails, or verifies nothing, execution falls back to `task` scope automatically at runtime, so the Tester judges the task — see `$([ -f templates/SCRUM_BOARD_SCHEMA.md ] && echo templates/SCRUM_BOARD_SCHEMA.md || echo node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md)`'s Execution Scope Fields section for the full runtime contract.
 
 Assign `light` when **any** of the following are true:
 - The task exceeds `inline_max_files` or `inline_max_lines` (per `project/configs/scope-thresholds.json`), but remains a single, tightly-bounded change (one file, or a small handful of directly related files)
 - The change is purely additive or config-level, like `inline`, but its estimated diff exceeds `inline_max_lines`
-- The task introduces minor branching or a small conditional (not "non-trivial architecture" — that still requires `task`) that would otherwise disqualify it from `inline`, but the change is still self-contained enough to verify with a smoke-harness pass rather than a full tester cycle
+- The task introduces minor branching or a small conditional (not "non-trivial architecture" — that still requires `task`) that would otherwise disqualify it from `inline`, but the change is still self-contained enough to verify with a smoke-harness pass (scope-mapped tests only) rather than a full tester cycle
 
 **Distinguishing `light` from `inline`:** `light` is for changes too big or too branchy for `inline`'s caps (`inline_max_files`, `inline_max_lines`) — if the change fits within those caps with no logic branches, use `inline` instead.
 
 **Distinguishing `light` from `task`:** assign `light`, not `task`, only when **all** of the following also hold:
 - The task does **not** require worktree isolation — it can be implemented directly by a single developer subagent pass
-- The task does **not** require independent tester verification — a `$([ -f scripts/smoke-harness.sh ] && echo scripts/smoke-harness.sh || echo node_modules/@jenga-ai/agent/scripts/smoke-harness.sh)` self-check is sufficient to catch regressions
+- The task does **not** require independent tester verification — a `$([ -f scripts/smoke-harness.sh ] && echo scripts/smoke-harness.sh || echo node_modules/@jenga-ai/agent/scripts/smoke-harness.sh)` self-check is sufficient to catch regressions. That check runs only the test files the project's scope map selects for the changed files (or `scripts/smoke.sh`), so it catches regressions only where such a mapping exists; a change no test maps to verifies nothing and goes to the Tester through the fallback
 - No shared-infrastructure contention exists (same contention concept as the `story` scope's mandatory contention check below — e.g. `package.json`, `settings.json`, `pyproject.toml`)
 - The task has no cross-story dependencies and tester validation is not sensitive to the specific implementation approach chosen
 

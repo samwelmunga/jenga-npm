@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke:
 # ---------------------------------------------------------------------------
 # skills/j-checklist/scripts/checklist-print.sh - print a pre-flight checklist registry (epic E67, story E67_S10,
 # task E67_S10_T01)
@@ -74,7 +75,10 @@ export LC_ALL=C
 
 SELF="$(basename "$0")"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PACKAGE_ROOT="$(cd "$SELF_DIR/../../.." && pwd)"
+# Package root (scripts/, templates/, lib/): resolved by the shared helper so it also works from a consumer's .claude/skills mirror.
+# shellcheck source=/dev/null
+if [ -f "$SELF_DIR/../../index/scripts/package-root.sh" ]; then . "$SELF_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SELF_DIR")" || true
 TEMPLATE_REL="templates/checklist-render.json"
 DEFAULT_REL="templates/checklists.json"
 

@@ -37,7 +37,10 @@ set -o nounset
 
 SCRIPT_NAME="record-execution.sh"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd -- "$SCRIPT_DIR/../../.." && pwd)"
+# Package root (scripts/, templates/, lib/): resolved by the shared helper so it also works from a consumer's .claude/skills mirror.
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+REPO_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 
 usage_err() { printf '%s: %s\n' "$SCRIPT_NAME" "$1" >&2; exit 2; }
 warn() { printf '%s: warning: %s (ledger entry skipped, task unaffected)\n' "$SCRIPT_NAME" "$1" >&2; exit 0; }

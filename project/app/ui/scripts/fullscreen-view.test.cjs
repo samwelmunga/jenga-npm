@@ -258,7 +258,7 @@ const T = (id, story, state, deps) => ({
 })
 const S1 = 'E01_S01'
 const SMALL = [T('E01_S01_T01', S1, 'done', []), T('E01_S01_T02', S1, 'ready', ['E01_S01_T01'])]
-// more than FOLD_THRESHOLD (5) done tasks in one story and one column fold into one group card
+// more than FOLD_THRESHOLD (3 since E92_S11_T03) done tasks in one story and one column fold into one group card
 const GROUPED = [...[1, 2, 3, 4, 5, 6, 7].map(n => T('E01_S01_T0' + n, S1, 'done', [])), T('E01_S01_T08', S1, 'ready', ['E01_S01_T01'])]
 const graph = (labels, tasks) => ({
   schema_version: 1, labels, epics: [{ id: 'E01', title: 'Goal epic' }],

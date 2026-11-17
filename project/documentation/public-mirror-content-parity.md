@@ -199,8 +199,9 @@ gate is what happens when neither was followed, not a replacement for choosing o
 
 **Enforced twice as of `E28_S17`.** The rule is now checked at two independent points, not one:
 
-1. **Pre-push, privately.** `check_test_subject_invariant` (above) — unconditional, runs before every
-   real `/mirror-public` push, and cannot be bypassed by using `mirror.sh` normally.
+1. **Pre-push, privately.** `check_test_subject_invariant` (above) — runs before every real
+   `/mirror-public` push unless the maintainer explicitly passes one of the two opt-in flags in
+   "Test-gate bypass" below.
 2. **In CI, on the public repo.** `.github/workflows/mirror-staging-gate.yml`'s `test` job runs the
    real `npm test` against the real staged checkout. It is not a second implementation of the private
    guard — `check_test_subject_invariant` lives in `mirror.sh`, which is permanently private and never
@@ -213,6 +214,38 @@ gate is what happens when neither was followed, not a replacement for choosing o
 Layer 1 is what stops a stranded test from ever reaching the mirror in the first place; layer 2 is
 what would catch it if layer 1 were ever bypassed (e.g. a direct push to the staging branch outside
 `mirror.sh`). Neither replaces the other.
+
+### Test-gate bypass (`E28_S22`)
+
+Layer 1 runs every shipping `tests/*.bats` file before a push, which takes hours on a slow machine and is wasted
+on a release that cannot change behaviour. `mirror.sh` therefore has two opt-in flags that skip
+`check_test_subject_invariant` for exactly two kinds of release. The decision logic is in
+`skills/j-mirror-public/scripts/test-gate-bypass.sh`; `mirror.sh` only wires it in, logs it and reports it.
+
+- **`--skip-tests-docs-only`** skips the gate when every path in the ship delta (the transfer list
+  `compute_ship_list` writes) is documentation: `README.md`, `CHANGELOG.md`, `LICENSE` or `LICENSE.md`, or a
+  `*.md` file under `docs/`, `project/documentation/` or `project/.wiki/`. Nothing else qualifies — not
+  `package.json`, a script, a skill, a template, and not `site/`. One such path disqualifies the whole delta.
+  An empty delta counts as documentation-only, because nothing changes.
+- **`--skip-tests-patch`** skips the gate when the current branch is `release/vA.B.C-YYYYMMDD` and is a patch
+  bump over the newest public tag (`vX.Y.Z` or `vX.Y.Z-stage`, as resolved by `release-prep.sh baseline`):
+  `A.B` must equal `X.Y` and `C` must be greater than `Z`.
+
+**Off by default, opt-in only.** Both flags default to off, so the gate runs unless the maintainer passes one
+on the command line. No environment variable enables either of them. An agent must never add a flag on its own
+initiative; use one only when the user asked to skip tests for that run.
+
+**Fails closed.** If a flag's condition does not hold, the run does not fall back to running the gate and does
+not skip it either: it refuses before any rsync write, commit or push, names the reason, and pushes nothing.
+For `--skip-tests-docs-only` that means a non-documentation path in the delta. For `--skip-tests-patch` it means
+a minor or major bump, a branch that is not a release branch, or a newest public tag that cannot be resolved or
+parsed. When both flags are passed, the docs-only condition is tried first and then the patch condition. The
+run refuses only when neither holds. Drop the flag to run the full gate instead.
+
+**What a granted bypass leaves behind.** The run log gets `test-subject-invariant: BYPASSED — <reason>` and the
+final summary gets `test gate     : BYPASSED — <reason>`, so a skipped gate is never silent. Layer 2 is not
+affected: the public repo's CI gate still runs the real `npm test` on the staged checkout regardless of either
+flag.
 
 **Which skills are never public.** Five are blocklisted in *both* their bare and `j-` form, so they
 ship in neither and no naming change can make them available: `convert`, `mirror-public`,

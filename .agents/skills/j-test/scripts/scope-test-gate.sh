@@ -400,8 +400,9 @@ SCRIPT_NAME="scope-test-gate.sh"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # skills/j-test/scripts -> the checkout root, or node_modules/@jenga-ai/agent
 # when installed as a dependency.
-REPO_ROOT="$(cd -- "$SCRIPT_DIR/../../.." && pwd)"
-
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+REPO_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 err() { printf '%s: %s\n' "$SCRIPT_NAME" "$1" >&2; }
 die() { local code="$1"; shift; err "$*"; exit "$code"; }
 

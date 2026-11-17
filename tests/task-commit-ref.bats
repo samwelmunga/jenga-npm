@@ -230,6 +230,54 @@ expect_fail() {
   done
 }
 
+# --- exclusion must not depend on the host's `mkdir` (E77_S05_T03) --------------------------------------------------
+#
+# The store is serialised by scripts/with-lock.sh. On Ubuntu 26.04 (uutils coreutils, the default `mkdir` there) a
+# `mkdir` that loses a race can still exit 0, which used to let two freezes both hold the lock and both exit 0
+# (E77_S05_T01 has the strace evidence; the public staging gate failed the test above with exit codes 0 and 0). These
+# cases put a stub `mkdir` that behaves that way first in PATH, so the defect is caught on every host, macOS included.
+
+make_lying_mkdir() {
+  local real
+  real="$(command -v mkdir)"
+  mkdir -p "$BATS_TEST_TMPDIR/lying-bin"
+  cat > "$BATS_TEST_TMPDIR/lying-bin/mkdir" <<STUB
+#!/bin/sh
+for a in "\$@"; do
+  if [ -d "\$a" ]; then exit 0; fi
+done
+exec "$real" "\$@"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/lying-bin/mkdir"
+}
+
+@test "a freeze does not overtake a live lock holder even when mkdir reports success for the existing lock directory" {
+  make_lying_mkdir
+  mkdir -p "$STORE_DIR" "$STORE.lock.d"
+  echo 99999 > "$STORE.lock.d/pid"
+  PATH="$BATS_TEST_TMPDIR/lying-bin:$PATH" WITH_LOCK_TIMEOUT_SECONDS=1 tcr freeze "$ID" --ref ASD-001 --source task
+  [ "$status" -eq 6 ]
+  [ ! -e "$STORE" ]
+  [ "$(cat "$STORE.lock.d/pid")" = "99999" ]
+}
+
+@test "concurrent freezes with different refs still leave one winner and exit 0 and 4 when mkdir reports success for an existing directory" {
+  make_lying_mkdir
+  export PATH="$BATS_TEST_TMPDIR/lying-bin:$PATH"
+  local round
+  for round in 1 2 3 4 5; do
+    rm -f "$BATS_TEST_TMPDIR/rc1" "$BATS_TEST_TMPDIR/rc2"
+    ( rc=0; bash "$SCRIPT" freeze "$ID" --ref ASD-001 --source task >/dev/null 2>&1 3>&- || rc=$?; echo "$rc" > "$BATS_TEST_TMPDIR/rc1" ) &
+    p1=$!
+    ( rc=0; bash "$SCRIPT" freeze "$ID" --ref ASD-002 --source task >/dev/null 2>&1 3>&- || rc=$?; echo "$rc" > "$BATS_TEST_TMPDIR/rc2" ) &
+    p2=$!
+    wait "$p1" "$p2"
+    [ "$(cat "$BATS_TEST_TMPDIR/rc1" "$BATS_TEST_TMPDIR/rc2" | sort | tr '\n' ' ')" = "0 4 " ]
+    tcr clear "$ID"
+    [ "$status" -eq 0 ]
+  done
+}
+
 # --- hostile refs ----------------------------------------------------------------------------------------------
 
 @test "a ref with shell metacharacters is rejected, nothing is written, and the canary stays absent" {

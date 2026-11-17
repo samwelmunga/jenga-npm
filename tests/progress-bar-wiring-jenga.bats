@@ -158,3 +158,20 @@ line_of() { grep -n -- "$1" "$SKILL" | head -1 | cut -d: -f1; }
     [ -z "$output" ]
   done
 }
+
+# --- E92_S08_T07: the lines are copied into the reply; the colour rule lives once, in skills/j-break/SKILL.md ----------
+
+@test "E92_S08_T07: every print runs with --charset utf8 --color never and copies the lines into the reply as a fenced code block" {
+  sec="$(section '### Phase 0.95')"
+  grep -qF 'comma separated> --after-story --charset utf8 --color never' <<<"$sec"
+  grep -qF 'Copy the lines it prints into your reply as a fenced code block' <<<"$sec"
+  grep -qF '`skills/j-break/SKILL.md` ("Progress lines")' <<<"$sec"
+  for l in "$(grep -F 'b.0. **Show the progress line**' "$SKILL")" "$(section '### Phase 3.5' | grep -F 'Show the progress line')"; do
+    grep -qF -- '--after-story --charset utf8 --color never' <<<"$l"
+    grep -qF 'copy the lines it prints into your reply as a fenced code block' <<<"$l"
+  done
+  run grep -F 'show the lines it prints' "$SKILL"
+  [ "$status" -ne 0 ]
+  run grep -F -- '--color always' <<<"$( { section '### Phase 0.95'; grep -F 'Show the progress line' "$SKILL"; } )"
+  [ "$status" -ne 0 ]
+}

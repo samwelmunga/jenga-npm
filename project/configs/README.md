@@ -77,7 +77,7 @@ and shared with everyone on the project. There is no local override layer and no
 
 Editable: the integer settings of `scope-thresholds.json` (every key except `threshold_version`), of
 `playbook-config.json` (`max_composition_depth`), `dashboard-config.json` (`dashboard_port`, 50000-64999), the string and boolean settings of `audit-config.json` (every key except
-`config_version`; see the "audit-config.json" section below), and the string settings of `test-config.json`: the two that control the
+`config_version`; see the "audit-config.json" section below), and the settings of `test-config.json`: the two strings that control the
 commit-time test prompt (`commit_prompt_default`: empty, `skip`, `scoped` or `full`, empty meaning always prompt;
 `commit_scope_map_file`: a relative `.json` path, default `templates/test-scope-map.json`) and the three that set which
 test run must pass before a board scope is closed (the scope test policy, see the "Scope test policy" section of
@@ -88,6 +88,28 @@ test run must pass before a board scope is closed (the scope test policy, see th
 | `test_run_task` | `none` | `none`, `scoped`, `full` |
 | `test_run_story` | `scoped` | `none`, `scoped`, `full` |
 | `test_run_epic` | `none` | `none`, `scoped`, `full` |
+| `mirror_gate_threshold_seconds` | `50` | whole number of seconds, 1 or more |
+| `manual_only_threshold_seconds` | `600` | whole number of seconds, 1 or more |
+| `full_run_confirm_file_count` | see below | whole number of files, 1 or more |
+| `ask_before_run_seconds` | see below | whole number of seconds, 1 or more |
+
+`mirror_gate_threshold_seconds` and `manual_only_threshold_seconds` are the long-running test thresholds (`E77_S06_T02`), two different notions kept apart on purpose:
+`mirror_gate_threshold_seconds` is how long a shipping test file may run, alone, before it is too slow for the pre-push
+test gate (it is a candidate for the gate's exclusion list and still runs in local runs), and
+`manual_only_threshold_seconds` is how long a test file may run, alone, before it should be tagged manual-only (never
+run automatically, even locally). The second is advisory: the `# jenga:manual-only: <reason>` marker in the file, not
+this number, defines which files are manual-only. Both are read only through `skills/j-test/scripts/test-thresholds.sh`
+(`get mirror-gate`, `get manual-only`, `list`), which prints the effective value; no other script keeps its own copy.
+It warns when the manual-only value is below the gate value, since a file cannot be too slow to run at all yet fine
+for the gate. Older `test-config.json` files lack both keys and read as the defaults; `jenga config set` creates them.
+
+`full_run_confirm_file_count` and `ask_before_run_seconds` are the run-budget numbers (`E95_S02_T02`), which bound a whole
+test run rather than one file: `full_run_confirm_file_count` is how many test files a runner selection may hold before the
+runner refuses it without `--confirm-full`, and `ask_before_run_seconds` is the up-front estimate
+(`scripts/test-estimate.sh`) above which an agent asks the user before starting a run. Their defaults and meaning are
+stated once, in the "Run budget" section of `project/documentation/test-runner.md`; both are read only through
+`skills/j-test/scripts/test-thresholds.sh` (`get confirm-file-count`, `get ask-before-run`, `list`). An absent key reads
+as its default and an invalid one warns and falls back, exactly as for the two thresholds above.
 
 An absent key reads as its default, and a present-but-invalid value reads as the default with a warning on stderr. The
 defaults are `none`, `scoped`, `none` (`E72_S08_T01`), so no automatic gate runs the full suite; `full` stays an accepted,

@@ -90,11 +90,15 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
+# Package root (scripts/, lib/, templates/): resolved so it also works from a consumer's .claude/skills mirror.
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 # Resolve JENGA_PROJECT_DIR the same way every other script in this directory does
 # (CLAUDE_PROJECT_DIR -> git toplevel -> cwd).
-if [ -f "$SCRIPT_DIR/../../../lib/resolve-project-dir.sh" ]; then
+if [ -f "$PACKAGE_ROOT/lib/resolve-project-dir.sh" ]; then
   # shellcheck source=lib/resolve-project-dir.sh
-  source "$SCRIPT_DIR/../../../lib/resolve-project-dir.sh"
+  source "$PACKAGE_ROOT/lib/resolve-project-dir.sh"
 elif [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
   JENGA_PROJECT_DIR="$CLAUDE_PROJECT_DIR"
 else

@@ -6,7 +6,7 @@
 # in this repo's own mirror.sh invokes this workflow directly -- it triggers
 # on the push itself, exactly like any other GitHub Actions workflow.
 #
-# Three jobs: `test` (npm test against the real checkout), `pack-smoke`
+# Three jobs: `test` (npm run test:ci, the full bats suite, against the real checkout), `pack-smoke`
 # (pack + install into a throwaway project, verify postinstall actually
 # mirrors framework files), and `promote-main` (fast-forward $DEFAULT_BRANCH
 # to the staged commit, only once both other jobs succeed).
@@ -21,7 +21,7 @@
 # that invariant does privately, pre-push, is MATERIALISE a temp tree and run
 # the shipping suite in it, to *simulate* what a public checkout would see.
 # In this workflow there is nothing to simulate: this checkout already IS
-# that public checkout. So `npm test` below, run for real against the actual
+# that public checkout. So `npm run test:ci` below, run for real against the actual
 # staged tree, is what check_test_subject_invariant approximates locally --
 # not a second, independent check. The private guard is what makes this gate
 # meaningful (it keeps a stranded test from ever reaching staging in the
@@ -68,7 +68,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y bats python3-yaml
 
       - name: Run test suite (bats)
-        run: npm test
+        # The FULL suite: `npm test` is only the bounded fast set since E95_S01_T02; CI=true lets --all run here.
+        run: npm run test:ci
 
   pack-smoke:
     runs-on: ubuntu-latest

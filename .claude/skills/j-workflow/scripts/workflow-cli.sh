@@ -76,6 +76,10 @@ export LC_ALL=C
 
 SELF="workflow-cli.sh"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Package root (scripts/, templates/): resolved so it also works from a consumer's .claude/skills mirror.
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 
 usage() {
   cat >&2 <<'USAGE'
@@ -98,8 +102,8 @@ fail() {
 default_script() {
   local name="$1" p
   p="$([ -f "scripts/workflow/$name" ] && echo "scripts/workflow/$name" || echo "node_modules/@jenga-ai/agent/scripts/workflow/$name")"
-  if [ ! -f "$p" ] && [ -f "$SCRIPT_DIR/../../../scripts/workflow/$name" ]; then
-    p="$SCRIPT_DIR/../../../scripts/workflow/$name"
+  if [ ! -f "$p" ] && [ -f "$PACKAGE_ROOT/scripts/workflow/$name" ]; then
+    p="$PACKAGE_ROOT/scripts/workflow/$name"
   fi
   echo "$p"
 }

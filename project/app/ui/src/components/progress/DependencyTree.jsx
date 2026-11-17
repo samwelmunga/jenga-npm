@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import './dependency-tree.css'
-import { GOAL_NODE_ID, LAYOUT, unfoldGroups } from './dependencyTreeModel'
+import { GOAL_NODE_ID, goalFailedText, LAYOUT, unfinishedDepText, unfoldGroups } from './dependencyTreeModel'
 import { toggleLabelKey } from './fullscreenModel'
 import FullscreenToggle from './FullscreenToggle'
 import useFocusContain from './useFocusContain'
@@ -21,7 +21,13 @@ import { transformOf } from './zoomPanModel'
  *
  *   - A state is never conveyed by colour alone: a done tick, in-progress half dot, ready plus or failed cross sits on
  *     the RIGHT of a card; a locked card shows only the closed padlock gate on its LEFT edge (no status mark). The gate
- *     is the dependency: closed = waiting, open = every dependency done, none = the task has no dependency.
+ *     is the dependency: closed = waiting, open = every dependency done, none = the task has no dependency. Since
+ *     E92_S09_T02 the gate counts the story's depends_on too, and every `ready` card (dashed border, ring, plus) looks the
+ *     same with or without dependencies: the gate badge is the only difference.
+ *   - A done card whose dependency is not done (the model's unfinishedDeps, from board-progress.sh's unfinished_deps,
+ *     E92_S11_T02, user decision 2026-11-15) shows a "?" in the in-progress yellow at the mark position, in place of its
+ *     tick, with a <title> tooltip naming the dependency (dep_unfinished / dep_unfinished_more); the tooltip and the
+ *     card's aria-label say it in words, so the "?" is the non-colour cue. It is still a done card (class, padlock, counts).
  *   - Hovering or focusing a card highlights its whole upstream and downstream chain and dims the rest; a tooltip lists
  *     the direct dependencies and what it unlocks. A group of more than FOLD_THRESHOLD same-state tasks is one stacked
  *     card; click or Enter expands it, an expanded group gets a collapse header. Expansion state lives here and uses
@@ -36,6 +42,14 @@ import { transformOf } from './zoomPanModel'
  *     (ctrl faster), a drag pans, two pointers pinch, and ZoomControls offers minus, plus, Fit and 100 % with a percent
  *     readout. Fit runs on the first render and when the epic changes, never on a refresh of the same epic. The viewport
  *     owns the size of the drawing, so it is no longer given a minimum width.
+ *   - E92_S12_T03: a story the payload states undecomposed (no task, or no counted task: the model's `undecomposed` flag on
+ *     the band and on the start node, E92_S12_T02) is drawn as an empty slot: its band and start node get a dashed outline
+ *     (9 4, longer than every other dash on the map: ready card 5 3, rejected card 2 3, boundary 3 3, cross-story edge
+ *     2 5, ready edge 6 6), the start node keeps its id, title and 0/0 and shows the short text of the story_undecomposed
+ *     label where the mini bar would be (no bar is drawn, so it never reads as 0 % progress), it has an aria label made from
+ *     story_undecomposed_aria, and a `ghost` edge (dash-dot) runs from it to the goal. Both labels are read with optLabel:
+ *     there is no English fallback, a payload without them keeps the dashed outline and omits the text. Nothing here
+ *     assumes a band has a task node.
  *   - E92_S07_T07: the large view. FullscreenToggle (next to the zoom controls) opens the tree's own root section.dep-tree
  *     large through useFullscreen (Fullscreen API, fixed-layer fallback), useFocusContain keeps focus inside it, and the
  *     root carries data-fullscreen while open. The root is never re-parented or remounted, so zoom, pan, hover, expanded
@@ -51,6 +65,18 @@ const GOAL_EDGE_INSET = 46 // an edge to the goal ends just inside its ring (rin
 const TITLE_MAX = 25
 
 const clip = (s, n) => (typeof s === 'string' && s.length > n ? s.slice(0, n - 1) + '…' : s || '')
+// E92_S10_T02: the failed-story goal line is longer than the goal's room, so it wraps on spaces into lines of at most n
+// characters (a longer word stays whole on its own line); the lines are drawn as tspans under the goal.
+const wrapWords = (s, n) => {
+  const lines = []
+  for (const w of String(s || '').split(' ').filter(Boolean)) {
+    const last = lines.length - 1
+    if (last >= 0 && lines[last].length + 1 + w.length <= n) lines[last] += ' ' + w
+    else lines.push(w)
+  }
+  return lines
+}
+const GOAL_LINE_H = 15
 const safeId = s => String(s).replace(/[^A-Za-z0-9_-]/g, '')
 
 /** Fallbacks for a labels object that lacks a key (the labels come from the progress payload). */
@@ -58,7 +84,7 @@ const FALLBACK = {
   goal: 'Goal',
   ready_to_take: 'Ready to take',
   nothing_ready: 'Nothing ready to take',
-  tree_empty: 'No dependencies to show',
+  tree_empty: 'No tasks to show',
   state_done: 'Done',
   state_ready: 'Ready',
   state_locked: 'Locked',
@@ -71,7 +97,12 @@ const FALLBACK = {
   show_all: 'Show all %d',
   collapse: 'Collapse',
   goal_reached: 'Goal reached!',
+  goal_failed: 'Goal not reached - %s has failed',
+  goal_failed_more: 'Goal not reached - %s and %d more have failed',
+  dep_unfinished: 'Done although dependency %s is not done - check the dependency',
+  dep_unfinished_more: 'Done although dependency %s and %d more are not done - check the dependencies',
   goal_progress: '%d / %d done · %d %%',
+  epic_decomposed: '%d/%d stories decomposed',
   tip_depends_on: 'Depends on',
   tip_unlocks: 'Unlocks',
   tip_goal_direct: 'Leads straight to the goal',
@@ -148,6 +179,16 @@ function Mark({ mark }) {
     default:
       return null
   }
+}
+
+/** The "?" of a done card whose dependency is not done (E92_S11_T02), drawn around (0,0) with its tooltip. */
+function UnfinishedMark({ text }) {
+  return (
+    <g>
+      <text className="dt-mark-q" textAnchor="middle" dominantBaseline="central">?</text>
+      <title>{text}</title>
+    </g>
+  )
 }
 
 /** The dependency gate badge on the left edge of a card: closed padlock = waiting, open padlock = all dependencies done. */
@@ -258,6 +299,10 @@ export default function DependencyTree({ model, labels }) {
     return null
   }
 
+  // E92_S11_T02: the words of the "?" of a done card whose dependency is not done; '' for every other card.
+  const unfinishedLabels = { dep_unfinished: label(labels, 'dep_unfinished'), dep_unfinished_more: label(labels, 'dep_unfinished_more') }
+  const unfinishedText = n => unfinishedDepText(unfinishedLabels, n && n.unfinishedDeps)
+
   // Tooltip: placed at the lower right of the card, so it follows zoom and pan and works for focus too. Once the view is
   // fitted that is a pixel position through the view transform; before the first fit (the SVG then fits the drawing
   // itself) it is a percent of the drawing.
@@ -284,6 +329,7 @@ export default function DependencyTree({ model, labels }) {
             <span className="dt-tip-key">{label(labels, 'tip_depends_on')}</span> {idsText(facts.dependsOn)}
           </span>
         ) : null}
+        {unfinishedText(facts) ? <span className="dt-tip-row dt-tip-unfinished">{unfinishedText(facts)}</span> : null}
         {facts.unlocks.length > 0 ? (
           <span className="dt-tip-row">
             <span className="dt-tip-key">{label(labels, 'tip_unlocks')}</span> {facts.unlocks.join(', ')}
@@ -300,6 +346,15 @@ export default function DependencyTree({ model, labels }) {
   const gid = safeId(goal.id)
   const fillH = 41 * p
   const progressText = fill(label(labels, 'goal_progress'), goal.done, goal.total, goal.percent)
+  // E92_S09_T04: the goal shows the epic percent (epic_progress); while some stories have no task yet it also shows
+  // decomposed/stories, so the percent reads as the product of the two fractions shown (section 5.1).
+  const decomposedText = goal.decomposed < goal.stories ? fill(label(labels, 'epic_decomposed'), goal.decomposed, goal.stories) : ''
+  // E92_S10_T02: while a story of the epic has failed (failedStories, stated by board-progress.sh) the goal is not reached
+  // and the percent stops at 99; the name line then names the failed story where "Goal reached!" would have been.
+  const failedText = goalFailedText({ goal_failed: label(labels, 'goal_failed'), goal_failed_more: label(labels, 'goal_failed_more') }, goal)
+  const failedLines = failedText ? wrapWords(failedText, 24) : []
+  // the lines under the name move down by the extra lines of a wrapped failed-story line (0 otherwise)
+  const below = Math.max(0, failedLines.length - 1) * GOAL_LINE_H
   const ring = 2 * Math.PI * 50
   const haloStyle = {
     '--goal-halo-opacity': (0.07 + 0.38 * p).toFixed(3),
@@ -313,7 +368,10 @@ export default function DependencyTree({ model, labels }) {
     let cls
     if (e.to === GOAL_NODE_ID) {
       to = { x: goal.x - GOAL_EDGE_INSET, y: goal.y }
-      cls = `dt-edge-goal dt-edge-${from.state === 'done' ? 'done' : 'locked'}`
+      // E92_S12_T03: the ghost edge (a not-broken-down story's start node to the goal) is dashed and neutral; a start node
+      // counts as done as a source, which would paint it like finished work. Never part of a hover chain (no card in its
+      // story), so the chain logic below leaves it to recede like any edge outside the chain.
+      cls = e.kind === 'ghost' ? 'dt-edge-goal dt-edge-ghost' : `dt-edge-goal dt-edge-${from.state === 'done' ? 'done' : 'locked'}`
     } else {
       const n = byNode.get(e.to)
       if (!n) return null
@@ -395,8 +453,9 @@ export default function DependencyTree({ model, labels }) {
                 {bands.map((b, i) => (
                   <rect
                     key={b.storyId}
-                    className={`dt-band${i % 2 ? ' dt-band-alt' : ''}`}
+                    className={`dt-band${i % 2 ? ' dt-band-alt' : ''}${b.start.undecomposed ? ' dt-band-ghost' : ''}`}
                     data-story={b.storyId}
+                    data-undecomposed={b.start.undecomposed ? 'true' : undefined}
                     x={LAYOUT.pad / 2}
                     y={b.y}
                     width={goal.x - LAYOUT.goalOffsetX - LAYOUT.goalGap / 2}
@@ -413,20 +472,27 @@ export default function DependencyTree({ model, labels }) {
               {bands.map(b => {
                 const s = b.start
                 const complete = s.total > 0 && s.done >= s.total
+                // E92_S12_T03: a story that is not broken down into tasks yet (flag stated by board-progress.sh, never counted here)
+                const ghost = s.undecomposed === true
+                const ghostText = ghost ? optLabel(labels, 'story_undecomposed') : ''
+                const ghostAria = ghost && optLabel(labels, 'story_undecomposed_aria') ? fill(optLabel(labels, 'story_undecomposed_aria'), `${s.storyId}${s.title ? ' ' + s.title : ''}`) : ''
                 return (
                   <g
                     key={s.id}
-                    className={`dt-start${complete ? ' dt-start-complete' : ''}`}
+                    className={`dt-start${complete ? ' dt-start-complete' : ''}${ghost ? ' dt-start-ghost' : ''}`}
                     data-start={s.storyId}
+                    data-undecomposed={ghost ? 'true' : undefined}
                     transform={`translate(${s.x} ${s.y})`}
+                    {...(ghostAria ? { role: 'group', 'aria-label': ghostAria } : {})}
                   >
                     <rect className="dt-start-box" width={s.w} height={s.h} rx="10" />
                     <text className="dt-start-id" x="12" y="20">{s.storyId}</text>
                     <text className="dt-start-count" x={s.w - 12} y="20" textAnchor="end">{`${s.done}/${s.total}`}</text>
                     <text className="dt-start-title" x="12" y="37">{clip(s.title, 28)}</text>
-                    <rect className="dt-start-bar-bg" x="12" y="50" width={s.w - 24} height="6" rx="3" />
-                    <rect className="dt-start-bar" x="12" y="50" width={s.total > 0 ? ((s.w - 24) * Math.min(s.done, s.total)) / s.total : 0} height="6" rx="3" />
-                    <title>{`${s.storyId}${s.title ? ' ' + s.title : ''} · ${s.done}/${s.total} ${label(labels, 'state_done')}`}</title>
+                    {ghost ? null : <rect className="dt-start-bar-bg" x="12" y="50" width={s.w - 24} height="6" rx="3" />}
+                    {ghost ? null : <rect className="dt-start-bar" x="12" y="50" width={s.total > 0 ? ((s.w - 24) * Math.min(s.done, s.total)) / s.total : 0} height="6" rx="3" />}
+                    {ghostText ? <text className="dt-start-ghost-text" x="12" y="56">{ghostText}</text> : null}
+                    <title>{ghostAria || `${s.storyId}${s.title ? ' ' + s.title : ''} · ${s.done}/${s.total}${ghost ? '' : ' ' + label(labels, 'state_done')}`}</title>
                   </g>
                 )
               })}
@@ -474,6 +540,8 @@ export default function DependencyTree({ model, labels }) {
                   onBlur: () => setHover(null),
                 }
                 const gateNote = gated ? ` (${gateText(gateKind)})` : ''
+                const flagText = unfinishedText(n)
+                const flagNote = flagText ? ` (${flagText})` : ''
                 return (
                   <g
                     key={n.id}
@@ -488,11 +556,11 @@ export default function DependencyTree({ model, labels }) {
                       ? {
                           role: 'button',
                           'aria-expanded': 'false',
-                          'aria-label': `${groupText(n)}, ${fill(label(labels, 'show_all'), n.count)}`,
+                          'aria-label': `${groupText(n)}, ${fill(label(labels, 'show_all'), n.count)}${flagNote}`,
                           onClick: () => toggle(n.id),
                           onKeyDown: toggleKeys(n.id),
                         }
-                      : { role: 'group', 'aria-label': `${name}: ${n.id}${n.title ? ' ' + n.title : ''}${gateNote}` })}
+                      : { role: 'group', 'aria-label': `${name}: ${n.id}${n.title ? ' ' + n.title : ''}${gateNote}${flagNote}` })}
                   >
                     {isGroup ? (
                       <g className="dt-stack" aria-hidden="true">
@@ -513,7 +581,11 @@ export default function DependencyTree({ model, labels }) {
                         <text className="dt-ctitle" x={tx} y="37">{clip(n.title, gated ? TITLE_MAX - 1 : TITLE_MAX)}</text>
                       </g>
                     )}
-                    {n.mark !== 'none' ? (
+                    {flagText ? (
+                      <g className="dt-mark dt-mark-unfinished" data-mark="unfinished" transform={`translate(${NODE_W - 22} ${NODE_H / 2})`}>
+                        <UnfinishedMark text={flagText} />
+                      </g>
+                    ) : n.mark !== 'none' ? (
                       <g className="dt-mark" data-mark={n.mark} transform={`translate(${NODE_W - 22} ${NODE_H / 2})`}>
                         <Mark mark={n.mark} />
                       </g>
@@ -529,7 +601,7 @@ export default function DependencyTree({ model, labels }) {
                 data-progress={p.toFixed(3)}
                 transform={`translate(${goal.x} ${goal.y})`}
                 role="img"
-                aria-label={`${goalText} · ${progressText}`}
+                aria-label={`${goalText} · ${progressText}${decomposedText ? ` · ${decomposedText}` : ''}${failedText ? ` · ${failedText}` : ''}`}
                 style={haloStyle}
               >
                 <g className="dt-halo-wrap">
@@ -556,9 +628,20 @@ export default function DependencyTree({ model, labels }) {
                     </g>
                   </g>
                 ) : null}
-                <text className="dt-goal-name" y="80" textAnchor="middle">{goal.reached ? label(labels, 'goal_reached') : goalName}</text>
-                <text className="dt-goal-title" y="98" textAnchor="middle">{clip(model.goal.title, 34)}</text>
-                <text className="dt-goal-count" y="116" textAnchor="middle">{progressText}</text>
+                {failedText ? (
+                  <text className="dt-goal-name dt-goal-failed" y="80" textAnchor="middle">
+                    {failedLines.map((l, i) => (
+                      <tspan key={i} x="0" dy={i === 0 ? 0 : GOAL_LINE_H}>{l}</tspan>
+                    ))}
+                  </text>
+                ) : (
+                  <text className="dt-goal-name" y="80" textAnchor="middle">{goal.reached ? label(labels, 'goal_reached') : goalName}</text>
+                )}
+                <text className="dt-goal-title" y={98 + below} textAnchor="middle">{clip(model.goal.title, 34)}</text>
+                <text className="dt-goal-count" y={116 + below} textAnchor="middle">{progressText}</text>
+                {decomposedText ? (
+                  <text className="dt-goal-count dt-goal-decomposed" y={132 + below} textAnchor="middle">{decomposedText}</text>
+                ) : null}
               </g>
             </g>
           </svg>

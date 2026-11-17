@@ -30,8 +30,8 @@ examples:
 
 1. **Read `project/configs/workflow.json`** to confirm board paths. Fall back to `project/board/` if the file does not exist.
 
-1.5. **Resolve the mode (`E92_S06_T26`)** — the arguments of `j.status` (`--legacy`, `--all`, one epic or story id,
-   `--root`, `--cols`, `--color`, in any order) are parsed by a script, never by this file. Pass the arguments exactly as
+1.5. **Resolve the mode (`E92_S06_T26`, Node renderer `E92_S08_T06`)** — the arguments of `j.status` (`--legacy`, `--all`,
+   one epic or story id, `--root`, `--cols`, `--color`, `--charset`, in any order) are parsed by a script, never by this file. Pass the arguments exactly as
    the user typed them:
    ```
    bash "$([ -f skills/j-status/scripts/resolve-status-mode.sh ] && echo skills/j-status/scripts/resolve-status-mode.sh || echo node_modules/@jenga-ai/agent/skills/j-status/scripts/resolve-status-mode.sh)" mode <the user's arguments>
@@ -39,10 +39,10 @@ examples:
    It prints one word. An exit status `2` (a bad flag, a second id, a task id) means the arguments were not valid: show
    its stderr line and stop. The word decides the path:
 
-   - `overview` (no argument) or `scope` (an epic or story id, `--all` allowed): the **default path**. Run the same
-     command with `render` in place of `mode`, after step 6.5 (so the renderer sees reconciled statuses), and print its
-     stdout unchanged: nothing is added, counted, drawn or
-     reworded here. For `overview` the output stands for the board listing, so skip steps 2-4, 6.9 and 6.10 and the board
+   - `overview` (no argument) or `scope` (an epic or story id, `--all` allowed): the **default path**, drawn by the Node
+     renderer. Run the same command with `render` in place of `mode` and `--charset utf8 --color never` before the user's
+     arguments, after step 6.5 (so the renderer sees reconciled statuses), and copy its stdout into the reply (see the
+     block below). For `overview` the output stands for the board listing, so skip steps 2-4, 6.9 and 6.10 and the board
      listing of step 7, and still do steps 5, 6, 6.5, 6.7 and 6.8 and print their sections (open rapports, queue, the
      `todo.md` warning, the dependency audit) after it, as laid out in `assets/output_format.md`. For `scope` the view is
      the whole answer: print it and stop. When `render` prints nothing or fails, fall back to the legacy path below and
@@ -50,6 +50,10 @@ examples:
    - `legacy` (`--legacy`, or `--all` with no id) or `legacy-scope` (`--legacy <id>`): the **legacy path**, which is
      everything below from step 2 on, exactly as written. `--all` with no id is the full per-epic and per-story list, so it
      takes this path too.
+
+   **Show the rendering in the reply.** Tool output is folded away in the desktop app, so copy the renderer's stdout
+   into your reply as a fenced code block, byte for byte: nothing added, counted, drawn or reworded. `--color never` is
+   used because ANSI colour cannot render in chat markdown; colour needs `--color always` in a real terminal.
 
    The legacy path (steps 2-4, 6.9, 6.10 and the board listing of step 7) is kept as it was before the rework of
    2026-11-13; `render-status-bars.sh` and `render-status-scope.sh` stay as they are.

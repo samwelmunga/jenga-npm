@@ -140,31 +140,60 @@ rendering verbatim, including its prompt line. This repository's list is the wor
 
 ```
 Choose which tests to run:
-1. npm test (unit) [also covers: bats tests (unit), bats (integration)]
-2. shellcheck (sast)
+1. bats tests (unit) [also covers: bats (integration), npm run test:ci (unknown)]
+2. npm test (unit)
+3. shellcheck (sast)
 
 Notes:
 - detected tool not listed in test-config.json: npm
 
-Enter selection (comma-separated, or 'all' for all, or 'probe' to only check whether this machine is slow, or blank for 1 through 2):
+Enter selection (comma-separated, or 'all' for all, or 'probe' to only check whether this machine is slow, or blank for 1 through 3):
 ```
 
-Two entries, not one entry per bats file: `npm test` (which runs `bats tests/*.bats`, so it covers the bats suites) and
-`shellcheck`. The `Notes:` block carries discovery's warnings. Blocks are separated by one blank line, and the `Not
+Three entries, not one entry per bats file: `bats tests` (the whole bats suite; `npm run test:ci` runs the same files and
+is folded into it), `npm test` (since `E95_S01_T02` only the bounded fast set, so it is its own entry and never stands in
+for the whole suite) and `shellcheck`. Choosing "all" runs the fast set's files a second time inside the full run; that
+redundancy is small (30 files) and is the price of never hiding the full suite behind `npm test`. The `Notes:` block carries discovery's warnings. Blocks are separated by one blank line, and the `Not
 runnable` and `Notes` blocks are omitted when empty. `name (type)` labels every entry, except that a name already ending
 in ` (<type>)` is printed as is, so a config-only suite reads `semgrep (sast)` and not `semgrep (sast) (sast)`.
 
-### How `npm test` runs the bats suite (two-pass split)
+### `npm test`, `npm run test:ci` and `scripts/run-tests.sh` (E95_S01_T02)
 
-`package.json`'s `test` script is `bash scripts/run-tests.sh` (E43_S02_T01). When GNU `parallel` (or `rush`) is on `PATH`
+`npm test` never runs the whole suite. A full run is still possible, but only deliberately.
+
+| Command | Runs |
+|---|---|
+| `npm test` = `scripts/run-tests.sh` | the **fast set**: the files listed in `tests/fast-set.txt` (30 files, summed recorded duration about 89 s), under a hard timeout |
+| `npm run test:ci` = `scripts/run-tests.sh --all` | every top-level `tests/*.bats`; accepted only when `CI=true` (GitHub Actions sets it) |
+| `scripts/run-tests.sh --all --confirm-full` | the same full run, deliberately, on a developer machine |
+| `scripts/run-tests.sh [--all] --list` | prints the files that mode would run, one per line, and runs nothing (no bats needed) |
+
+- **`--all` is refused** without `CI=true` or `--confirm-full`: it runs nothing, exits 2 and names `--confirm-full` and
+  `npm run test:ci`. `--confirm-full` on its own (without `--all`) is a usage error.
+- **`RUN_TESTS_TIMEOUT`** (positive integer seconds, default 180) bounds the fast run. On timeout the bats process group
+  and every descendant are stopped (TERM, then KILL after 2 s), `run-tests: timed out after <n> s` is printed and the
+  exit status is 124: a timed-out run is never a pass. No GNU `timeout` is needed. An invalid value is ignored with a
+  warning. `--all` has no timeout of its own; CI jobs carry theirs.
+- **The fast set** lives in `tests/fast-set.txt` (shipped to the public mirror with the rest of `tests/`). Its header holds
+  the selection rule and the summed duration: latest record per file in `project/logs/test-timings.jsonl`, ascending
+  duration, last status `passed`, shipped, not in `SERIAL_FILES`, no nested suite run, stop before 90 000 ms. An entry
+  that is absent, not a top-level `tests/*.bats` or in `SERIAL_FILES` is skipped with a note; an empty set exits 2.
+  `E95_S02` replaces the list with a `tier:fast` tag.
+- **The public staging gate** (`.github/workflows/mirror-staging-gate.yml`, job `test`) runs `npm run test:ci`, so the
+  public gate still runs every shipped bats file.
+
+### How the full run (`--all`) runs the bats suite (two-pass split)
+
+`package.json`'s `test:ci` script is `bash scripts/run-tests.sh --all` (E43_S02_T01, E95_S01_T02). When GNU `parallel` (or `rush`) is on `PATH`
 and `bats` supports `--jobs`, the script runs two passes: a parallel bulk pass (`bats --jobs N`) over every top-level
 `tests/*.bats` file except the shared-state ones, then a plain serial pass over those files (the two that mutate the real
 `.claude/settings.json`, `.agents/settings.json`, `.jenga-permission-level.json` and the shared `.mirror-worktrees/public`
 clone; `bats --jobs` has no per-file exclusion, hence two invocations). The serial pass always runs, and the exit status is
 the first non-zero one. Without a parallel binary, or with `RUN_TESTS_JOBS=1`, it is one plain `bats tests/*.bats`, the
-previous behaviour. The catalog treats `bash scripts/run-tests.sh` as the aggregate of `bats tests/*.bats` (see rule 2
-below), so the fold is unchanged. The wall-clock speedup has not been measured yet: it needs a machine with `parallel` or
-`rush` installed (`npm test` against `RUN_TESTS_JOBS=1 npm test`).
+previous behaviour. The catalog treats `bash scripts/run-tests.sh --all` as the aggregate of `bats tests/*.bats` (see
+rule 2 below), so `npm run test:ci` folds onto the bats suite; the bare `bash scripts/run-tests.sh` (`npm test`, the fast
+set) is not normalised and stays its own entry. The fast run uses the same parallel detection as a single pass. The wall-clock speedup has not been measured yet: it needs a machine with `parallel` or
+`rush` installed (`scripts/run-tests.sh --all --confirm-full` against the same with `RUN_TESTS_JOBS=1`).
 
 ### The dedupe rule and `also covers`
 
@@ -175,11 +204,15 @@ tests twice:
    `config:bats:integration` as `bats tests/*.bats`.
 2. **The npm alias.** `npm test` and `npm run <key>` are aliases for the body of that script in `package.json` (read
    with `jq`, never executed). For an npm suite the key is that script body when it is a non-empty string, otherwise its
-   command. Here `scripts.test` is `bats tests/*.bats` (or the aggregate `bash scripts/run-tests.sh`, normalised to it), so
-   `npm:test` shares a key with `bats:tests`; without this, an hour-long bats suite would run twice. A missing, unreadable or unparseable `package.json` just means no alias.
+   command. A body of `bats tests/*.bats`, or the full aggregate `bash scripts/run-tests.sh --all` (optionally with
+   `--confirm-full`, normalised to it), shares a key with `bats:tests`; without this, an hour-long bats suite would run
+   twice. Here that is `scripts["test:ci"]`. The bare `bash scripts/run-tests.sh` (`scripts.test`) runs only the fast
+   set since `E95_S01_T02` and is not normalised, so `npm test` is its own entry. A missing, unreadable or unparseable `package.json` just means no alias.
 3. **The survivor** of a group is the first `npm` entry (the project's own declared entry point), else the first
    non-`config` entry, else the first `config` entry, "first" being `id` order. Everyone else is listed in the survivor's
-   `also` array and rendered as `[also covers: ...]`. A group of one is not folded.
+   `also` array and rendered as `[also covers: ...]`. A group of one is not folded. Exception: an npm suite whose body
+   is the CI-gated `run-tests.sh --all` (no `--confirm-full`) is never the survivor, because it exits 2 outside CI; the
+   plain `bats tests/*.bats` entry survives and the npm script is listed under `also`.
 4. Scripts that call other scripts (`npm run other`) are not resolved further.
 
 The catalog's `runnable` entries carry `n` (contiguous, `1..N`, in `id` order), `id`, `name`, `type`, `ecosystem`,
@@ -846,8 +879,8 @@ which is the safe direction. The gate reports those under `not_narrowable` rathe
 #### The opaque `npm` entry point
 
 `build-catalog.sh` folds suites that would run the same thing, and for an `npm` suite it keys on the **body of that
-script read from `package.json`** — here `scripts.test` is `bats tests/*.bats`, so `npm test` folds onto `bats:tests`
-and a run-all does not execute the hour-long bats suite twice. Narrowing collides with that fold in two different
+script read from `package.json`** — a body of `bats tests/*.bats` (or, here, `scripts["test:ci"]`, the full runner
+`bash scripts/run-tests.sh --all`) folds the npm suite onto `bats:tests`, and a run-all does not execute the hour-long bats suite twice. Narrowing collides with that fold in two different
 ways, and both needed fixing (full reasoning, measurements and the options weighed:
 `project/documentation/scope-gate-npm-fold-double-execution.md`).
 
@@ -1310,7 +1343,8 @@ After `E72_S08` **no local lifecycle gate runs the full suite**: not a task clos
 rollup. It runs in three places, all chosen by a human or by CI rather than by code:
 
 1. **The public CI `test` job on the `jenga-npm` mirror** (`.github/workflows/mirror-staging-gate.yml`, job `test`,
-   running `npm test`, which is `bats tests/*.bats`) against a checkout of the staging branch. The same workflow's
+   running `npm run test:ci`, which is `scripts/run-tests.sh --all`, every top-level `tests/*.bats`; it ran `npm test`
+   until `E95_S01_T02` made `npm test` a bounded fast set) against a checkout of the staging branch. The same workflow's
    `promote-main` job declares `needs: [test, pack-smoke]`, so the full suite gates **fast-forwarding the public default
    branch**. It does **not** gate `npm publish`.
 2. **`j.test`**, which a user invokes and which runs the whole runnable catalog by default.
@@ -1333,7 +1367,7 @@ rejected on 2026-11-08: the epic's aim is finer-grained control of test runs, wi
 more frequent offers of a test run at the natural stops, so that nobody is stuck behind a gate. It stays a known limit, not
 a covered case. The authoritative account is
 `project/documentation/full-run-call-site-audit.md` section 2, which this section does not override. Note too that
-`npm test` on the public checkout is top-level only and limited to the suites that survive `.publicignore`: the largest
+`npm run test:ci` on the public checkout is top-level only and limited to the suites that survive `.publicignore`: the largest
 automatic run that exists, not a superset of a local `j.test` run.
 
 ### How to change it
@@ -1753,6 +1787,116 @@ through `commit_scope_map_file` (see "A project scope map"), which both this pol
 
 **The run was interrupted.** The gate returns `run-suites.sh`'s exit 130 unchanged. Nothing was verified, so the scope
 must not close on it; run the gate again.
+
+## Manual-only tests
+
+A test file that runs extra long is classified **manual-only**: it is excluded from automated runs, because one such
+file can stall a whole run. The classification, and the one script that reads it, are defined here; later changes to
+`j.test`, the `j.commit` gate and `npm test` only ask that script.
+
+### The marker
+
+A manual-only file carries a comment line within its **first 40 lines**:
+
+    # jenga:manual-only: <reason>
+
+The reason is mandatory and one line. A tag with an empty reason is invalid and is reported as an error (exit `2`), so
+a file cannot be excluded without saying why. A tag on line 41 or later is ignored. Only `.bats` files are wired; the
+same comment form would extend to other ecosystems that use `#` comments.
+
+`skills/j-test/scripts/manual-only.sh` is the **only** place that decides which files are manual-only (its `--help`
+header is the contract): `list [--root <dir>]` prints `<path><TAB><reason>` for each tagged `tests/**/*.bats` file in
+byte order, `check <file>` exits `0` if the file is manual-only and `1` if not, and `reason <file>` prints the reason.
+It reads files only and executes no project code.
+
+### Why a header tag and not a `test-config.json` list
+
+1. **The public mirror.** `test-config.json` ships, so a list entry would publish the name of a private, blocklisted
+   test file. A tag inside the file travels with the file and is absent wherever the file is absent.
+2. **A test never outlives its subject.** A rename or delete cannot leave a stale entry pointing at nothing.
+3. **Locality.** The reason sits next to the code that makes the test slow.
+4. **No second source of truth.** `jenga config` edits scalar settings, and a file list would have to be kept in
+   sync with the tests.
+
+### The runtime threshold (advisory)
+
+A test file whose measured runtime, **run alone, exceeds `manual_only_threshold_seconds`** (default **600 seconds**,
+10 minutes) should be classified manual-only.
+
+The number lives in `project/configs/test-config.json` and is read only through
+`skills/j-test/scripts/test-thresholds.sh get manual-only`; change it with
+`jenga config set test-config.manual_only_threshold_seconds <n>`. It is advisory: no mechanism enforces it and nothing
+tags a file for you (the timing log below records measured run times, it does not classify). The
+`# jenga:manual-only: <reason>` marker, not this number, is what defines which files are manual-only. It is a different
+threshold from `mirror_gate_threshold_seconds` (default 50 seconds), which decides whether a shipping test file is too slow
+for the pre-push test gate while still running locally; the reader warns when the manual-only value is set below the gate
+value.
+
+The two thresholds, side by side. Both are flat integers in `project/configs/test-config.json`, and both are read only
+through `skills/j-test/scripts/test-thresholds.sh` (`get <mirror-gate|manual-only>`, or `list` for both):
+
+| Name (`get`) | Config key | Default | Meaning |
+|---|---|---|---|
+| `mirror-gate` | `mirror_gate_threshold_seconds` | 50 | A test file slower than this, run alone, is too slow for the pre-push test gate. It still runs in local runs. |
+| `manual-only` | `manual_only_threshold_seconds` | 600 | A test file slower than this, run alone, should be tagged manual-only. Advisory. |
+
+The 600-second default is derived only from the one set of measurements available (2026-10-16): a sequential run of 140
+test files made no progress for over two hours, one file's real-push cases took about 20 minutes each, and a tester
+separately saw that file run for more than 22 minutes. The threshold has to sit below those figures; 10 minutes is half
+of the shortest, so a file that is already clearly past it gets tagged rather than waiting to reach the measured worst
+case. The measurements come from one machine, so treat the number as a starting point and re-measure before relying on it.
+
+### Test timing log
+
+Measured run times of test files are kept in one place: `project/logs/test-timings.jsonl` (the `logs` path of
+`workflow.json`), one JSON object per line, **appended** by `skills/j-test/scripts/record-timing.sh` (its `--help` header is
+the contract). That log is the **single source of truth** for test timings: whatever times a test file records through the
+writer, and whatever reports on timings reads only the log. There is no second result file. A record looks like this, with
+a generic file name:
+
+    {"date":"2026-10-28T09:00:00Z","suite":"tests/example.bats","tests":12,"passed":12,"failed":0,"duration_ms":4210,"scope":"file","caller":"example-timer.sh","status":"passed","commit":"<HEAD sha>","blob":"<blob sha of the test file>","load_1m":0.8,"cpu_ms":3950}
+
+`suite` is the root-relative test path, `duration_ms` the wall-clock time of that file run alone, `status` is `passed`,
+`failed` or `timeout` (a timeout record carries the cap as its duration, meaning "at least this long"), `commit` and
+`blob` let a later run skip a file whose test and code did not change, and `load_1m` is the one-minute load average when the
+file started (`null` when not recorded), so a number taken on a busy machine can be distrusted. `cpu_ms` is the user plus
+system CPU time of that run (`null` when not recorded, and always for a timeout). Wall-clock time can be many times the CPU
+time when the machine makes a run wait (measured on a development machine: 5 to 17 times, with first execution of a newly
+created file costing 130 to 230 ms of waiting), so the long-running report measures a record by `cpu_ms` when it has one and
+by `duration_ms` otherwise. The writer validates every
+field, writes nothing on a bad one, and appends under a lock, so two concurrent writers leave two intact lines. Use the
+newest record of a file when more than one exists.
+
+## Run budget
+
+Two numbers bound a whole test run, as opposed to the two per-file thresholds in "Manual-only tests" above
+(`E95_S02_T02`). Both are flat integers in `project/configs/test-config.json`, read only through
+`skills/j-test/scripts/test-thresholds.sh`, and changed with `jenga config set test-config.<key> <n>`. This table is the
+one place their defaults are stated; everything else names the key.
+
+| Name (`get`) | Config key | Default | Meaning |
+|---|---|---|---|
+| `confirm-file-count` | `full_run_confirm_file_count` | 60 files | A runner selection of more test files than this is refused without `--confirm-full`. Twice the fast set of 2026-11-16 (30 files). |
+| `ask-before-run` | `ask_before_run_seconds` | 300 s | An agent asks the user before starting a run whose estimate exceeds this ("a few minutes"). |
+
+An absent key reads as the default; a value that is not a positive whole number warns on stderr and reads as the default,
+the same rule as the per-file thresholds.
+
+### The duration estimate
+
+`scripts/test-estimate.sh` prints an up-front estimate for a selection of test files, so that the runner and an agent
+deciding whether to ask the user compute it the same way:
+
+    scripts/test-estimate.sh tests/example.bats tests/other.bats
+    scripts/test-estimate.sh --files-from selection.txt --json
+
+For each path it takes the newest `scope: "file"` record in the test timing log (above) by `date`, keyed on the path,
+never on `blob` (retagging a file changes its blob, not its cost), and sums `duration_ms`. The output is one summary line,
+`estimate: <s> s for <n> file(s) (<k> timed, <u> untimed)`, with `; excludes <u> untimed file(s)` appended when any file
+has no record, then one `untimed: <path>` line per such file; `--json` prints
+`{"files":n,"timed":k,"untimed":[...],"estimated_seconds":s}`. A missing timing log (the public package ships no
+`project/logs/`) makes every file untimed and still exits 0. It is a **serial sum**: no parallelism, load or cache model,
+so read it as an order of magnitude. It requires `jq`; `--help` is the full contract.
 
 ## Troubleshooting
 

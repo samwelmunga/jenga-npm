@@ -20,11 +20,18 @@
 #
 # Lock primitive: `mkdir` on a lock directory, NOT `flock`. `flock` is a
 # Linux-only (util-linux) utility and is not present by default on macOS/BSD
-# (this repo runs on Darwin). POSIX `mkdir` is atomic on every platform this
-# repo targets: the kernel guarantees that when multiple processes race to
-# create the same directory, exactly one succeeds and every other call fails
-# with EEXIST. That atomicity — not any cooperative check beforehand — is
-# what makes this a real mutual-exclusion lock instead of advisory prose.
+# (this repo runs on Darwin). The mkdir(2) SYSCALL is atomic on every platform
+# this repo targets: when multiple processes race to create the same
+# directory, exactly one succeeds and every other call fails with EEXIST.
+# The mkdir PROGRAM is not guaranteed to pass that through: uutils coreutils
+# (the default on Ubuntu 25.10 and 26.04) re-stats the path after EEXIST and
+# exits 0 for an existing directory, so two racing callers can both see
+# success. So the exit status of `mkdir` is not trusted as proof of
+# ownership. After it succeeds the winner claims the lock by creating the pid
+# file with a noclobber (O_EXCL) redirect, which only one process can do; a
+# caller that loses that claim treats the lock as held and retries.
+# That exclusive create -- not any cooperative check beforehand -- is what
+# makes this a real mutual-exclusion lock instead of advisory prose.
 #
 # Environment overrides (all optional):
 #   WITH_LOCK_TIMEOUT_SECONDS   Max time to wait for a held lock (default: 30)
@@ -105,8 +112,13 @@ acquire_lock() {
   start="$(now_epoch)"
   while true; do
     if mkdir "$LOCK_DIR" 2>/dev/null; then
-      echo "$$" > "$LOCK_PID_FILE" 2>/dev/null || true
-      return 0
+      # mkdir's exit status is not proof of ownership (see the lock-primitive note in the header): claim the lock
+      # with the shell's own O_EXCL create. Exactly one contender can create the pid file; a contender that
+      # "won" mkdir but loses this claim has lost the lock and retries. Never rm the directory here: it belongs
+      # to the real holder.
+      if ( set -C; echo "$$" > "$LOCK_PID_FILE" ) 2>/dev/null; then
+        return 0
+      fi
     fi
 
     maybe_reclaim_stale_lock

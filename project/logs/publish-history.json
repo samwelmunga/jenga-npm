@@ -1024,6 +1024,38 @@
     "reason": "Staged via direct gh workflow dispatch, run 42591476306 (public test gate red; /publish stage bypassed)"
   },
   {
+    "id": "2f1890fe-1a6b-4517-9f1b-b35d526158a5",
+    "version": "v5.0.1",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-11-09T23:30:18Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "staged",
+    "git_tag": "v5.0.1",
+    "commit_sha": "cc929c3b28f6448ef5ae1dc1299d91d054cd9500",
+    "stage_id": "740a7f6f-0965-4892-b0e9-847bbf14a811",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": "Staged via direct gh workflow dispatch, run 42720838288 (public test gate red; /publish stage bypassed)"
+  },
+  {
+    "id": "575d5d24-e445-4916-8280-06ae4fb78d06",
+    "version": "v5.0.1",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-11-10T01:21:11Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "approved",
+    "git_tag": "v5.0.1",
+    "commit_sha": "cc929c3b28f6448ef5ae1dc1299d91d054cd9500",
+    "stage_id": "740a7f6f-0965-4892-b0e9-847bbf14a811",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": "Approved outside /publish. npm dist-tag latest confirmed at 5.0.1; published README contains no ST-Test/Skolkartan section."
+  },
+  {
     "id": "300afcd9-f958-48b9-9c67-26dcd3580379",
     "version": "v5.1.0",
     "target": "npm-jenga",

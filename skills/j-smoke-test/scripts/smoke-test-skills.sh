@@ -72,6 +72,60 @@
 # (E64_S01_T02). Nothing else is ever promoted to critical by volume.
 #
 # ---------------------------------------------------------------------------
+# THE EXECUTION PHASE (E98_S02_T02) -- on by default, `--no-exec` turns it off
+# ---------------------------------------------------------------------------
+# Checks 1-6 are structural: they cannot see a script that FINDS its assets in the
+# wrong place, because every structural check runs in the package layout. A consumer
+# does not have that layout: postinstall mirrors only skills/ and agents/ into
+# `.claude/` and `.agents/`, so a script that derives the package root as
+# "$SCRIPT_DIR/../../.." lands on `.claude/` and cannot find templates/, scripts/,
+# lib/ or hooks/ (the 5.0.1 failure). This phase EXECUTES the scripts in that layout.
+#
+#   1. It builds a throwaway consumer in a temp directory with
+#      scripts/consumer-layout-fixture.sh (the one shared helper): the package under
+#      test in node_modules/@jenga-ai/agent, and .claude/ and .agents/ holding only
+#      skills/ and agents/.
+#   2. For every skills/<skill>/scripts/**/*.sh it runs one safe invocation from the
+#      fixture's `.claude/skills/<skill>/scripts/`, with the working directory set to
+#      the fixture consumer root and a SCRUBBED environment (env -i): HOME, TMPDIR and
+#      CLAUDE_PROJECT_DIR point inside the temp directory, so a script cannot write
+#      to the real repository, the real home directory or the real `.claude/`.
+#   3. The safe invocation is `--help`, when the script handles `--help` or `-h`, or
+#      the arguments it DECLARES in its own first 40 lines:
+#          # smoke-invoke: <args>          one invocation (words split on whitespace,
+#                                          no quoting, no expansion); repeatable
+#          # smoke-invoke:                 one invocation with no arguments
+#          # smoke-invoke: none <reason>   declared unverifiable, with the reason
+#      A script with neither is UNVERIFIABLE: it is not executed (running an unknown
+#      script with a made-up argument is not safe), it is listed by name with its
+#      reason on stderr and it is counted in the summary. Maintainer-only or
+#      mutating skills (j-init, j-distribute, j-mirror-public, j-publish,
+#      j-self-sync, j-dashboard*), test directories and sourced lib/ files are never
+#      executed and are listed the same way.
+#   4. Each invocation has a timeout (default 10 s, `--exec-timeout <s>` or
+#      JENGA_SMOKE_EXEC_TIMEOUT), and stdin is /dev/null, so a script that blocks
+#      on input fails instead of hanging. `timeout`, `gtimeout` or a perl alarm is
+#      used, whichever exists (stock macOS has none of the first two).
+#
+#   exec-package-asset  critical  non-zero exit and the output names a package asset
+#                                 under `.claude/` or `.agents/` (templates, scripts,
+#                                 lib, hooks, mcp, bin, jobs), directly or through an
+#                                 un-normalised `skills/<s>/scripts/../../../<asset>`
+#   exec-failed         minor     any other non-zero exit (first output line quoted),
+#                                 or the shell could not run the script (126/127)
+#   exec-timeout        minor     the invocation did not finish within the timeout
+#   exec-fixture-failed minor     the fixture could not be built, so nothing was run
+#
+# MIRROR ROOT. Pointed at a consumer's mirror (--root <consumer>/.claude: skills/ and
+# agents/ only, no templates/), the structural checks resolve bare script names and
+# assets against the package root instead (PACKAGE_ROOT, or --package-root <dir>), so
+# a mirror root does not produce one layout-artefact critical per script reference.
+# The execution phase then runs the MIRROR's own scripts, in a throwaway copy of that
+# consumer (the mirror's skills/ copied under .claude/, the package symlinked at
+# node_modules/@jenga-ai/agent); the real consumer is never touched. With no package
+# root to be found it is skipped, with a note on stderr.
+#
+# ---------------------------------------------------------------------------
 # REFERENCE EXTRACTION (heuristic by nature, deliberately conservative)
 # ---------------------------------------------------------------------------
 # References are tokens found in SKILL.md's body (everything after the
@@ -103,28 +157,43 @@
 # ---------------------------------------------------------------------------
 # USAGE
 # ---------------------------------------------------------------------------
-#   smoke-test-skills.sh [--root <dir>] [--critical-only]
+#   smoke-test-skills.sh [--root <dir>] [--package-root <dir>] [--critical-only]
+#                        [--no-exec] [--exec-timeout <seconds>]
 #
 #   --root <dir>      repository (or installed package) root holding skills/,
 #                     agents/ and templates/. Default: three levels above this
 #                     script, which is correct both in this repo and in
 #                     node_modules/@jenga-ai/agent.
+#   --package-root <dir>
+#                     the package that holds scripts/, templates/, lib/ and hooks/.
+#                     Only needed with a mirror --root (`.claude`) when the package
+#                     cannot be found from this script's own location or the current
+#                     directory (see skills/index/scripts/package-root.sh).
 #   --critical-only   print only critical findings on stdout (the summary on
 #                     stderr still counts both).
+#   --no-exec         skip the execution phase (structural checks only).
+#   --exec-timeout <seconds>
+#                     per-invocation timeout of the execution phase (default 10).
 #
 # Exit codes: 0 no critical finding; 1 at least one critical finding;
 #             2 usage error or missing dependency (jq).
-# Read-only: it never writes to the tree it inspects.
+# Read-only: it never writes to the tree it inspects (the execution phase works in a
+# temp copy and removes it).
 # ---------------------------------------------------------------------------
 
 set -uo pipefail
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+if [ -f "$SELF_DIR/../../index/scripts/package-root.sh" ]; then . "$SELF_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SELF_DIR")" || true
 ROOT="$(cd "$SELF_DIR/../../.." && pwd)"
 CRITICAL_ONLY=0
+RUN_EXEC=1
+EXEC_TIMEOUT="${JENGA_SMOKE_EXEC_TIMEOUT:-10}"
 
 usage() {
-  echo "Usage: $(basename "$0") [--root <dir>] [--critical-only]" >&2
+  echo "Usage: $(basename "$0") [--root <dir>] [--package-root <dir>] [--critical-only] [--no-exec] [--exec-timeout <seconds>]" >&2
 }
 
 while [ $# -gt 0 ]; do
@@ -132,7 +201,14 @@ while [ $# -gt 0 ]; do
     --root)
       if [ $# -lt 2 ]; then usage; exit 2; fi
       ROOT="$2"; shift 2 ;;
+    --package-root)
+      if [ $# -lt 2 ]; then usage; exit 2; fi
+      PACKAGE_ROOT="$2"; shift 2 ;;
     --critical-only) CRITICAL_ONLY=1; shift ;;
+    --no-exec) RUN_EXEC=0; shift ;;
+    --exec-timeout)
+      if [ $# -lt 2 ]; then usage; exit 2; fi
+      EXEC_TIMEOUT="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "smoke-test-skills: unknown argument: $1" >&2; usage; exit 2 ;;
   esac
@@ -147,6 +223,10 @@ if [ ! -d "$ROOT/skills" ]; then
   exit 2
 fi
 ROOT="$(cd "$ROOT" && pwd)"
+case "$EXEC_TIMEOUT" in
+  ''|*[!0-9]*|0) echo "smoke-test-skills: --exec-timeout must be a positive whole number of seconds" >&2; exit 2 ;;
+esac
+if [ -n "$PACKAGE_ROOT" ] && [ -d "$PACKAGE_ROOT" ]; then PACKAGE_ROOT="$(cd "$PACKAGE_ROOT" && pwd)"; fi
 
 CRITICAL=0
 MINOR=0
@@ -284,7 +364,7 @@ normalise_ref() {
 resolve_ref() {
   local sdir="$1" kind="$2" base cand
   FOUND=""
-  for base in "$sdir" "$ROOT"; do
+  for base in "$sdir" "$ROOT" "$PACKAGE_ROOT"; do
     cand="$base/$REF"
     if [ "$kind" = "sh" ]; then
       [ -f "$cand" ] && { FOUND="$cand"; return 0; }
@@ -293,7 +373,7 @@ resolve_ref() {
     fi
   done
   if [ "$kind" = "sh" ] && [[ "$REF" != */* ]]; then
-    for cand in "$ROOT/scripts/$REF" "$ROOT/hooks/$REF"; do
+    for cand in "$ROOT/scripts/$REF" "$ROOT/hooks/$REF" "$PACKAGE_ROOT/scripts/$REF" "$PACKAGE_ROOT/hooks/$REF"; do
       [ -f "$cand" ] && { FOUND="$cand"; return 0; }
     done
     for cand in "$ROOT"/skills/*/scripts/"$REF"; do
@@ -421,7 +501,7 @@ check_skill() {
 # mirror-time guard cannot disagree. Located in the repo (<root>/scripts), an installed .claude/.agents tree
 # (sibling scripts/) or an npm install (node_modules/@jenga-ai/agent/scripts).
 NEVER_PUBLIC_LIB=""
-for _cand in "$SELF_DIR/../../../scripts/never-public-refs.sh" "$ROOT/scripts/never-public-refs.sh" \
+for _cand in "$PACKAGE_ROOT/scripts/never-public-refs.sh" "$ROOT/scripts/never-public-refs.sh" \
              "$SELF_DIR/../../../node_modules/@jenga-ai/agent/scripts/never-public-refs.sh" \
              "$ROOT/node_modules/@jenga-ai/agent/scripts/never-public-refs.sh"; do
   if [ -f "$_cand" ]; then NEVER_PUBLIC_LIB="$_cand"; break; fi
@@ -432,7 +512,10 @@ if [ -z "$NEVER_PUBLIC_LIB" ]; then
 fi
 # shellcheck source=/dev/null
 . "$NEVER_PUBLIC_LIB"
-never_public_load "$ROOT/.publicignore" "$ROOT/scripts/never-public-exemptions.conf"
+NEVER_PUBLIC_EXEMPT_CONF="$ROOT/scripts/never-public-exemptions.conf"
+[ -f "$NEVER_PUBLIC_EXEMPT_CONF" ] || [ ! -f "$PACKAGE_ROOT/scripts/never-public-exemptions.conf" ] \
+  || NEVER_PUBLIC_EXEMPT_CONF="$PACKAGE_ROOT/scripts/never-public-exemptions.conf"
+never_public_load "$ROOT/.publicignore" "$NEVER_PUBLIC_EXEMPT_CONF"
 # Fail closed on a malformed exemption file (E28_S21_T03), naming the entry.
 if [ -n "$NEVER_PUBLIC_EXEMPT_ERROR" ]; then
   echo "smoke-test-skills: $NEVER_PUBLIC_EXEMPT_ERROR" >&2
@@ -480,6 +563,172 @@ for d in "$ROOT"/skills/*/; do
   check_never_public_refs "$(basename "$d")"
 done
 
+# ---------------------------------------------------------------------------
+# Execution phase (E98_S02_T02). See the header for the contract.
+# ---------------------------------------------------------------------------
+EXEC_RAN=0
+EXEC_PASSED=0
+EXEC_UNVERIFIABLE=0
+EXEC_UNVERIFIABLE_LIST=""
+EXEC_NOTE=""
+EXEC_WORKDIR=""
+EXEC_CONSUMER=""
+
+# run_limited <seconds> <cmd...>: stock macOS has no `timeout`; use timeout, then gtimeout (coreutils), then a
+# perl alarm, and run unbounded only when none exists.
+run_limited() {
+  local secs="$1"; shift
+  if command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then gtimeout "$secs" "$@"
+  elif command -v perl >/dev/null 2>&1; then perl -e 'alarm shift; exec @ARGV or exit 127' "$secs" "$@"
+  else "$@"; fi
+}
+
+exec_cleanup() { if [ -n "$EXEC_WORKDIR" ]; then rm -rf "$EXEC_WORKDIR"; fi; }
+
+# A package asset named under the mirror root is the signature of a wrong-root resolution: either normalised
+# (.claude/templates/x) or left as the climb that produced it (.claude/skills/<s>/scripts/../../../templates/x).
+EXEC_ASSET='(templates|scripts|lib|hooks|mcp|bin|jobs)'
+EXEC_WRONG_ROOT_RE="/\\.(claude|agents)/${EXEC_ASSET}([^[:alnum:]_.-]|\$)|/\\.(claude|agents)/skills/[^[:space:]]*/scripts/[^[:space:]]*(\\.\\./){3,}${EXEC_ASSET}([^[:alnum:]_.-]|\$)"
+
+# exec_skip_reason <skill/scripts/file>: prints why a script is never executed, or nothing.
+exec_skip_reason() {
+  case "$1" in
+    j-init/*|j-distribute/*|j-mirror-public/*|j-publish/*|j-self-sync/*|j-dashboard*/*)
+      printf '%s' "maintainer-only or mutating skill; never run in a consumer" ;;
+    */tests/*|*/test/*) printf '%s' "test support, not an entry point" ;;
+    */lib/*) printf '%s' "sourced library, not an entry point" ;;
+  esac
+}
+
+# declared_invocations <file>: one line per `# smoke-invoke:` header in the first 40 lines, each prefixed with @.
+declared_invocations() {
+  head -n 40 "$1" | sed -n -E 's/^#[[:space:]]*smoke-invoke:[[:space:]]*(.*[^[:space:]])?[[:space:]]*$/@\1/p'
+}
+
+# script_handles_help <file>: true when the code (comment lines do not count) handles --help or -h, so `--help` is a
+# safe invocation.
+script_handles_help() {
+  # grep -c, not -q: -q exits at the first match and the upstream grep then dies of SIGPIPE, which `pipefail` reports.
+  [ "$(grep -Ev '^[[:space:]]*#' "$1" | grep -Ec -- '(^|[^[:alnum:]_-])(--help|-h)([^[:alnum:]_-]|$)')" -gt 0 ]
+}
+
+# note_unverifiable <skill/scripts/file> <reason>
+note_unverifiable() {
+  EXEC_UNVERIFIABLE=$((EXEC_UNVERIFIABLE + 1))
+  EXEC_UNVERIFIABLE_LIST="${EXEC_UNVERIFIABLE_LIST}  unverifiable: skills/$1 - $2
+"
+}
+
+# exec_one <skill> <skill/scripts/file> <args>: one sandboxed invocation from the fixture's .claude/skills mirror.
+exec_one() {
+  local skill="$1" rel="$2" args="$3" out="$EXEC_WORKDIR/out.txt" rc first label
+  label="${args:-<no arguments>}"
+  EXEC_RAN=$((EXEC_RAN + 1))
+  (
+    cd "$EXEC_CONSUMER" || exit 125
+    set -f
+    # shellcheck disable=SC2086  # the declared arguments are split on whitespace on purpose
+    run_limited "$EXEC_TIMEOUT" env -i PATH="$PATH" HOME="$EXEC_WORKDIR/home" TMPDIR="$EXEC_WORKDIR/tmp" \
+      CLAUDE_PROJECT_DIR="$EXEC_CONSUMER" LC_ALL=C bash "$EXEC_CONSUMER/.claude/skills/$rel" $args
+  ) </dev/null >"$out" 2>&1
+  rc=$?
+  if [ "$rc" -eq 0 ]; then EXEC_PASSED=$((EXEC_PASSED + 1)); return 0; fi
+  first="$(head -n 1 "$out" | tr -d '\000-\010\013-\037' | cut -c1-200)"
+  if [ "$rc" -eq 124 ] || [ "$rc" -eq 142 ]; then
+    emit minor exec-timeout "$skill" "$skill: script $rel" \
+      "$rel $label did not finish within ${EXEC_TIMEOUT}s in the consumer layout" \
+      "A step that calls it hangs; a blocking prompt or a runaway loop is the usual cause."
+    return 0
+  fi
+  if grep -Eq "$EXEC_WRONG_ROOT_RE" "$out"; then
+    first="$(grep -E "$EXEC_WRONG_ROOT_RE" "$out" | head -n 1 | tr -d '\000-\010\013-\037' | cut -c1-200)"
+    emit critical exec-package-asset "$skill" "$skill: script $rel" \
+      "$rel $label exits $rc in the consumer layout and names a package asset under the mirror: $first" \
+      "The script resolves package assets against .claude/ (or .agents/), where postinstall puts only skills/ and agents/; in a consumer install the step that calls it fails."
+    return 0
+  fi
+  emit minor exec-failed "$skill" "$skill: script $rel" \
+    "$rel $label exits $rc in the consumer layout: ${first:-no output}" \
+    "The script fails when run the way a consumer runs it; it may still work from the package layout."
+}
+
+exec_phase() {
+  local list rel skill abs reason decls decl args helper mode
+  list="$(cd "$ROOT/skills" && find . -type f -name '*.sh' -path '*/scripts/*' 2>/dev/null | sed 's|^\./||' | sort)"
+  if [ -z "$list" ]; then EXEC_NOTE="no skill scripts to execute"; return 0; fi
+  if [ -d "$ROOT/templates" ]; then
+    mode="package"
+  elif [ -n "$PACKAGE_ROOT" ] && [ -d "$PACKAGE_ROOT/templates" ] && [ "$PACKAGE_ROOT" != "$ROOT" ]; then
+    mode="mirror"
+  else
+    EXEC_NOTE="skipped: $ROOT has no templates/ (a mirror root) and no package root was found; pass --package-root <dir>"
+    return 0
+  fi
+  helper="$ROOT/scripts/consumer-layout-fixture.sh"
+  if [ ! -f "$helper" ]; then helper="$PACKAGE_ROOT/scripts/consumer-layout-fixture.sh"; fi
+  EXEC_WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/jenga-smoke-exec.XXXXXX")" || { EXEC_NOTE="skipped: cannot create a temp directory"; return 0; }
+  trap exec_cleanup EXIT
+  mkdir -p "$EXEC_WORKDIR/home" "$EXEC_WORKDIR/tmp"
+  EXEC_CONSUMER="$EXEC_WORKDIR/consumer"
+  if [ "$mode" = "mirror" ]; then
+    # The root under test IS a consumer's mirror (.claude): execute ITS skills, in a throwaway copy of that
+    # consumer, with the package where npm puts it. Nothing under the real consumer is touched.
+    if ! { mkdir -p "$EXEC_CONSUMER/node_modules/@jenga-ai" "$EXEC_CONSUMER/.claude" "$EXEC_CONSUMER/project/configs" \
+           && ln -s "$PACKAGE_ROOT" "$EXEC_CONSUMER/node_modules/@jenga-ai/agent" \
+           && cp -R "$ROOT/skills" "$EXEC_CONSUMER/.claude/skills" \
+           && printf '{}\n' > "$EXEC_CONSUMER/project/configs/workflow.json" \
+           && git -C "$EXEC_CONSUMER" init -q . ; } 2>"$EXEC_WORKDIR/fixture.err"; then
+      emit minor exec-fixture-failed "j-smoke-test" "j-smoke-test: execution phase" \
+        "the consumer copy of the mirror root could not be built: $(head -n 1 "$EXEC_WORKDIR/fixture.err" 2>/dev/null | cut -c1-160)" \
+        "No script was executed, so a script that resolves package assets against .claude/ would not be caught."
+      EXEC_NOTE="skipped: the consumer copy of the mirror root could not be built"
+      return 0
+    fi
+  elif [ ! -f "$helper" ] || ! bash "$helper" "$EXEC_CONSUMER" "$ROOT" >/dev/null 2>"$EXEC_WORKDIR/fixture.err"; then
+    emit minor exec-fixture-failed "j-smoke-test" "j-smoke-test: execution phase" \
+      "the consumer-layout fixture could not be built (helper: $helper): $(head -n 1 "$EXEC_WORKDIR/fixture.err" 2>/dev/null | cut -c1-160)" \
+      "No script was executed, so a script that resolves package assets against .claude/ would not be caught."
+    EXEC_NOTE="skipped: the consumer-layout fixture could not be built"
+    return 0
+  fi
+  EXEC_CONSUMER="$(cd "$EXEC_CONSUMER" && pwd -P)"
+
+  while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
+    skill="${rel%%/*}"
+    abs="$ROOT/skills/$rel"
+    reason="$(exec_skip_reason "$rel")"
+    if [ -n "$reason" ]; then note_unverifiable "$rel" "$reason"; continue; fi
+    decls="$(declared_invocations "$abs")"
+    if [ -z "$decls" ]; then
+      if script_handles_help "$abs"; then
+        decls="@--help"
+      else
+        note_unverifiable "$rel" "no --help handling and no '# smoke-invoke:' header"
+        continue
+      fi
+    fi
+    while IFS= read -r decl; do
+      args="${decl#@}"
+      case "$args" in
+        none|none\ *) note_unverifiable "$rel" "declared unverifiable:${args#none}"; continue ;;
+      esac
+      exec_one "$skill" "$rel" "$args"
+    done <<EOF
+$decls
+EOF
+  done <<EOF
+$list
+EOF
+}
+
+if [ "$RUN_EXEC" -eq 1 ]; then
+  exec_phase
+else
+  EXEC_NOTE="skipped (--no-exec)"
+fi
+
 RESULT="PASS"
 [ "$CRITICAL" -eq 0 ] || RESULT="FAIL"
 {
@@ -487,6 +736,12 @@ RESULT="PASS"
   echo "================"
   echo "Skills checked: $CHECKED ($EXEMPT exempt: not a skill)"
   echo "Findings: $CRITICAL critical, $MINOR minor"
+  if [ -n "$EXEC_NOTE" ]; then
+    echo "Execution check: $EXEC_NOTE"
+  else
+    echo "Execution check: $EXEC_RAN invoked, $EXEC_PASSED exited 0, $EXEC_UNVERIFIABLE unverifiable"
+  fi
+  if [ "$EXEC_UNVERIFIABLE" -gt 0 ]; then printf '%s' "$EXEC_UNVERIFIABLE_LIST"; fi
   echo "Result: $RESULT"
 } >&2
 

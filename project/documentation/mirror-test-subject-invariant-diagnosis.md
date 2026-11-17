@@ -435,6 +435,17 @@ An early exit (E28_S18_T04) is the cheaper and safer win, and needs no new depen
 
 ---
 
+### Progress output and the final failure line (E77_S06_T07)
+
+Because the loop above is long, `check_test_subject_invariant` now says where it is. Before each shipping test file it logs one
+line, `test-subject-invariant: [<i>/<N>] <file> (elapsed <m>m<s>s)`, where `N` is the number of shipping test files in the
+run and the elapsed time comes from the shell's own `SECONDS` counter; this is progress only, and the loop, the verdict and
+the early-exit behaviour described above are unchanged. A failing file still logs its own line at the moment it fails
+(`test-subject-invariant: FAIL <file> - <first "not ok" line, or the exit status when the file failed to load>`), and the final
+refusal message still lists every failing file, one `  - <file>: <detail>` line each, so a long run that fails near its end
+names its culprits without anyone scrolling back through the progress lines. The files that make the gate long are found by
+measurement rather than by hand; see "Long-running tests" in the mirror skill's `SKILL.md`.
+
 ## 7. The `E46_S02_T01` shared-`.git/config` leak class: ruled OUT
 
 `project/rapports/problems/E46_S02_T01-mirror-test-corrupted-shared-repo-state.md` records a mirror test

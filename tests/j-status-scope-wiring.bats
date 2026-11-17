@@ -65,10 +65,10 @@ setup() {
 
 # ---- E92_S06_T26: the default scope view and the --legacy scope block ---------------------------------------------------
 
-@test "j.status <id> resolves to the T25 scope renderer and j.status --legacy <id> to the old render-status-scope.sh" {
+@test "j.status <id> resolves to the Node scope renderer and j.status --legacy <id> to the old render-status-scope.sh" {
   D="$REPO/skills/j-status/scripts"
   [ "$(bash "$D/resolve-status-mode.sh" mode E03_S05)" = "scope" ]
-  [ "$(bash "$D/resolve-status-mode.sh" plan E03_S05)" = "render-status-scope-view.sh E03_S05" ]
+  [ "$(bash "$D/resolve-status-mode.sh" plan E03_S05)" = "node lib/progress/cli.js scope E03_S05" ]
   [ "$(bash "$D/resolve-status-mode.sh" mode --legacy E03_S05)" = "legacy-scope" ]
   [ "$(bash "$D/resolve-status-mode.sh" plan --legacy E03_S05)" = "render-status-scope.sh E03_S05" ]
   [ -f "$D/render-status-scope-view.sh" ]
@@ -94,6 +94,6 @@ setup() {
 
 @test "output_format.md says the Extended scope block is legacy-path only and shows the default scope view" {
   grep -Fq 'Legacy path only (`j.status --legacy <epic-or-story-id>`' "$FMT"
-  grep -Fq 'render E92_S06 --cols 80 --color never' "$FMT"
-  grep -Fq 'Ready to take (0)' "$FMT"
+  grep -Fq 'render E92_S08 --charset utf8 --color never --cols 80' "$FMT"
+  grep -Fq 'Ready to take: ' "$FMT"
 }

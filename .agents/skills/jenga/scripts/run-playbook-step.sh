@@ -622,10 +622,13 @@ elif [ "$SUBCOMMAND" = "advance" ]; then
   PKG_ROOT=""
   if [ "$OUTCOME" = "passed" ] && [ -n "$EXTRA" ]; then
     ADVANCE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    # shellcheck source=/dev/null
+    if [ -f "$ADVANCE_SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$ADVANCE_SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+    _PKG_CAND="$(jenga_package_root "$ADVANCE_SCRIPT_DIR")" || true
     if [ -n "${JENGA_PLAYBOOKS_TEST_ROOT:-}" ]; then
       PKG_ROOT="$JENGA_PLAYBOOKS_TEST_ROOT"
-    elif [ -d "$ADVANCE_SCRIPT_DIR/../../../templates" ]; then
-      PKG_ROOT="$(cd "$ADVANCE_SCRIPT_DIR/../../.." && pwd)"
+    elif [ -d "$_PKG_CAND/templates" ]; then
+      PKG_ROOT="$_PKG_CAND"
     elif [ -d "$PROJECT_DIR/node_modules/@jenga-ai/agent/templates" ]; then
       PKG_ROOT="$PROJECT_DIR/node_modules/@jenga-ai/agent"
     else

@@ -39,7 +39,8 @@ script-missing|j-mirror-public
 
 setup_file() {
   set +e
-  "$BASH_BIN" "$HARNESS" > "$BATS_FILE_TMPDIR/real.jsonl" 2> "$BATS_FILE_TMPDIR/real.err"
+  # --no-exec: this file is about the structural checks; the execution phase is covered by smoke-test-mirror-layout.bats
+  "$BASH_BIN" "$HARNESS" --no-exec > "$BATS_FILE_TMPDIR/real.jsonl" 2> "$BATS_FILE_TMPDIR/real.err"
   echo "$?" > "$BATS_FILE_TMPDIR/real.status"
   set -e
 }

@@ -597,7 +597,7 @@ These six fields control the execution footprint of a task within the `/jenga` a
   - `story` — task may touch files across multiple tasks in the same story
   - `epic` — task may touch files across stories; requires `epic_scope_approval: true` on the parent epic
   - `inline` — trivial change (e.g. config tweak, comment, schema doc); no execution plan or summary document is needed
-  - `light` — sits between `inline` and `task` in scope: a single developer subagent pass with no worktree, self-verified via `scripts/smoke-harness.sh` in lieu of a separate tester invocation; if the smoke harness fails, execution falls back to `task` scope
+  - `light` — sits between `inline` and `task` in scope: a single developer subagent pass with no worktree, self-verified via `scripts/smoke-harness.sh` in lieu of a separate tester invocation. The self-check runs only `scripts/smoke.sh` or the test files the project's own scope map selects for the change (never the whole suite) and may verify nothing (exit 3); if the smoke harness fails or verifies nothing, execution falls back to `task` scope and the Tester judges the task
 
 **`needs_docs`**
 - Valid values: `true` | `false`

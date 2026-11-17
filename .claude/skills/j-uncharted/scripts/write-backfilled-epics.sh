@@ -107,6 +107,10 @@ LABEL=""
 INPUT=""
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+# Package root (scripts/, lib/, templates/): resolved so it also works from a consumer's .claude/skills mirror.
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 
 usage() {
   cat <<EOF
@@ -264,7 +268,7 @@ ISO_DATE=$(date -u +%Y-%m-%d)
 # in the project root, then next to the skills/ directory this script is deployed under (the source tree, or the
 # .claude/ / .agents/ mirror or an installed package).
 ALLOCATOR=""
-for _cand in "$REPO_ROOT/scripts/next-board-id.sh" "$SCRIPT_DIR/../../../scripts/next-board-id.sh"; do
+for _cand in "$REPO_ROOT/scripts/next-board-id.sh" "$PACKAGE_ROOT/scripts/next-board-id.sh" "$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/next-board-id.sh"; do
   if [ -f "$_cand" ] && [ -f "$(dirname -- "$_cand")/lib/board-ids.sh" ]; then
     ALLOCATOR=$(cd -- "$(dirname -- "$_cand")" && pwd -P)/next-board-id.sh
     break

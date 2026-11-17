@@ -153,3 +153,16 @@ step4() { section '^### 4\. '; }
     [ -z "$output" ]
   fi
 }
+
+# --- E92_S08_T07: the lines are copied into the reply; the colour rule lives once, in skills/j-break/SKILL.md ----------
+
+@test "E92_S08_T07: the wave call runs with --charset utf8 --color never and the lines are copied into the reply as a fenced code block" {
+  sec="$(new_section)"
+  grep -- 'RP --scope' "$SKILL" | grep -qF -- 'comma separated> --after-story --charset utf8 --color never'
+  grep -qF 'copy the lines it prints into your reply as a fenced code block' <<<"$sec"
+  run grep -F 'show the lines it prints' "$SKILL"
+  [ "$status" -ne 0 ]
+  grep -qF '`skills/j-break/SKILL.md` ("Progress lines")' <<<"$sec"
+  run grep -F -- '--color always' <<<"$sec"
+  [ "$status" -ne 0 ]
+}

@@ -186,9 +186,13 @@ FIELD_PATTERN='^[a-z_]{1,32}$'
 
 SELF="$(basename "$0")"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# The shared scripts directory, reached by climbing from this skill's scripts directory rather than naming any
-# path from the resolved root.
-SHARED_DIR="$SCRIPT_DIR/../../../scripts"
+# Package root (scripts/, templates/): resolved so it also works from a consumer's .claude/skills mirror.
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
+# The shared scripts directory of the package (monorepo root, or node_modules/@jenga-ai/agent in a consumer
+# install), not a path from the resolved project root.
+SHARED_DIR="$PACKAGE_ROOT/scripts"
 
 STATE_DIR=""
 STATE_FILE=""

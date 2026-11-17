@@ -115,7 +115,9 @@ SCRIPT_NAME="test-gate-run.sh"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # skills/j-commit/scripts -> the checkout root, or node_modules/@jenga-ai/agent
 # when installed as a dependency.
-REPO_ROOT="$(cd -- "$SCRIPT_DIR/../../.." && pwd)"
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+REPO_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 JTEST_DIR="$SCRIPT_DIR/../../j-test/scripts"
 
 ACTIONS=" skip passed failed error override halt fallback unavailable interrupted "

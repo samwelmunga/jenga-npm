@@ -1,7 +1,13 @@
 /**
  * dependencyTreeModel — E92_S06_T09, reworked to dependency-tree v2 by E92_S06_T19.
  *
- * Pure (React-free, DOM-free) model for the epic dependency tree in the overlay. Input is the body of
+ * Pure (React-free, DOM-free) model for the epic dependency tree in the overlay.
+ *
+ * E92_S08_T02: the graph STRUCTURE (depth columns, gates, marks, folding, bands, edges, ready/unlocked, goal facts) now lives in
+ * lib/progress/dependency-structure.js, shared with the Node terminal renderer, which has no use for pixels. This file keeps
+ * what is specific to the dashboard: the pixel layout (LAYOUT, COL_WIDTH, layoutTree) and unfoldGroups, and re-exports every
+ * name it exported before the split, so DependencyTree.jsx and EntryDetailPanel.jsx are unchanged.
+ * Input is the body of
  * `GET /v1/progress-graph` (the output of `scripts/board-progress.sh --graph [--within <id>]` plus `labels`).
  * It accepts the full-board payload or a `--within`-restricted one and selects the epic itself, so both give the
  * same model. It derives no state, readiness or unlocked_by: those are the script's. It counts nothing the payload
@@ -13,22 +19,29 @@
  * edge runs from the right edge of the dependency to the left edge of the dependent. The old v1 convention was the
  * reverse (`from` the dependent). Every edge carries `crossStory` (the two ends sit in different stories; boundary
  * edges always do) and a `kind`: `dependency` (task to task), `boundary` (a node outside the epic to a task),
- * `start` (a story's start node to a task with no in-epic dependency) and `goal` (a task that nothing in the epic
- * depends on to the goal, whose id is GOAL_NODE_ID). Edges between the visible nodes are de-duplicated by
+ * `start` (a story's start node to a task with no in-epic dependency), `goal` (a task that nothing in the epic
+ * depends on to the goal, whose id is GOAL_NODE_ID) and `ghost` (E92_S12_T02: the start node of a ghost band to the goal,
+ * drawn dashed; see below). Edges between the visible nodes are de-duplicated by
  * `from` + `to`; once groups fold, the edges of a group are the union of its members'.
  *
  * Model shape (arrays are sorted, so the same input gives a deep-equal output):
- *   empty        true when the epic has no tasks or no dependency at all (the goal is still filled in)
+ *   empty        true only when the epic has no tasks (the goal is still filled in); an epic with tasks but no
+ *                dependency edge gets its tree, every task in column 0 (E92_S09_T01)
  *   goal         { id, title, fraction, percent, done, total, reached, x, y }  fraction 0..1, rejected not counted
- *   stories      per story: { storyId, title, done, total, buckets }   the start-node facts, id order
+ *   stories      per story: { storyId, title, done, total, buckets }   the start-node facts, id order, plus
+ *                undecomposed: true on a story the payload states `decomposed: false` (E92_S12_T02)
  *   tasks        every task, never folded: { kind:'task', id, title, storyId, state, bucket, row, column, gate,
- *                mark, dependsOn, unlocks, upstream, downstream }   gate: none | locked | open;
+ *                mark, dependsOn, unlocks, upstream, downstream }   gate: none | locked | open, from the task's own
+ *                and its story's depends_on (E92_S09_T02, see gateOf in dependency-structure.js);
  *                mark: done | in_progress | ready | failed | rejected | none (none for a locked task)
  *   nodes        the VISIBLE nodes: tasks and folded groups, each with x, y, w, h, inX, outX, midY and slot
  *                group: { kind:'group', id, members, count, state, row, column, gate, mark, dependsOn, unlocks,
  *                upstream, downstream }
  *   headers      one collapse header per expanded group
- *   bands        per story: { storyId, row, y, h, start }   `start` is the start node (id `story:<storyId>`)
+ *   bands        per story: { storyId, row, y, h, start }   `start` is the start node (id `story:<storyId>`; it carries
+ *                `undecomposed: true` for an undecomposed story). A GHOST band (E92_S12_T02: an undecomposed story with no task
+ *                node, built because buildDependencyTreeModel asks for includeUndecomposed) has `undecomposed: true` too and no
+ *                node; it is laid out like any band, `cardH + bandPad` tall, and has one `ghost` edge to the goal
  *   edges        the visible edges, see above
  *   boundary     nodes outside the epic, { id, status, bucket }
  *   foldable     ids of every group that would fold, folded or not
@@ -39,11 +52,9 @@
  * The layout numbers are exported (LAYOUT) so the renderer and the zoom/fit code share one source.
  */
 
-/** A group folds when MORE than this many tasks share a state within one story and one column. */
-export const FOLD_THRESHOLD = 5
+import { buildDependencyStructure, foldStructure, fillUnlockedBy, goalFailedText, unfinishedDepText, FOLD_THRESHOLD, GOAL_NODE_ID } from '../../../../../../lib/progress/dependency-structure.js'
 
-/** Id of the goal as an edge target. */
-export const GOAL_NODE_ID = 'goal'
+export { fillUnlockedBy, goalFailedText, unfinishedDepText, FOLD_THRESHOLD, GOAL_NODE_ID }
 
 /** Layout numbers, in user units. width and height of the whole drawing are in `model.layout`. */
 export const LAYOUT = Object.freeze({
@@ -67,296 +78,50 @@ export const LAYOUT = Object.freeze({
 })
 export const COL_WIDTH = LAYOUT.columnW
 
-const STATE_ORDER = { in_progress: 0, ready: 1, failed: 2, locked: 3, done: 4, rejected: 5, unknown: 6 }
-const MARKED = new Set(['done', 'in_progress', 'ready', 'failed', 'rejected'])
-const BUCKETS = ['done', 'in_progress', 'failed', 'pending', 'rejected', 'unknown']
-
-const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
-const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
-const arr = v => (Array.isArray(v) ? v : [])
-const stateRank = s => (s in STATE_ORDER ? STATE_ORDER[s] : 7)
-
-/** Substitute the two `%s` of the unlocked_by label, in order (task id, then unlocked_by id). '' when label missing. */
-export function fillUnlockedBy(template, taskId, byTaskId) {
-  if (typeof template !== 'string' || !template) return ''
-  const values = [taskId, byTaskId]
-  let i = 0
-  return template.replace(/%s/g, () => String(values[i++] ?? ''))
-}
-
-function zeroGoal(id, title) {
-  return { id, title, fraction: 0, percent: 0, done: 0, total: 0, reached: false, x: 0, y: 0 }
-}
-
-function emptyModel(goal) {
-  return {
-    empty: true,
-    goal: goal || zeroGoal('', ''),
-    stories: [],
-    tasks: [],
-    nodes: [],
-    headers: [],
-    bands: [],
-    edges: [],
-    boundary: [],
-    foldable: [],
-    expanded: [],
-    ready: [],
-    unlocked: [],
-    layout: { ...LAYOUT, width: 0, height: 0, columns: 0 },
-  }
-}
-
-const finite = v => typeof v === 'number' && Number.isFinite(v) && v >= 0
-
-/** done / total from a payload `totals` object ({ done, denominator, ... }); null when it does not carry them. */
-function fromTotals(totals) {
-  if (!totals || typeof totals !== 'object') return null
-  const denominator = totals.denominator
-  if (!finite(totals.done) || !finite(denominator)) return null
-  const buckets = {}
-  for (const b of BUCKETS) buckets[b] = finite(totals[b]) ? totals[b] : 0
-  return { done: totals.done, total: denominator, buckets }
-}
-
-/** Fallback when the payload carries no totals: read each task's own bucket; rejected and unknown are not counted. */
-function fromTasks(list) {
-  const buckets = {}
-  for (const b of BUCKETS) buckets[b] = 0
-  for (const t of list) if (t.bucket in buckets) buckets[t.bucket]++
-  return { done: buckets.done, total: buckets.done + buckets.in_progress + buckets.failed + buckets.pending, buckets }
-}
-
-/** Goal progress: fraction 0..1, whole percent, and `reached` only at 100 % of a non-empty count. No division by zero. */
-function goalFacts(id, title, figures) {
-  const { done, total } = figures
-  const fraction = total > 0 ? Math.min(1, done / total) : 0
-  return { id, title, fraction, percent: Math.round(fraction * 100), done, total, reached: total > 0 && done >= total, x: 0, y: 0 }
-}
-
-/** Longest dependency path per node, cycle-safe: bounded relaxation, at most n passes, so a cycle cannot hang. */
-function computeColumns(ids, deps) {
-  const col = new Map(ids.map(id => [id, 0]))
-  const max = ids.length
-  for (let pass = 0; pass < max; pass++) {
-    let changed = false
-    for (const id of ids) {
-      for (const d of deps.get(id)) {
-        if (!col.has(d)) continue
-        const next = Math.min(col.get(d) + 1, max - 1)
-        if (col.get(id) < next) { col.set(id, next); changed = true }
-      }
-    }
-    if (!changed) break
-  }
-  return col
-}
-
-/** Transitive closure over `next` (id -> ids), the start excluded; cycle-safe through the visited set. */
-function closure(start, next) {
-  const seen = new Set()
-  const stack = [...(next.get(start) || [])]
-  while (stack.length) {
-    const id = stack.pop()
-    if (seen.has(id) || id === start) continue
-    seen.add(id)
-    for (const n of next.get(id) || []) stack.push(n)
-  }
-  return [...seen].sort()
-}
-
-export function buildDependencyTreeModel(graph, epicId, labels) {
-  if (!graph || typeof graph !== 'object' || typeof epicId !== 'string' || !epicId) return emptyModel()
-  const lab = labels || graph.labels || {}
-  const allTasks = arr(graph.tasks).filter(t => t && typeof t === 'object')
-  const tasks = allTasks.filter(t => t.epic_id === epicId).slice().sort(byId)
-  const epicEntry = arr(graph.epics).find(e => e && e.id === epicId)
-  const epicTitle = (epicEntry && epicEntry.title) || ''
-  if (tasks.length === 0) return emptyModel(goalFacts(epicId, epicTitle, { done: 0, total: 0 }))
-
-  const epicFigures = fromTotals(epicEntry && epicEntry.tasks && epicEntry.tasks.totals) || fromTasks(tasks)
-  const goal = goalFacts(epicId, epicTitle, epicFigures)
-
-  const taskIds = new Set(tasks.map(t => t.id))
-  const depsOf = new Map() // task id -> its depends_on (self-references dropped, de-duplicated, sorted)
-  const outside = new Set()
-  let edgeCount = 0
-  for (const t of tasks) {
-    const list = [...new Set(arr(t.depends_on).filter(d => typeof d === 'string' && d && d !== t.id))].sort()
-    depsOf.set(t.id, list)
-    for (const d of list) { edgeCount++; if (!taskIds.has(d)) outside.add(d) }
-  }
-  if (edgeCount === 0) return emptyModel(goal)
-
-  // Boundary nodes: only {id, status, bucket}, from the payload's tasks, else its `external` list.
-  const lookup = new Map()
-  for (const x of arr(graph.external)) if (x && x.id) lookup.set(x.id, x)
-  for (const x of allTasks) lookup.set(x.id, x)
-  const boundary = [...outside].sort().map(id => {
-    const x = lookup.get(id) || {}
-    return { id, status: x.status ?? '', bucket: x.bucket ?? '' }
-  })
-  const bucketOf = id => {
-    const x = lookup.get(id)
-    return x && typeof x.bucket === 'string' ? x.bucket : ''
-  }
-
-  // Dependents inside the epic, and the in-epic dependencies the depth is built on.
-  const inner = new Map(tasks.map(t => [t.id, depsOf.get(t.id).filter(d => taskIds.has(d))]))
-  const dependents = new Map(tasks.map(t => [t.id, []]))
-  for (const t of tasks) for (const d of inner.get(t.id)) dependents.get(d).push(t.id)
-  for (const list of dependents.values()) list.sort()
-  const cols = computeColumns(tasks.map(t => t.id), inner)
-
-  const storyEntries = new Map(arr(graph.stories).filter(s => s && s.id).map(s => [s.id, s]))
-  const storyIds = [...new Set(tasks.map(t => t.story_id))].sort()
-  const stories = storyIds.map(sid => {
-    const entry = storyEntries.get(sid)
-    const figures = fromTotals(entry && entry.totals) || fromTasks(tasks.filter(t => t.story_id === sid))
-    return { storyId: sid, title: (entry && entry.title) || '', done: figures.done, total: figures.total, buckets: figures.buckets }
-  })
-  const rowOf = new Map(storyIds.map((sid, i) => [sid, i]))
-
-  const taskFacts = tasks.map(t => {
-    const dependsOn = depsOf.get(t.id)
-    const gate = dependsOn.length === 0 ? 'none' : dependsOn.every(d => bucketOf(d) === 'done') ? 'open' : 'locked'
-    return {
-      kind: 'task',
-      id: t.id,
-      title: t.title ?? '',
-      storyId: t.story_id,
-      state: t.state,
-      bucket: t.bucket ?? '',
-      row: rowOf.get(t.story_id),
-      column: cols.get(t.id),
-      gate,
-      mark: MARKED.has(t.state) ? t.state : 'none',
-      dependsOn,
-      unlocks: dependents.get(t.id),
-      upstream: closure(t.id, depsOf),
-      downstream: closure(t.id, dependents),
-    }
-  })
-
-  const ready = tasks.filter(t => t.state === 'ready').map(t => ({ id: t.id, title: t.title ?? '', storyId: t.story_id }))
-  const unlocked = tasks
-    .filter(t => typeof t.unlocked_by === 'string' && t.unlocked_by)
-    .map(t => ({ taskId: t.id, text: fillUnlockedBy(lab.unlocked_by, t.id, t.unlocked_by) }))
-
-  return layoutTree({ empty: false, goal, stories, tasks: taskFacts, boundary, ready, unlocked }, [])
-}
-
-const groupId = (sid, column, state) => `group:${sid}|${column}|${state}`
-
-/** Facts of one folded group: the union of its members' dependsOn, unlocks and chains, the members excluded. */
-function groupFacts(sid, column, state, members) {
-  const ids = new Set(members.map(m => m.id))
-  const union = key => [...new Set(members.flatMap(m => m[key]))].filter(id => !ids.has(id)).sort()
-  const gates = members.map(m => m.gate)
-  return {
-    kind: 'group',
-    id: groupId(sid, column, state),
-    members: members.map(m => m.id),
-    count: members.length,
-    state,
-    storyId: sid,
-    row: members[0].row,
-    column,
-    gate: gates.every(g => g === 'none') ? 'none' : gates.includes('locked') ? 'locked' : 'open',
-    mark: MARKED.has(state) ? state : 'none',
-    dependsOn: union('dependsOn'),
-    unlocks: union('unlocks'),
-    upstream: union('upstream'),
-    downstream: union('downstream'),
-  }
-}
-
 /**
- * Pure layout of the facts for a given set of expanded group ids. Cells are (story band, column); inside a cell the
- * tasks are ordered by state, then id. A state with more than FOLD_THRESHOLD tasks in one cell folds into one group
- * node unless its id is in `expanded`, in which case a collapse header precedes the members.
+ * Pure pixel layout of a structure (see lib/progress/dependency-structure.js): positions every band, node, collapse header,
+ * the start nodes and the goal, and adds the `layout` totals. Nothing structural is decided here.
  */
-function layoutTree(m, expandedIn) {
+export function layoutTree(s) {
+  const { columns, ...rest } = s
   const L = LAYOUT
-  const expanded = new Set(expandedIn)
-  const ctask = new Map(m.tasks.map(t => [t.id, t]))
-  const maxCol = m.tasks.reduce((x, t) => Math.max(x, t.column), 0)
+  if (s.empty) return { ...rest, goal: { ...s.goal, x: 0, y: 0 }, layout: { ...L, width: 0, height: 0, columns: 0 } }
 
   const nodes = []
   const headers = []
   const bands = []
-  const foldable = []
-  const visibleOf = new Map() // task id -> visible node id
-  const foldedIn = new Set()
   let y = L.pad
 
-  m.stories.forEach((story, row) => {
-    const inStory = m.tasks.filter(t => t.storyId === story.storyId)
-    const cells = new Map()
-    for (const t of inStory) {
-      if (!cells.has(t.column)) cells.set(t.column, [])
-      cells.get(t.column).push(t)
-    }
-    const slotsOf = new Map()
-    for (const [column, list] of [...cells].sort((a, b) => a[0] - b[0])) {
-      list.sort((a, b) => stateRank(a.state) - stateRank(b.state) || cmp(a.id, b.id))
-      const count = {}
-      for (const t of list) count[t.state] = (count[t.state] || 0) + 1
-      const slots = []
-      const done = new Set()
-      for (const t of list) {
-        if (count[t.state] > FOLD_THRESHOLD) {
-          const gid = groupId(story.storyId, column, t.state)
-          const members = list.filter(x => x.state === t.state)
-          if (!done.has(gid)) foldable.push(gid)
-          if (expanded.has(gid)) {
-            if (!done.has(gid)) { done.add(gid); slots.push({ type: 'header', id: gid, state: t.state, count: members.length }) }
-            slots.push({ type: 'task', task: t })
-          } else if (!done.has(gid)) {
-            done.add(gid)
-            slots.push({ type: 'group', group: groupFacts(story.storyId, column, t.state, members), members })
-          }
-        } else slots.push({ type: 'task', task: t })
-      }
-      slotsOf.set(column, slots)
-    }
-    const slotH = s => (s.type === 'header' ? L.headerH : L.cardH)
-    const gapAfter = s => (s.type === 'header' ? L.headerGap : L.rowGap)
-    const cellH = slots => slots.reduce((h, s, i) => h + slotH(s) + (i < slots.length - 1 ? gapAfter(s) : 0), 0)
-    const inner = Math.max(L.cardH + L.bandPad, ...[...slotsOf.values()].map(cellH))
+  for (const band of s.bands) {
+    const { row } = band
+    const slotH = sl => (sl.type === 'header' ? L.headerH : L.cardH)
+    const gapAfter = sl => (sl.type === 'header' ? L.headerGap : L.rowGap)
+    const cellH = slots => slots.reduce((h, sl, i) => h + slotH(sl) + (i < slots.length - 1 ? gapAfter(sl) : 0), 0)
+    const inner = Math.max(L.cardH + L.bandPad, ...band.cells.map(c => cellH(c.slots)))
     const h = L.bandPad * 2 + inner
 
-    for (const [column, slots] of slotsOf) {
+    for (const { column, slots } of band.cells) {
       let cy = y + (h - cellH(slots)) / 2
       const x = L.columnX0 + column * L.columnW
-      slots.forEach((s, slot) => {
-        if (s.type === 'header') {
-          headers.push({ kind: 'header', id: s.id, state: s.state, count: s.count, row, column, x, y: cy, w: L.cardW, h: L.headerH })
+      for (const sl of slots) {
+        if (sl.type === 'header') {
+          headers.push({ ...sl.header, x, y: cy, w: L.cardW, h: L.headerH })
         } else {
-          const facts = s.type === 'group' ? s.group : s.task
-          const gated = facts.gate !== 'none'
-          nodes.push({ ...facts, slot, x, y: cy, w: L.cardW, h: L.cardH, inX: x - (gated ? L.gateR : 0), outX: x + L.cardW, midY: cy + L.cardH / 2 })
-          if (s.type === 'group') for (const mem of s.members) { visibleOf.set(mem.id, facts.id); foldedIn.add(facts.id) }
-          else visibleOf.set(s.task.id, s.task.id)
+          const gated = sl.node.gate !== 'none'
+          nodes.push({ ...sl.node, x, y: cy, w: L.cardW, h: L.cardH, inX: x - (gated ? L.gateR : 0), outX: x + L.cardW, midY: cy + L.cardH / 2 })
         }
-        cy += slotH(s) + gapAfter(s)
-      })
+        cy += slotH(sl) + gapAfter(sl)
+      }
     }
 
-    const startId = `story:${story.storyId}`
     bands.push({
-      storyId: story.storyId,
+      storyId: band.storyId,
       row,
       y,
       h,
+      ...(band.undecomposed ? { undecomposed: true } : {}),
       start: {
-        kind: 'start',
-        id: startId,
-        storyId: story.storyId,
-        title: story.title,
-        done: story.done,
-        total: story.total,
-        buckets: story.buckets,
+        ...band.start,
         x: L.pad,
         y: y + h / 2 - L.startH / 2,
         w: L.startW,
@@ -366,50 +131,28 @@ function layoutTree(m, expandedIn) {
       },
     })
     y += h + L.bandGap
-  })
+  }
 
   const contentH = y - L.bandGap + L.pad
-  const goalX = L.columnX0 + maxCol * L.columnW + L.cardW + L.goalGap
+  const goalX = L.columnX0 + (columns - 1) * L.columnW + L.cardW + L.goalGap
   const layout = {
     ...L,
     width: goalX + L.goalAreaW,
     height: Math.max(contentH, L.minHeight),
-    columns: maxCol + 1,
+    columns,
   }
-  const goal = { ...m.goal, x: goalX + L.goalOffsetX, y: contentH / 2 }
+  const goal = { ...s.goal, x: goalX + L.goalOffsetX, y: contentH / 2 }
 
-  // Edges between the visible nodes, de-duplicated; a group stands for all of its members.
-  const edges = []
-  const seen = new Set()
-  const add = (from, to, crossStory, kind) => {
-    const key = `${from}>${to}`
-    if (seen.has(key)) return
-    seen.add(key)
-    edges.push({ from, to, crossStory, kind })
-  }
-  for (const t of m.tasks) {
-    const to = visibleOf.get(t.id)
-    let inEpic = 0
-    for (const d of t.dependsOn) {
-      const dep = ctask.get(d)
-      if (dep) { inEpic++; add(visibleOf.get(d), to, dep.storyId !== t.storyId, 'dependency') }
-      else add(d, to, true, 'boundary')
-    }
-    if (inEpic === 0) add(`story:${t.storyId}`, to, false, 'start')
-    if (t.unlocks.length === 0) add(to, GOAL_NODE_ID, false, 'goal')
-  }
+  return { ...rest, goal, nodes, headers, bands, layout }
+}
 
-  return {
-    ...m,
-    goal,
-    nodes,
-    headers,
-    bands,
-    edges,
-    foldable: [...new Set(foldable)].sort(),
-    expanded: [...expanded].filter(id => foldable.includes(id)).sort(),
-    layout,
-  }
+/**
+ * The dashboard model of one epic. The dashboard shows undecomposed stories as ghost bands (E92_S12_T02), so
+ * `includeUndecomposed` is on by default; the fourth argument can override it, e.g. `{ includeUndecomposed: false }`.
+ * A payload without the per-story `decomposed` flag (an older script) gives the model it always gave.
+ */
+export function buildDependencyTreeModel(graph, epicId, labels, options) {
+  return layoutTree(buildDependencyStructure(graph, epicId, labels, { includeUndecomposed: true, ...(options || {}) }))
 }
 
 /**
@@ -419,5 +162,5 @@ function layoutTree(m, expandedIn) {
  */
 export function unfoldGroups(model, expandedIds) {
   if (!model || model.empty) return model
-  return layoutTree(model, expandedIds ? [...expandedIds] : [])
+  return layoutTree(foldStructure(model, expandedIds ? [...expandedIds] : []))
 }

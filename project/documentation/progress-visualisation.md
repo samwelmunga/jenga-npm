@@ -19,6 +19,9 @@ where that text appears (9.2, 12.4, 16 and 18), and the superseded text is kept 
 
 The story `E92_S07` (2026-11-13) adds one more section: the large and fullscreen view of the dependency tree (29).
 
+The story `E92_S08` (2026-11-14) adds section 30: the Node terminal renderer (`lib/progress/cli.js`, `jenga progress`) is
+now the default for every terminal view, and the bash renderers of sections 17, 18 and 23 to 26 are the `--legacy` path.
+
 ## 1. Purpose and consumers
 
 One script, `scripts/board-progress.sh`, turns the scrum board into status counts per scope and prints them as JSON on
@@ -32,7 +35,7 @@ Seven consumers read its output and none of them counts:
 | Dashboard pie charts (tasks, stories, epics, backlog) | `E92_S03` | Renders `counts` and `totals`, also in the snapshot export |
 | Pipeline diagram with the current stage highlighted | `E92_S04` | Reads state only where it needs it |
 | `j.status` bars and `--summary` (optional) | `E92_S05` | Renders `totals` next to the existing tables |
-| Epic card bar on the Board tab | `E92_S06` | Reads `--graph --counts-only`: one stop per story, percent from the epic's task totals (section 15) |
+| Epic card bar on the Board tab | `E92_S06` | Reads `--graph --counts-only`: one stop per story, percent from the epic's `epic_progress` (sections 5.2, 15) |
 | Dependency tree in the epic overlay | `E92_S06` | Reads the full `--graph` (`--within <epic>`): tasks, `state`, `blocked_by`, `unlocked_by`, `ready` (section 16) |
 | Scoped `j.status` block (`j.status E03`, `j.status E03_S05`) | `E92_S06` | Reads `--graph --within <id>` and lays out the tree, "Ready to take" and "X unlocked by Y" as text (section 18) |
 
@@ -98,14 +101,16 @@ once per item, so `--by-parent` returns them all in one pass. It is a scope of i
 {
   "schema_version": 1,
   "scope": { "type": "by-parent" },
-  "epics":   [ { "id": "E01", "level": "stories", "totals": { "done": 0, "in_progress": 0, "failed": 0, "pending": 0, "rejected": 0, "unknown": 0, "denominator": 0 } } ],
+  "epics":   [ { "id": "E01", "level": "stories", "totals": { "done": 0, "in_progress": 0, "failed": 0, "pending": 0, "rejected": 0, "unknown": 0, "denominator": 0 },
+                 "epic_progress": { "stories": 0, "decomposed": 0, "tasks_done": 0, "tasks_denominator": 0, "percent": 0, "goal_reached": false } } ],
   "stories": [ { "id": "E01_S01", "level": "tasks", "totals": { } } ],
   "warnings": []
 }
 ```
 
 Per epic the `totals` cover its stories (each story belongs to the epic named by its own `epic_id`); per story the `totals`
-cover its tasks (each task belongs to the story named by its own `story_id`). The `totals` object, the status table
+cover its tasks (each task belongs to the story named by its own `story_id`). Each epic entry also carries the epic
+percent `epic_progress` of section 5.1 (`E92_S09_T03`); story entries do not. The `totals` object, the status table
 (section 4) and the denominator rule (section 5) are the ones every other mode uses, so an epic entry equals the `stories`
 level of `--epic <id>` and a story entry equals the `tasks` level of `--story <id>`. An epic with no stories and a story
 with no tasks are listed with all-zero totals (the renderer shows `0/0`); the mode never exits `3` for an empty parent,
@@ -171,7 +176,10 @@ The example is illustrative (a story with seven tasks) and is written so that `j
 keys of the shape, and a consumer may rely on them:
 
 - `schema_version` is the integer `1`. It is incremented on any breaking change to the shape, and this document is
-  updated in the same change.
+  updated in the same change. Adding a key is not a breaking change; changing what an existing key means is.
+- `epic_progress` (only for `--epic <id>`, between `levels` and `warnings`; `E92_S09_T03`) is the epic percent of
+  section 5.1: `{stories, decomposed, tasks_done, tasks_denominator, percent, goal_reached}`. The example above is a
+  story scope and so does not carry it.
 - `scope` is `{type, ids}`. `type` is one of `epic`, `story`, `ids`, `backlog`, `all`. `ids` holds the ids the caller
   named (empty for `backlog` and `all`).
 - `levels` holds one block per item level: `tasks`, `stories`, `epics`. A block is `{counts, totals, items}`.
@@ -265,7 +273,134 @@ denominator = done + in_progress + failed + pending
 `rejected` and `unknown` are reported separately in `totals`. They are in neither the numerator nor the denominator:
 `Rejected` is never counted as done and never as remaining, and an unknown status is neither until someone fixes it.
 The progress fraction a consumer shows is `done / denominator`; when `denominator` is `0` the consumer shows its
-empty state instead of dividing.
+empty state instead of dividing. The one exception is an **epic's** percent, which is not `done / denominator` of any
+`totals` object but the `epic_progress` figure of section 5.1, so that stories nobody has broken down yet lower it.
+
+### 5.1 The epic percent: `epic_progress` (`E92_S09_T03`)
+
+Requested by the user on 2026-11-15: an epic whose stories are not all broken down into tasks must not look complete.
+The formula is the user's:
+
+```
+epic fraction = (task fraction of the decomposed stories) x (decomposed stories / all stories)
+percent       = floor(100 * tasks_done * decomposed / (tasks_denominator * stories))
+```
+
+`scripts/board-progress.sh` computes it once per epic and prints it as the object `epic_progress`; no consumer
+recomputes it (`E92` decision 1).
+
+| Key | Meaning |
+|---|---|
+| `stories` | The epic's **counted** stories: stories whose own status is not in the `rejected` or `unknown` bucket. It is the denominator rule above applied to stories, so it equals the epic's `stories.totals.denominator` |
+| `decomposed` | Counted stories with at least one **counted** task (task denominator above `0`) |
+| `tasks_done`, `tasks_denominator` | `done` and the denominator over the tasks of the decomposed stories. A task counts under a story when its own `story_id` names the story and its own `epic_id` names the story's epic |
+| `percent` | `floor(100 * tasks_done * decomposed / (tasks_denominator * stories))` in exact integer arithmetic; `0` when `stories` or `decomposed` is `0` (no division by zero); **at most `99` while `failed_stories` is not empty** (`E92_S10_T02`, below) |
+| `goal_reached` | `true` exactly when `stories > 0`, `decomposed == stories`, `tasks_done == tasks_denominator` **and `failed_stories` is empty**; so `true` exactly when `percent` is `100` |
+| `failed_stories` | (`E92_S10_T02`) the ids of the epic's counted stories whose **own** status is in the failed bucket (`Failed` and `Blocked`, section 4), in numeric id order; `[]` when none. The last key of the object |
+
+Examples (they are the cases of `tests/board-progress-epic-percent.bats`):
+
+| Epic | `epic_progress` | Percent |
+|---|---|---|
+| 5 stories, 3 decomposed, half their tasks done | 50 % x 3/5 | **30** |
+| 5 stories, 3 decomposed, all their tasks done | 100 % x 3/5 | **60** |
+| every story decomposed, every task done | 100 % x 5/5 | **100**, `goal_reached` |
+| no stories, or stories with no tasks | | **0** |
+| 1 story, 199 of 200 tasks done | 99.5 % | **99** (floor), goal not reached |
+| 3 stories, every task done, one story's own status `Failed` (or `Blocked`) | 100 % x 3/3, capped | **99**, goal not reached, `failed_stories: ["E11_S02"]` |
+| 2 stories, one `Failed` (its task done), the other with 1 of 2 tasks done | 2/3 x 2/2 | **66** (unchanged), goal not reached, `failed_stories: ["E13_S01"]` |
+
+Decisions, with the reason for each:
+
+- **Rejected and unknown work is out, as everywhere (`E92` decision 3).** A `Rejected` task is neither done nor
+  remaining, so it does not count and does not by itself make a story decomposed: a story whose tasks are all rejected
+  (or of unknown status) is not decomposed. A `Rejected` story, and a story of unknown status, is not one of the
+  `stories` either, and its tasks are not counted. "A decomposed story has at least one task" therefore reads "at least
+  one counted task", the same test the story's `complete` flag already uses (task denominator above `0`).
+- **Rounding: floor to a whole percent, one rule everywhere.** Rounding to nearest would print `100` for 99.5 %, before
+  the goal is reached; with the floor, `100` is printed exactly when `goal_reached` is true and never otherwise. The
+  cost is that a fraction under 1 % prints `0`.
+- **The field is new; nothing changes meaning.** `tasks.totals`, `stories.totals` and `stories.complete` keep their
+  meaning, so `schema_version` stays `1` (an added key is backward compatible, section 3).
+- **The per-story flag (`E92_S12_T01`).** `--graph` also states, for each story, the fact the epic `decomposed` count is
+  made of, so a view can name the undecomposed stories instead of only counting them. `decomposed` on a `stories[]` entry
+  is `true` for a counted story with at least one counted task (the definition of the row above), `false` for a counted
+  story with no counted task (no task file, or every task rejected or of unknown status), and `null` for a story that is
+  not counted (its own status is `Rejected` or of unknown status), which a view must not draw as "not broken down" because
+  `epic_progress.stories` does not count it either. It is read from the figures `epic_progress` already derives, with no
+  second counting pass, so the two cannot disagree. The invariant, per epic: the number of `true` stories equals
+  `epic_progress.decomposed`, and the number of `false` stories equals `epic_progress.stories - epic_progress.decomposed`
+  (`tests/board-progress-graph.bats`). No percent, no count and no bar changes because of the flag.
+- **No goal while a story has failed (`E92_S10_T02`).** User decision 2026-11-15: "'Goal reached' när en story är Failed:
+  hindra det", and, confirming the proposal, "procenten stannar på högst 99 % och mållinjen visar vilken story som är
+  Failed i stället för gratulationen" (the percent stops at 99 % at most, and the goal line shows which story has failed
+  instead of the congratulation). Observed: `j.status E92` showed "100 % ... Goal reached - well done!" while `E92_S08`
+  was `Failed` by its own status with every task done or merged. The rule, decided here and nowhere else:
+  1. A counted story whose **own** status is in the failed bucket blocks the goal: `goal_reached` is `false` while there
+     is at least one, and the story is listed in `failed_stories`.
+  2. While there is at least one, `percent` is capped at `99`, so no view ever shows 100 % without the goal. Below `100`
+     the formula is unchanged (a capped value is never lower than the formula's).
+  3. A story whose tasks include a failed task is already below 100 % (that task is not done), so the rule adds nothing
+     there: it is about the story's own status only.
+  4. **Open choice, `Blocked`.** The user named `Failed`; the default applied is the failed bucket of `E92` decision 2,
+     `Failed` **and** `Blocked`. If `Blocked` must not stop the goal, only the bucket test in `epic_progress_calc` of
+     `scripts/board-progress.sh` (and this paragraph and its tests) change.
+  `failed_stories` is an added key (the last of the object), so `schema_version` stays `1`; no existing key changes
+  meaning. `--epic <id> --summary` appends ` · failed stories: <ids>` to its `epic` line only while the list is not
+  empty (fixed English words, like the rest of that line): `epic     99% · 10/10 stories decomposed · 86/86 tasks done ·
+  failed stories: E92_S08`; otherwise the line is unchanged.
+- **The goal line that names the failed story (`E92_S10_T02`).** Where a view would have shown the congratulation (the
+  terminal message `sc_msg_done`, "Goal reached - well done!"; the overlay goal's `goal_reached`, "Goal reached!"), it
+  names the failed story instead, with the labels `goal_failed` (`Goal not reached - %s has failed`, sv `Målet ej nått -
+  %s har misslyckats`) and, for more than one, `goal_failed_more` (`Goal not reached - %s and %d more have failed`, sv
+  `Målet ej nått - %s och %d till har misslyckats`): the first id in numeric order and the count of the others, chosen so
+  the line fits the overlay goal and one terminal line. A view shows it exactly when the stated goal is not reached, the
+  stated `percent` is at the cap (`99`) and `failed_stories` is not empty (`goalFailedText` in
+  `lib/progress/dependency-structure.js`, shared by the Node views and the dashboard; the `--legacy` jq applies the same
+  test); below 99 % the existing messages (`sc_msg_almost`, `sc_msg_half` and so on) are unchanged. A natural 99 % (for
+  example 199 of 200 tasks) with a failed story stated also shows it, which is still true: the goal is not reached and
+  that story has failed.
+- **Modes that carry it:** `--graph` (every epic entry, also with `--counts-only` and `--within`; it feeds the dashboard
+  epic card, the overlay goal and the Node renderers), `--by-parent` (every epic entry; `j.status --legacy` and
+  `jenga progress bar --each epics`), `--epic <id>` (top level, between `levels` and `warnings`; `jenga progress bar
+  --epic`) and `--epic <id> --summary` (one `epic` line after the level lines, section 12.1). `--story`, `--ids`,
+  `--all` and `--backlog` do not carry it: no view reads an epic percent from them.
+- **The `n/total` shown beside the percent.** A view that shows `epic_progress.percent` shows `tasks_done/
+  tasks_denominator` beside it, never `tasks.totals`, and, whenever `decomposed < stories`, also `decomposed/stories`
+  (for example `3/6 tasks · 3/5 stories decomposed · 30 %`). The percent is then the floor of the product of the two
+  fractions shown, and with every story decomposed it is the floor of the task fraction alone, so no view shows numbers
+  that silently contradict it. `tasks_denominator` is never above `tasks.totals.denominator`; they differ only by tasks
+  of a rejected or unknown-status story, orphan tasks, and tasks whose `epic_id` disagrees with their story's.
+- **The board-level total line is unchanged.** The total line of the `j.status` overview (`lib/progress/overview.js`,
+  `skills/j-status/scripts/render-status-overview.sh`) is done/total **tasks** summed over the epics' `tasks.totals`,
+  a task count of the whole board and not the completeness of any epic. An undecomposed story holds no task, so it adds
+  nothing to that count either way; folding story decomposition into it would need a board-level formula the user did
+  not ask for. Each epic **row** under it is an epic percent and switches to `epic_progress` with the other views
+  (`E92_S09_T04`, section 5.2).
+
+### 5.2 Which views show the epic percent (`E92_S09_T04`)
+
+Every view below reads `epic_progress` from `board-progress.sh` output **unchanged**: none divides, rounds or derives the
+percent, and a payload without `epic_progress` (a hand-built fixture, a payload from before `E92_S09_T03`) shows `0` and
+an unreached goal rather than a recomputed figure. Beside the percent each shows `tasks_done/tasks_denominator`, and the
+`decomposed/stories` note (label `epic_decomposed`, `%d/%d stories decomposed`, sv `%d/%d berättelser nedbrutna`) whenever
+`decomposed < stories`. "Complete", the goal star and the done message follow `goal_reached` only. Since `E92_S10_T02`
+each also reads `failed_stories` and, at the 99 % cap, names the failed story where the congratulation would have been
+(section 5.1); none recomputes the goal or the cap.
+
+| View | Source | What shows the epic percent |
+|---|---|---|
+| Dashboard epic card bar | `project/app/ui/src/components/progress/epicBarModel.js` (`--graph --counts-only` via `/v1/progress-cards`) | The percent beside the bar and the `card_bar_aria` label (now "`%d%%` of the epic done"); the card shows no counts as text, so only the aria label's story counts stand beside it (section 15). It has no congratulation; with a failed story it shows the stated `99%` (`E92_S10_T02`) |
+| Overlay dependency tree goal | `goalFacts` in `lib/progress/dependency-structure.js`, drawn by `DependencyTree.jsx` | The ring, halo, star fill (`fraction` = `percent / 100`), the `goal_progress` text (`tasks_done / tasks_denominator · percent %`), a second line with the `decomposed/stories` note, the aria label, and `dt-complete` on `goal_reached` (section 20.7). `goalFacts` carries `failedStories`; at the cap the name line (where "Goal reached!" would be) shows `goal_failed` in the failed colour, wrapped on spaces into lines of at most 24 characters, the lines below moving down, and the aria label ends with the same text (`E92_S10_T02`) |
+| `j.status` overview (Node default) | `lib/progress/overview.js` (`--graph --counts-only`) | Each epic row: `tasks_done/tasks_denominator`, the percent, the dim note; rows sort by it; "Complete (N)" holds the `goal_reached` epics only. The board total line and its run bar stay summed `tasks.totals` (section 5.1); the row's small bar keeps the task buckets. At the cap a row names the failed story in the failed colour before its title (`E92_S10_T02`); the epic stays in its group (no failed task, so not "Needs attention") |
+| `j.status <E##>` scope view (Node default) | `lib/progress/scope.js` (`--graph --within`) | The header (`decomposed/stories · percent %`), the message (its percent, and "stories left" counting an undecomposed story as unfinished) and the milestone goal flag (star on `goal_reached`). At the cap the message is `goal_failed` in the failed colour, ahead of the last-story and percent messages (`E92_S10_T02`). The run bar under it stays the epic's task bar with its own `n/total` (it is the parity-tested task bar; with every task done it still ends in its task star and `n/n`, a task count, not the goal). A story scope keeps its story's task percent and its done message: its payload states neither `epic_progress` nor the story's own status |
+| `j.status --legacy` overview and scope view | `skills/j-status/scripts/render-status-overview.sh`, `render-status-scope-view.sh` | The same figures as the two Node views above, row for row and header for header, so `--legacy` and the default agree (`tests/lib-progress-overview-scope.test.mjs` compares them); the failed-story line too (`E92_S10_T02`, colour `31`) |
+
+Checked and left unchanged, because they show no epic percent: `scripts/render-story-bar.sh` (the after-story line, a
+**story's** `levels.tasks.totals` from `--story`), `lib/progress/bar.js` `renderBarLine` and `jenga progress bar --epic` /
+`--each epics` (a task bar with `done/denominator` and no percent), `scripts/pipeline-stage.sh` (an in-progress count),
+`render-status-scope.sh` (the `--legacy` tree block, no percent) and the dashboard pie charts (bucket shares of section 10,
+not an epic percent).
 
 ## 6. What "backlog" means as a scope
 
@@ -705,6 +840,9 @@ from the same totals and the same status table (section 4), so the text and the 
 - **Scope.** There is no default scope. `--summary` is an output switch that goes with a scope flag from section 2
   (`--epic`, `--story`, `--ids`, `--backlog` or `--all`), and a call with no scope flag is a usage error (exit `2`). It
   cannot be combined with `--by-parent` (exit `2`); `--items` is ignored. Exit codes are those of the JSON mode.
+- **The epic line (`E92_S09_T03`).** With `--epic <id>` one more line follows the level lines:
+  `epic     <percent>% · <decomposed>/<stories> stories decomposed · <tasks_done>/<tasks_denominator> tasks done`, the
+  `epic_progress` figures of section 5.1. Its words are fixed English, like `done` and `pending`. No other scope prints it.
 - **No colour.** The block carries no colour and no ESC byte (control bytes in a warning detail become `?`), and is
   byte-identical across runs.
 - **Languages.** `in progress`, `failed`, `unknown` and the rejected note come from `scripts/lib/progress-labels.sh`
@@ -807,12 +945,14 @@ fields, not live numbers.
   "epics":   [ { "id", "title", "depends_on": [..],
                  "stories": { "totals": {..}, "complete": <number of complete stories> },
                  "tasks":   { "totals": {..} },
+                 "epic_progress": { "stories", "decomposed", "tasks_done", "tasks_denominator", "percent", "goal_reached" },
                  "ready_count": <ready tasks under the epic> } ],
   "stories": [ { "id", "epic_id", "title", "depends_on": [..], "totals": {..},
-                 "complete": true|false, "stop": "done|in_progress|failed|pending|rejected",
-                 "ready_count": <n> } ],
+                 "complete": true|false, "decomposed": true|false|null,
+                 "stop": "done|in_progress|failed|pending|rejected", "ready_count": <n> } ],
   "tasks":   [ { "id", "story_id", "epic_id", "title", "status", "bucket", "state",
-                 "depends_on": [..], "blocked_by": [..], "unlocked_by": "<id>"|null } ],
+                 "depends_on": [..], "blocked_by": [..], "waiting_on": [..], "unfinished_deps": [..],
+                 "unlocked_by": "<id>"|null } ],
   "ready": [ "<task id>", .. ],
   "external": [ { "id", "status", "bucket" } ],          only with --within
   "warnings": [ { "kind", "id", "detail" } ]
@@ -820,12 +960,18 @@ fields, not live numbers.
 ```
 
 - **Epics.** `stories.totals` is the epic's totals over its stories, `stories.complete` the number of stories whose
-  `complete` flag is true, and `tasks.totals` the totals over every task under the epic. The card percent is
-  `tasks.totals` done divided by its denominator (section 15).
+  `complete` flag is true, and `tasks.totals` the totals over every task under the epic. `epic_progress`
+  (`E92_S09_T03`) is the epic percent of section 5.1, which counts undecomposed stories; it is the figure every view
+  shows as the epic's percent (the views read it since `E92_S09_T04`; section 5.2 lists them).
 - **Stories.** `complete` is true when the story's task denominator is above 0 and `done` equals it (rejected tasks are
   excluded, as everywhere). `stop` is the story's single colour bucket, decided in this order: `rejected` when the story's
   own status is `Rejected`; `done` when `complete`; `failed` when any task is failed; `in_progress` when any task is in
   progress or some but not all are done; otherwise `pending`.
+  `decomposed` (`E92_S12_T01`, between `complete` and `stop`) states whether the story has been broken down into tasks,
+  by the same definition as `epic_progress.decomposed` (section 5.1, "The per-story flag"): `true` for a counted story with
+  at least one counted task, `false` for a counted story with none, `null` for a story that is not counted at all (its own
+  status is `Rejected` or of unknown status). It is a bare JSON literal, present on every story entry in the full board,
+  with `--counts-only` and with `--within`, and the same in all three.
 - **Tasks.** `status` is the raw status, `bucket` its bucket from section 4, `state` the dependency-aware state of
   section 13.2.
 - **`--counts-only`.** Leaves out the `tasks` array and changes nothing else. It is the card payload: the Board tab never
@@ -847,6 +993,17 @@ status outside the table), or, for a task in the pending bucket, `ready` or `loc
   is not consulted: a story that depends on another story is satisfied by that story's own status.
 - **`blocked_by`** lists the unsatisfied ids (the task's own, then its story's, each once); it is `[]` unless the state
   is `locked`.
+- **`waiting_on`** (`E92_S10_T01`) lists the same unsatisfied ids, by the same rule and in the same order, for **every**
+  task that is not in the done bucket (in progress, failed, rejected and unknown too, not only pending); it is `[]` for a
+  done task and for a task whose effective dependencies are all satisfied. For a pending task it equals `blocked_by`,
+  which keeps its meaning. It is what the padlock gate reads (20.0, "Rule: the padlock for every task state"), so no
+  consumer re-derives satisfaction for a task that has left the pending bucket. An added key: `schema_version` stays 1.
+- **`unfinished_deps`** (`E92_S11_T02`) lists the same unsatisfied ids, by the same rule and in the same order, for a task
+  **in** the done bucket; it is `[]` for every other task and for a done task whose effective dependencies are all
+  satisfied. A done task with a non-empty list is a board contradiction (section 30.12): a dependency reopened after the
+  task was done, or a wrong `depends_on`. `waiting_on` and `unfinished_deps` never both hold ids for one task. It changes
+  nothing else: the task keeps `state: done`, its bucket and every count, and its padlock stays open. An added key:
+  `schema_version` stays 1.
 - **`unlocked_by`** is set for a `ready`, `in_progress` or `done` task with at least one `depends_on`: the done
   dependency of the task's OWN `depends_on` that finished last (the larger `date_completed` wins; a tie or missing dates
   fall back to the larger id by numeric order, so `E10` is above `E9`). It is `null` when there is none.
@@ -854,7 +1011,7 @@ status outside the table), or, for a task in the pending bucket, `ready` or `loc
   of ready tasks under it.
 
 The reader never re-derives any of this: the card bar, the tree and the scoped `j.status` block all take `state`,
-`blocked_by`, `unlocked_by` and `ready` as given.
+`blocked_by`, `waiting_on`, `unfinished_deps`, `unlocked_by` and `ready` as given.
 
 ### 13.3 `--within <id>`
 
@@ -908,12 +1065,15 @@ decisions:
   not complete is never drawn as done, whatever its `stop` says. The other stops take the script's `stop` bucket: yellow
   in progress, red failed, grey pending, muted `rejected`.
 - **No text on the stops**, and the bar is **not animated** (`progress.css` declares no animation or transition for it).
-- **The percent beside the bar is done tasks divided by total tasks** of the epic (`tasks.totals`), rounded to a whole
-  percent, and `0` when the denominator is 0. It is not the share of complete stories.
+- **The percent beside the bar is the epic percent** `epic_progress.percent` of section 5.1 (`E92_S09_T04`), read as
+  the script states it and never recomputed: the task fraction of the decomposed stories times decomposed / all stories,
+  floored, so an epic with stories that have no task yet never shows 100 %. An entry without `epic_progress` shows `0%`.
+  Before `E92_S09_T04` it was done tasks over total tasks (`tasks.totals`), rounded.
 - **Colours** are the `--color-progress-*` tokens in `tokens.css` (the section 4 contract: green done, yellow in
   progress, red failed and blocked, grey pending, muted `Rejected`); no colour literal is in the component or its CSS.
 - **Accessibility.** The wrapper is `role="img"` with an `aria-label` filled from the `card_bar_aria` label (`%d of %d
-  stories complete, %d%% of tasks done`); the percent text and the stops are `aria-hidden`.
+  stories complete, %d%% of the epic done`; it said "of tasks done" before `E92_S09_T04`); the percent text and the stops
+  are `aria-hidden`.
 - **Empty and failing cases.** An epic with 0 stories draws a track with no stops and `0%`; an epic with 0 tasks shows
   `0%`. If `/v1/progress-cards` fails, or a snapshot lacks the key, the cards show no bar and no error banner.
 
@@ -987,6 +1147,9 @@ the model of `dependencyTreeModel.js`, not the concept drawing. The tree has bee
 
 ## 17. The restyled terminal bar (`E92_S06`)
 
+> **Not the default since `E92_S08`:** the after-task line is drawn by the Node renderer (section 30.4); this bash bar is
+> the `--legacy` path of `run-progress.sh` and what `j.status --legacy` draws (section 30.7).
+
 `scripts/render-progress-bar.sh` was restyled by `E92_S06_T12` with the symbols of the concept set. The change is
 cosmetic and stays in bash: no Node dependency, and the counting, colour rules, width rules and labels are untouched.
 
@@ -1022,6 +1185,9 @@ Real output of the renderer for `done 8, in_progress 1, failed 1, rejected 2` of
 > **Superseded as the default (2026-11-13, `E92_S06_T25`, `E92_S06_T26`).** `j.status <id>` now runs the scope view of
 > section 25.2. The block below is what `render-status-scope.sh` prints, and it is what `j.status --legacy <id>` still runs,
 > unchanged; step 6.10 of `skills/j-status/SKILL.md` is the legacy path. Kept as history and as the legacy contract.
+>
+> **Since `E92_S08`** the default `j.status <id>` is the Node scope view of section 30.5, not section 25.2;
+> `j.status --legacy <id>` still runs this block (section 30.7).
 
 `j.status` called with one epic or story id (for example `j.status E03` or `j.status E03_S05`) prints an extended block after
 the scoped part of the overview. The plain overview never shows it. The block is produced by
@@ -1033,7 +1199,8 @@ dependency logic: it reads `board-progress.sh --graph --within <id>` once and la
 - **Tree.** A heading, the goal line (`⚑ Goal: <id>`, `★` when every story in the scope is complete), then each story (its
   `stop` symbol, id, title and `╌╌ <depends_on>`) with its tasks indented below it (state symbol, id, state word, title and
   the task's `depends_on`; `━━` before the dependencies of a task that is not blocked, `╌╌` when it is locked, failed or
-  rejected). With no edge in the scope the tree is replaced by the `tree_empty` label.
+  rejected). Only a scope with no tasks replaces the tree with the `tree_empty` label; a scope with tasks and no edge draws its
+  stories and tasks (`E92_S09_T01`).
 - **Symbols.** `●` done (green), `◉` in progress (yellow) or failed (red), `○` pending, locked or rejected (dim); ASCII
   stand-ins `[x] [~] [ ] > * = -` in a non-UTF-8 locale. A state is also written as a word, so colour is not required.
 - **Narrow terminals.** Under 50 columns (`--cols`, else `COLUMNS`, else 80) the tree becomes a flat list, one task per line.
@@ -1080,10 +1247,17 @@ fifty-one more, listed in section 27):
 | `state_locked` | `Locked` | `Låst` |
 | `state_failed` | `Failed` | `Misslyckad` |
 | `state_rejected` | `Rejected` | `Avvisad` |
-| `tree_empty` | `No dependencies in this scope` | `Inga beroenden i detta omfång` |
+| `tree_empty` | `No tasks in this scope` | `Inga uppgifter i detta omfång` |
 | `nothing_ready` | `Nothing is ready to take right now` | `Inget är redo att ta just nu` |
-| `card_bar_aria` | `%d of %d stories complete, %d%% of tasks done` | `%d av %d berättelser klara, %d%% av uppgifterna gjorda` |
+| `card_bar_aria` | `%d of %d stories complete, %d%% of the epic done` | `%d av %d berättelser klara, %d%% av epicen klar` |
+| `epic_decomposed` (`E92_S09_T04`) | `%d/%d stories decomposed` | `%d/%d berättelser nedbrutna` |
+| `goal_failed` (`E92_S10_T02`) | `Goal not reached - %s has failed` | `Målet ej nått - %s har misslyckats` |
+| `goal_failed_more` (`E92_S10_T02`) | `Goal not reached - %s and %d more have failed` | `Målet ej nått - %s och %d till har misslyckats` |
+| `story_undecomposed` (`E92_S12_T03`) | `Not broken down yet` | `Inte nedbruten ännu` |
+| `story_undecomposed_aria` (`E92_S12_T03`) | `%s - not broken down into tasks yet` | `%s - ännu inte nedbruten i uppgifter` |
 
+`story_undecomposed_aria` (one `%s`, the story id and title already joined by the caller) is the aria sentence of the start node of
+an undecomposed story (section 20.2); the two keys are the last of `PROGRESS_LABEL_KEYS`.
 `unlocked_by` (two `%s`, task id then the unlocking id) and `card_bar_aria` (`%d` complete stories, `%d` total stories,
 `%d%%` percent, in that order) are format strings and keep their placeholders; the caller fills them in. The in-progress
 state of the tree reuses the existing `in_progress` key.
@@ -1103,6 +1277,115 @@ presentation facts only, no colour, no word, no state of its own, nothing counte
 and `DependencyTree.jsx` with `dependency-tree.css` draws it. Everything is still loaded only in the epic overlay (16.3)
 and from the embedded `progressGraph` in a snapshot (16.5). The numbers below are `LAYOUT` in the model.
 
+### 20.0 Shared structure module (`E92_S08_T02`)
+
+The graph structure (depth columns, gates, marks, folding of groups, story bands and start nodes, edges, goal facts, `ready`
+and `unlocked`) lives in `lib/progress/dependency-structure.js`, which ships through the package's `lib/` entry and has no
+pixel number and no import, so the Node terminal renderer can share it. `dependencyTreeModel.js` imports it, keeps `LAYOUT`,
+`COL_WIDTH`, `layoutTree` (the pixels) and `unfoldGroups`, and re-exports every name it exported before, so the components are
+unchanged. The model is deep-equal to the pre-split one (`project/app/ui/scripts/dependency-structure-parity.test.cjs` against
+`tests/fixtures/progress/dependency-tree-parity.json`, run by `tests/progress-shared-structure.bats`, which also scans
+`lib/progress/` for APIs newer than Node 14.13.1). The Vite dev server lists `lib/progress` in `server.fs.allow`
+(`project/app/ui/vite.config.js`); the production build needs no setting.
+
+<!-- begin E92_S09_T01: tree for every epic with tasks -->
+#### Rule: a tree for every epic with at least one task (`E92_S09_T01`)
+
+User request of 2026-11-15: an epic's tree always renders, whether or not it has dependency edges; the only exception is an
+epic with no tasks.
+
+- `buildDependencyStructure` returns the full structure (story bands with their start nodes, depth columns, edges, goal) for
+  every epic with **at least one task**. With no dependency edge (a self-reference does not count) every task sits in depth
+  column 0 of its story band with gate `none`, a `start` edge from its story and a `goal` edge; more than 3 tasks of one state
+  in that column still fold. `empty` is `true` **only for an epic with zero tasks** (and for an unknown epic or an unreadable
+  payload, which have none); the goal facts are filled in either way.
+- The dashboard overlay therefore draws the tree for such an epic; the `tree_empty` label ("No tasks in this scope" /
+  "Inga uppgifter i detta omfång", component fallback "No tasks to show") appears only for zero tasks.
+- The terminal scope view (`j.status <E##>`, `lib/progress/scope.js`) draws the bands and the goal straight from the shared
+  module; the one-column `foldStructure` fallback it used to carry for edge-free epics is removed. The legacy block
+  (`j.status --legacy <id>`) prints `tree_empty` only for a scope with no tasks.
+- The parity recording (`tests/fixtures/progress/dependency-tree-parity.json`) differs from the pre-split model in exactly the
+  three edge-free cases, re-recorded and renamed, plus one added edge-free case; every other case is byte-identical.
+<!-- end E92_S09_T01 -->
+
+<!-- begin E92_S09_T02: one ready style, the padlock as the only dependency marker -->
+#### Rule: every startable task is drawn ready; the padlock alone tells whether it has dependencies (`E92_S09_T02`)
+
+User request of 2026-11-15: "Items that are available to start must all have a dashed border and the plus icon. The lock
+is the only thing that distinguishes items that have/had dependencies from those that do not." The padlock reading below
+was confirmed by the user the same day.
+
+- **Ready rule.** A task is startable when `scripts/board-progress.sh` gives it `state: ready` (Pending, every id in its own
+  `depends_on` and in its story's `depends_on` satisfied, section 13.2). Every such task is drawn ready, whether it has
+  dependencies or not: in the dashboard the dashed border (`.dt-state-ready`), the ready ring and the plus mark; in the
+  terminal scope view `◉` in the ready colour (cyan; since `E92_S11_T01` an `in_progress` task has its own `◐` in yellow,
+  before that it shared `◉`) and its title under
+  "Ready to take". A task in any other state never gets the ready style.
+- **Padlock rule.** The gate (`gate` of a task in `lib/progress/dependency-structure.js`) is computed from the task's
+  **effective dependencies**, its own `depends_on` plus its story's `depends_on`, the same two lists the script's `state`
+  and `blocked_by` come from. It takes the script's verdict and adds no "satisfied" rule of its own:
+  - `none` (no badge) only when both lists are empty;
+  - `locked` (closed padlock) when the script lists unsatisfied ids in `blocked_by`, including a task locked **only**
+    through its story's `depends_on`;
+  - `open` (open padlock) for a `ready` task: the script found every effective dependency satisfied (a rejected
+    dependency counts as satisfied there, so it opens the padlock of a ready task);
+  - for a task that has left the pending bucket (done, in progress, failed, rejected): superseded by `E92_S10_T01`, see
+    "Rule: the padlock for every task state" below. (Until then it was `open` when every one of the task's OWN
+    dependencies was in the done bucket, else `locked`, which closed the padlock on done tasks.)
+  So the padlock is the only visual difference between a startable task that has or had dependencies and one that never
+  had any, a startable task never carries the closed padlock, and a locked task never carries the open one or none.
+  Story dependencies draw no edge; `dependsOn` and the edges stay the task's own.
+- **Cause found on 2026-11-15** (board at `ec7a7cfa`): the gate was computed from the task's own `depends_on` only. 14
+  tasks locked only through their story (for example `E91_S02_T01`, `E92_S09_T03`) had gate `none`, so they showed neither
+  the plus nor a padlock and read as "no dependency, yet not startable"; 3 tasks (`E91_S03_T02`, `E91_S04_T02`,
+  `E91_S04_T03`) showed an open padlock on a task that cannot start. The ready style itself was already keyed on `state`
+  alone in both renderers. Edge-free epics showed the empty state instead of their ready tasks until `E92_S09_T01`.
+- The terminal arrow into a node follows the gate (`open` green, else the locked colour), so a task locked through its
+  story gets the locked arrow colour; the dashboard edge keeps its colour rule (20.3: a locked dependent green when its
+  dependency is done).
+- The parity recording changed the `gate` of the ready tasks in exactly two cases whose fixtures hold a ready task with an
+  unfinished dependency (input the script never prints), from `locked` to `open`; both are renamed with
+  `(ready gate open, E92_S09_T02)`, and nothing else in the recording changed.
+<!-- end E92_S09_T02 -->
+
+<!-- begin E92_S10_T01: the padlock rule for every task state -->
+#### Rule: the padlock for every task state (`E92_S10_T01`)
+
+User decision of 2026-11-15 (decision 1 of `E92_S10`): "Om den inte är genomförd och har beroenden som inte är uppfyllda
+ska det vara ett stängt lås, annars ska det alltid visas ett öppet lås oavsett status på ärendet" (if it is not done and has
+dependencies that are not satisfied it must be a closed padlock, otherwise always an open padlock, whatever the item's
+status). The gate (`gateOf()` in `lib/progress/dependency-structure.js`) reads the task's **effective dependencies** (its own
+`depends_on` plus its story's, as in `E92_S09_T02`):
+
+| Task | Gate |
+|---|---|
+| no effective dependency | `none` (no padlock, unchanged) |
+| in the done bucket (`Passed`, `Passed with remarks`, the lifecycle statuses), whatever its dependencies | `open` |
+| not done, and at least one effective dependency unsatisfied | `locked` (closed padlock) |
+| not done, every effective dependency satisfied (ready, in progress, failed, rejected, unknown) | `open` |
+
+- **Where "unsatisfied" comes from.** The script states it: `waiting_on` (13.2) lists the unsatisfied effective ids of every
+  task not in the done bucket, by the script's one rule (the named item is in the done bucket through its own status, or is
+  rejected). The gate is `locked` when the task is not done and the payload states something it waits for: a non-empty
+  `waiting_on`, a non-empty `blocked_by` or `state: locked` (for a pending task the three agree). No "satisfied" rule is
+  re-derived in JavaScript. Of the task's two ways, the script key was taken because the payload states a story's OWN
+  status nowhere outside `external` (`stop` is task-derived), so a consumer could not apply the rule to a story dependency.
+- **A payload from an older script** (no `waiting_on`) closes the padlock only on a locked pending task; a task in progress,
+  failed or rejected shows the open one, as the payload states nothing it waits for.
+- **Consequences.** A done task never shows the closed padlock; a `ready` task always shows the open one; a rejected
+  dependency opens the padlock (it is satisfied); a task in progress, failed or rejected whose effective dependency is still
+  unsatisfied shows the **closed** padlock (the literal reading; open point of `E92_S10`, whether `Rejected` counts as
+  "genomförd", for the user to decide).
+- **Real board, 2026-11-15** (gate per task bucket, every epic, before and after): done `locked` 43 to 0 and `open` 752 to
+  795; rejected `locked` 37 to 0 and `open` 28 to 65; pending unchanged (47 `locked`, 15 `open`); failed and in progress
+  unchanged (1 `open` each). No task that is in progress, failed or rejected has an unsatisfied effective dependency today,
+  so the open point changes no padlock on the current board.
+- Both views follow from the one gate: the dashboard through `dependencyTreeModel.js` (the badge on the card), the terminal
+  through `lib/progress/tree-text.js` (the arrow into a node is green for `open`, else the locked colour).
+- The parity recording changed `gate` keys only, in eight cases renamed with `(gate rule, E92_S10_T01)` and listed in
+  `project/app/ui/scripts/dependency-structure-parity.test.cjs`.
+<!-- end E92_S10_T01 -->
+
 ### 20.1 Depth columns
 
 Columns are dependency depth **across the whole epic**, not per story: a task sits one column to the right of its deepest
@@ -1117,13 +1400,62 @@ done/total (from the payload's `totals`; from the tasks' own `bucket` only when 
 cut to 28 characters and a mini bar. Tasks with no dependency inside the epic branch from their own story's start node (edge
 `kind: start`). Rows inside a band are deterministic (the same input gives a deep-equal model).
 
+#### The undecomposed story: a ghost band and start node (`E92_S12`)
+
+A story that has not been broken down into tasks used to have no band at all, so an epic could look finished while a story
+was missing from the picture. Since `E92_S12` the overlay tree draws it, from the per-story `decomposed` flag of the payload
+(section 5.1, "The per-story flag"); nothing is counted in the browser.
+
+- **What qualifies.** A story of the epic stated `decomposed: false` that has no task node. `true`, `null` and a payload
+  without the key add nothing anywhere, so the model is deep-equal to the one built before `E92_S12`. A story stated `false`
+  that still has task nodes (every task rejected or of unknown status, which are drawn) keeps them, and gets the dashed
+  outline of its band and of its start node and the label on its start node, but no ghost edge (its tasks already reach the goal).
+- **What is drawn.** A **ghost band** (`dt-band-ghost`, `data-undecomposed="true"`) with no cells, so **no task node**, and a
+  **ghost start node** (`dt-start-ghost`, `data-undecomposed="true"`) with the story id, its title, `0/0` and the label text
+  `story_undecomposed` ("Not broken down yet"). The mini bar is left out on purpose, so the node never reads as 0 %
+  progress. The outline of the band and of the start node is **dashed** (`9 4`, longer dashes than anything else on the
+  map), so the state is not carried by colour; the text is italic in `--color-text-muted`. Bands are ordered by story id with
+  the decomposed ones, so a ghost band sits where the story would.
+- **Aria.** The start node has `role="group"` and an `aria-label` from `story_undecomposed_aria` filled with the id and the
+  title ("E01_S02 Second - not broken down into tasks yet"); its `<title>` tooltip is the same sentence. A payload without
+  the two labels still draws the dashed outline and omits the text and the aria label (they are read as optional).
+- **The goal edge: drawn (decision of `E92_S12_T02`).** Each ghost band has one edge from its start node to the goal, of
+  `kind: ghost`. Without it a ghost band would be an orphan: it has no task, so neither a `start` nor a `goal` edge exists
+  for it, and the goal would look reachable without it, which is what the band is there to contradict. It is drawn
+  **dash-dot** (`10 3 2 3`) in the neutral border colour, never in the ready colour or dash, and it is not part of any
+  card's hover chain (the story has no card), so it recedes with the other edges while a card is hovered. A story that has
+  task nodes gets none: its tasks already have `start` and `goal` edges.
+- **An epic with no task node keeps the empty state.** Ghost bands appear only in an epic that already has at least one
+  task node. An epic whose stories are **all** undecomposed has zero task nodes and so keeps the `empty` structure of
+  section 20.0 ("a tree for every epic with at least one task"): the `tree_empty` text, no band, no start node and no ghost
+  edge. This is deliberate and pinned by a test (the user may revisit it); the epic card still shows its `0 %` and its
+  decomposed count.
+- **What does not change.** The epic card bar (section 15), the terminal bars and views (sections 9, 17, 18, 25; the Node
+  renderers do not pass the option that enables ghost bands) and the percent formula of section 5.1 are untouched: the
+  ghost band draws a fact the payload already states and adds nothing to any figure. The goal still shows `done / total ·
+  percent %` and, while `decomposed < stories`, the `epic_decomposed` note. Zoom, Fit, pan and the large and fullscreen view
+  (sections 21 and 29) measure the layout, which includes the ghost bands, so they need no special case.
+- **Checked.** Tests: `tests/dashboard-snapshot-progress-graph.bats` captures a fixture project of one epic with three
+  stories (one decomposed, two without a task file), asserts `decomposed` `true`, `false`, `false` in the captured
+  payload, renders the real tree over it (`project/app/ui/scripts/render-captured-epic-tree.cjs`) to three bands, two
+  dashed and labelled, and does the same from the `--snapshot` HTML alone, so the payload is embedded and no server is
+  needed; the model, drawing and label tests are in `dependency-tree-model.test.cjs`, `dependency-tree.test.cjs` and
+  `tests/progress-labels.bats`. In a browser, the project's own board (epic `E01`, 8 stories, 2 undecomposed) was opened
+  in the light and the dark theme, live and in a `--snapshot` file: dashed bands, dashed start nodes with the text,
+  no task node in them, zoom, Fit and the fullscreen layer working. Two limits, stated as observed: the snapshot file was
+  served unchanged over loopback `http` because the browser pane refuses `file://` addresses (the `file://` claim rests on
+  the bats case and on the file needing no server, not on a real `file://` open), and native real fullscreen was not
+  observed (the pane neither entered it nor fell back by itself; the fixed-layer fallback of section 29.2 was exercised, as
+  in `E92_S07_T10`, which is open item 1 of section 29.8 and not caused by this story).
+
 ### 20.3 Edges
 
 - **Direction.** An edge `{ from, to }` runs from the dependency to the dependent: it leaves the **right** edge of the
   dependency and arrives at the **left** edge of the dependent (the gate badge included). This reverses the v1 convention
   of 16.1, and the model header states it.
 - **Kinds.** `dependency` (task to task), `boundary` (an outside node to a task), `start` (a start node to a task with no
-  in-epic dependency) and `goal` (only a task that **nothing in the epic depends on** connects to the goal).
+  in-epic dependency), `goal` (only a task that **nothing in the epic depends on** connects to the goal) and, since
+  `E92_S12`, `ghost` (the start node of an undecomposed story to the goal, section 20.2).
 - **Above the bands.** The paint order is bands, then edges, then start nodes, boundary nodes, collapse headers, cards and
   the goal, so no band fill hides a line.
 - **Dotted cross-story edges.** An edge between two stories (and every boundary edge) carries `crossStory` and is drawn dotted
@@ -1135,13 +1467,15 @@ edges drop to 10 % opacity.
 ### 20.4 The gate icon and the status marks
 
 A small circular **gate badge** sits on the left edge of a card and answers one question, "is this task waiting for a
-dependency?". It is derived from the dependencies' `bucket === 'done'` (a rejected dependency does **not** open it):
+dependency?". Since `E92_S09_T02` it reads the task's effective dependencies (its own `depends_on` plus its story's), and
+since `E92_S10_T01` the script's verdict for every task state (`waiting_on`, `blocked_by`, `state`). The full rule is in
+20.0, "Rule: the padlock for every task state":
 
 | Gate | Shown | Meaning |
 |---|---|---|
-| `none` | no badge | the task has no dependency |
-| `locked` | closed grey padlock | at least one dependency is not done |
-| `open` | open green padlock | it has dependencies and every one is done |
+| `none` | no badge | neither the task nor its story has a dependency |
+| `locked` | closed grey padlock | the task is not done and at least one effective dependency is unsatisfied (`waiting_on` is non-empty) |
+| `open` | open green padlock | it has dependencies and the task is done, or none is unsatisfied (every `ready` task with dependencies) |
 
 The **status mark** stays on the right of the card: tick (`done`), half-filled dot (`in_progress`), **plus on every ready
 task**, cross (`failed`), dash (`rejected`). A **locked task shows only the closed gate**, no status mark. A state is never
@@ -1151,7 +1485,7 @@ included, lies inside the badge circle.
 
 ### 20.5 Group folding
 
-When **more than 5** tasks (`FOLD_THRESHOLD = 5`) share one state inside one story and one column, they fold into **one
+When **more than 3** tasks (`FOLD_THRESHOLD = 3`, lowered from 5 by `E92_S11_T03` on 2026-11-15) share one state inside one story and one column, they fold into **one
 stacked card** ("N tasks . state", with a "Show all N" action); click, Enter or Space expands it and an expanded group gets a
 "Collapse" header. The edges of a group are the union of its members' edges, and `unfoldGroups(model, expandedIds)`
 re-lays out with chosen groups open. The expansion state lives in the component, not in the model.
@@ -1165,15 +1499,22 @@ anchored to the drawing; since zoom and pan (section 21) it is positioned in pix
 
 ### 20.7 The Goal and its progress scaling
 
-The goal is a star in a disc with a **progress ring**, drawn from the epic's done and total (`goal.fraction`, `percent`,
-`done`, `total`, `reached`; from the payload's epic totals, rejected not counted, no division by zero). It scales with the
-completed share `p` (0 to 1):
+The goal is a star in a disc with a **progress ring**, drawn from the epic percent (`goal.fraction`, `percent`, `done`,
+`total`, `reached`, `stories`, `decomposed`). Since `E92_S09_T04` these are the script's `epic_progress` read unchanged
+(section 5.2): `percent` and `reached` (`goal_reached`) as stated, `fraction` = `percent / 100`, `done`/`total` =
+`tasks_done`/`tasks_denominator`; while `decomposed < stories` a second line under the counts shows the
+`epic_decomposed` note, also in the aria label. Before, they were the epic's task totals. It scales with the completed
+share `p` (0 to 1):
 
 - the **halo** has strength `0.07 + 0.38 p` (`--goal-halo-opacity`) and radius `(54 + 26 p) / 54` times its base
   (`--goal-halo-scale`); the halo "breathes" (a slow opacity loop), and the radiating pulse of v1 is gone;
 - the **star fills from the bottom** with `p`, and the ring shows the same share with the `goal_progress` text ("done / total · percent %");
 - at `p = 1` (`goal.reached`) the goal gets `dt-complete`: green, a **shimmer** sweep, **five sparks** that twinkle, and the
   `goal_reached` word.
+- while a story of the epic has failed (`goal.failedStories`, the script's `failed_stories`, `E92_S10_T02`) the goal is
+  never reached and `p` stops at `0.99`; at that cap the name line shows `goal_failed` / `goal_failed_more` (class
+  `dt-goal-failed`, the failed colour) instead of `Goal`, wrapped into lines of at most 24 characters, and the aria label
+  ends with the same text (section 5.1).
 
 ### 20.8 Words, colours and checks
 
@@ -1243,6 +1584,9 @@ with the preference set; a literal `file://` open was not done.
 
 ## 23. The after-task bar always shows the story (`E92_S06_T22`)
 
+> **Since `E92_S08`** the story-scope lines are drawn by `cli.js after-task` (section 30.4) by default; the bash output
+> below is the `--legacy` path (`--legacy` or `JENGA_PROGRESS_RENDERER=legacy`, section 30.7). The scope rule is unchanged.
+
 After every finished task (`j.do`), wave (`j.dooo`, a `j.jenga` wave) or bundle, the callers run
 `skills/j-break/scripts/run-progress.sh --scope story --task <finished task id>[,<id>...]` and print what it prints.
 
@@ -1265,6 +1609,9 @@ Real output, `run-progress.sh --scope story --task E92_S05_T01,E92_S06_T02 --col
 ```
 
 ## 24. The after-story line (`E92_S06_T23`)
+
+> **Since `E92_S08`** `story-finished.sh` draws the line with `cli.js after-story` (section 30.4) by default;
+> `render-story-bar.sh` (24.1, 24.2) is the `--legacy` path. The decision and the ledger (24.1, 24.3) are unchanged.
 
 When all tasks of a story have just reached a terminal state, **Failed and Rejected included**, one more line is printed after
 the after-task bars. The design is **Proposal A** of `project/documentation/prototypes/E92_S06/bars-prototype.html`.
@@ -1326,6 +1673,9 @@ usage error exits `2`. Covered by `tests/render-story-bar.bats` (21 tests) and `
 
 ## 25. The new `j.status` views (`E92_S06_T24`, `E92_S06_T25`)
 
+> **Superseded by `E92_S08`:** `j.status` now runs the Node `overview` and `scope` views (section 30.5); the two scripts
+> below stay on disk but are no longer routed, not even by `--legacy` (section 30.7).
+
 Both renderers live in `skills/j-status/scripts/`, share `lib/status-render-common.sh` (sibling lookup, UTF-8 detection,
 colour, width, the one-warning-exit-0 rule, glyph sets, cell allocation, `emit`), read the board **once** and count nothing:
 the totals they print are the ones `board-progress.sh` states (`E92` decision 1), and every word comes from
@@ -1344,9 +1694,10 @@ Replaces the 627-line per-epic and per-story list with a page of a few dozen lin
 1. a **total line** (epics, done/total tasks, percent), a bar and a counts line (in progress, red, pending, rejected);
 2. **only the epics that are not complete**, in groups headed "Needs attention" (has failed tasks), "In progress", "Started"
    and "Not started", each sorted by percent (highest first, ties by numeric id); one row per epic: id, bar, done/total,
-   percent, a failed or in-progress marker and the title cut to the width;
-3. complete epics collapsed to **one** line ("Complete (N)" and their task total), and epics with only rejected tasks or no
-   tasks to **one more** line;
+   percent, a failed or in-progress marker and the title cut to the width (since `E92_S09_T04` the row's done/total and
+   percent are the epic's `epic_progress`, with a `decomposed/stories` note while lower; section 5.2);
+3. complete epics collapsed to **one** line ("Complete (N)" and their task total; since `E92_S09_T04` an epic is complete
+   only when its `goal_reached` is true), and epics with only rejected tasks or no tasks to **one more** line;
 4. a footer hint naming `j.status <id>` and `j.status --all`.
 
 Under **50 columns** the bars are dropped. The overview does not print `--all`'s list itself: given `--all` it prints nothing
@@ -1377,7 +1728,8 @@ story-total fallback, unlike the prototype).
 For an epic or a story id (`E3_S5` equals `E03_S05`; a task id, a missing or a malformed id exits `2`), from
 `board-progress.sh --graph --within <id>`. It **replaces** the indented text tree of section 18 as the default.
 
-1. **Header block.** Title and percent; for an epic a **milestone track** (a start glyph, one segment and stop per story, then
+1. **Header block.** Title and percent (for an epic, since `E92_S09_T04`, the `epic_progress` percent with a
+   `decomposed/stories` note while lower, section 5.2); for an epic a **milestone track** (a start glyph, one segment and stop per story, then
    the goal) with a label under each stop (`S01`, ...); a **one-line message** chosen from the stated percent and the number of
    unfinished stories (done; "last story"; at least 80 % "Almost there - N stories left"; at least 50 % "Past halfway"; above 0
    "Good pace!"; else "The first step is just ahead"), joined with "Ready to take: the first two ready ids (+N)". A story id gets
@@ -1412,6 +1764,9 @@ Ready to take (0)
 ```
 
 ## 26. `j.status --legacy`, `--all` and the mode switch (`E92_S06_T26`)
+
+> **Since `E92_S08`** the `overview` and `scope` rows route to `node lib/progress/cli.js` and the resolver also takes
+> `--charset`; the legacy rows are unchanged (current table in section 30.7).
 
 The arguments of `j.status` are parsed by **one script**, `skills/j-status/scripts/resolve-status-mode.sh`, not by prose in
 `skills/j-status/SKILL.md`. Step 1.5 of the skill runs it once with `mode` and follows the word it prints; for the default
@@ -1684,3 +2039,629 @@ unavailable", not a `file://` open.
 
 **Also not verified:** real touch, the Safari or mobile Fullscreen behaviour, the leave-guard dialog above the layer (only its
 z-index was read), and the layer opened within 0.2 s of the overlay's slide-in.
+
+## 30. The Node terminal renderer (`E92_S08`)
+
+Story `E92_S08` (2026-11-14) moved the drawing of every terminal progress view from bash to Node, in the design of the
+prototype `project/documentation/prototypes/E92_S06/bars-prototype.html` and the story's design image: UTF-8 glyphs,
+colour, a milestone line, a hatched run bar with `n/total`, and story bands with ready (`◉`) and locked (`○`) nodes. It
+ports **rendering only**. The counts still come from `scripts/board-progress.sh` alone (`E92` decision 1) and the words
+from `scripts/lib/progress-labels.sh` alone, so the Node code counts nothing and holds no user-visible word. The bash
+renderers of sections 17, 18, 23, 24 and 26 stay on disk, unchanged, as the `--legacy` path.
+
+This section is written from the code as built on main at `e1b14b10` (2026-11-15). Every command it names was run once
+for `E92_S08_T09`, with `LANG=` (empty, locale C) and a pipe on stdout unless the text says otherwise, and every block of
+output below is real output of that run, abridged where it says so. The board moves on, so the numbers will not match a
+later run. Subsection 30.4 is the text `E92_S08_T04` wrote, kept as it was apart from one cross-reference.
+
+### 30.1 Why the bash renderers showed ASCII and no colour
+
+The bash renderers guess. They pick glyphs from `LC_ALL`, `LC_CTYPE` and `LANG`, and colour from "stdout is a terminal"
+plus `NO_COLOR`. The Bash tool an agent runs commands in has `LANG=""` (locale C) and a pipe on stdout, so they always
+fell back to ASCII and no colour. The same after-task call, drawn both ways in that environment:
+
+```text
+$ run-progress.sh --scope story --task E92_S08_T09 --charset utf8 --color never
+E92_S08  ▰▰▰▰▰▰▰▱▱▱⚑ 7/10
+$ run-progress.sh --scope story --task E92_S08_T09 --legacy --color never
+[#######---]> 7/10
+```
+
+(`JENGA_PROGRESS_RENDERER=legacy` in place of `--legacy` gives the same second line.) Node always writes UTF-8, so the
+glyph set and colour became an **explicit** choice: a flag, then an environment variable, then a config key, then a
+default (30.3). Nothing under `lib/progress/` reads `LC_ALL`, `LC_CTYPE` or `LANG`.
+
+The second problem was where the output lands: the desktop app folds tool output into a collapsed tool-call row, so a
+rendering is seen only when the agent copies it into its reply. That is handled by the wiring (30.7), not by the
+renderer.
+
+### 30.2 Module map, entry point, data and labels
+
+Everything lives in `lib/progress/` (ESM, Node built-ins only, no dependency). The entry point is `lib/progress/cli.js`;
+`jenga progress` (30.6) runs the same `run()` in-process.
+
+| Module | What it holds |
+|---|---|
+| `cli.js` | Argument parsing, the sub-command table (`COMMANDS`), the never-fail rule, the EPIPE guard; exports `run(argv, io)` |
+| `charset.js` | The two glyph tables (`utf8`, `ascii`; every glyph one code point and one cell) and the charset resolution |
+| `color.js` | The colour mode resolution, the ANSI painter, the palette keyed by bucket name (`SGR`) |
+| `config.js` | `resolveChoice` (the one precedence rule) and the reader of the two `dashboard-config.json` keys |
+| `width.js` | Terminal width resolution, display width (ANSI counts zero, one cell per code point), truncation with `…` |
+| `data.js` | Runs `scripts/board-progress.sh` and parses its JSON; finds the scripts directory |
+| `labels.js` | Runs `scripts/progress-labels-json.sh` and fills `%d`/`%s` placeholders |
+| `bar.js` | The run bar (`bar` sub-command), cell allocation, the rejected note |
+| `lines.js` | The after-task and after-story lines (`after-task`, `after-story`) |
+| `overview.js` | The `overview` view |
+| `scope.js` | The `scope` view: header, milestone line, run bar, bands, the ready and "unlocked by" lists |
+| `tree-text.js` | The character-cell layout of a story band (`--layout horizontal\|vertical\|auto`) |
+| `dependency-structure.js` | The shared graph structure (section 20.0), used by the dashboard and by `scope.js` |
+
+- **Data.** `data.js` runs `bash <scripts>/board-progress.sh` with the same arguments the bash renderers pass
+  (`--graph`, `--story <id>`, `--within <id>`, `--counts-only`, ...) and parses the JSON. Failure is a value, never a
+  throw. The scripts directory is `JENGA_PROGRESS_SCRIPTS_DIR` when set (a test seam, then the only candidate), else
+  `scripts/` next to the package's `lib/` (the repository, or `node_modules/@jenga-ai/agent/` when installed), else
+  `<cwd>/scripts`, else `<cwd>/node_modules/@jenga-ai/agent/scripts`.
+- **Labels.** `labels.js` runs `scripts/progress-labels-json.sh` once per call, with `JENGA_PROGRESS_LANG` set from
+  `--lang` when given (English by default, `sv` for Swedish). That script forks per label and takes seconds on the
+  maintainer's machine; every command that draws pays it once. `node lib/progress/cli.js labels` prints the table.
+- **Shared structure.** `dependency-structure.js` decides what a tree is (depth columns, bands, gates, folding, ready and
+  unlocked, goal); `tree-text.js` decides how it is drawn in cells. The dashboard model
+  `project/app/ui/src/components/progress/dependencyTreeModel.js` imports the same module (section 20.0, and the
+  `E92_S09` rules there).
+- **Diagnostics.** `info` prints the resolved settings and both glyph tables, `data <board-progress args>` prints the
+  script's JSON, `labels` prints the label table.
+
+`node lib/progress/cli.js --help` prints, exactly:
+
+```text
+usage: cli.js [options] <command> [command arguments]
+
+options (anywhere on the line):
+  --charset utf8|ascii       glyph set (default utf8; env JENGA_PROGRESS_CHARSET; config progress_charset)
+  --color auto|always|never  colour (default auto; env JENGA_PROGRESS_COLOR; config progress_color)
+  --cols N                   width in columns (default COLUMNS, then the terminal, then 80)
+  --root <dir>               project root (sets JENGA_PROJECT_ROOT)
+  --lang <code>              label language (sets JENGA_PROGRESS_LANG; default en)
+  -h, --help                 print this usage
+
+commands:
+  info         print the resolved settings and the active glyph table
+  data         run scripts/board-progress.sh with the given arguments and print its JSON
+  labels       print the label table for the effective language
+  bar          one run-bar line for a scope (--epic, --story, --ids or bare ids, --all, --backlog), or one per epic or story
+  after-task   the line of the story a finished task belongs to: --task <id>[,<id>...] (one line per distinct story)
+  after-story  the story-finished line: --story <id>[,<id>...] [--ready N] (the ledger stays in story-finished.sh)
+  overview     the board overview: totals, the run bar and the epics still in progress (--all is the caller's legacy list)
+  scope        the scope view of one epic or story id: milestone line, run bar, story bands, ready and locked nodes
+
+exit codes: 0 ok (also when progress is unavailable: one warning on stderr), 2 usage error
+```
+
+The usage lists the shared flags only. The flags of each sub-command are not in it: `bar` takes `--level`, `--cells`,
+`--each`, `--epic`, `--story`, `--ids`, `--all`, `--backlog`; `after-task` takes `--task`, `--story`, `--cells`;
+`after-story` takes `--story`, `--ready`; `overview` takes `--all` (accepted, prints nothing, as the bash renderer did);
+`scope` takes `--layout`. An unknown flag of a sub-command is a usage error (exit 2). The gap in the usage text is filed
+as a rapport (30.10).
+
+**The never-fail rule.** A progress problem (an unknown id, a missing script, a failing script, an invalid environment
+or config value, an unexpected exception) prints one `cli.js: warning: ...` line on stderr, nothing on stdout, and exits
+`0`. Only a usage error exits `2` (an unknown flag or command, a flag without its value, an invalid flag value), with the
+problem and the usage on stderr. Observed: `after-task --task E99_S99_T99` printed `cli.js: warning: unknown task id, or
+it names no story: E99_S99_T99` and exit 0; `--color purple bar` printed `cli.js: --color must be auto, always or never
+(got: purple)` plus the usage and exit 2; `scope E92_S09_T01` exited 2 (`'E92_S09_T01' is a task id; give an epic or a
+story id`).
+
+### 30.3 Charset, colour and width: flag, environment variable, config key, default
+
+| Setting | Flag | Environment variable | Config key (`dashboard-config.json`) | Default |
+|---|---|---|---|---|
+| Glyph set | `--charset utf8\|ascii` | `JENGA_PROGRESS_CHARSET` | `progress_charset` | `utf8` |
+| Colour | `--color auto\|always\|never` | `JENGA_PROGRESS_COLOR` | `progress_color` | `auto` |
+| Width | `--cols N` (1 to 10000) | `COLUMNS` | none | the terminal's own width when stdout is a terminal, else `80` |
+| Project root | `--root <dir>` | `JENGA_PROJECT_ROOT` | none | the upward search of `scripts/resolve-root.sh` |
+| Language | `--lang <code>` | `JENGA_PROGRESS_LANG` | none | `en` |
+
+- **Precedence** is flag, then environment variable, then config key, then default (the story's decision 3), in one
+  function, `resolveChoice` in `config.js`. The nearest, most deliberate statement wins. A layer whose value is not
+  allowed is skipped with one warning and the next layer is tried: `JENGA_PROGRESS_COLOR=bogus ... info` warned
+  `JENGA_PROGRESS_COLOR: "bogus" is not one of auto, always, never; ignored` and reported `color=auto ...
+  source=default`.
+- **Colour modes.** `auto` is on only when stdout is a terminal and `NO_COLOR` is unset or empty; `always` is on even with
+  `NO_COLOR` set and a pipe (observed: `NO_COLOR=1 ... --color always bar` wrote `ESC[32m`); `never` is off even on a
+  terminal. The palette is keyed by the bucket names `board-progress.sh` prints, so Node maps no status: done green
+  (`32`), in progress yellow (`33`), failed red (`31`), pending grey (`90`), rejected a muted blue-grey (`38;5;67`), plus
+  the two node colours of the design, ready cyan (`36`) and locked grey (`90`), and a 256-colour green gradient on the
+  milestone line.
+- **Charset.** `utf8` and `ascii` have the same keys; every `ascii` glyph is below `0x80`. Run with `LANG=` and a pipe,
+  `bar --epic E92` printed `▰▰▰▰▰▰▰▰▰▱⚑ 68/71` and `--charset ascii bar --epic E92` printed `#########-> 68/71`.
+- **The config keys** are two optional keys of the **existing** `project/configs/dashboard-config.json` (no new file,
+  no rename). A project that predates them simply lacks them, so there is **no migration**: a missing file, key or
+  configs directory means the default, silently. The file is found through `scripts/resolve-root.sh get configs`, as
+  `board-progress.sh` finds it. Each key has a descriptor in `templates/config-descriptors/dashboard-config.json`
+  (a string with an `allowed` list, marked optional), so `jenga config` reads and sets them:
+
+  ```text
+  $ jenga config get dashboard-config.progress_charset        (key absent in this repository: the default)
+  utf8
+  $ jenga config get dashboard-config.progress_color
+  auto
+  $ jenga config set dashboard-config.progress_charset ascii  (run against a scratch project, not this repository)
+  dashboard-config.progress_charset = "ascii"
+  $ jenga config set dashboard-config.progress_color purple
+  progress_color: "purple" is not one of the allowed values "auto", "always", "never"     (exit 4)
+  ```
+
+  In that scratch project `cli.js --root <it> info` then reported `charset=ascii source=config`; with
+  `JENGA_PROGRESS_CHARSET=utf8` it reported `source=env`, and with `--charset ascii` as well, `source=flag`.
+  `scripts/dashboard-port.sh` keeps the two keys when it rewrites the port (`tests/dashboard-port.bats`, "ensure keeps
+  progress_charset and progress_color ...").
+
+### 30.4 The Node run bar and the after-task and after-story lines (`E92_S08_T04`)
+
+`lib/progress/cli.js` draws the run bar and the two story lines in the hatched design (the bash renderers of sections 17,
+23 and 24 stay untouched and remain the `--legacy` path). The command is `node lib/progress/cli.js [--charset utf8|ascii]
+[--color auto|always|never] [--cols N] [--lang sv] <command>`; charset and colour are explicit settings (section 30.3 and the
+story's decision 3), never read from the locale.
+
+| Command | What it draws | Counts from |
+|---|---|---|
+| `bar [--level tasks\|stories\|epics] [--cells N] [scope]` | the run bar, one line | `board-progress.sh <scope>`; the scope is `--epic <id>`, `--story <id>`, `--ids <list>` (or bare ids), `--all` (the default) or `--backlog` |
+| `bar --each epics\|stories` | `<id><TAB><line>` for every epic or story | `board-progress.sh --by-parent` (no scope, no `--level`) |
+| `after-task --task <id>[,<id>...]` | one line per distinct story of the finished tasks, led by the story id (`E92_S06  ▰▰▰▱▱▱▱▱▱▱⚑ 3/4`) | `--graph` (`tasks[].story_id`, only for task ids), then `--story <id>` per story; `--story <id>` names stories directly |
+| `after-story --story <id>[,<id>...] [--ready N]` | the story-finished line `E92_S06  <bar>★ 4/4 · 100 %` plus counts that wrap under the bar | `--story <id>` |
+
+- **Bar.** Each state has its own cell glyph as well as its own colour, in the order done, in progress, failed, pending: `▰`
+  (ASCII `#`) done in green, `▒` (ASCII `=`) in progress in yellow, `✕` (ASCII `x`) failed in red, `▱` (ASCII `-`) not started
+  in grey (since `E92_S11_T01`; before it, done, in progress and failed all drew `▰` and only the colour told them apart, see
+  30.11). Cells are allocated by the same largest-remainder rule as the bash renderer.
+  The goal mark after the bar is `★` when everything counted is done, otherwise `⚑`; none for `0/0`.
+- **Text.** `done/denominator`, then `in progress`, `red` (failed), `unknown` and the rejected note, each only when above 0. Every
+  word is a label of `scripts/lib/progress-labels.sh` (English by default, `--lang sv` or `JENGA_PROGRESS_LANG=sv` for Swedish).
+  `Rejected` is excluded from the denominator and shown as the note `⊘ n rejected (not counted)` in a muted blue-grey that is none of
+  the status colours; it is never drawn as a cell.
+- **Narrow terminals.** The run bar is at most `--cells` (default 10) and shrinks to the room left; below 4 cells the bar is dropped
+  and the text alone is printed, which then loses unknown, the rejected note and in progress, in that order, and only last is cut to
+  width-1 cells plus one ellipsis. The story line has a 8 to 30 cell bar, is text-only under 40 columns, and wraps its counts under
+  the bar instead of cutting them. No line is wider than the width (display width, ANSI not counted).
+- **Never fails a run.** An empty scope (exit 3 of `board-progress.sh`), an unknown id (exit 2), a task naming no story or a missing
+  script prints one `cli.js: warning:` line on stderr, nothing on stdout, and exits 0; every id is resolved before anything is
+  drawn, so one bad id prints nothing. Only a usage error exits 2. An EPIPE on stdout (a reader that closes early) is ignored.
+- **Whether to print** an after-story line, and the once-per-completion ledger, stay in `skills/j-break/scripts/story-finished.sh`.
+- **Cost.** `loadLabels` runs `scripts/progress-labels-json.sh`, which forks per label and takes seconds on the maintainer's
+  machine, so every command pays it once per call; the tests therefore serve the label tables from a stub scripts directory.
+
+### 30.5 The overview and scope views, and the narrow-terminal layout (`E92_S08_T05`)
+
+Both views replace the bash views of section 25 as the `j.status` default. They read the board once, count nothing,
+take every word from the label table and every glyph from `charset.js`, and cut every line before painting it, so no
+line is wider than the width. Measured at 80 columns (`--cols` unset, `COLUMNS` unset, a pipe): the widest line of
+`overview` and of `scope E92` was 80 cells.
+
+**`overview`** (no id) reads `board-progress.sh --graph --counts-only` and prints the total line, the run bar with its
+counts, the epics that are not complete in four groups (needs attention, in progress, started, not started; highest
+percent first, ties by id), one line for the complete epics, one for the epics with only rejected tasks or no tasks, and a
+footer hint. Under 50 columns the bars are dropped. `--all` is accepted and prints nothing: the full list is the legacy
+path (30.7). Real output, `cli.js --charset utf8 --color never overview` (abridged to two rows per group):
+
+```text
+Board · 92 epics · 1450/1577 tasks · 92 %
+  ▰▰▰▰▰▰▰▰▰▰▰▱⚑ 1450/1577 · 1 in progress · 6 red · ⊘ 101 rejected (not counted)
+  ○ 120 pending
+
+Needs attention (4)
+  E70 ▰▰▰▰▰▰▰▰▰▰▰▰▰▰ 16/17 94 %  ✕1  Retire Jenga's Own Use of docs/ (Site Sour…
+  E61 ▰▰▰▰▱▱▱▱▱▱▱▱▱▱   0/7  0 %  ✕2  Master Set Manifest and Instruction-File M…
+
+Started (16)
+  E22 ▰▰▰▰▰▰▰▰▰▰▰▰▰▱ 30/31 97 %    /publish Skill — Deployment Pipeline Orchest…
+  E92 ▰▰▰▰▰▰▰▰▰▰▰▰▰▱ 68/71 96 %    Progress Visualisation: see how far a run, a…
+
+Not started (3)
+  E52 ▱▱▱▱▱▱▱▱▱▱▱▱▱▱ 0/2 0 %    Agent Orchestration — Cross-Session Message Iso…
+
+★ Complete (60)  1034 tasks · hidden
+⊘ Only rejected or empty (9): E02, E04, E23, E48, E55, E81, E82, E84, E90
+
+Details for one epic: j.status <id>  ·  all rows: j.status --all
+```
+
+(`E61` shows four filled cells at `0/7`: they are its two failed tasks, red in colour. This sample was captured before
+`E92_S11_T01`, when done and failed cells shared `▰`; the same rows now read `E70 ▰▰▰▰▰▰▰▰▰▰▰▰▰✕` and
+`E61 ✕✕✕✕▱▱▱▱▱▱▱▱▱▱`, so a failed cell is visible without colour, see 30.11.)
+
+**`scope <E## | E##_S##>`** reads `board-progress.sh --graph --within <id>` and prints:
+
+1. a header, `<id> · <title>` and the percent (for an epic the `epic_progress` percent since `E92_S09_T04`, section 5.2);
+2. for an epic, the **milestone line** (below) and one line with the message and "Ready to take" (the first two ids of the
+   payload's `ready` list, `(+N)` for the rest); a story id gets the header without the track, and without a message
+   unless the story is complete;
+3. the run bar of 30.4 with `n/total`;
+4. one **band** per story: the story title in capitals with `done/total`, then its tasks as nodes, `●` done, `◉` ready
+   (cyan), `◐` in progress (yellow; it shared `◉` with ready until `E92_S11_T01`), `✕` failed, `⊘` rejected, `○` locked or
+   pending, joined by arrows that are real
+   dependency edges, with references for the other dependencies and `⚑` after every node that reaches the goal (the rule
+   is below, "Arrows, references and the row order"); the structure (depth columns, gates, folding of more than three
+   tasks of one state into a group node such as `● 4 tasks`, the edges) comes from `dependency-structure.js`. Every story
+   is listed, complete ones too (the hiding line of section 25.2 is not drawn, and `j.status <id> --all` therefore
+   changes nothing);
+5. "Ready to take:" with the titles of the ready tasks, then one "`<task>` unlocked by `<what it waits for>`" line per
+   locked node, where a dependency is named by its task title or, for a story dependency, its story id, joined with `+`.
+
+Real output, `cli.js --color never scope E91`, re-captured on 2026-11-15 after `E92_S10_T03` (abridged to three bands
+and three "unlocked by" lines; at 80 columns the first two bands fit and stay horizontal, the third is vertical):
+
+```text
+E91 · Major-release capture: record why a release is major and which epic…  17 %
+●━━━━━━━╌╌╌◉╌╌╌╌╌╌╌╌╌╌○╌╌╌╌╌╌╌╌╌╌○━━━╌╌╌╌╌╌╌◉╌╌╌╌╌╌╌╌╌╌○╌╌⚑
+           S01        S02        S03        S04        S05 Goal
+Good pace! 5 stories left  ▸  Ready to take: E91_S01_T03
+
+E91  ▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱⚑ 3/17
+
+BREAKING-CHANGE RECORD FORMAT AND THE J.BREAKING-CHANGE SKILL (WITH THE J.… 2/3
+      ● Define the br…───▸● Add the j.bre…───▸◉ Add the j.maj…───▸⚑
+
+MAJOR-BUMP DETECTION AND THE EPIC PICKER 0/3
+      ○ Add detect-ma…───▸○ Add list-epic…───▸○ Add the epic …
+
+DEPLOY-PUBLIC WIRING: CAPTURE STEP, RECORD REUSE AND THE SOFT WARNING AT A… 0/4
+  ○ Add release-check.sh (decides skip, reuse or capture; asks nothi… ◂─ S02_T01
+    └─▸ ○ Add breaking-gate.sh, the soft warning text for the approve step
+      └─▸ ○ Wire the capture and gate steps into deploy-public.json and the … →⚑
+  ○ Add the --release mode to the j.breaking-change SKILL.md ◂─ S01_T02
+
+Ready to take: Add the j.major-release…
+Add detect-major.sh (ba… unlocked by E91_S01
+Add list-epics.sh (comp… unlocked by Add detect-major.sh (ba… + E91_S01
+Add release-check.sh (d… unlocked by Add detect-major.sh (ba… + E91_S02
+```
+
+**Arrows, references and the row order** (`E92_S10_T03`, user decision 2026-11-15: "lägg till och kör: jag skapar en
+task som ritar om så att varje pil motsvarar ett verkligt beroende, och kör den nu", every arrow is a real dependency and
+no in-scope dependency is invisible; source: rapport `E92_S08_T08-scope-view-arrows-imply-edges-that-do-not-exist`).
+Before it, the arrow in front of a node only meant "has some incoming dependency" and was drawn after whatever node sat
+to its left, so it could join two unconnected tasks, and an edge whose source sat on another row was not shown at all.
+
+- **What an arrow means.** An arrow `▸` before a node is drawn only from its *drawn parent*: the first node, in band
+  order (column, then slot), of the **same band** that sits in the depth column **directly to its left** and has a
+  `dependency` edge to it in `structure.edges`. A folded group stands for its members (its edges are the union of
+  theirs, section 20.5), so an arrow to or from a group is real when any member has that edge. A node with no drawn
+  parent gets no arrow, only blank padding of the arrow width.
+- **Row order.** The drawn parents form one forest per band, roots and children in band order. The horizontal rows are
+  a depth-first walk of it: a node's first child continues its row (`───▸`); each further child opens a row below the
+  subtree of the previous one and is joined to the parent by a fork, `─┬─▸` on the first child's row, ` ├─▸` / ` └─▸`
+  on the later children's rows and ` │` on the rows in between (ASCII `-+->`, ` +->`, ` |`). Every node keeps its depth
+  column. The vertical layout draws the same forest, one line per node indented by its depth in the tree (2 cells per
+  level), `├─▸` / `└─▸` before a child and `│` on the lines between two siblings; a root starts at the band indent with
+  no connector.
+- **References.** Every other incoming `dependency` or `boundary` edge of a node (a second dependency, one in an
+  earlier non-adjacent column, one in another story or outside the epic) is shown after its name as `◂─ <ids>`
+  (ASCII `<- <ids>`), ids sorted and joined by `,`, each written relative to the node: `T03` for a task of its own
+  story, `S01_T06` for another story of the epic (`S10` for a story id a task depends on), the full id outside the epic.
+  A reference to a group names the members the node depends on. A story's own `depends_on` is not an edge of
+  `structure.edges` (it only closes the padlock, section 20.0), so it gets no reference. In a horizontal band a column
+  that carries a reference is widened by its widest reference, so the columns of the band stay aligned; in the vertical
+  layout the title and then the reference are cut to the room left. The reference takes the arrow's colour (the gate,
+  as the arrow it stands for).
+- **The goal.** `───▸⚑` follows every node that has a `goal` edge. A task with one has no dependent in the epic, so it
+  always ends its row; a folded group can have a goal edge and drawn children, and then gets a last branch ` └─▸⚑`.
+  The old rule drew the goal arrow only after the last column of a row, which hid it after a node that happened to have
+  a neighbour to its right (on the rapport's fixture: Hotel, Kilo and Juliet).
+- **Glyphs.** `fork` (`┬` / `+`) and `back` (`◂` / `<`) were added to `charset.js`, both one cell in both tables.
+- **Checked by** `tests/helpers/scope-arrow-walk.mjs`, which reads the arrows, references and goal arrows back out of the
+  rendered rows and compares them with `structure.edges`: on the rapport's fixture (`tests/lib-progress-parity.test.mjs`),
+  on generated bands with a folded group (`tests/lib-progress-overview-scope.test.mjs`) and on the `j.status` fixture of
+  `tests/j-status-scope-view.bats`.
+
+The `E92_S09` and `E92_S10` bands of `cli.js --color never scope E92` after the change (`E92_S09_T04` depends on `T02`,
+drawn as the arrow, and on `T03`, shown as the reference; `E92_S10_T02` and `T03` both depend on `T01`, drawn as a fork):
+
+```text
+REDO: A TREE FOR EVERY EPIC WITH TASKS, ONE READY STYLE FOR EVERY STARTABL… 4/4
+      ● Render the de…───▸● Draw every st…───▸● Show the new … ◂─ T03 ───▸⚑
+      ● Compute an ep…
+
+PADLOCK RULE FOR EVERY TASK STATE, AND NO 'GOAL REACHED' WHILE A STORY HAS… 1/3
+      ● Closed padloc…─┬─▸◉ No 'Goal reac…───▸⚑
+                       └─▸◉ Scope view ar…───▸⚑
+```
+
+Before it the `E92_S09` band read `● Render the de…───▸● Draw every st…───▸● Show the new …───▸⚑` over a lone
+`● Compute an ep…`, so the edge `E92_S09_T03` → `E92_S09_T04` was invisible.
+
+**The milestone line** (decision 2). The stops are the stories of the scoped epic in the order the payload lists them,
+one stop per story, with the epic as the goal at the end (`⚑`, or `★` when every counted task is done) and a label under
+each stop (the story title when it fits the segment, else its number, `S01`, ...; then `Goal`). A stop is the `stop` the
+payload states: done `●`, in progress `◉`, failed `✕`, else `○`; a story with no counted task gets `⊘`. The current
+milestone is a story whose stop is in progress: `◉`, its label in bold. Each story's segment is filled in proportion to
+its done share, in a green 256-colour gradient along the line, and the rest is dashed grey. The message is chosen from the stated percent and the number of
+unfinished stories exactly as `render-status-scope-view.sh` chose it (complete; last story; at least 80 %; at least 50 %;
+above 0; else the start line), and "next" is that script's "Ready to take" selection. The track is dropped under 50
+columns, or when it does not fit (width `min(cols, 64)`, at most 10 cells per story). No new rule was invented; the
+Scrum Master's reading of the user's answer is recorded in the story and the user may still correct it.
+
+**The narrow-terminal layout** (decision 1). `scope` takes `--layout horizontal|vertical|auto`, default `auto`; the design
+width is 80 columns.
+
+- `horizontal`: one text row per row of the band's drawn-parent forest (above) and one column per depth column. A column
+  is 20 cells: a 4-cell arrow, the mark, a space and a 14-cell name; a longer title ends in `…` (ASCII `~`); a column that
+  carries a reference is wider by the widest reference plus two spaces. A band row starts 6 cells in. So a band whose
+  rows span three depth columns without references fits 80 columns (67 cells with the goal arrow) and one that spans
+  four does not (87). Forced `horizontal` shrinks the name width, never below one cell, until every band fits: rows are never added,
+  titles only get shorter (`scope E92_S08 --layout horizontal` at 80 printed `◉ Ex…───▸◉ No…───▸● No…...`).
+- `vertical`: an indented tree of the same forest, one line per node, indented by its depth in the tree, `├─▸` / `└─▸`
+  (ASCII `+->`) before a child, `│` between two siblings, the title and the reference cut to the room left.
+- `auto`: a band is drawn vertical **only when its longest horizontal row, at the 14-cell name width, is wider than the
+  terminal**; every other band stays horizontal; a reference counts in that width. In the `E91` output above the first
+  band (67 cells) stays horizontal and the third (wider than 80 with its reference) is vertical at 80. `E92_S08` (nine
+  depth columns) is vertical at 80.
+
+The width is that of 30.3 (`--cols`, `COLUMNS`, the terminal, 80). `j.status` cannot pass `--layout` (30.7).
+
+**The four decisions of `E92_S08_T01`**, as recorded in the story's "Decisions" section, and where they live in code:
+
+1. Narrow layout: option 4, the hybrid by width with a flag, as above (`tree-text.js`, `scope` sub-command flag).
+2. Milestone line: option 1, **interpreted** from the user's answer ("build on the same principle as is done now, only the
+   design changes"), as above (`scope.js`).
+3. Charset and colour defaults: option 1 with the user's amendment, two keys in the existing `dashboard-config.json`,
+   precedence flag, environment variable, config key, default (30.3; `config.js`, `charset.js`, `color.js`, the
+   descriptor file).
+4. A user-run colour command: option 2, `jenga progress` (30.6; `lib/commands/progress.js`, `E92_S08_T10`).
+
+### 30.6 `jenga progress` (`E92_S08_T10`)
+
+`jenga progress <sub-command> [flags]` is the short way to see the views with colour in a real terminal. It is a thin
+forwarder in `lib/commands/progress.js`, behind the `jenga` bin (`bin/jenga.js`), modelled on `jenga config`: it runs
+`run()` of `lib/progress/cli.js` in-process with the same sub-commands and flags, and adds one thing, `--color always`
+in front of the arguments unless the caller passed `--color` (as `--color x` or `--color=x`). Because that is a flag, it
+outranks `JENGA_PROGRESS_COLOR` and `progress_color`: `progress_color: never` does not turn its colour off,
+`jenga progress --color never ...` does. It makes no model call and uses no network; exit codes are those of `cli.js`.
+
+```text
+jenga progress overview              the board overview, in colour
+jenga progress scope E92             the scope view of an epic (or a story id)
+jenga progress bar --epic E92        one run-bar line
+jenga progress --help                the usage of cli.js (30.2), unchanged
+```
+
+`jenga --help` lists it as `jenga progress  Show board progress in the terminal (colour on; see also: jenga progress
+--help)`. Observed: `jenga progress bar --epic E92` into a pipe began with `ESC[32m` (colour on without a terminal, as
+`always` means), `jenga progress --color=never scope E92_S09` printed plain text, and `jenga progress` with no
+sub-command printed `cli.js: no command given` and the usage and exited 2. In a consumer project it runs as
+`npx jenga progress ...`.
+
+### 30.7 Wiring, the copy into the reply, and `--legacy` (`E92_S08_T06`, `E92_S08_T07`)
+
+**`j.status`.** Step 1.5 of `skills/j-status/SKILL.md` runs `resolve-status-mode.sh mode <the user's arguments>` and,
+for `overview` or `scope`, the same with `render` and `--charset utf8 --color never` in front of the user's arguments.
+The resolver now routes:
+
+| Mode | Arguments | Renderer |
+|---|---|---|
+| `overview` | none | `node lib/progress/cli.js overview` (the default) |
+| `scope` | `<id>` (`--all` accepted, not forwarded) | `node lib/progress/cli.js scope <id>` (the default) |
+| `legacy` | `--legacy`, or `--all` with no id | `render-status-bars.sh` (section 12.4) |
+| `legacy-scope` | `--legacy <id>` | `render-status-scope.sh <id>` (section 18) |
+
+Observed `plan` output: `node lib/progress/cli.js scope E92_S08 --charset utf8 --color never`, `node lib/progress/cli.js
+overview` and `render-status-scope.sh E92`; `mode --all` printed `legacy`. `--charset` is accepted and forwarded to the
+Node renderer only. When `node` is not on `PATH` or `cli.js` is missing, `render` runs the legacy renderer of the same
+scope with one warning on stderr. `render-status-overview.sh` and `render-status-scope-view.sh` (section 25) stay on disk
+but are **no longer routed** by anything, neither as the default nor as `--legacy`. `--layout` is not an argument of the
+resolver (`mode E92 --layout vertical` exits 2, `unknown argument: --layout`), so `j.status` always draws the scope view
+with `auto`; filed as a rapport (30.10).
+
+**`run-progress.sh` and `story-finished.sh`.** In story scope (`--scope story --task <ids>`) the after-task lines are
+drawn by **one** `node lib/progress/cli.js ... after-task --story <S1,S2,...>` call for every distinct story, and the
+after-story line by `story-finished.sh` with `cli.js after-story --story <id>`; deciding whether a story just finished,
+and the ledger, stay in bash (section 24.1, 24.3). `--legacy`, or `JENGA_PROGRESS_RENDERER=legacy` in the environment,
+draws with `scripts/render-progress-bar.sh` and `scripts/render-story-bar.sh` byte for byte as before; any other value of
+the variable means the Node default. When the Node drawing is not possible (no `node`, no `cli.js`, a non-zero exit or
+no output) one `... (legacy drawing used, run unaffected)` warning is written and the legacy renderers draw instead.
+`--charset` goes to Node only; `--cols` and `--color` go to both. `--scope run` and `--resolve-scope` (compatibility
+only, section 23) always draw with the legacy renderer. Node's output is captured so that it can fall back, so Node sees
+a pipe and `auto` never colours it.
+
+**The call sites.** `skills/j-do/SKILL.md` (4.1.3), `skills/j-dooo/SKILL.md` (1.1), `skills/jenga/SKILL.md` (Phase 0.95,
+and its bundle and wave steps) and `skills/j-break/SKILL.md` ("Progress lines") run `run-progress.sh --scope story --task
+<ids> --after-story --charset utf8 --color never`. Which glyphs, colour and width, and what to print, stay in the
+renderer; the `SKILL.md` files say only when to call it.
+
+**Why the copy into the reply, as a fenced code block.** The desktop app folds tool output into a collapsed tool-call row,
+so a rendering left there is never seen. Each of those `SKILL.md` files therefore tells the agent to copy the stdout into
+its reply as a fenced code block, byte for byte: the block keeps the monospace alignment of the bands and the bar, and
+the agent adds, counts or rewords nothing. The rule sits in one short block per file (`j-status` "Show the rendering in
+the reply", `j-break` "Progress lines", which the other three point at). The copy is run with `--charset utf8 --color
+never`: ANSI colour cannot render in chat markdown, and UTF-8 must be explicit because the Bash tool has `LANG=""`.
+**Colour is for a real terminal and needs `--color always` there** (or `jenga progress`, 30.6), because the default
+`auto` is off for a pipe and the callers capture the output.
+
+### 30.8 Node version floor, banned APIs and the packaging boundary
+
+- **Floor.** `package.json` `engines.node` is `>=14.13.1`, and `E92_S08` did not raise it. The story bans
+  `String.prototype.replaceAll`, `Array.prototype.at`, `??=` (and the other logical assignments), `Object.hasOwn`,
+  `structuredClone`, `node:test` and `fetch`; `import` of `node:` built-ins is allowed from 14.13.1.
+  `tests/progress-shared-structure.bats` and `tests/lib-progress-core.test.mjs` scan `lib/progress/` for them, and
+  `tests/progress-node14-guard.bats` scans `lib/commands/progress.js` and the story's Node test files too, with a wider
+  list (`rmSync`/`rm`, `cpSync`/`cp`, `randomUUID`, `findLast`, `toSorted`, `new AbortController`, the `*/promises`
+  modules), and imports every module and runs `cli.js info` on a real Node 14.13.1 binary when one is available
+  (`JENGA_NODE14_BIN`, or nvm's `v14.13.1`), skipping that case otherwise.
+- **Packaging boundary.** `package.json` `files` ships `project/app/ui/dist` and `project/app/ui/scripts`, **not**
+  `project/app/ui/src`, so a terminal renderer cannot import the dashboard's model from `src` in a consumer install. That
+  is why `E92_S08_T02` moved the graph structure to `lib/progress/dependency-structure.js` (shipped through `lib/`) and the
+  dashboard imports it from there; the Vite dev server allows the path in `server.fs.allow`
+  (`project/app/ui/vite.config.js`), and the built `dist` bundles it.
+- **Tests.** The Node tests are `tests/lib-progress-core.test.mjs`, `lib-progress-bar.test.mjs`,
+  `lib-progress-overview-scope.test.mjs` and `lib-progress-parity.test.mjs`, each run by a bats wrapper of the same name
+  (`.bats`), because `j.test` discovers bats suites, not bare `.test.mjs` files. The bats files that lock the `--legacy`
+  output (`tests/render-progress-bar.bats`, `tests/j-status-bars.bats`, `tests/j-status-scope.bats`, ...) stay as they
+  were; `tests/progress-command.bats` covers `jenga progress`.
+
+### 30.9 What was observed, and what was not
+
+**Observed** by `E92_S08_T09` (a background agent, through the Bash tool, `LANG=` and a pipe, Node v24.18.0): every
+command and every output block of sections 30.1 to 30.8; the widest line at 80 columns (80 cells); the ANSI bytes with
+`--color always` and `jenga progress` (read with `od -c`) and their absence with `--color never`; the Swedish labels
+(`--lang sv bar --epic E61` printed `▰▰▰▱▱▱▱▱▱▱⚑ 0/7 · 2 röd`).
+
+**Not observed:**
+
+- **The real-session reply check** of the story's Definition of Done: that `j.status`, a `j.do` after-task line and a
+  `j.jenga` wave line, drawn by the Node renderer in a real session, appear in the reply as a fenced code block in UTF-8.
+  This task cannot look at a reply in the desktop app. The blocks in this section are the same bytes the renderer prints,
+  copied from the Bash tool, but how a reply shows them was not looked at.
+- **The real-terminal colour check**: that `--color always` output was looked at once in a real terminal and compared
+  with the prototype and the design image. This task has no terminal to look at. Only the escape sequences were checked
+  (which SGR codes are written, and that they are closed), not how they look.
+- **A run on Node 14.13.1.** No such binary was used here; the floor rests on the scans and the opt-in case of
+  `tests/progress-node14-guard.bats` (30.8).
+
+Both Definition-of-Done checks remain for a person to do in a real session and a real terminal.
+
+### 30.10 Distribution, manifest and mirror verification (`E92_S08_T09`)
+
+All four checks were read-only and ran in the task's own worktree; nothing was fixed.
+
+1. **`npm pack --dry-run`** (run as `npm pack --dry-run --ignore-scripts --json`: the `prepack` script builds the
+   dashboard UI and would write `project/app/ui/dist`, which a read-only check must not do; the file list does not depend
+   on it apart from `dist`). Result: 660 files, version 5.0.0. All 13 files of `lib/progress/` are listed, and so is every
+   non-test file outside `project/` that an `E92_S08` commit changed: `bin/jenga.js`, `lib/commands/progress.js`,
+   `lib/config/descriptors.js`, `lib/config/store.js`, `templates/config-descriptor-schema.json`,
+   `templates/config-descriptors/dashboard-config.json`, `skills/j-status/scripts/resolve-status-mode.sh`,
+   `skills/j-break/scripts/run-progress.sh`, `skills/j-break/scripts/story-finished.sh`,
+   `skills/j-status/assets/output_format.md` and the five `SKILL.md` files (`j-status`, `j-do`, `j-dooo`, `jenga`,
+   `j-break`); also the scripts the renderer runs (`scripts/board-progress.sh`, `scripts/progress-labels-json.sh`,
+   `scripts/lib/progress-labels.sh`, `scripts/resolve-root.sh`) and `lib/config/paths.js`, which `cli.js` imports. No
+   path under `project/app/ui/src` and none under `tests/` is listed. No manifest change was needed: `lib/`, `bin/`,
+   `scripts/`, `skills/` and `templates/` are already in `files`.
+2. **Manifests: no entry needed** (so there is nothing to test). `lib/postinstall-manifest.js` records only the files the
+   consumer postinstall mirrors from `skills/` and `agents/` into `.claude/` and `.agents/`; `lib/` stays in
+   `node_modules` and is not recorded (`scripts/postinstall.js` header). `lib/legacy-shipped-paths.json` is the seed list
+   of old shipped `agents/` and `skills/` paths for delete reconciliation; `lib/progress/` is new, so it is not legacy.
+   `lib/skill-allow-list.json` is a list of 64 skill names with no command patterns; no skill was added, and the skills
+   reach Node through their existing scripts (`resolve-status-mode.sh`, `run-progress.sh`).
+3. **`.publicignore` and the mirror.** `.publicignore` has no pattern that excludes `lib/` or `lib/progress/` (the only
+   `lib/` text in it is a comment naming `lib/skill-allow-list.json`). **`mirror.sh --dry-run` could not complete:** it
+   stopped with exit 1 before its preview because the public `origin/main` (`5eb42b1`, "chore(publish): record v5.1.0
+   stage_tested and approved ledger entries") has moved past the local `last-mirror-sync` marker (`68c9d00`), and a fresh
+   clone has no marker at all. `--force` was not used: its path pushes a rescue tag to the public remote. Filed as a
+   rapport. To still answer the question, `mirror.sh`'s own functions `compute_full_ship_set`, `compute_ship_list` and
+   `check_never_public_refs_invariant` were extracted verbatim and run against a scratch copy of the scratch clone (so
+   the shared `.mirror-worktrees/public` was not touched). The full ship set has 2677 files and contains all 13 files of
+   `lib/progress/` and `lib/commands/progress.js`; the public tip contains no file under `lib/progress/` yet, so the next
+   mirror adds them. **The shared-never-public reference guard passed**: "no failing reference to a never-public skill
+   (95 non-failing mention(s) logged, 45 path hit(s) exempted ...) — OK", exit 0.
+4. **`.claude/` and `.agents/`** were not edited by hand by this task. They are generated by `j.self-sync`, which must be
+   run to bring this story's root changes into them, and **was not run** by this task. At `e1b14b10` the mirrored copies
+   of `resolve-status-mode.sh`, `run-progress.sh` and the `j-status`, `j-do` and `jenga` `SKILL.md` files differ from the
+   root files, and so do 2 of the 14 mirrored Node files (`lib/progress/dependency-structure.js` and `scope.js`, the
+   `E92_S09` changes).
+
+### 30.11 Every state has its own glyph, colour or not (`E92_S11_T01`)
+
+User decision of 2026-11-15 (story `E92_S11`, decision 1), answering "2" to: "in the bar, in-progress gets ▒ (ASCII =)
+and failed ✕ (ASCII x); in the terminal tree, in-progress gets a half dot ◐ (ASCII %), as in the dashboard."
+
+Until then the Node renderers told some states apart by colour alone: `paintCells()` in `lib/progress/bar.js` drew done,
+in-progress and failed cells all as `▰` (ASCII `#`), and `STATE_VIEW` in `lib/progress/tree-text.js` gave an in-progress
+task the ready mark `◉`. With colour off, as in the copy into a chat reply (section 30.7), a story with 2 of 3 tasks done
+and 1 in progress looked full. **In the Node renderers a state is no longer told apart by colour alone:** every state has
+its own glyph in both charsets, and the colours are unchanged.
+
+**Run-bar cells** (`paintCells()`, used by the run bar, the after-task and after-story lines and the `j.status` overview and
+scope views), in this order:
+
+| State | `utf8` | `ascii` | `charset.js` key | Colour |
+|---|---|---|---|---|
+| done | `▰` | `#` | `runFull` | green |
+| in progress | `▒` | `=` | `runInProgress` | yellow |
+| failed | `✕` | `x` | `cross` | red |
+| pending | `▱` | `-` | `runEmpty` | grey |
+
+**Tree marks** (`STATE_VIEW`, the bands of the scope view):
+
+| State | `utf8` | `ascii` | `charset.js` key | Colour |
+|---|---|---|---|---|
+| done | `●` | `*` | `done` | green |
+| ready | `◉` | `@` | `ready` | cyan |
+| in progress | `◐` | `%` | `inProgress` | yellow |
+| failed | `✕` | `x` | `cross` | red |
+| rejected | `⊘` | `x` | `rejected` | muted blue-grey |
+| locked or pending | `○` | `o` | `locked` | grey |
+| done, but a dependency is not done (`E92_S11_T02`, 30.12) | `?` | `?` | `unfinished` | yellow (in progress) |
+
+- `runInProgress` is its own key, not `hatch`: both are `▒` in `utf8`, but `hatch` is `:` in `ascii` and the user chose `=`
+  for the in-progress cell. Every new glyph is one code point and one terminal cell (the width pin in
+  `tests/lib-progress-core.test.mjs` covers every key of both tables) and every `ascii` glyph is a byte below `0x80`.
+- In `ascii`, failed and rejected tree marks are both `x`, as before `E92_S11_T01`; a rejected task is never a bar cell.
+- Counting is unchanged: the renderer still counts nothing, and the cell allocation is the same.
+- Example, `--color never`, 3 done, 1 in progress, 1 failed, 1 pending at 6 cells: `▰▰▰▒✕▱` in `utf8`, `###=x-` in `ascii`.
+- Not changed: the `--legacy` bash renderers (sections 17, 18, 23 to 25) and the dashboard UI, which already had a distinct
+  mark per state. The overview's per-epic marker (`◉1`, `✕2`) and the milestone line's in-progress stop (`◉`) keep their
+  glyphs: in those places `◉` is the only in-progress mark and no ready mark is drawn next to it.
+
+### 30.12 A done task whose dependency is not done: the `?` mark and the `j.reconcile` finding (`E92_S11_T02`)
+
+User decision of 2026-11-15 (story `E92_S11`, decision 2): "En ticket kan inte både vara genomförd och samtidigt vara
+beroende av en icke genomförd ticket. Om ticketen är genomförd före dess är det ett defacto bevis för att den inte var
+beroende av den andra ticketen." (A ticket cannot both be done and depend on a ticket that is not done; if it was done
+first, that is proof it did not depend on it.) The user chose to flag the contradiction, with "ett frågetecken i samma gula
+färg som pågående ärenden där plustecknet brukar ligga för ärenden som är redo" (a question mark in the in-progress yellow,
+where a ready task has its plus).
+
+**The script states it.** `board-progress.sh --graph` gives every task `unfinished_deps` (section 13.2): for a task in the
+done bucket, the effective dependencies (own `depends_on`, then the story's, each once) that are not satisfied, `[]`
+otherwise. Renderers count nothing and decide nothing: they read the key. A payload without it (an older script or
+snapshot) renders exactly as before, because the shared structure (`lib/progress/dependency-structure.js`) adds
+`unfinishedDeps` to a task or a folded group only when the stated list is not empty.
+
+**Nothing else changes.** The task keeps `state: done`, stays in the done bucket and counts as done in every bar, percent
+and goal. The padlock rule of `E92_S10_T01` is unchanged: a done task keeps the open padlock. The flag is a separate mark,
+not a gate.
+
+**How it is shown.**
+
+| Where | Mark | Words |
+|---|---|---|
+| Dashboard tree (`DependencyTree.jsx`) | `?` in `--color-progress-in-progress` at the card's mark position, in place of the done tick (`data-mark="unfinished"`, class `dt-mark-q`) | a `<title>` tooltip on the `?`, the card's `aria-label` and the hover tooltip name the dependency |
+| Terminal tree (`lib/progress/tree-text.js`) | `?` (glyph key `unfinished`, `?` in `utf8` and `ascii`) in the in-progress colour, in place of `●`; the name keeps the done style | one line per flagged task after the "unlocked by" lines: `? <task>: <words>` |
+
+The words are two labels of `scripts/lib/progress-labels.sh` (and the English fallbacks in `DependencyTree.jsx`):
+
+| Key | en | sv |
+|---|---|---|
+| `dep_unfinished` | `Done although dependency %s is not done - check the dependency` | `Klar trots att beroendet %s inte är klart - kontrollera beroendet` |
+| `dep_unfinished_more` | `Done although dependency %s and %d more are not done - check the dependencies` | `Klar trots att beroendet %s och %d till inte är klara - kontrollera beroendena` |
+
+With several unfinished dependencies the words name the first (own `depends_on` first, then the story's) and a count of
+the others, the same choice as the failed-story goal line (`goal_failed_more`). They use ` - ` rather than an en dash, as
+`goal_failed` does, so `--charset ascii` keeps them readable. The state is not carried by colour alone: the `?` is the cue
+without colour, and the words say it.
+
+Terminal sample (`cli.js --charset utf8 --color never scope E01 --layout vertical`, the fixture of
+`tests/lib-progress-overview-scope.test.mjs` "E92_S11_T02"):
+
+```text
+FIRST 2/3
+  ● Plan
+    └─▸ ✕ Build it
+      └─▸ ? Write docs →⚑
+
+SECOND 1/1
+  ? Ship it ◂─ S01_T02 →⚑
+
+Nothing is ready to take right now
+? Write docs: Done although dependency E01_S01_T02 is not done - check the dependency
+? Ship it: Done although dependency E01_S01_T02 and 1 more are not done - check the dependencies
+```
+
+**`j.reconcile` reports it.** `skills/j-reconcile/scripts/detect-done-before-dependency.sh [--within <id>] [--root <dir>]`
+reads `--graph`, keeps the tasks whose `unfinished_deps` is not empty, names each dependency with its level and status
+(one `--ids ... --items` call) and prints `{"count": N, "findings": [...]}`. `j.reconcile` lists the findings under "DONE
+BEFORE ITS DEPENDENCY" and offers to inspect the dependency. It is report-only: no status, `depends_on` or file is changed,
+because which side is wrong is the user's call. With no flagged task it reports nothing new.
+
+**Observed on the real board, 2026-11-15** (`detect-done-before-dependency.sh` on this repository): 8 findings, all through
+a STORY dependency (none through a task's own `depends_on`): `E51_S05_T01`..`T03` (`Merged`, story `E51_S04` is
+`Pending`), `E91_S04_T01` (`Passed`, `E91_S03` is `Pending`) and `E92_S09_T01`..`T04` (`Merged`, `E92_S08` is `Failed`). The
+story's count of 0 cases on 2026-11-15 looked at the tasks' own dependencies only.

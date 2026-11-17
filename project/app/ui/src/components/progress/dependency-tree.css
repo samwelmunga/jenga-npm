@@ -39,6 +39,13 @@
 .dep-tree .dt-start-bar-bg { fill: var(--color-border); }
 .dep-tree .dt-start-bar { fill: var(--color-progress-done); }
 .dep-tree .dt-start-complete .dt-start-box { stroke: var(--color-progress-done); }
+/* E92_S12_T03: a story that is not broken down into tasks yet. The cue that does not rely on colour is the dashed outline
+   (9 4: longer than every other dash on the map, which are 5 3 ready card, 2 3 rejected card, 3 3 boundary node, 2 5 cross-story
+   edge, 6 6 ready edge) together with the label text; the mini bar is not drawn, so the node never reads as 0 % progress.
+   Neutral tokens only: the band keeps its own border token, the start node its strong border, the text the muted text. */
+.dep-tree .dt-band-ghost { stroke-dasharray: 9 4; }
+.dep-tree .dt-start-ghost .dt-start-box { stroke-dasharray: 9 4; }
+.dep-tree .dt-start-ghost-text { fill: var(--color-text-muted); font-size: 11px; font-style: italic; }
 
 /* edges: dependency right edge to dependent left edge, painted above the bands */
 .dep-tree .dt-edge { fill: none; stroke-width: 2; stroke-linecap: round; }
@@ -49,6 +56,8 @@
 .dep-tree .dt-edge-failed { stroke: var(--color-progress-failed); }
 .dep-tree .dt-edge-rejected { stroke: var(--color-progress-rejected); opacity: 0.8; }
 .dep-tree .dt-edge-cross { stroke-dasharray: 2 5; }
+/* E92_S12_T03: the ghost edge, a not-broken-down story's start node to the goal: neutral and dash-dot (10 3 2 3), unlike every other edge dash. */
+.dep-tree .dt-edge-ghost { stroke: var(--color-border-strong); stroke-dasharray: 10 3 2 3; opacity: 0.8; }
 .dep-tree .dt-edge-goal { stroke-width: 2.5; }
 
 /* cards */
@@ -80,6 +89,9 @@
 .dep-tree .dt-state-failed .dt-mark-line { stroke: var(--color-progress-failed); }
 .dep-tree .dt-state-ready .dt-mark-line { stroke: var(--color-progress-pending); }
 .dep-tree .dt-state-rejected .dt-mark-line { stroke: var(--color-progress-rejected); }
+/* E92_S11_T02: the "?" of a done card whose dependency is not done, in the in-progress yellow (the "?" is the non-colour cue). */
+.dep-tree .dt-mark-q { fill: var(--color-progress-in-progress); font-size: 17px; font-weight: 800; }
+.dep-tree .dt-tip-unfinished { color: var(--color-progress-in-progress); }
 .dep-tree .dt-ring { fill: none; stroke: var(--color-progress-pending); stroke-width: 2; opacity: 0; transform-box: fill-box; transform-origin: center; }
 
 /* dependency gate badge, on the left edge of the card where the incoming line enters */
@@ -131,8 +143,10 @@
 .dep-tree .dt-goal-ring-bg { fill: none; stroke: var(--color-border); stroke-width: 5; }
 .dep-tree .dt-goal-ring { fill: none; stroke: var(--goal-c); stroke-width: 5; stroke-linecap: round; }
 .dep-tree .dt-goal-name { fill: var(--color-text); font-weight: 800; font-size: 15px; }
+.dep-tree .dt-goal-name.dt-goal-failed { fill: var(--color-progress-failed); font-size: 12px; }
 .dep-tree .dt-goal-title { fill: var(--color-text-muted); font-size: 12px; }
 .dep-tree .dt-goal-count { fill: var(--goal-c); font-weight: 700; font-size: 12px; }
+.dep-tree .dt-goal-decomposed { font-weight: 400; font-size: 11px; }
 .dep-tree .dt-shine-stop { stop-color: var(--dt-shine); }
 .dep-tree .dt-shine-edge { stop-opacity: 0; }
 .dep-tree .dt-shine-mid { stop-opacity: 0.85; }

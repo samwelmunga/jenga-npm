@@ -32,7 +32,10 @@ set -u
 
 SELF="$(basename "$0")"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RESOLVE_ROOT="$here/../../../scripts/resolve-root.sh"
+# shellcheck source=/dev/null
+if [ -f "$here/../../index/scripts/package-root.sh" ]; then . "$here/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$here")" || true
+RESOLVE_ROOT="$PACKAGE_ROOT/scripts/resolve-root.sh"
 
 conv=""
 subject=""
@@ -96,7 +99,7 @@ if ! jq -e '.categories["commit-format"].values | type == "object"' "$conv" >/de
   none "no commit-format convention recorded"
 fi
 # A conventions file that fails validation is not trusted (nothing is applied from it).
-if ! bash "$here/../../../scripts/validate-conventions.sh" "$conv" >/dev/null 2>&1; then
+if ! bash "$PACKAGE_ROOT/scripts/validate-conventions.sh" "$conv" >/dev/null 2>&1; then
   printf '%s: conventions file is invalid, ignored: %s\n' "$SELF" "$conv" >&2
   none "no applicable commit-format convention (conventions file invalid)"
 fi

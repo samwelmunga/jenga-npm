@@ -123,7 +123,11 @@ export LC_ALL=C
 
 SELF="$(basename "$0")"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SHARED_DIR="$SCRIPT_DIR/../../../scripts"
+# Package root (scripts/, templates/): resolved so it also works from a consumer's .claude/skills mirror.
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
+SHARED_DIR="$PACKAGE_ROOT/scripts"
 RESOLVE_ROOT="$SHARED_DIR/resolve-root.sh"
 VALIDATOR="$SHARED_DIR/workflow/validate-workflow.sh"
 WORKFLOW_LIB="$SHARED_DIR/workflow/lib.sh"

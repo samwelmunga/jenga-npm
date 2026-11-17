@@ -134,6 +134,7 @@ project/.playbooks/
 + project/.workflows/scripts/npm-login-wait.sh
 + project/.workflows/scripts/stage-wait-ready.sh
 + project/.workflows/scripts/st-test-run.sh
++ project/.workflows/scripts/st-test-mock-board.sh
 + project/.workflows/scripts/finalize-release.sh
 - project/.workflows/**
 #
@@ -351,17 +352,6 @@ tests/mirror-orphaned-twin-rewrite.bats
 tests/helpers/mirror-orphaned-twin-rewrite.sh
 # tests/helpers/router-route.mjs: drives the router that router-prefix-guard.bats imports
 tests/helpers/router-route.mjs
-# v5.1.0 release: ten tests that failed the mirror's test-subject gate in the public tree (stranded or broken there)
-tests/board-id-sort.bats
-tests/consumer-install-testbed.bats
-tests/dashboard-assigned-port.bats
-tests/dashboard-free-port.bats
-tests/dependency-audit-workflow.bats
-tests/e86-upgrade-and-go.bats
-tests/j-status-overview.bats
-tests/j-status-scope-view.bats
-tests/jenga-sync.bats
-tests/pages-workflow.bats
 # tests/dev-done-post-sync-commit.bats: runs skills/j-dev-done/scripts/commit-post-sync.sh,
 # which lives under the fully-private skills/j-dev-done/ blocklisted above. Synced to the
 # public mirror without its subject by the 2026-09-18 run (81b7f8b6), where all 14 of its
@@ -427,6 +417,13 @@ tests/mirror-test-gate-bypass.bats
 # report nothing. Same reasoning as the three sibling tests/mirror-*.bats entries directly above. Added
 # in the same commit that creates this file (E77_S01_T03), so it never exists unblocklisted.
 tests/mirror-nested-suite-flag.bats
+# tests/mirror-scratch-clone-git-hold.bats: reads skills/j-mirror-public/scripts/mirror.sh at run time and
+# runs its scratch-clone .git hold/restore block and integrity guard (every @test case uses them), and that
+# skill is fully private (blocklisted above, both naming forms). The file has no publicly-meaningful subset, so
+# per project/documentation/public-mirror-content-parity.md's rule section option 1 (blocklist) is correct
+# rather than a visible skip. Same reasoning as the sibling tests/mirror-*.bats entries directly above. Added in
+# the same commit that creates the file (E28_S24_T02), so it never exists unblocklisted.
+tests/mirror-scratch-clone-git-hold.bats
 # project/documentation/nested-suite-run-reachability.md (E77_S01_T01): internal finding about the
 # nested suite run inside skills/j-mirror-public/scripts/mirror.sh, which is itself blocklisted above;
 # project/documentation/ is not blanket-blocklisted, so this one internal document is listed by name.
@@ -580,3 +577,13 @@ tests/epic-wrap-up-scripts.bats
 # blocklisted above, so they fail in the mirror-shaped tree while passing privately (found by the /mirror-public
 # test gate on 2026-11-05). The map under test is the maintainer's project scope map. Follows its private subjects.
 tests/project-scope-map.bats
+# --- Decision (E98_S03_T02, 2026-11-16): the post-self-sync consumer smoke test stays private ---
+# scripts/consumer-smoke-after-sync.sh is run by skills/j-self-sync/ (fully private, blocklisted above) and needs
+# the maintainer's private consumer project `../st-test`; without either it can only print SKIP. It is blocklisted
+# together with its subject's only caller, and tests/consumer-smoke-after-sync.bats (which greps
+# skills/j-self-sync/scripts/run.js, absent in the mirror) follows it, per the rule that a test may never outlive its subject.
+# scripts/consumer-layout-fixture.sh deliberately SHIPS: it is generic (it builds an offline consumer layout from a
+# package tree) and tests/package-root.bats, which ships, uses it for the 5.0.1 regression.
+# Before changing this decision, re-run scripts/check-publicignore-match.sh on both script paths.
+scripts/consumer-smoke-after-sync.sh
+tests/consumer-smoke-after-sync.bats

@@ -46,7 +46,13 @@ sr_find_file() {
     [ -f "$override" ] && printf '%s' "$override"
     return 0
   fi
-  for cand in "$dir/../../../scripts/$rel" "scripts/$rel" "node_modules/@jenga-ai/agent/scripts/$rel"; do
+  # The package root: the install root in the monorepo and in node_modules, but node_modules/@jenga-ai/agent in a
+  # consumer project, where "$dir/../../.." is only the .claude/ mirror (skills/ and agents/, no scripts/).
+  local pkg
+  # shellcheck source=/dev/null
+  if [ -f "$dir/../../index/scripts/package-root.sh" ]; then . "$dir/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+  pkg="$(jenga_package_root "$dir")" || true
+  for cand in "$pkg/scripts/$rel" "scripts/$rel" "node_modules/@jenga-ai/agent/scripts/$rel"; do
     if [ -f "$cand" ]; then printf '%s' "$cand"; return 0; fi
   done
   return 0

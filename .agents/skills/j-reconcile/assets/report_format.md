@@ -39,6 +39,10 @@ Scope: <resolved scope — see forms below>
    📖 E##_S## · <Story Title>
       - [ ] <unchecked DoD item text>
 
+🔗 DONE BEFORE ITS DEPENDENCY (report-only — a done task whose dependency is not done; nothing was changed)
+   🔧 E##_S##_T## · <Task Title> (<status>)  — depends on <dependency id> (<dependency status>)
+   Offered to inspect the dependency: <accepted for <id> | declined>
+
 🧹 TODO CLEANUP
    Removed: <N> stale entries
    Commented out: <N> newly-reconciled entries
@@ -65,6 +69,10 @@ Scope: <resolved scope — see forms below>
   own epics/stories/tasks only — not the whole board's.
 - Omit any section that has zero items (e.g. if nothing was demoted, skip the DEMOTED block entirely).
 - The MERGED section should include the branch name that was merged.
+- The DONE BEFORE ITS DEPENDENCY section is report-only (`E92_S11_T02`): one line per finding of
+  `skills/j-reconcile/scripts/detect-done-before-dependency.sh`, the task with its status and every unfinished dependency
+  with its status (`depends on E01_S01_T02 (Failed), E01_S01 (In Progress)`). Nothing is demoted, promoted or edited
+  because of it. Omit the section when the script's `count` is 0.
 - The LADDER STATUS — UNVERIFIED section is report-only: it lists a task in a script-set ladder status
   (see `/reconcile` Section 0) that Phase 2 could not confirm and found no branch for. Unlike a `completed`
   task in the same position it is **not** demoted — its status and dates are left exactly as they were. It is

@@ -11,6 +11,12 @@ if PUBLISH_REPO_ROOT="$(git -C "$PUBLISH_SCRIPT_DIR" rev-parse --show-toplevel 2
 else
   PUBLISH_REPO_ROOT="$(cd "$PUBLISH_SCRIPT_DIR/../../.." && pwd)"
 fi
+# The package that ships this skill (its scripts/, templates/, lib/). It is NOT PUBLISH_REPO_ROOT: that is the project
+# being published. From a consumer's .claude/skills/ mirror "$PUBLISH_SCRIPT_DIR/../../.." is only .claude/, so the
+# shared resolver looks in node_modules/@jenga-ai/agent as well. See skill-authoring.md, "Locating the package root".
+# shellcheck source=/dev/null
+if [ -f "$PUBLISH_SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$PUBLISH_SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PUBLISH_PACKAGE_ROOT="$(jenga_package_root "$PUBLISH_SCRIPT_DIR")" || true
 PUBLISH_DEFAULT_HISTORY_FILE="$PUBLISH_REPO_ROOT/project/logs/publish-history.json"
 PUBLISH_DEFAULT_CONFIG_FILE="$PUBLISH_REPO_ROOT/project/configs/publish.json"
 

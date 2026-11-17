@@ -426,7 +426,8 @@ run_j_init_as_consumer() {
 # the defaults the test-config descriptor declares, so a new project starts with the
 # same shape this repo has and `jenga config get` finds both keys. E72_S06_T01 adds the
 # three per-scope test_run_* keys (none, scoped, none) after them. E72_S08_T06 adds
-# test_default_suite_set (empty: not configured) last.
+# test_default_suite_set (empty: not configured), and E77_S06_T02 the two long-running
+# threshold keys (50 and 600 seconds) last.
 #
 # THE SCAFFOLD'S KEY SHAPE IS PINNED IN TWO PLACES: the keys_unsorted equality below, and
 # the descriptor-default loop in the NEXT case. A key added to
@@ -446,7 +447,7 @@ run_j_init_as_consumer() {
   [ "$status" -eq 0 ]
   run jq -e '.test_run_task == "none" and .test_run_story == "scoped" and .test_run_epic == "none"' "$cfg"
   [ "$status" -eq 0 ]
-  run jq -e '(keys_unsorted) == ["tools","commit_prompt_default","commit_scope_map_file","test_run_task","test_run_story","test_run_epic","test_default_suite_set"]' "$cfg"
+  run jq -e '(keys_unsorted) == ["tools","commit_prompt_default","commit_scope_map_file","test_run_task","test_run_story","test_run_epic","test_default_suite_set","mirror_gate_threshold_seconds","manual_only_threshold_seconds"]' "$cfg"
   [ "$status" -eq 0 ]
   run jq -e '.tools == []' "$cfg"
   [ "$status" -eq 0 ]
@@ -458,7 +459,7 @@ run_j_init_as_consumer() {
   local descriptor="$REPO_ROOT/templates/config-descriptors/test-config.json"
   local template="$REPO_ROOT/skills/j-init/assets/test-config_template.json"
   local key
-  for key in commit_prompt_default commit_scope_map_file test_run_task test_run_story test_run_epic test_default_suite_set; do
+  for key in commit_prompt_default commit_scope_map_file test_run_task test_run_story test_run_epic test_default_suite_set mirror_gate_threshold_seconds manual_only_threshold_seconds; do
     run jq -n -e --arg k "$key" --slurpfile d "$descriptor" --slurpfile t "$template" \
       '($d[0].keys[] | select(.key == $k) | .default) == $t[0][$k]'
     [ "$status" -eq 0 ]

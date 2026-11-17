@@ -58,6 +58,19 @@ prescribes with `testbed_skill_command <skill> <script>`, run it from the consum
 status and the resulting board files. If a new shipped script flags in the sweep, fix it; allowlist only
 maintainer-only tooling or presence probes, and say why.
 
+## ST-Test mock board
+
+Separate from this offline testbed: after the staged tarball has been installed in the ST-Test consumer project
+and checked (`project/.workflows/scripts/st-test-run.sh`), the `deploy-stage` workflow regenerates a mock board
+there and shows it with `j.dashboard-share`, `j.status` and `j.status E01`.
+
+The instructions for that live in the ST-Test project, not in this repository: the **"Mock board data"** section
+of `<st-test-path>/README.md` (the `st_test_path` workflow input; default `../st-test`) describes the shape of the
+data (three epics of three stories with 3, 6 and 9 tasks; not started, half done with dependencies, done with one
+Rejected task), the generator `scripts/mock-board.sh` (`generate`, `clean`, `reset`) and how it recognises, and so
+removes, mock data from earlier runs. A session that needs to run or change this reads that section first. The
+workflow reaches the generator through `project/.workflows/scripts/st-test-mock-board.sh`.
+
 ## Not covered
 
 The package's own runtime dependencies (`express`, `gray-matter`, ...) are not installed, so the dashboard API

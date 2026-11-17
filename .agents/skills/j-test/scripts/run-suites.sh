@@ -81,8 +81,9 @@ SCRIPT_NAME="run-suites.sh"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # skills/j-test/scripts -> the checkout root, or node_modules/@jenga-ai/agent
 # when installed as a dependency.
-REPO_ROOT="$(cd -- "$SCRIPT_DIR/../../.." && pwd)"
-
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+REPO_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 # Remember the caller's locale so suites see it, then pin ours.
 ORIG_LC_ALL_SET=0
 ORIG_LC_ALL=""

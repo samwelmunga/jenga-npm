@@ -9,7 +9,8 @@
 # Called by skills/j-close-story/SKILL.md Step 2. Run it from the project root, like the skill's other scripts.
 #
 # WHAT IT DOES
-#   1. Looks for task-usage.sh at scripts/task-usage.sh, then node_modules/@jenga-ai/agent/scripts/task-usage.sh.
+#   1. Looks for task-usage.sh at scripts/task-usage.sh, then node_modules/@jenga-ai/agent/scripts/task-usage.sh,
+#      from the cwd and every directory above it (so a subdirectory of the project works).
 #      When it exists in neither place it prints NOTHING and exits 0 (public-mirror guard: the script is not shipped
 #      there, and an absent measurement tool is not a failure to report).
 #   2. Runs `task-usage.sh --persist --story <story-id>`. The arithmetic, the locking and every frontmatter write
@@ -37,8 +38,19 @@ case "$STORY" in
   *[!A-Za-z0-9_]*) printf 'persist-task-usage.sh: malformed story id: %s\n' "$STORY" >&2; exit 2 ;;
 esac
 
-TU="$([ -f scripts/task-usage.sh ] && echo scripts/task-usage.sh || echo node_modules/@jenga-ai/agent/scripts/task-usage.sh)"
-[ -f "$TU" ] || exit 0
+# task-usage.sh: the project's own scripts/ (a monorepo checkout) or its node_modules/@jenga-ai/agent copy, looked up
+# from the cwd and every directory above it, so the script also works from a subdirectory of the project (a lookup
+# relative to the cwd alone found nothing there and the silent no-op below hid it). Absent everywhere: no-op.
+TU=""
+_d="$PWD"
+while :; do
+  for _c in "$_d/scripts/task-usage.sh" "$_d/node_modules/@jenga-ai/agent/scripts/task-usage.sh"; do
+    if [ -f "$_c" ]; then TU="$_c"; break 2; fi
+  done
+  [ "$_d" = "/" ] && break
+  _d="$(dirname "$_d")"
+done
+[ -n "$TU" ] || exit 0
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/persist-task-usage.XXXXXX")" || exit 0
 trap 'rm -rf "$TMP"' EXIT

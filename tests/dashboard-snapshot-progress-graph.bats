@@ -206,3 +206,159 @@ JS
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   assert_output_contains "html embeds both routes"
 }
+
+# ---- E92_S12_T04: the undecomposed story (ghost band) end to end through the offline snapshot ----------------------------------
+#
+# E02 has three stories: E02_S01 decomposed (two tasks), E02_S02 and E02_S03 with no task file. E03 has two stories and no task at
+# all. The capture is the real one (real board-progress.sh --graph behind the real route); the render is the real EpicTreeBody, the
+# component the epic overlay mounts, over the captured payload (project/app/ui/scripts/render-captured-epic-tree.cjs). Nothing here
+# reimplements the rule: a regression in the flag, the model or the drawing fails one of these.
+RENDER_SRC="$REPO_ROOT/project/app/ui/scripts/render-captured-epic-tree.cjs"
+
+write_ghost_fixture() {
+  write_item epics E02 "" "" "In Progress"
+  write_item stories E02_S01 epic_id E02 "In Progress"
+  write_item stories E02_S02 epic_id E02 Pending
+  write_item stories E02_S03 epic_id E02 Pending
+  write_item tasks E02_S01_T01 story_id E02_S01 Passed
+  write_item tasks E02_S01_T02 story_id E02_S01 Pending
+  write_item epics E03 "" "" Pending
+  write_item stories E03_S01 epic_id E03 Pending
+  write_item stories E03_S02 epic_id E03 Pending
+}
+
+render_requires() {
+  command -v node >/dev/null 2>&1 || skip "node is not installed"
+  ( cd "$REPO_ROOT/project/app/ui" && node -e "require.resolve('esbuild'); require.resolve('react'); require.resolve('react-dom/server')" ) >/dev/null 2>&1 \
+    || skip "project/app/ui dependencies are not installed"
+}
+
+# $1 = a snapshot data JSON or a snapshot HTML, $2 = epic id; leaves the facts as one JSON line in $output
+render_epic() {
+  run node "$RENDER_SRC" --data "$1" --epic "$2"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "ghost bands: the captured routes.progressGraph.data.stories[] carries decomposed true, false, false for the three stories" {
+  write_ghost_fixture
+  capture_fixture
+  run node -e '
+    const art = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    const stories = art.routes.progressGraph.data.stories;
+    const by = Object.fromEntries(stories.map(s => [s.id, s]));
+    const got = ["E02_S01", "E02_S02", "E02_S03"].map(id => by[id] && by[id].decomposed);
+    const fail = m => { console.error(m); process.exit(1); };
+    if (JSON.stringify(got) !== "[true,false,false]") fail("decomposed for E02_S01..S03 is " + JSON.stringify(got));
+    // the same story order as captured: ids ascend, so the three stories sit in this order
+    const order = stories.filter(s => s.epic_id === "E02").map(s => s.id);
+    if (JSON.stringify(order) !== JSON.stringify(["E02_S01", "E02_S02", "E02_S03"])) fail("order " + order);
+    // the fixture story of the default setup is decomposed too (it has counted tasks); the flag is a real boolean, never a string
+    if (by.E01_S01.decomposed !== true) fail("E01_S01 decomposed is " + by.E01_S01.decomposed);
+    for (const s of stories) if (typeof s.decomposed !== "boolean" && s.decomposed !== null) fail(s.id + " decomposed is not true, false or null");
+    // the invariant of the documentation: an epic is fully decomposed exactly when none of its stories is undecomposed
+    const ep = art.routes.progressGraph.data.epics.find(e => e.id === "E02");
+    const decomposedCount = stories.filter(s => s.epic_id === "E02" && s.decomposed === true).length;
+    if (!ep.epic_progress || ep.epic_progress.stories !== 3 || ep.epic_progress.decomposed !== decomposedCount) {
+      fail("epic_progress " + JSON.stringify(ep.epic_progress) + " disagrees with the per-story flags (" + decomposedCount + " true)");
+    }
+    console.log("decomposed flags ok");
+  ' "$CAP_OUT"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  assert_output_contains "decomposed flags ok"
+}
+
+@test "ghost bands: the real tree over the captured payload draws three bands, two dashed and labelled, no task node in those two" {
+  render_requires
+  write_ghost_fixture
+  capture_fixture
+  render_epic "$CAP_OUT" E02
+  printf '%s' "$output" > "$BATS_TEST_TMPDIR/facts.json"
+  run node -e '
+    const f = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    const labels = JSON.parse(require("fs").readFileSync(process.argv[2], "utf8")).routes.progressGraph.data.labels;
+    const fail = m => { console.error(m); process.exit(1); };
+    if (f.empty) fail("the epic with tasks must not show the empty state");
+    if (f.bands.length !== 3) fail("expected three bands, got " + f.bands.length);
+    if (JSON.stringify(f.bands.map(b => b.story)) !== JSON.stringify(["E02_S01", "E02_S02", "E02_S03"])) fail("band order " + JSON.stringify(f.bands));
+    const ghostBands = f.bands.filter(b => b.ghost).map(b => b.story);
+    if (JSON.stringify(ghostBands) !== JSON.stringify(["E02_S02", "E02_S03"])) fail("dashed bands " + ghostBands);
+    for (const b of f.bands) if (b.ghost !== b.undecomposed) fail("band " + b.story + " class and data attribute disagree");
+    if (f.starts.length !== 3) fail("expected three start nodes, got " + f.starts.length);
+    // the words come from the captured payload (its labels), never from the component
+    if (!labels.story_undecomposed || !labels.story_undecomposed_aria) fail("the captured payload lacks the two undecomposed labels");
+    for (const id of ["E02_S02", "E02_S03"]) {
+      const s = f.starts.find(x => x.story === id);
+      if (!s || !s.ghost || !s.undecomposed) fail(id + " start node is not a ghost start node");
+      if (s.count !== "0/0") fail(id + " count is " + s.count);
+      if (s.text !== labels.story_undecomposed) fail(id + " text " + JSON.stringify(s.text) + " is not the captured label");
+      const aria = labels.story_undecomposed_aria.replace("%s", id + " Title of " + id);
+      if (s.aria !== aria) fail(id + " aria " + JSON.stringify(s.aria) + " is not " + JSON.stringify(aria));
+      if (f.taskNodes.some(n => n.indexOf(id + "_T") === 0)) fail("a task node inside the undecomposed story " + id);
+    }
+    const s1 = f.starts.find(x => x.story === "E02_S01");
+    if (s1.ghost || s1.undecomposed || s1.text !== null || s1.aria !== null) fail("the decomposed story start node must be drawn as before");
+    if (JSON.stringify(f.taskNodes.slice().sort()) !== JSON.stringify(["E02_S01_T01", "E02_S01_T02"])) fail("task nodes " + JSON.stringify(f.taskNodes));
+    if (f.ghostEdges !== 2) fail("expected one ghost edge per ghost band, got " + f.ghostEdges);
+    console.log("ghost bands rendered ok");
+  ' "$BATS_TEST_TMPDIR/facts.json" "$CAP_OUT"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  assert_output_contains "ghost bands rendered ok"
+}
+
+@test "ghost bands: the --snapshot HTML embeds the payload and the ghost bands render from it alone, no server" {
+  render_requires
+  local ui="$REPO_ROOT/project/app/ui"
+  [ -d "$ui/dist" ] || skip "project/app/ui/dist is not built"
+  write_ghost_fixture
+  capture_fixture
+  local html="$BATS_TEST_TMPDIR/snapshot.html"
+  run node "$ui/scripts/build-snapshot-html.cjs" --dist "$ui/dist" --data "$CAP_OUT" --out "$html"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # the page reads its data from the embedded element and calls no server: the same element is the render input here
+  run grep -c '<script id="jenga-dashboard-data" type="application/json">' "$html"
+  [ "$output" = "1" ]
+  run node -e '
+    const html = require("fs").readFileSync(process.argv[1], "utf8");
+    const art = JSON.parse(html.match(/<script id="jenga-dashboard-data" type="application\/json">([\s\S]*?)<\/script>/)[1]);
+    const by = Object.fromEntries(art.routes.progressGraph.data.stories.map(s => [s.id, s.decomposed]));
+    if (JSON.stringify([by.E02_S01, by.E02_S02, by.E02_S03]) !== "[true,false,false]") { console.error("embedded flags " + JSON.stringify(by)); process.exit(1); }
+    console.log("html embeds the decomposed flags");
+  ' "$html"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  assert_output_contains "html embeds the decomposed flags"
+  render_epic "$html" E02
+  run node -e '
+    const f = JSON.parse(process.argv[1]);
+    const ghost = f.starts.filter(s => s.ghost);
+    if (f.bands.length !== 3 || f.bands.filter(b => b.ghost).length !== 2 || ghost.length !== 2) { console.error(JSON.stringify(f)); process.exit(1); }
+    if (ghost.some(s => !s.text || !s.aria)) { console.error("a ghost start node lacks its label or aria text"); process.exit(1); }
+    if (f.taskNodes.some(n => /^E02_S0[23]_/.test(n))) { console.error("a task node in a ghost band"); process.exit(1); }
+    console.log("ghost bands render from the snapshot file");
+  ' "$output"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  assert_output_contains "ghost bands render from the snapshot file"
+}
+
+@test "ghost bands: an epic whose stories are all undecomposed has no task node and keeps the empty state" {
+  render_requires
+  write_ghost_fixture
+  capture_fixture
+  run node -e '
+    const art = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    const g = art.routes.progressGraph.data;
+    const flags = g.stories.filter(s => s.epic_id === "E03").map(s => s.decomposed);
+    if (JSON.stringify(flags) !== "[false,false]") { console.error("E03 flags " + JSON.stringify(flags)); process.exit(1); }
+    if (g.tasks.some(t => t.epic_id === "E03")) { console.error("E03 must have no task"); process.exit(1); }
+    console.log("E03 has two undecomposed stories and no task");
+  ' "$CAP_OUT"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  render_epic "$CAP_OUT" E03
+  run node -e '
+    const f = JSON.parse(process.argv[1]);
+    // T02 left the empty rule alone (lib/progress/dependency-structure.js: no task node, no tree): no band, no start node, no ghost edge
+    if (!f.empty || f.bands.length !== 0 || f.starts.length !== 0 || f.taskNodes.length !== 0 || f.ghostEdges !== 0) { console.error(JSON.stringify(f)); process.exit(1); }
+    console.log("all-undecomposed epic keeps the empty state");
+  ' "$output"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  assert_output_contains "all-undecomposed epic keeps the empty state"
+}

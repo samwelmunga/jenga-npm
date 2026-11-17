@@ -41,5 +41,9 @@
   "test_run_task": "none",
   "test_run_story": "scoped",
   "test_run_epic": "none",
-  "test_default_suite_set": "tests/smoke-test-skills.bats,tests/resolve-root.bats,tests/events-append.bats,tests/scope-test-policy-resolve.bats,tests/discover-tests.bats,tests/j-test-build-catalog.bats"
+  "test_default_suite_set": "tests/smoke-test-skills.bats,tests/resolve-root.bats,tests/events-append.bats,tests/scope-test-policy-resolve.bats,tests/discover-tests.bats,tests/j-test-build-catalog.bats",
+  "mirror_gate_threshold_seconds": 50,
+  "manual_only_threshold_seconds": 600,
+  "full_run_confirm_file_count": 60,
+  "ask_before_run_seconds": 300
 }

@@ -9,6 +9,18 @@
 > `project/rapports/problems/E72_S08_T04-audit-completeness-and-unpinned-config-rules.md`. The audit's two
 > conclusions — no fourth automatic route, and no board item for the `run_full` grep hole — both survived.
 
+> **Corrected 2026-11-16 (`E95_S01_T04`): the first of those two conclusions was wrong.** A fourth automatic
+> route existed when this audit was written: `j.do`'s inline, `light` and `--trivial` paths call
+> `scripts/smoke-harness.sh`, whose step 2 (lines 53–60 on `d89a15e8`) ran `npm test`, which ran every top-level
+> `tests/*.bats`. The `package.json` `"test"` row below said "nothing in the board flow calls `npm test`", and
+> Appendix A never searched for `npm test` or `smoke-harness`, so the route stayed invisible. It is the route that
+> ran the whole suite (394 files, 8,219 tests, about 3 h) for the `--trivial` task `E92_S11_T03` on 2026-11-15.
+> `E95_S01_T01` removed it (smoke-harness runs only opted-in or scope-mapped tests) and `E95_S01_T02` made
+> `npm test` a bounded fast set, so the corrected rows describe `main` at `024b6270`. Every correction is marked
+> *Corrected 2026-11-16 (`E95_S01_T04`)*; the original wording is kept, struck through or quoted, as history. Why
+> the sweep missed it is recorded in Appendix A ("Grep 5") and in
+> `project/rapports/problems/E95_S01-full-run-audit-missed-npm-test-route.md`.
+
 `T01` re-tiered the per-scope policy to `none` / `scoped` / `none`, `T02` removed the scoped-to-full
 escalation, `T06` supplied the bounded floor that replaced it, and `T03` adds the standing `scoped` ≠ `full`
 invariant. Those close the three *known* routes to an automatic full run. **This document exists to prove
@@ -39,12 +51,16 @@ code selects `full` with no human in the loop and no recorded user default.
 | `skills/j-commit/scripts/test-gate-scoped.sh` | `discover-tests.sh`, `build-catalog.sh`, `map-scope.sh` | produces a plan only; runs nothing | Builds the full catalog as the *denominator* for mapping (`CAT_FULL`), then emits a plan. It never runs it. | **OK.** |
 | `skills/j-commit/SKILL.md` step 4b | the three scripts above | `scoped`, `full`, `skip` | **A human answering a prompt.** On a `zero`/`error` plan it must say plainly this is *not a pass*, then show `fallback-prompt` and parse the typed answer with `fallback-answer` (blank → `skip`, never `full`). Logged with `--action fallback --caller interactive`. | **OK.** The zero-mapping route to `full` requires a typed `1`. |
 | `skills/j-test/SKILL.md` + `run-suites.sh` | the whole runnable catalog by default | `full` by default | **The user, by invoking it.** Deliberate and out of scope per the story. | **OK by design.** |
-| `package.json` `"test"` | `bats tests/*.bats` | the top-level bats files in one invocation | **A human or CI.** Not a lifecycle gate; nothing in the board flow calls `npm test`. | **OK.** Human/CI-invoked. |
-| `.github/workflows/mirror-staging-gate.yml` job `test` | `npm test` | full (of the *public* checkout) | **CI, on a push to the staging branch.** This is the real full-suite gate — see §2, including a correction to how it is usually described. | **OK.** The sanctioned place for a full run. |
+| `package.json` `"test"` | ~~`bats tests/*.bats`~~ → `bash scripts/run-tests.sh` (no arguments) | ~~the top-level bats files in one invocation~~ → **the fast set only**: the 30 files in `tests/fast-set.txt` (summed recorded duration about 89 s), one `bats` pass under a hard watchdog timeout (`RUN_TESTS_TIMEOUT`, default 180 s; exit 124 and `run-tests: timed out after <n> s`, never a pass) | ~~**A human or CI.** Not a lifecycle gate; nothing in the board flow calls `npm test`.~~ **Corrected 2026-11-16 (`E95_S01_T04`): that claim was false.** `scripts/smoke-harness.sh` ran `npm test` (its step 2) from `j.do`'s inline, `light` and `--trivial` paths, so the board flow did reach the whole suite with no human choosing it. The harness has not called `npm test` since `E95_S01_T01` (`1ecaea8e`); `npm test` itself has been the bounded fast set since `E95_S01_T02` (`8bba5526`). Remaining callers: a human, `j.publish`'s `test` gate, `j.test`'s `npm test` catalog entry. | ~~**OK.** Human/CI-invoked.~~ **Was a fourth automatic route; closed by `E95_S01`.** Whoever calls it now gets at most the fast set. |
+| `package.json` `"test:ci"` *(row added 2026-11-16, `E95_S01_T04`)* | `bash scripts/run-tests.sh --all` | full: every top-level `tests/*.bats` (395 files on `main` at `024b6270`, per `--all --list`) | **CI, or a human who types `--confirm-full`.** `--all` is refused (exit 2, nothing run, the message names `--confirm-full` and `npm run test:ci`) unless `CI=true` or `--confirm-full` is given. | **OK.** The one deliberate full-run entry point. |
+| `scripts/run-tests.sh` *(row added 2026-11-16, `E95_S01_T04`)* | `bats` over the fast set, or over every top-level file with `--all` | fast set (default), full (`--all`), list only (`--list`) | **The caller's arguments, gated as above.** Added 2026-11-12 by `E43_S02_T01`, ten days after this audit; its header (lines 5–6 then) named `scripts/smoke-harness.sh` as an `npm test` consumer, and nothing re-checked this table against it. | **OK** after `E95_S01_T02`. |
+| `scripts/smoke-harness.sh` *(row added 2026-11-16, `E95_S01_T04`)* | ~~`npm test` (step 2), `pytest` (step 3), `go test ./...` (step 4), each inferred~~ → `scripts/smoke.sh` if present; else nothing for a docs-only change; else, with a project scope map, only the bats files `map-scope.sh` + `narrow-suites.sh` select for the changed files; else nothing | ~~full, whenever `package.json` had a `test` script~~ → delegated, scoped, or none | **Before `E95_S01_T01`: code, with no human in the loop** — `j.do` ran the harness on every inline, `light` and `--trivial` task, and step 2 chose `npm test` because `package.json` had a `test` script. **Since `E95_S01_T01`: nobody**; it never infers a runner and prints `smoke-harness: nothing verified (<reason>)` with exit 3 when nothing is opted in or mapped. | **Was the missed fourth route** (the 2026-11-15 incident); **OK** since `E95_S01_T01`. `j.do`/`scrum-master` prose for exit 3 is `E95_S01_T03`'s. |
+| `skills/j-publish/scripts/run_gates.sh` *(row added 2026-11-16, `E95_S01_T04`)* | `npm test` of the project being published (lines 249–251) | whatever that project's `npm test` runs | **A human, by running `j.publish`.** In a `jenga-npm` checkout that is the fast set since `E95_S01_T02`. | **OK.** Human-invoked. |
+| `.github/workflows/mirror-staging-gate.yml` job `test` | ~~`npm test`~~ → `npm run test:ci` (line 72) | full (of the *public* checkout); GitHub Actions sets `CI=true`, so `--all` is accepted | **CI, on a push to the staging branch.** This is the real full-suite gate — see §2, including a correction to how it is usually described. *Corrected 2026-11-16 (`E95_S01_T04`): switched to `npm run test:ci` in the same commit as `package.json` (`8bba5526`), so the gate did not shrink to the fast set.* | **OK.** The sanctioned place for a full run. |
 | `scripts/slowness-probe.sh` | — | — | Mentions `run-suites.sh` only in a header comment about `JENGA_NESTED_SUITE_RUN`; it invokes no runner. | **Not a call site.** |
-| `skills/j-close-task/`, `skills/j-close-story/`, `skills/j-verify/`, `skills/jenga/`, `skills/j-do/`, `skills/j-dooo/` | **nothing** | — | — | **Not call sites — the proven negative.** Grep 2 found **zero** runner invocations across all six. `j-close-task` only *delegates*: the Tester runs the gate, the Scrum Master rolls up. The other five never mention a runner at all. |
-| `hooks/` | **nothing** | — | — | **Not call sites.** Zero hits. `on_preflight_check.sh` runs `checklist.sh check`, never a test runner. |
-| `project/.workflows/` | **nothing** | — | — | **Not call sites.** Zero hits; no workflow step shells out to a runner. |
+| `skills/j-close-task/`, `skills/j-close-story/`, `skills/j-verify/`, `skills/jenga/`, `skills/j-do/`, `skills/j-dooo/` | **nothing** | — | — | **Not call sites — the proven negative.** Grep 2 found **zero** runner invocations across all six. `j-close-task` only *delegates*: the Tester runs the gate, the Scrum Master rolls up. The other five never mention a runner at all. **Corrected 2026-11-16 (`E95_S01_T04`): not true of `skills/j-do/`.** Its `SKILL.md` (on `d89a15e8`: lines 538–541 in section 4.2 and 593–596 in section 4.3) runs `scripts/smoke-harness.sh`, which ran `npm test`. Grep 2's patterns contain neither `smoke-harness` nor `npm test`, so a runner reached one hop away was not seen. The other five still have no runner invocation. |
+| `hooks/` | **nothing** | — | — | **Not call sites.** Zero hits. `on_preflight_check.sh` runs `checklist.sh check`, never a test runner. *(Rechecked 2026-11-16: `hooks/on_session_end.sh:134` mentions `smoke-harness.sh` in a comment only.)* |
+| `project/.workflows/` | ~~**nothing**~~ | — | — | ~~**Not call sites.** Zero hits; no workflow step shells out to a runner.~~ **Corrected 2026-11-16 (`E95_S01_T04`):** `project/.workflows/scripts/st-test-run.sh:176` (present since 2026-11-01) runs `npm test` **inside the ST-Test consumer project**, as a step of the user-started `deploy-stage` workflow. It runs that consumer's own tests, not this repository's suite, so it is not a route to a full run here; it was invisible to Grep 2 for the same reason as the `j.do` route. |
 | `.claude/**`, `.agents/**` | generated copies of the above | identical | identical | **Not audited separately, by design.** Per `CLAUDE.md` these are build outputs of `j.self-sync`; they are **resynced, not audited**. Auditing them would double-count every row and invite a hand-edit. |
 
 **Answer to the question the task asks: there is no fourth automatic route.** After `T01`, `T02` and `T06`,
@@ -53,6 +69,16 @@ option 2 or its fallback prompt, a typed `--tests full`), by the user's own reco
 (`test_run_* = full`), or by CI on the public mirror. No lifecycle gate — task close, story close, epic
 rollup — runs the full suite, and none can.
 
+**Corrected 2026-11-16 (`E95_S01_T04`): that answer was wrong when written.** There was a fourth automatic
+route: `j.do` (inline, `light`, `--trivial`) → `scripts/smoke-harness.sh` step 2 → `npm test` → every top-level
+`tests/*.bats`. No human chose it and no recorded configuration selected it. It was not a lifecycle *gate* in the
+sense of task, story or epic close, which is how the paragraph above was scoped, but it was an automatic full run
+on the board flow, which is what this document set out to prove did not exist. It is closed on `main` at
+`024b6270`: the harness invokes no runner (`E95_S01_T01`), `npm test` is the bounded fast set and the full run is
+`npm run test:ci`, refused outside CI without `--confirm-full` (`E95_S01_T02`). This audit should not be read as
+proof that no further route exists: `E95` replaces enumeration with a changed default enforced in the runner, and
+`E95_S06` measures callers instead of grepping for them.
+
 ---
 
 ## 2. Where the full suite genuinely runs after this story
@@ -60,7 +86,9 @@ rollup — runs the full suite, and none can.
 Three places, and **no local lifecycle gate is one of them**:
 
 1. **The public CI `test` job on the `jenga-npm` mirror** — `.github/workflows/mirror-staging-gate.yml`,
-   job `test`, running `npm test` (`bats tests/*.bats`) against a real checkout of the staging branch.
+   job `test`, running ~~`npm test` (`bats tests/*.bats`)~~ `npm run test:ci` (`scripts/run-tests.sh --all`,
+   accepted because CI sets `CI=true`; *corrected 2026-11-16, `E95_S01_T04`*) against a real checkout of the
+   staging branch.
 2. **`j.test`** — user-invoked, full-suite by default.
 3. **`j.commit`'s option 2** ("Run j.test (full suite)"), or its zero-mapping fallback prompt option 1 —
    in both cases a human typing the choice.
@@ -89,7 +117,9 @@ tests gate promotion to the branch publish is dispatched from".
 
 **And "full" there is not this repository's full catalog.** `npm test` is `bats tests/*.bats`: top-level
 only, and on the public checkout only the suites that survive `.publicignore`. It is the largest automatic
-run that exists, not a superset of a local `j.test` run.
+run that exists, not a superset of a local `j.test` run. *Corrected 2026-11-16 (`E95_S01_T04`): read
+`npm run test:ci` for `npm test` here; the scope (top-level only, public files only) is unchanged. `npm test`
+is now the 30-file fast set.*
 
 ---
 
@@ -464,6 +494,10 @@ Returned **no runner invocation** from any of the six skills, from `hooks/` or f
 The only substantive hits were `package.json`'s `"test": "bats tests/*.bats"`, `j-close-task`'s prose
 delegating the gate to the Tester, and unrelated uses of the word "catalog" in `skills/jenga/scripts/`.
 
+*Corrected 2026-11-16 (`E95_S01_T04`):* "no runner invocation" held only for the runners this pattern names.
+`skills/j-do/SKILL.md` invoked `scripts/smoke-harness.sh`, and `project/.workflows/scripts/st-test-run.sh` ran
+`npm test`; neither string is in the pattern. See Grep 5.
+
 **Grep 3 — stale policy prose in the agent definitions.**
 
 ```bash
@@ -500,3 +534,48 @@ done
 ```
 
 `map-scope.sh` is the gate's own mapper and is read-only; **no test suite was executed by this task.**
+
+**Grep 5 — the generic entry points the original sweep never searched for.** *Added 2026-11-16
+(`E95_S01_T04`).* Run on `main` at `024b6270` (after `E95_S01_T01` and `E95_S01_T02` merged). Same root-source
+set as Grep 1, plus `.github/`, which Grep 1 omitted although the table rows `mirror-staging-gate.yml`.
+
+```bash
+for pat in 'npm test' 'npm run test' 'smoke-harness' 'run-tests.sh'; do
+  echo "=== $pat ==="
+  grep -rlF "$pat" skills agents hooks scripts templates lib tests package.json CLAUDE.md .github \
+    project/.workflows project/configs 2>/dev/null | sort
+done
+```
+
+Hits at the time of writing (files; `tests/` includes fixtures and `tests/fast-set.txt`):
+
+| Pattern | Files | Of which under `tests/` | Live invocations outside `tests/` (everything else is a comment, prose, a fixture or an alias table) |
+|---|---|---|---|
+| `npm test` | 49 | 33 | `project/.workflows/scripts/st-test-run.sh:176` (the ST-Test consumer's own `npm test`); `skills/j-publish/scripts/run_gates.sh:249–251` (the published project's `npm test`). Alias handling, not invocation: `skills/j-test/scripts/{discover-tests,build-catalog,narrow-suites,scope-test-gate,run-suites,manual-only}.sh`, `skills/j-uncharted/scripts/detect-tests.sh`. Comments only: `scripts/smoke-harness.sh:27`, `scripts/run-tests.sh`, `.github/workflows/mirror-staging-gate.yml:71`, `skills/j-mirror-public/`, `skills/j-publish/adapters/npm.md`, `skills/j-tools/assets/shipped-tools.json` |
+| `npm run test` | 9 | 6 | `.github/workflows/mirror-staging-gate.yml:72` (`npm run test:ci`). `scripts/run-tests.sh` and `skills/j-test/scripts/narrow-suites.sh` mention it in messages and comments |
+| `smoke-harness` | 13 | 3 | `skills/j-do/SKILL.md:579,634` (sections 4.2 and 4.3 run the harness); the harness itself. Prose: `agents/scrum-master.md:285,296`, `templates/SCRUM_BOARD_SCHEMA.md:600`, `skills/j-todo/SKILL.md:39`; comments: `hooks/on_session_end.sh:134`, `skills/j-smoke-test/`; the scope-map rule in `project/configs/test-scope-map.json`; the generated copy `.github/agents/scrum-master.md` (not audited, like `.claude/` and `.agents/`) |
+| `run-tests.sh` | 9 | 4 | `package.json:24` (`"test"`) and `:25` (`"test:ci"`); the script itself. Alias normalisation (only the `--all` form folds onto `bats:tests`): `skills/j-test/scripts/build-catalog.sh`, `skills/j-test/scripts/narrow-suites.sh`; the scope-map rule in `project/configs/test-scope-map.json:341` |
+
+The same two greps that mattered, run against the audited tree itself (`git grep -lF '<pattern>' d89a15e8 --`
+over the same root set, `tests/` excluded):
+
+- `npm test` at `d89a15e8`: 13 files, including **`scripts/smoke-harness.sh`** (step 2, lines 53–60:
+  `cd "$REPO_ROOT" && npm test`) and `project/.workflows/scripts/st-test-run.sh`.
+- `smoke-harness` at `d89a15e8`: 9 files, including **`skills/j-do/SKILL.md`** (lines 538–541 and 593–596) and
+  `agents/scrum-master.md`.
+
+So both hops of the incident route — `j.do` → harness, harness → `npm test` — were one grep each away on the day
+the audit was written. `scripts/run-tests.sh` did not exist yet (added 2026-11-12, `E43_S02_T01`); `package.json`
+`"test"` was `bats tests/*.bats`.
+
+**What the original sweep missed, and why** *(note dated 2026-11-16, `E95_S01_T04`).* Greps 1 and 2 searched for
+the names of the runners and gates `E72` had built (`scope-test-gate`, `run-suites`, `test-gate-*`,
+`build-catalog`, `discover-tests`, `bats`, `test_run_`). They found every caller of *those* scripts and nothing
+that reached the suite through a generic entry point. `npm test` was listed as a row, but its caller column was
+written from belief ("nothing in the board flow calls `npm test`") rather than from a grep for `npm test`, and
+`smoke-harness.sh` was never named at all, so the two-hop route `j.do` → `smoke-harness.sh` → `npm test` had no
+pattern that could match either hop. Ten days later `scripts/run-tests.sh`'s new header named the harness as an
+`npm test` consumer, and nothing re-read this audit against it. The lesson recorded in `E95` is not "add these
+four patterns and the list is complete": enumerating callers by known names is what failed. `E95` changes the
+default instead (`npm test` can no longer run everything; a full run needs `--all` plus `CI=true` or
+`--confirm-full`) and `E95_S06` finds unknown callers by measurement (every `run-tests.sh` run logs its caller).

@@ -105,7 +105,10 @@ set -u
 
 SELF_NAME="reap.sh"
 SELF_DIR="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P)"
-PACKAGE_ROOT="$(CDPATH='' cd -- "$SELF_DIR/../../.." >/dev/null 2>&1 && pwd -P)"
+# Package root (scripts/, templates/, lib/): resolved by the shared helper so it also works from a consumer's .claude/skills mirror.
+# shellcheck source=/dev/null
+if [ -f "$SELF_DIR/../../index/scripts/package-root.sh" ]; then . "$SELF_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SELF_DIR")" || true
 CLASSIFY="$SELF_DIR/classify.sh"
 GUARD="$PACKAGE_ROOT/scripts/worktree-remove-guard.sh"
 

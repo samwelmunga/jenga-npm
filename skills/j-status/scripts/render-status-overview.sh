@@ -12,8 +12,13 @@
 #   4. a footer hint: `j.status <id>` for one epic, `j.status --all` for every row.
 #
 # This script does no counting and no status classification. It reads the board ONCE with
-# `scripts/board-progress.sh --graph --counts-only` and only lays out the totals objects that JSON states (each epic's
-# tasks.totals); the percent is round(done * 100 / denominator) of those totals. Every word comes from
+# `scripts/board-progress.sh --graph --counts-only` and only lays out the figures that JSON states. The total line and
+# its bar are each epic's tasks.totals, summed (percent round(done * 100 / denominator)); each epic ROW shows the epic
+# percent the script states in epic_progress (E92_S09_T04, section 5.1 of progress-visualisation.md), never recomputed:
+# tasks_done/tasks_denominator, percent, and a dim "decomposed/stories" note (label epic_decomposed) while some stories
+# have no task. An epic is complete only when goal_reached; the row bar keeps the task buckets. While a story of the epic
+# has failed by its own status (epic_progress.failed_stories, E92_S10_T02) the script states no goal and at most 99 %;
+# at that cap the row names the failed story before the title (labels goal_failed / goal_failed_more). Every word comes from
 # scripts/lib/progress-labels.sh (JENGA_PROGRESS_LANG=sv for Swedish). Layout helpers (glyph sets, width, colour,
 # truncation, bar drawing) are in lib/status-render-common.sh.
 #
@@ -35,7 +40,8 @@
 #
 # SIBLING FILES, first match wins
 #   env JENGA_BOARD_PROGRESS / JENGA_PROGRESS_LABELS (test seam: a stub that prints a board-progress JSON fixture),
-#   then <this dir>/../../../scripts/<name> and scripts/lib/progress-labels.sh, then node_modules/@jenga-ai/agent/scripts/.
+#   then <package root>/scripts/<name> and scripts/lib/progress-labels.sh (the package root comes from
+#   skills/index/scripts/package-root.sh, see lib/status-render-common.sh), then ./scripts/ and ./node_modules/@jenga-ai/agent/scripts/.
 #
 # A PROBLEM NEVER FAILS j.status
 #   Empty board, missing board-progress.sh or labels, board-progress.sh failing, malformed JSON, jq missing: ONE stderr
@@ -100,6 +106,8 @@ l_g_att="$(lab ov_group_attention)"; l_g_prog="$(lab ov_group_progress)"
 l_g_start="$(lab ov_group_started)"; l_g_not="$(lab ov_group_notstarted)"
 l_complete="$(lab ov_complete)"; l_hidden="$(lab ov_hidden)"; l_rejempty="$(lab ov_rejected_empty)"
 l_f_scope="$(lab ov_footer_scope)"; l_f_all="$(lab ov_footer_all)"
+l_decomposed="$(lab epic_decomposed)"
+l_goal_failed="$(lab goal_failed)"; l_goal_failed_more="$(lab goal_failed_more)"
 for v in "$l_board" "$l_epics" "$l_tasks" "$l_pending" "$l_prog" "$l_red" "$l_rejnote" "$l_g_att" "$l_g_prog" \
          "$l_g_start" "$l_g_not" "$l_complete" "$l_hidden" "$l_rejempty" "$l_f_scope" "$l_f_all"; do
   [ -n "$v" ] || sr_warn "progress labels missing"
@@ -118,6 +126,17 @@ json="$(bash "$BOARD_PROGRESS" "${bp_args[@]}" 2>/dev/null)" || sr_warn "board-p
 PROGRAM='
 def T: (.tasks.totals // {}) | {done: (.done // 0), in_progress: (.in_progress // 0), failed: (.failed // 0),
                                  pending: (.pending // 0), rejected: (.rejected // 0), denominator: (.denominator // 0)};
+def EP: (.epic_progress // {}) | {percent: ([(.percent // 0), 100] | min), done: (.tasks_done // 0),
+                                  den: (.tasks_denominator // 0), stories: (.stories // 0),
+                                  decomposed: (.decomposed // 0), reached: (.goal_reached == true),
+                                  failed: [(.failed_stories // [])[] | select(type == "string" and . != "")]};
+# E92_S10_T02: at the 99 % cap with a failed story stated (no goal), the row names it before the title; "" otherwise
+def failedtext($e): if ($e.ep.reached | not) and ($e.ep.failed | length) > 0 and $e.ep.percent >= 99 then
+    (if ($e.ep.failed | length) == 1 then $l_goal_failed else $l_goal_failed_more end)
+    | if . == "" then "" else (sub("%s"; $e.ep.failed[0]) | sub("%d"; (($e.ep.failed | length) - 1 | tostring))) end
+  else "" end;
+def note($e): if $e.ep.decomposed < $e.ep.stories and $l_decomposed != "" then
+    ($l_decomposed | sub("%d"; ($e.ep.decomposed | tostring)) | sub("%d"; ($e.ep.stories | tostring))) else "" end;
 def idnum: [(.id | tostring | scan("[0-9]+") | tonumber)];
 def pct_of($t): $t | pct;
 def bar_of($t; $w): $t | bar($w);
@@ -129,10 +148,16 @@ def rowline($e; $idw; $cntw; $pctw; $barw; $mkw):
   | marker($t) as $mk
   | ( [["  ", ""], [($e.id | txt | pad($idw)), "36"], [" ", ""]]
       + (if $cols >= 50 then bar_of($t; $barw) + [[" ", ""]] else [] end)
-      + [[(($t.done | tostring) + "/" + ($t.denominator | tostring) | lpad($cntw)), ""], [" ", ""],
-         [((pct_of($t) | tostring) + " %" | lpad($pctw)), ""]] ) as $base
+      + [[(($e.ep.done | tostring) + "/" + ($e.ep.den | tostring) | lpad($cntw)), ""], [" ", ""],
+         [(($e.ep.percent | tostring) + " %" | lpad($pctw)), ""]]
+      + (if note($e) != "" then [["  ", ""], [note($e), "2"]] else [] end) ) as $base
   | ($cols - ($base | segs_len) - 2 - $mkw - 2) as $room
-  | if $room >= 4 then
+  | (failedtext($e) | txt) as $ft
+  | if $room >= 4 and $ft != "" then
+      ($room - ($ft | length) - 3) as $rest
+      | $base + [["  ", ""], [($mk[0] | pad($mkw)), $mk[1]], ["  ", ""], [($ft | clip($room)), "31"]]
+        + (if $rest >= 4 then [[" " + g.sep + " ", "2"], [($e.title | txt | clip($rest)), "2"]] else [] end)
+    elif $room >= 4 then
       $base + [["  ", ""], [($mk[0] | pad($mkw)), $mk[1]], ["  ", ""], [($e.title | txt | clip($room)), "2"]]
     elif $mk[0] != "" then $base + [["  ", ""], $mk]
     else $base end;
@@ -147,8 +172,8 @@ def group($name; $color; $list):
   if ($list | length) == 0 then empty
   else
     ([$list[] | .id | txt | length] | max) as $idw0
-    | ([$list[] | ((.t.done | tostring) + "/" + (.t.denominator | tostring) | length)] | max) as $cntw
-    | ([$list[] | ((.t | pct | tostring) + " %" | length)] | max) as $pctw
+    | ([$list[] | ((.ep.done | tostring) + "/" + (.ep.den | tostring) | length)] | max) as $cntw
+    | ([$list[] | ((.ep.percent | tostring) + " %" | length)] | max) as $pctw
     | ([$list[] | (marker(.t)[0] | length)] | max) as $mkw
     | (if $cols >= 80 then 14 elif $cols >= 60 then 10 else 6 end) as $barw
     | ([[($name + " (" + ($list | length | tostring) + ")"), $color]] | emit),
@@ -157,18 +182,18 @@ def group($name; $color; $list):
   end;
 
 . as $d
-| [($d.epics // [])[] | . + {t: T}] as $epics
+| [($d.epics // [])[] | . + {t: T, ep: EP}] as $epics
 | if ($epics | length) == 0 then error("no epics") else . end
-| ($epics | map(select(.t.denominator > 0 and .t.done == .t.denominator))) as $complete
+| ($epics | map(select(.t.denominator > 0 and .ep.reached))) as $complete
 | ($epics | map(select(.t.denominator == 0))) as $empty
-| ($epics | map(select(.t.denominator > 0 and .t.done < .t.denominator))) as $open
+| ($epics | map(select(.t.denominator > 0 and (.ep.reached | not)))) as $open
 | ($open | map(select(.t.failed > 0))) as $att
 | ($open | map(select(.t.failed == 0 and .t.in_progress > 0))) as $prog
 | ($open | map(select(.t.failed == 0 and .t.in_progress == 0 and .t.done > 0))) as $start
 | ($open | map(select(.t.failed == 0 and .t.in_progress == 0 and .t.done == 0))) as $not
 | (reduce $epics[] as $e ({done: 0, in_progress: 0, failed: 0, pending: 0, rejected: 0, denominator: 0};
      reduce ("done", "in_progress", "failed", "pending", "rejected", "denominator") as $k (.; .[$k] += $e.t[$k]))) as $tot
-| def srt: sort_by([-(.t | pct)] + idnum);
+| def srt: sort_by([-(.ep.percent)] + idnum);
   # 1. total
   ( ( $l_board + " " + g.sep + " " + ($epics | length | tostring) + " " + $l_epics + " " + g.sep + " "
       + ($tot.done | tostring) + "/" + ($tot.denominator | tostring) + " " + $l_tasks + " " + g.sep + " "
@@ -210,7 +235,7 @@ out="$(printf '%s\n' "$json" | sr_jq "$PROGRAM" \
   --arg l_prog "$l_prog" --arg l_red "$l_red" --arg l_rejnote "$l_rejnote" --arg l_g_att "$l_g_att" \
   --arg l_g_prog "$l_g_prog" --arg l_g_start "$l_g_start" --arg l_g_not "$l_g_not" --arg l_complete "$l_complete" \
   --arg l_hidden "$l_hidden" --arg l_rejempty "$l_rejempty" --arg l_f_scope "$l_f_scope" --arg l_f_all "$l_f_all" \
-  2>/dev/null)" || sr_warn "board-progress.sh output could not be rendered (empty board or malformed JSON)"
+  --arg l_decomposed "$l_decomposed" --arg l_goal_failed "$l_goal_failed" --arg l_goal_failed_more "$l_goal_failed_more" 2>/dev/null)" || sr_warn "board-progress.sh output could not be rendered (empty board or malformed JSON)"
 [ -n "$out" ] || sr_warn "nothing to render"
 printf '%s\n' "$out"
 exit 0

@@ -45,6 +45,10 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+# Package root (scripts/, lib/, templates/): resolved so it also works from a consumer's .claude/skills mirror.
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 REPO_ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)
 [ -n "$REPO_ROOT" ] || REPO_ROOT=$(cd -- "$SCRIPT_DIR/../../.." && pwd -P)
 
@@ -57,8 +61,8 @@ REPO_ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)
 # applied to this skill's elicitation-state.sh WITH_LOCK resolution): prefer
 # a monorepo checkout's sibling scripts/ dir, else fall back to the installed
 # npm package under node_modules/@jenga-ai/agent.
-if [ -f "$SCRIPT_DIR/../../../scripts/validate-board.sh" ]; then
-  VALIDATOR_ROOT="$SCRIPT_DIR/../../../scripts"
+if [ -f "$PACKAGE_ROOT/scripts/validate-board.sh" ]; then
+  VALIDATOR_ROOT="$PACKAGE_ROOT/scripts"
 elif [ -f "$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/validate-board.sh" ]; then
   VALIDATOR_ROOT="$REPO_ROOT/node_modules/@jenga-ai/agent/scripts"
 else

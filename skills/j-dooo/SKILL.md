@@ -52,11 +52,11 @@ After `/do` hands back control, mark the story/task that was just started as **I
 
 ### 1.1. Progress line (`E92`), once per wave
 
-Shows a one-line progress bar after each wave. This section says only **when** to call `skills/j-break/scripts/run-progress.sh`; which story the bar covers, the counting and the drawing all live in that script and the scripts it calls, never here. Write `RP` for `bash "$([ -f skills/j-break/scripts/run-progress.sh ] && echo skills/j-break/scripts/run-progress.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/run-progress.sh)"`.
+Shows a one-line progress bar after each wave. This section says only **when** to call `skills/j-break/scripts/run-progress.sh`; which story the bar covers, the counting and the drawing all live in that script and the scripts it calls, never here. Write `RP` for `bash "$([ -f skills/j-break/scripts/run-progress.sh ] && echo skills/j-break/scripts/run-progress.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/run-progress.sh)"`. Copy the lines it prints into your reply as a fenced code block (the tool-call row is folded away in the desktop app); `skills/j-break/SKILL.md` ("Progress lines") has the rest of the rule.
 
 **What a wave is here.** One pass through step 1: the `/do` call that pass made and its hand-back to `/dooo`, before step 2. A pass that launched several background sub-agents is still one wave. This step runs between step 1 and step 2 on every pass, the deferral path included, so it always comes before the break check and before step 3 offers the next wave.
 
-1. **Print once per wave.** On every pass, the first included, run `RP --scope story --task <the ids of the tasks this wave finished, comma separated> --after-story` and show the lines it prints: one bar per distinct story, then one more line for each story this wave just finished (the script groups and decides, not this skill). Print once per wave, never once per task of the wave and never from an inner `/do`. It is best-effort: it never blocks, fails or re-statuses anything, and a warning on stderr is not an error.
+1. **Print once per wave.** On every pass, the first included, run `RP --scope story --task <the ids of the tasks this wave finished, comma separated> --after-story --charset utf8 --color never` and copy the lines it prints into your reply as a fenced code block: one bar per distinct story, then one more line for each story this wave just finished (the script groups and decides, not this skill). Print once per wave, never once per task of the wave and never from an inner `/do`. It is best-effort: it never blocks, fails or re-statuses anything, and a warning on stderr is not an error.
 
 ### 2. Return to the board — identify parallelisable tasks
 

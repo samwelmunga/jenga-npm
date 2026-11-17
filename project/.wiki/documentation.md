@@ -1769,6 +1769,18 @@ Each entry below lists a playbook's `id`, display `name`, `description`, `keywor
 
 ---
 
+#### `quick-fix`
+
+**Name:** Quick Fix
+
+**Description:** A brief discussion on what to build or fix, followed by implementing it through parallel task execution, and finally commits it.
+
+**Keywords:** quick fix, small fix, fix and commit, patch it, quick implementation
+
+**Steps:** `j-brainstorm` → `j-todo` → `jenga` → `j-commit`
+
+---
+
 ### Project-Local Playbooks (`project/.playbooks/`)
 
 Authored per-project via `/j-playbook-new`; merged into the same load-time catalog as the built-in playbooks above.

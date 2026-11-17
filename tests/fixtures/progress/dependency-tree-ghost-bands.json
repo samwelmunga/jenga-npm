@@ -1,0 +1,2142 @@
+{
+  "note": "E92_S12_T02: a NEW recording (not a re-recording of any case of dependency-tree-parity.json): ghost bands for undecomposed stories. Recorded from dependencyTreeModel.js with includeUndecomposed on (the default of buildDependencyTreeModel). E01_S01 and E01_S03 are ghost bands (decomposed false, no tasks), E01_S04 has only a rejected task (decomposed false: nodes kept, start fact flagged), E01_S02 and E01_S05 are decomposed, E01_S05 folds five ready tasks.",
+  "cases": [
+    {
+      "name": "ghost bands: two undecomposed stories without tasks, one with only a rejected task, a fold (E92_S12_T02)",
+      "epicId": "E01",
+      "labelsMode": "default",
+      "graph": {
+        "schema_version": 1,
+        "scope": {
+          "type": "graph"
+        },
+        "labels": {
+          "unlocked_by": "%s unlocked by %s",
+          "tree_empty": "No dependencies to show"
+        },
+        "lang": "en",
+        "epics": [
+          {
+            "id": "E01",
+            "title": "Goal epic",
+            "epic_progress": {
+              "stories": 5,
+              "decomposed": 2,
+              "tasks_done": 1,
+              "tasks_denominator": 7,
+              "percent": 5,
+              "goal_reached": false
+            }
+          }
+        ],
+        "stories": [
+          {
+            "id": "E01_S01",
+            "epic_id": "E01",
+            "title": "Story E01_S01",
+            "decomposed": false
+          },
+          {
+            "id": "E01_S02",
+            "epic_id": "E01",
+            "title": "Story E01_S02",
+            "decomposed": true
+          },
+          {
+            "id": "E01_S03",
+            "epic_id": "E01",
+            "title": "Story E01_S03",
+            "decomposed": false
+          },
+          {
+            "id": "E01_S04",
+            "epic_id": "E01",
+            "title": "Story E01_S04",
+            "decomposed": false
+          },
+          {
+            "id": "E01_S05",
+            "epic_id": "E01",
+            "title": "Story E01_S05",
+            "decomposed": true
+          }
+        ],
+        "tasks": [
+          {
+            "id": "E01_S02_T01",
+            "story_id": "E01_S02",
+            "epic_id": "E01",
+            "title": "Title E01_S02_T01",
+            "status": "Pending",
+            "bucket": "done",
+            "state": "done",
+            "depends_on": [],
+            "blocked_by": [],
+            "unlocked_by": null
+          },
+          {
+            "id": "E01_S02_T02",
+            "story_id": "E01_S02",
+            "epic_id": "E01",
+            "title": "Title E01_S02_T02",
+            "status": "Pending",
+            "bucket": "pending",
+            "state": "ready",
+            "depends_on": [
+              "E01_S02_T01"
+            ],
+            "blocked_by": [],
+            "unlocked_by": null
+          },
+          {
+            "id": "E01_S04_T01",
+            "story_id": "E01_S04",
+            "epic_id": "E01",
+            "title": "Title E01_S04_T01",
+            "status": "Pending",
+            "bucket": "rejected",
+            "state": "rejected",
+            "depends_on": [],
+            "blocked_by": [],
+            "unlocked_by": null
+          },
+          {
+            "id": "E01_S05_T01",
+            "story_id": "E01_S05",
+            "epic_id": "E01",
+            "title": "Title E01_S05_T01",
+            "status": "Pending",
+            "bucket": "pending",
+            "state": "ready",
+            "depends_on": [],
+            "blocked_by": [],
+            "unlocked_by": null
+          },
+          {
+            "id": "E01_S05_T02",
+            "story_id": "E01_S05",
+            "epic_id": "E01",
+            "title": "Title E01_S05_T02",
+            "status": "Pending",
+            "bucket": "pending",
+            "state": "ready",
+            "depends_on": [],
+            "blocked_by": [],
+            "unlocked_by": null
+          },
+          {
+            "id": "E01_S05_T03",
+            "story_id": "E01_S05",
+            "epic_id": "E01",
+            "title": "Title E01_S05_T03",
+            "status": "Pending",
+            "bucket": "pending",
+            "state": "ready",
+            "depends_on": [],
+            "blocked_by": [],
+            "unlocked_by": null
+          },
+          {
+            "id": "E01_S05_T04",
+            "story_id": "E01_S05",
+            "epic_id": "E01",
+            "title": "Title E01_S05_T04",
+            "status": "Pending",
+            "bucket": "pending",
+            "state": "ready",
+            "depends_on": [],
+            "blocked_by": [],
+            "unlocked_by": null
+          },
+          {
+            "id": "E01_S05_T05",
+            "story_id": "E01_S05",
+            "epic_id": "E01",
+            "title": "Title E01_S05_T05",
+            "status": "Pending",
+            "bucket": "pending",
+            "state": "ready",
+            "depends_on": [],
+            "blocked_by": [],
+            "unlocked_by": null
+          }
+        ],
+        "external": null,
+        "warnings": []
+      },
+      "expected": {
+        "folded": {
+          "empty": false,
+          "goal": {
+            "id": "E01",
+            "title": "Goal epic",
+            "fraction": 0.05,
+            "percent": 5,
+            "done": 1,
+            "total": 7,
+            "reached": false,
+            "stories": 5,
+            "decomposed": 2,
+            "failedStories": [],
+            "x": 910,
+            "y": 318
+          },
+          "stories": [
+            {
+              "storyId": "E01_S01",
+              "title": "Story E01_S01",
+              "done": 0,
+              "total": 0,
+              "buckets": {
+                "done": 0,
+                "in_progress": 0,
+                "failed": 0,
+                "pending": 0,
+                "rejected": 0,
+                "unknown": 0
+              },
+              "undecomposed": true
+            },
+            {
+              "storyId": "E01_S02",
+              "title": "Story E01_S02",
+              "done": 1,
+              "total": 2,
+              "buckets": {
+                "done": 1,
+                "in_progress": 0,
+                "failed": 0,
+                "pending": 1,
+                "rejected": 0,
+                "unknown": 0
+              }
+            },
+            {
+              "storyId": "E01_S03",
+              "title": "Story E01_S03",
+              "done": 0,
+              "total": 0,
+              "buckets": {
+                "done": 0,
+                "in_progress": 0,
+                "failed": 0,
+                "pending": 0,
+                "rejected": 0,
+                "unknown": 0
+              },
+              "undecomposed": true
+            },
+            {
+              "storyId": "E01_S04",
+              "title": "Story E01_S04",
+              "done": 0,
+              "total": 0,
+              "buckets": {
+                "done": 0,
+                "in_progress": 0,
+                "failed": 0,
+                "pending": 0,
+                "rejected": 1,
+                "unknown": 0
+              },
+              "undecomposed": true
+            },
+            {
+              "storyId": "E01_S05",
+              "title": "Story E01_S05",
+              "done": 0,
+              "total": 5,
+              "buckets": {
+                "done": 0,
+                "in_progress": 0,
+                "failed": 0,
+                "pending": 5,
+                "rejected": 0,
+                "unknown": 0
+              }
+            }
+          ],
+          "tasks": [
+            {
+              "kind": "task",
+              "id": "E01_S02_T01",
+              "title": "Title E01_S02_T01",
+              "storyId": "E01_S02",
+              "state": "done",
+              "bucket": "done",
+              "row": 1,
+              "column": 0,
+              "gate": "none",
+              "mark": "done",
+              "dependsOn": [],
+              "unlocks": [
+                "E01_S02_T02"
+              ],
+              "upstream": [],
+              "downstream": [
+                "E01_S02_T02"
+              ]
+            },
+            {
+              "kind": "task",
+              "id": "E01_S02_T02",
+              "title": "Title E01_S02_T02",
+              "storyId": "E01_S02",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 1,
+              "column": 1,
+              "gate": "open",
+              "mark": "ready",
+              "dependsOn": [
+                "E01_S02_T01"
+              ],
+              "unlocks": [],
+              "upstream": [
+                "E01_S02_T01"
+              ],
+              "downstream": []
+            },
+            {
+              "kind": "task",
+              "id": "E01_S04_T01",
+              "title": "Title E01_S04_T01",
+              "storyId": "E01_S04",
+              "state": "rejected",
+              "bucket": "rejected",
+              "row": 3,
+              "column": 0,
+              "gate": "none",
+              "mark": "rejected",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": []
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T01",
+              "title": "Title E01_S05_T01",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": []
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T02",
+              "title": "Title E01_S05_T02",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": []
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T03",
+              "title": "Title E01_S05_T03",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": []
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T04",
+              "title": "Title E01_S05_T04",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": []
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T05",
+              "title": "Title E01_S05_T05",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": []
+            }
+          ],
+          "boundary": [],
+          "ready": [
+            {
+              "id": "E01_S02_T02",
+              "title": "Title E01_S02_T02",
+              "storyId": "E01_S02"
+            },
+            {
+              "id": "E01_S05_T01",
+              "title": "Title E01_S05_T01",
+              "storyId": "E01_S05"
+            },
+            {
+              "id": "E01_S05_T02",
+              "title": "Title E01_S05_T02",
+              "storyId": "E01_S05"
+            },
+            {
+              "id": "E01_S05_T03",
+              "title": "Title E01_S05_T03",
+              "storyId": "E01_S05"
+            },
+            {
+              "id": "E01_S05_T04",
+              "title": "Title E01_S05_T04",
+              "storyId": "E01_S05"
+            },
+            {
+              "id": "E01_S05_T05",
+              "title": "Title E01_S05_T05",
+              "storyId": "E01_S05"
+            }
+          ],
+          "unlocked": [],
+          "nodes": [
+            {
+              "kind": "task",
+              "id": "E01_S02_T01",
+              "title": "Title E01_S02_T01",
+              "storyId": "E01_S02",
+              "state": "done",
+              "bucket": "done",
+              "row": 1,
+              "column": 0,
+              "gate": "none",
+              "mark": "done",
+              "dependsOn": [],
+              "unlocks": [
+                "E01_S02_T02"
+              ],
+              "upstream": [],
+              "downstream": [
+                "E01_S02_T02"
+              ],
+              "slot": 0,
+              "x": 280,
+              "y": 172,
+              "w": 200,
+              "h": 48,
+              "inX": 280,
+              "outX": 480,
+              "midY": 196
+            },
+            {
+              "kind": "task",
+              "id": "E01_S02_T02",
+              "title": "Title E01_S02_T02",
+              "storyId": "E01_S02",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 1,
+              "column": 1,
+              "gate": "open",
+              "mark": "ready",
+              "dependsOn": [
+                "E01_S02_T01"
+              ],
+              "unlocks": [],
+              "upstream": [
+                "E01_S02_T01"
+              ],
+              "downstream": [],
+              "slot": 0,
+              "x": 540,
+              "y": 172,
+              "w": 200,
+              "h": 48,
+              "inX": 530,
+              "outX": 740,
+              "midY": 196
+            },
+            {
+              "kind": "task",
+              "id": "E01_S04_T01",
+              "title": "Title E01_S04_T01",
+              "storyId": "E01_S04",
+              "state": "rejected",
+              "bucket": "rejected",
+              "row": 3,
+              "column": 0,
+              "gate": "none",
+              "mark": "rejected",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": [],
+              "slot": 0,
+              "x": 280,
+              "y": 416,
+              "w": 200,
+              "h": 48,
+              "inX": 280,
+              "outX": 480,
+              "midY": 440
+            },
+            {
+              "kind": "group",
+              "id": "group:E01_S05|0|ready",
+              "members": [
+                "E01_S05_T01",
+                "E01_S05_T02",
+                "E01_S05_T03",
+                "E01_S05_T04",
+                "E01_S05_T05"
+              ],
+              "count": 5,
+              "state": "ready",
+              "storyId": "E01_S05",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": [],
+              "slot": 0,
+              "x": 280,
+              "y": 538,
+              "w": 200,
+              "h": 48,
+              "inX": 280,
+              "outX": 480,
+              "midY": 562
+            }
+          ],
+          "headers": [],
+          "bands": [
+            {
+              "storyId": "E01_S01",
+              "row": 0,
+              "y": 20,
+              "h": 108,
+              "undecomposed": true,
+              "start": {
+                "kind": "start",
+                "id": "story:E01_S01",
+                "storyId": "E01_S01",
+                "title": "Story E01_S01",
+                "done": 0,
+                "total": 0,
+                "buckets": {
+                  "done": 0,
+                  "in_progress": 0,
+                  "failed": 0,
+                  "pending": 0,
+                  "rejected": 0,
+                  "unknown": 0
+                },
+                "undecomposed": true,
+                "x": 20,
+                "y": 40,
+                "w": 200,
+                "h": 68,
+                "outX": 220,
+                "midY": 74
+              }
+            },
+            {
+              "storyId": "E01_S02",
+              "row": 1,
+              "y": 142,
+              "h": 108,
+              "start": {
+                "kind": "start",
+                "id": "story:E01_S02",
+                "storyId": "E01_S02",
+                "title": "Story E01_S02",
+                "done": 1,
+                "total": 2,
+                "buckets": {
+                  "done": 1,
+                  "in_progress": 0,
+                  "failed": 0,
+                  "pending": 1,
+                  "rejected": 0,
+                  "unknown": 0
+                },
+                "x": 20,
+                "y": 162,
+                "w": 200,
+                "h": 68,
+                "outX": 220,
+                "midY": 196
+              }
+            },
+            {
+              "storyId": "E01_S03",
+              "row": 2,
+              "y": 264,
+              "h": 108,
+              "undecomposed": true,
+              "start": {
+                "kind": "start",
+                "id": "story:E01_S03",
+                "storyId": "E01_S03",
+                "title": "Story E01_S03",
+                "done": 0,
+                "total": 0,
+                "buckets": {
+                  "done": 0,
+                  "in_progress": 0,
+                  "failed": 0,
+                  "pending": 0,
+                  "rejected": 0,
+                  "unknown": 0
+                },
+                "undecomposed": true,
+                "x": 20,
+                "y": 284,
+                "w": 200,
+                "h": 68,
+                "outX": 220,
+                "midY": 318
+              }
+            },
+            {
+              "storyId": "E01_S04",
+              "row": 3,
+              "y": 386,
+              "h": 108,
+              "start": {
+                "kind": "start",
+                "id": "story:E01_S04",
+                "storyId": "E01_S04",
+                "title": "Story E01_S04",
+                "done": 0,
+                "total": 0,
+                "buckets": {
+                  "done": 0,
+                  "in_progress": 0,
+                  "failed": 0,
+                  "pending": 0,
+                  "rejected": 1,
+                  "unknown": 0
+                },
+                "undecomposed": true,
+                "x": 20,
+                "y": 406,
+                "w": 200,
+                "h": 68,
+                "outX": 220,
+                "midY": 440
+              }
+            },
+            {
+              "storyId": "E01_S05",
+              "row": 4,
+              "y": 508,
+              "h": 108,
+              "start": {
+                "kind": "start",
+                "id": "story:E01_S05",
+                "storyId": "E01_S05",
+                "title": "Story E01_S05",
+                "done": 0,
+                "total": 5,
+                "buckets": {
+                  "done": 0,
+                  "in_progress": 0,
+                  "failed": 0,
+                  "pending": 5,
+                  "rejected": 0,
+                  "unknown": 0
+                },
+                "x": 20,
+                "y": 528,
+                "w": 200,
+                "h": 68,
+                "outX": 220,
+                "midY": 562
+              }
+            }
+          ],
+          "edges": [
+            {
+              "from": "story:E01_S02",
+              "to": "E01_S02_T01",
+              "crossStory": false,
+              "kind": "start"
+            },
+            {
+              "from": "E01_S02_T01",
+              "to": "E01_S02_T02",
+              "crossStory": false,
+              "kind": "dependency"
+            },
+            {
+              "from": "E01_S02_T02",
+              "to": "goal",
+              "crossStory": false,
+              "kind": "goal"
+            },
+            {
+              "from": "story:E01_S04",
+              "to": "E01_S04_T01",
+              "crossStory": false,
+              "kind": "start"
+            },
+            {
+              "from": "E01_S04_T01",
+              "to": "goal",
+              "crossStory": false,
+              "kind": "goal"
+            },
+            {
+              "from": "story:E01_S05",
+              "to": "group:E01_S05|0|ready",
+              "crossStory": false,
+              "kind": "start"
+            },
+            {
+              "from": "group:E01_S05|0|ready",
+              "to": "goal",
+              "crossStory": false,
+              "kind": "goal"
+            },
+            {
+              "from": "story:E01_S01",
+              "to": "goal",
+              "crossStory": false,
+              "kind": "ghost"
+            },
+            {
+              "from": "story:E01_S03",
+              "to": "goal",
+              "crossStory": false,
+              "kind": "ghost"
+            }
+          ],
+          "foldable": [
+            "group:E01_S05|0|ready"
+          ],
+          "expanded": [],
+          "layout": {
+            "pad": 20,
+            "startW": 200,
+            "startH": 68,
+            "columnX0": 280,
+            "columnW": 260,
+            "cardW": 200,
+            "cardH": 48,
+            "rowGap": 18,
+            "headerH": 22,
+            "headerGap": 8,
+            "bandPad": 20,
+            "bandGap": 14,
+            "goalGap": 100,
+            "goalAreaW": 260,
+            "goalOffsetX": 70,
+            "gateR": 10,
+            "minHeight": 300,
+            "width": 1100,
+            "height": 636,
+            "columns": 2
+          }
+        },
+        "unfoldedAll": {
+          "empty": false,
+          "goal": {
+            "id": "E01",
+            "title": "Goal epic",
+            "fraction": 0.05,
+            "percent": 5,
+            "done": 1,
+            "total": 7,
+            "reached": false,
+            "stories": 5,
+            "decomposed": 2,
+            "failedStories": [],
+            "x": 910,
+            "y": 455
+          },
+          "stories": [
+            {
+              "storyId": "E01_S01",
+              "title": "Story E01_S01",
+              "done": 0,
+              "total": 0,
+              "buckets": {
+                "done": 0,
+                "in_progress": 0,
+                "failed": 0,
+                "pending": 0,
+                "rejected": 0,
+                "unknown": 0
+              },
+              "undecomposed": true
+            },
+            {
+              "storyId": "E01_S02",
+              "title": "Story E01_S02",
+              "done": 1,
+              "total": 2,
+              "buckets": {
+                "done": 1,
+                "in_progress": 0,
+                "failed": 0,
+                "pending": 1,
+                "rejected": 0,
+                "unknown": 0
+              }
+            },
+            {
+              "storyId": "E01_S03",
+              "title": "Story E01_S03",
+              "done": 0,
+              "total": 0,
+              "buckets": {
+                "done": 0,
+                "in_progress": 0,
+                "failed": 0,
+                "pending": 0,
+                "rejected": 0,
+                "unknown": 0
+              },
+              "undecomposed": true
+            },
+            {
+              "storyId": "E01_S04",
+              "title": "Story E01_S04",
+              "done": 0,
+              "total": 0,
+              "buckets": {
+                "done": 0,
+                "in_progress": 0,
+                "failed": 0,
+                "pending": 0,
+                "rejected": 1,
+                "unknown": 0
+              },
+              "undecomposed": true
+            },
+            {
+              "storyId": "E01_S05",
+              "title": "Story E01_S05",
+              "done": 0,
+              "total": 5,
+              "buckets": {
+                "done": 0,
+                "in_progress": 0,
+                "failed": 0,
+                "pending": 5,
+                "rejected": 0,
+                "unknown": 0
+              }
+            }
+          ],
+          "tasks": [
+            {
+              "kind": "task",
+              "id": "E01_S02_T01",
+              "title": "Title E01_S02_T01",
+              "storyId": "E01_S02",
+              "state": "done",
+              "bucket": "done",
+              "row": 1,
+              "column": 0,
+              "gate": "none",
+              "mark": "done",
+              "dependsOn": [],
+              "unlocks": [
+                "E01_S02_T02"
+              ],
+              "upstream": [],
+              "downstream": [
+                "E01_S02_T02"
+              ]
+            },
+            {
+              "kind": "task",
+              "id": "E01_S02_T02",
+              "title": "Title E01_S02_T02",
+              "storyId": "E01_S02",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 1,
+              "column": 1,
+              "gate": "open",
+              "mark": "ready",
+              "dependsOn": [
+                "E01_S02_T01"
+              ],
+              "unlocks": [],
+              "upstream": [
+                "E01_S02_T01"
+              ],
+              "downstream": []
+            },
+            {
+              "kind": "task",
+              "id": "E01_S04_T01",
+              "title": "Title E01_S04_T01",
+              "storyId": "E01_S04",
+              "state": "rejected",
+              "bucket": "rejected",
+              "row": 3,
+              "column": 0,
+              "gate": "none",
+              "mark": "rejected",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": []
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T01",
+              "title": "Title E01_S05_T01",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": []
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T02",
+              "title": "Title E01_S05_T02",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": []
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T03",
+              "title": "Title E01_S05_T03",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": []
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T04",
+              "title": "Title E01_S05_T04",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": []
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T05",
+              "title": "Title E01_S05_T05",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": []
+            }
+          ],
+          "boundary": [],
+          "ready": [
+            {
+              "id": "E01_S02_T02",
+              "title": "Title E01_S02_T02",
+              "storyId": "E01_S02"
+            },
+            {
+              "id": "E01_S05_T01",
+              "title": "Title E01_S05_T01",
+              "storyId": "E01_S05"
+            },
+            {
+              "id": "E01_S05_T02",
+              "title": "Title E01_S05_T02",
+              "storyId": "E01_S05"
+            },
+            {
+              "id": "E01_S05_T03",
+              "title": "Title E01_S05_T03",
+              "storyId": "E01_S05"
+            },
+            {
+              "id": "E01_S05_T04",
+              "title": "Title E01_S05_T04",
+              "storyId": "E01_S05"
+            },
+            {
+              "id": "E01_S05_T05",
+              "title": "Title E01_S05_T05",
+              "storyId": "E01_S05"
+            }
+          ],
+          "unlocked": [],
+          "nodes": [
+            {
+              "kind": "task",
+              "id": "E01_S02_T01",
+              "title": "Title E01_S02_T01",
+              "storyId": "E01_S02",
+              "state": "done",
+              "bucket": "done",
+              "row": 1,
+              "column": 0,
+              "gate": "none",
+              "mark": "done",
+              "dependsOn": [],
+              "unlocks": [
+                "E01_S02_T02"
+              ],
+              "upstream": [],
+              "downstream": [
+                "E01_S02_T02"
+              ],
+              "slot": 0,
+              "x": 280,
+              "y": 172,
+              "w": 200,
+              "h": 48,
+              "inX": 280,
+              "outX": 480,
+              "midY": 196
+            },
+            {
+              "kind": "task",
+              "id": "E01_S02_T02",
+              "title": "Title E01_S02_T02",
+              "storyId": "E01_S02",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 1,
+              "column": 1,
+              "gate": "open",
+              "mark": "ready",
+              "dependsOn": [
+                "E01_S02_T01"
+              ],
+              "unlocks": [],
+              "upstream": [
+                "E01_S02_T01"
+              ],
+              "downstream": [],
+              "slot": 0,
+              "x": 540,
+              "y": 172,
+              "w": 200,
+              "h": 48,
+              "inX": 530,
+              "outX": 740,
+              "midY": 196
+            },
+            {
+              "kind": "task",
+              "id": "E01_S04_T01",
+              "title": "Title E01_S04_T01",
+              "storyId": "E01_S04",
+              "state": "rejected",
+              "bucket": "rejected",
+              "row": 3,
+              "column": 0,
+              "gate": "none",
+              "mark": "rejected",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": [],
+              "slot": 0,
+              "x": 280,
+              "y": 416,
+              "w": 200,
+              "h": 48,
+              "inX": 280,
+              "outX": 480,
+              "midY": 440
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T01",
+              "title": "Title E01_S05_T01",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": [],
+              "slot": 1,
+              "x": 280,
+              "y": 558,
+              "w": 200,
+              "h": 48,
+              "inX": 280,
+              "outX": 480,
+              "midY": 582
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T02",
+              "title": "Title E01_S05_T02",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": [],
+              "slot": 2,
+              "x": 280,
+              "y": 624,
+              "w": 200,
+              "h": 48,
+              "inX": 280,
+              "outX": 480,
+              "midY": 648
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T03",
+              "title": "Title E01_S05_T03",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": [],
+              "slot": 3,
+              "x": 280,
+              "y": 690,
+              "w": 200,
+              "h": 48,
+              "inX": 280,
+              "outX": 480,
+              "midY": 714
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T04",
+              "title": "Title E01_S05_T04",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": [],
+              "slot": 4,
+              "x": 280,
+              "y": 756,
+              "w": 200,
+              "h": 48,
+              "inX": 280,
+              "outX": 480,
+              "midY": 780
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T05",
+              "title": "Title E01_S05_T05",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": [],
+              "slot": 5,
+              "x": 280,
+              "y": 822,
+              "w": 200,
+              "h": 48,
+              "inX": 280,
+              "outX": 480,
+              "midY": 846
+            }
+          ],
+          "headers": [
+            {
+              "kind": "header",
+              "id": "group:E01_S05|0|ready",
+              "state": "ready",
+              "count": 5,
+              "row": 4,
+              "column": 0,
+              "x": 280,
+              "y": 528,
+              "w": 200,
+              "h": 22
+            }
+          ],
+          "bands": [
+            {
+              "storyId": "E01_S01",
+              "row": 0,
+              "y": 20,
+              "h": 108,
+              "undecomposed": true,
+              "start": {
+                "kind": "start",
+                "id": "story:E01_S01",
+                "storyId": "E01_S01",
+                "title": "Story E01_S01",
+                "done": 0,
+                "total": 0,
+                "buckets": {
+                  "done": 0,
+                  "in_progress": 0,
+                  "failed": 0,
+                  "pending": 0,
+                  "rejected": 0,
+                  "unknown": 0
+                },
+                "undecomposed": true,
+                "x": 20,
+                "y": 40,
+                "w": 200,
+                "h": 68,
+                "outX": 220,
+                "midY": 74
+              }
+            },
+            {
+              "storyId": "E01_S02",
+              "row": 1,
+              "y": 142,
+              "h": 108,
+              "start": {
+                "kind": "start",
+                "id": "story:E01_S02",
+                "storyId": "E01_S02",
+                "title": "Story E01_S02",
+                "done": 1,
+                "total": 2,
+                "buckets": {
+                  "done": 1,
+                  "in_progress": 0,
+                  "failed": 0,
+                  "pending": 1,
+                  "rejected": 0,
+                  "unknown": 0
+                },
+                "x": 20,
+                "y": 162,
+                "w": 200,
+                "h": 68,
+                "outX": 220,
+                "midY": 196
+              }
+            },
+            {
+              "storyId": "E01_S03",
+              "row": 2,
+              "y": 264,
+              "h": 108,
+              "undecomposed": true,
+              "start": {
+                "kind": "start",
+                "id": "story:E01_S03",
+                "storyId": "E01_S03",
+                "title": "Story E01_S03",
+                "done": 0,
+                "total": 0,
+                "buckets": {
+                  "done": 0,
+                  "in_progress": 0,
+                  "failed": 0,
+                  "pending": 0,
+                  "rejected": 0,
+                  "unknown": 0
+                },
+                "undecomposed": true,
+                "x": 20,
+                "y": 284,
+                "w": 200,
+                "h": 68,
+                "outX": 220,
+                "midY": 318
+              }
+            },
+            {
+              "storyId": "E01_S04",
+              "row": 3,
+              "y": 386,
+              "h": 108,
+              "start": {
+                "kind": "start",
+                "id": "story:E01_S04",
+                "storyId": "E01_S04",
+                "title": "Story E01_S04",
+                "done": 0,
+                "total": 0,
+                "buckets": {
+                  "done": 0,
+                  "in_progress": 0,
+                  "failed": 0,
+                  "pending": 0,
+                  "rejected": 1,
+                  "unknown": 0
+                },
+                "undecomposed": true,
+                "x": 20,
+                "y": 406,
+                "w": 200,
+                "h": 68,
+                "outX": 220,
+                "midY": 440
+              }
+            },
+            {
+              "storyId": "E01_S05",
+              "row": 4,
+              "y": 508,
+              "h": 382,
+              "start": {
+                "kind": "start",
+                "id": "story:E01_S05",
+                "storyId": "E01_S05",
+                "title": "Story E01_S05",
+                "done": 0,
+                "total": 5,
+                "buckets": {
+                  "done": 0,
+                  "in_progress": 0,
+                  "failed": 0,
+                  "pending": 5,
+                  "rejected": 0,
+                  "unknown": 0
+                },
+                "x": 20,
+                "y": 665,
+                "w": 200,
+                "h": 68,
+                "outX": 220,
+                "midY": 699
+              }
+            }
+          ],
+          "edges": [
+            {
+              "from": "story:E01_S02",
+              "to": "E01_S02_T01",
+              "crossStory": false,
+              "kind": "start"
+            },
+            {
+              "from": "E01_S02_T01",
+              "to": "E01_S02_T02",
+              "crossStory": false,
+              "kind": "dependency"
+            },
+            {
+              "from": "E01_S02_T02",
+              "to": "goal",
+              "crossStory": false,
+              "kind": "goal"
+            },
+            {
+              "from": "story:E01_S04",
+              "to": "E01_S04_T01",
+              "crossStory": false,
+              "kind": "start"
+            },
+            {
+              "from": "E01_S04_T01",
+              "to": "goal",
+              "crossStory": false,
+              "kind": "goal"
+            },
+            {
+              "from": "story:E01_S05",
+              "to": "E01_S05_T01",
+              "crossStory": false,
+              "kind": "start"
+            },
+            {
+              "from": "E01_S05_T01",
+              "to": "goal",
+              "crossStory": false,
+              "kind": "goal"
+            },
+            {
+              "from": "story:E01_S05",
+              "to": "E01_S05_T02",
+              "crossStory": false,
+              "kind": "start"
+            },
+            {
+              "from": "E01_S05_T02",
+              "to": "goal",
+              "crossStory": false,
+              "kind": "goal"
+            },
+            {
+              "from": "story:E01_S05",
+              "to": "E01_S05_T03",
+              "crossStory": false,
+              "kind": "start"
+            },
+            {
+              "from": "E01_S05_T03",
+              "to": "goal",
+              "crossStory": false,
+              "kind": "goal"
+            },
+            {
+              "from": "story:E01_S05",
+              "to": "E01_S05_T04",
+              "crossStory": false,
+              "kind": "start"
+            },
+            {
+              "from": "E01_S05_T04",
+              "to": "goal",
+              "crossStory": false,
+              "kind": "goal"
+            },
+            {
+              "from": "story:E01_S05",
+              "to": "E01_S05_T05",
+              "crossStory": false,
+              "kind": "start"
+            },
+            {
+              "from": "E01_S05_T05",
+              "to": "goal",
+              "crossStory": false,
+              "kind": "goal"
+            },
+            {
+              "from": "story:E01_S01",
+              "to": "goal",
+              "crossStory": false,
+              "kind": "ghost"
+            },
+            {
+              "from": "story:E01_S03",
+              "to": "goal",
+              "crossStory": false,
+              "kind": "ghost"
+            }
+          ],
+          "foldable": [
+            "group:E01_S05|0|ready"
+          ],
+          "expanded": [
+            "group:E01_S05|0|ready"
+          ],
+          "layout": {
+            "pad": 20,
+            "startW": 200,
+            "startH": 68,
+            "columnX0": 280,
+            "columnW": 260,
+            "cardW": 200,
+            "cardH": 48,
+            "rowGap": 18,
+            "headerH": 22,
+            "headerGap": 8,
+            "bandPad": 20,
+            "bandGap": 14,
+            "goalGap": 100,
+            "goalAreaW": 260,
+            "goalOffsetX": 70,
+            "gateR": 10,
+            "minHeight": 300,
+            "width": 1100,
+            "height": 910,
+            "columns": 2
+          }
+        },
+        "refoldedFromUnfolded": {
+          "empty": false,
+          "goal": {
+            "id": "E01",
+            "title": "Goal epic",
+            "fraction": 0.05,
+            "percent": 5,
+            "done": 1,
+            "total": 7,
+            "reached": false,
+            "stories": 5,
+            "decomposed": 2,
+            "failedStories": [],
+            "x": 910,
+            "y": 318
+          },
+          "stories": [
+            {
+              "storyId": "E01_S01",
+              "title": "Story E01_S01",
+              "done": 0,
+              "total": 0,
+              "buckets": {
+                "done": 0,
+                "in_progress": 0,
+                "failed": 0,
+                "pending": 0,
+                "rejected": 0,
+                "unknown": 0
+              },
+              "undecomposed": true
+            },
+            {
+              "storyId": "E01_S02",
+              "title": "Story E01_S02",
+              "done": 1,
+              "total": 2,
+              "buckets": {
+                "done": 1,
+                "in_progress": 0,
+                "failed": 0,
+                "pending": 1,
+                "rejected": 0,
+                "unknown": 0
+              }
+            },
+            {
+              "storyId": "E01_S03",
+              "title": "Story E01_S03",
+              "done": 0,
+              "total": 0,
+              "buckets": {
+                "done": 0,
+                "in_progress": 0,
+                "failed": 0,
+                "pending": 0,
+                "rejected": 0,
+                "unknown": 0
+              },
+              "undecomposed": true
+            },
+            {
+              "storyId": "E01_S04",
+              "title": "Story E01_S04",
+              "done": 0,
+              "total": 0,
+              "buckets": {
+                "done": 0,
+                "in_progress": 0,
+                "failed": 0,
+                "pending": 0,
+                "rejected": 1,
+                "unknown": 0
+              },
+              "undecomposed": true
+            },
+            {
+              "storyId": "E01_S05",
+              "title": "Story E01_S05",
+              "done": 0,
+              "total": 5,
+              "buckets": {
+                "done": 0,
+                "in_progress": 0,
+                "failed": 0,
+                "pending": 5,
+                "rejected": 0,
+                "unknown": 0
+              }
+            }
+          ],
+          "tasks": [
+            {
+              "kind": "task",
+              "id": "E01_S02_T01",
+              "title": "Title E01_S02_T01",
+              "storyId": "E01_S02",
+              "state": "done",
+              "bucket": "done",
+              "row": 1,
+              "column": 0,
+              "gate": "none",
+              "mark": "done",
+              "dependsOn": [],
+              "unlocks": [
+                "E01_S02_T02"
+              ],
+              "upstream": [],
+              "downstream": [
+                "E01_S02_T02"
+              ]
+            },
+            {
+              "kind": "task",
+              "id": "E01_S02_T02",
+              "title": "Title E01_S02_T02",
+              "storyId": "E01_S02",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 1,
+              "column": 1,
+              "gate": "open",
+              "mark": "ready",
+              "dependsOn": [
+                "E01_S02_T01"
+              ],
+              "unlocks": [],
+              "upstream": [
+                "E01_S02_T01"
+              ],
+              "downstream": []
+            },
+            {
+              "kind": "task",
+              "id": "E01_S04_T01",
+              "title": "Title E01_S04_T01",
+              "storyId": "E01_S04",
+              "state": "rejected",
+              "bucket": "rejected",
+              "row": 3,
+              "column": 0,
+              "gate": "none",
+              "mark": "rejected",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": []
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T01",
+              "title": "Title E01_S05_T01",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": []
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T02",
+              "title": "Title E01_S05_T02",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": []
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T03",
+              "title": "Title E01_S05_T03",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": []
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T04",
+              "title": "Title E01_S05_T04",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": []
+            },
+            {
+              "kind": "task",
+              "id": "E01_S05_T05",
+              "title": "Title E01_S05_T05",
+              "storyId": "E01_S05",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": []
+            }
+          ],
+          "boundary": [],
+          "ready": [
+            {
+              "id": "E01_S02_T02",
+              "title": "Title E01_S02_T02",
+              "storyId": "E01_S02"
+            },
+            {
+              "id": "E01_S05_T01",
+              "title": "Title E01_S05_T01",
+              "storyId": "E01_S05"
+            },
+            {
+              "id": "E01_S05_T02",
+              "title": "Title E01_S05_T02",
+              "storyId": "E01_S05"
+            },
+            {
+              "id": "E01_S05_T03",
+              "title": "Title E01_S05_T03",
+              "storyId": "E01_S05"
+            },
+            {
+              "id": "E01_S05_T04",
+              "title": "Title E01_S05_T04",
+              "storyId": "E01_S05"
+            },
+            {
+              "id": "E01_S05_T05",
+              "title": "Title E01_S05_T05",
+              "storyId": "E01_S05"
+            }
+          ],
+          "unlocked": [],
+          "nodes": [
+            {
+              "kind": "task",
+              "id": "E01_S02_T01",
+              "title": "Title E01_S02_T01",
+              "storyId": "E01_S02",
+              "state": "done",
+              "bucket": "done",
+              "row": 1,
+              "column": 0,
+              "gate": "none",
+              "mark": "done",
+              "dependsOn": [],
+              "unlocks": [
+                "E01_S02_T02"
+              ],
+              "upstream": [],
+              "downstream": [
+                "E01_S02_T02"
+              ],
+              "slot": 0,
+              "x": 280,
+              "y": 172,
+              "w": 200,
+              "h": 48,
+              "inX": 280,
+              "outX": 480,
+              "midY": 196
+            },
+            {
+              "kind": "task",
+              "id": "E01_S02_T02",
+              "title": "Title E01_S02_T02",
+              "storyId": "E01_S02",
+              "state": "ready",
+              "bucket": "pending",
+              "row": 1,
+              "column": 1,
+              "gate": "open",
+              "mark": "ready",
+              "dependsOn": [
+                "E01_S02_T01"
+              ],
+              "unlocks": [],
+              "upstream": [
+                "E01_S02_T01"
+              ],
+              "downstream": [],
+              "slot": 0,
+              "x": 540,
+              "y": 172,
+              "w": 200,
+              "h": 48,
+              "inX": 530,
+              "outX": 740,
+              "midY": 196
+            },
+            {
+              "kind": "task",
+              "id": "E01_S04_T01",
+              "title": "Title E01_S04_T01",
+              "storyId": "E01_S04",
+              "state": "rejected",
+              "bucket": "rejected",
+              "row": 3,
+              "column": 0,
+              "gate": "none",
+              "mark": "rejected",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": [],
+              "slot": 0,
+              "x": 280,
+              "y": 416,
+              "w": 200,
+              "h": 48,
+              "inX": 280,
+              "outX": 480,
+              "midY": 440
+            },
+            {
+              "kind": "group",
+              "id": "group:E01_S05|0|ready",
+              "members": [
+                "E01_S05_T01",
+                "E01_S05_T02",
+                "E01_S05_T03",
+                "E01_S05_T04",
+                "E01_S05_T05"
+              ],
+              "count": 5,
+              "state": "ready",
+              "storyId": "E01_S05",
+              "row": 4,
+              "column": 0,
+              "gate": "none",
+              "mark": "ready",
+              "dependsOn": [],
+              "unlocks": [],
+              "upstream": [],
+              "downstream": [],
+              "slot": 0,
+              "x": 280,
+              "y": 538,
+              "w": 200,
+              "h": 48,
+              "inX": 280,
+              "outX": 480,
+              "midY": 562
+            }
+          ],
+          "headers": [],
+          "bands": [
+            {
+              "storyId": "E01_S01",
+              "row": 0,
+              "y": 20,
+              "h": 108,
+              "undecomposed": true,
+              "start": {
+                "kind": "start",
+                "id": "story:E01_S01",
+                "storyId": "E01_S01",
+                "title": "Story E01_S01",
+                "done": 0,
+                "total": 0,
+                "buckets": {
+                  "done": 0,
+                  "in_progress": 0,
+                  "failed": 0,
+                  "pending": 0,
+                  "rejected": 0,
+                  "unknown": 0
+                },
+                "undecomposed": true,
+                "x": 20,
+                "y": 40,
+                "w": 200,
+                "h": 68,
+                "outX": 220,
+                "midY": 74
+              }
+            },
+            {
+              "storyId": "E01_S02",
+              "row": 1,
+              "y": 142,
+              "h": 108,
+              "start": {
+                "kind": "start",
+                "id": "story:E01_S02",
+                "storyId": "E01_S02",
+                "title": "Story E01_S02",
+                "done": 1,
+                "total": 2,
+                "buckets": {
+                  "done": 1,
+                  "in_progress": 0,
+                  "failed": 0,
+                  "pending": 1,
+                  "rejected": 0,
+                  "unknown": 0
+                },
+                "x": 20,
+                "y": 162,
+                "w": 200,
+                "h": 68,
+                "outX": 220,
+                "midY": 196
+              }
+            },
+            {
+              "storyId": "E01_S03",
+              "row": 2,
+              "y": 264,
+              "h": 108,
+              "undecomposed": true,
+              "start": {
+                "kind": "start",
+                "id": "story:E01_S03",
+                "storyId": "E01_S03",
+                "title": "Story E01_S03",
+                "done": 0,
+                "total": 0,
+                "buckets": {
+                  "done": 0,
+                  "in_progress": 0,
+                  "failed": 0,
+                  "pending": 0,
+                  "rejected": 0,
+                  "unknown": 0
+                },
+                "undecomposed": true,
+                "x": 20,
+                "y": 284,
+                "w": 200,
+                "h": 68,
+                "outX": 220,
+                "midY": 318
+              }
+            },
+            {
+              "storyId": "E01_S04",
+              "row": 3,
+              "y": 386,
+              "h": 108,
+              "start": {
+                "kind": "start",
+                "id": "story:E01_S04",
+                "storyId": "E01_S04",
+                "title": "Story E01_S04",
+                "done": 0,
+                "total": 0,
+                "buckets": {
+                  "done": 0,
+                  "in_progress": 0,
+                  "failed": 0,
+                  "pending": 0,
+                  "rejected": 1,
+                  "unknown": 0
+                },
+                "undecomposed": true,
+                "x": 20,
+                "y": 406,
+                "w": 200,
+                "h": 68,
+                "outX": 220,
+                "midY": 440
+              }
+            },
+            {
+              "storyId": "E01_S05",
+              "row": 4,
+              "y": 508,
+              "h": 108,
+              "start": {
+                "kind": "start",
+                "id": "story:E01_S05",
+                "storyId": "E01_S05",
+                "title": "Story E01_S05",
+                "done": 0,
+                "total": 5,
+                "buckets": {
+                  "done": 0,
+                  "in_progress": 0,
+                  "failed": 0,
+                  "pending": 5,
+                  "rejected": 0,
+                  "unknown": 0
+                },
+                "x": 20,
+                "y": 528,
+                "w": 200,
+                "h": 68,
+                "outX": 220,
+                "midY": 562
+              }
+            }
+          ],
+          "edges": [
+            {
+              "from": "story:E01_S02",
+              "to": "E01_S02_T01",
+              "crossStory": false,
+              "kind": "start"
+            },
+            {
+              "from": "E01_S02_T01",
+              "to": "E01_S02_T02",
+              "crossStory": false,
+              "kind": "dependency"
+            },
+            {
+              "from": "E01_S02_T02",
+              "to": "goal",
+              "crossStory": false,
+              "kind": "goal"
+            },
+            {
+              "from": "story:E01_S04",
+              "to": "E01_S04_T01",
+              "crossStory": false,
+              "kind": "start"
+            },
+            {
+              "from": "E01_S04_T01",
+              "to": "goal",
+              "crossStory": false,
+              "kind": "goal"
+            },
+            {
+              "from": "story:E01_S05",
+              "to": "group:E01_S05|0|ready",
+              "crossStory": false,
+              "kind": "start"
+            },
+            {
+              "from": "group:E01_S05|0|ready",
+              "to": "goal",
+              "crossStory": false,
+              "kind": "goal"
+            },
+            {
+              "from": "story:E01_S01",
+              "to": "goal",
+              "crossStory": false,
+              "kind": "ghost"
+            },
+            {
+              "from": "story:E01_S03",
+              "to": "goal",
+              "crossStory": false,
+              "kind": "ghost"
+            }
+          ],
+          "foldable": [
+            "group:E01_S05|0|ready"
+          ],
+          "expanded": [],
+          "layout": {
+            "pad": 20,
+            "startW": 200,
+            "startH": 68,
+            "columnX0": 280,
+            "columnW": 260,
+            "cardW": 200,
+            "cardH": 48,
+            "rowGap": 18,
+            "headerH": 22,
+            "headerGap": 8,
+            "bandPad": 20,
+            "bandGap": 14,
+            "goalGap": 100,
+            "goalAreaW": 260,
+            "goalOffsetX": 70,
+            "gateR": 10,
+            "minHeight": 300,
+            "width": 1100,
+            "height": 636,
+            "columns": 2
+          }
+        }
+      }
+    }
+  ]
+}

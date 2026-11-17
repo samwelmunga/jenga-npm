@@ -58,7 +58,10 @@
 set -uo pipefail
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEMPLATE="$SELF_DIR/../../../templates/CRITICAL_ERROR_TABLE_TEMPLATE.md"
+# shellcheck source=/dev/null
+if [ -f "$SELF_DIR/../../index/scripts/package-root.sh" ]; then . "$SELF_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SELF_DIR")" || true
+TEMPLATE="$PACKAGE_ROOT/templates/CRITICAL_ERROR_TABLE_TEMPLATE.md"
 ROWS_ONLY=0
 INPUT="-"
 

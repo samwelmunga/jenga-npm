@@ -211,3 +211,34 @@ port_in_file() { jq -r '.dashboard_port' "$FILE"; }
   p="$(jq -r '.dashboard_port' "$REPO_ROOT/project/configs/dashboard-config.json")"
   [ "$p" -ge 50000 ] && [ "$p" -le 64999 ]
 }
+
+# E92_S08_T03: write_port rewrites the port with `jq '.[$k] = $v'` on the existing object, so the optional terminal-progress
+# keys of the same file must survive a regeneration. This is the proof the E92_S08 decision asked for.
+@test "ensure keeps progress_charset and progress_color (and any other key) when it regenerates an out-of-range port" {
+  local bad
+  for bad in 100 49999 65000 70000 12; do
+    printf '{\n  "dashboard_port": %s,\n  "progress_charset": "ascii",\n  "progress_color": "never",\n  "other_key": {"a": [1, 2]}\n}\n' "$bad" > "$FILE"
+    run bash "$SCRIPT" ensure
+    [ "$status" -eq 0 ]
+    [ "$output" -ge 50000 ]
+    [ "$output" -le 64999 ]
+    [ "$(jq -r '.dashboard_port' "$FILE")" = "$output" ]
+    [ "$(jq -r '.progress_charset' "$FILE")" = "ascii" ]
+    [ "$(jq -r '.progress_color' "$FILE")" = "never" ]
+    [ "$(jq -c '.other_key' "$FILE")" = '{"a":[1,2]}' ]
+    [ "$(jq 'keys | length' "$FILE")" -eq 4 ]
+  done
+}
+
+@test "ensure keeps progress_charset and progress_color when the port key is missing or not an integer" {
+  printf '{\n  "progress_charset": "ascii",\n  "progress_color": "always"\n}\n' > "$FILE"
+  run bash "$SCRIPT" ensure
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.progress_charset, .progress_color' "$FILE" | tr '\n' ' ')" = "ascii always " ]
+  [ "$(jq -r '.dashboard_port' "$FILE")" = "$output" ]
+  printf '{\n  "dashboard_port": "58150",\n  "progress_charset": "ascii"\n}\n' > "$FILE"
+  run bash "$SCRIPT" ensure
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.progress_charset' "$FILE")" = "ascii" ]
+  [ "$(jq -r '.dashboard_port | type' "$FILE")" = "number" ]
+}

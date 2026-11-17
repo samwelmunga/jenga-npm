@@ -7,8 +7,13 @@
 #
 # Follows the former README steps 3-9 in order: download the staged tarball to a temp
 # directory, check its shasum, install it in the consumer, approve and run the
-# postinstall, check .jenga-version, run the skill smoke test, run the package's own
+# postinstall, check .jenga-version, run the skill smoke test over the package root and over the
+# consumer's mirrored .claude/skills, run the package's own
 # two node tests, then run the consumer's own checks.
+#
+# The steps that follow this one in the `deploy-stage` workflow (mock board data, j.dashboard-share,
+# j.status) are not run here. How the mock board is generated and removed is documented in the
+# "Mock board data" section of <st-test-path>/README.md; see st-test-mock-board.sh.
 #
 # stdout is the report (the step's `report` output, consumed by the confirm step that
 # offers the release options). Progress goes to stderr.
@@ -136,19 +141,56 @@ else
   check FAIL ".jenga-version matches" "expected $VERSION, found '${INSTALLED_VERSION:-missing}'"
 fi
 
-# --- README step 7: the skill smoke test, against the package root ----------------
+# --- README step 7: the skill smoke test, over BOTH layouts -----------------------
+# A consumer never runs skills from the package root: postinstall mirrors only skills/ and agents/ into the
+# consumer's .claude/ and .agents/, so a script that finds package assets relative to itself resolves them
+# against .claude/ and fails there while passing in the package layout. Two checks, two layouts, so a failure
+# names the layout it happened in:
+#   (package root)             the structural checks over node_modules/<pkg>, as before
+#   (consumer .claude/skills)  the same checks over the consumer's own mirror plus the execution check, which runs
+#                              each mirrored script's --help from a throwaway copy of the consumer
 PKG_ROOT="node_modules/$PKG"
 SMOKE="$PKG_ROOT/skills/j-smoke-test/scripts/smoke-test-skills.sh"
 if [ -f "$CONSUMER/$SMOKE" ]; then
-  SMOKE_OUT="$(cd "$CONSUMER" && bash "$SMOKE" --root "$PKG_ROOT" 2>&1)"
+  # The execution phase (--no-exec, --package-root) arrived with the check this step now relies on. An installed
+  # smoke test without it cannot judge the consumer layout; say so rather than report a pass it did not earn.
+  if grep -q -- '--no-exec' "$CONSUMER/$SMOKE"; then SMOKE_EXEC=1; else SMOKE_EXEC=0; fi
+
+  SMOKE_FLAG=""
+  if [ "$SMOKE_EXEC" -eq 1 ]; then SMOKE_FLAG="--no-exec"; fi
+  # shellcheck disable=SC2086  # SMOKE_FLAG is empty or one flag
+  SMOKE_OUT="$(cd "$CONSUMER" && bash "$SMOKE" $SMOKE_FLAG --root "$PKG_ROOT" 2>&1)"
   SMOKE_RC=$?
   if [ "$SMOKE_RC" -eq 0 ]; then
-    check PASS "skill smoke test" "no critical finding"
+    check PASS "skill smoke test (package root)" "no critical finding"
   else
-    check FAIL "skill smoke test" "exit $SMOKE_RC; $(printf '%s' "$SMOKE_OUT" | tail -n 4 | tr '\n' ' ')"
+    check FAIL "skill smoke test (package root)" "exit $SMOKE_RC; $(printf '%s' "$SMOKE_OUT" | tail -n 4 | tr '\n' ' ')"
+  fi
+
+  if [ ! -d "$CONSUMER/.claude/skills" ]; then
+    check FAIL "skill smoke test (consumer .claude/skills)" "$CONSUMER/.claude/skills not found; the postinstall did not mirror the skills"
+  elif [ "$SMOKE_EXEC" -eq 0 ]; then
+    check FAIL "skill smoke test (consumer .claude/skills)" "the installed smoke test has no execution check (no --no-exec); it cannot judge the consumer layout"
+  else
+    SMOKE_ERR="$(mktemp "${TMPDIR:-/tmp}/st-smoke-err.XXXXXX")"
+    SMOKE_OUT="$(cd "$CONSUMER" && bash "$SMOKE" --root .claude --package-root "$PKG_ROOT" 2>"$SMOKE_ERR")"
+    SMOKE_RC=$?
+    if [ "$SMOKE_RC" -eq 0 ]; then
+      check PASS "skill smoke test (consumer .claude/skills)" "no critical finding; $(grep -E '^Execution check:' "$SMOKE_ERR" | head -n 1)"
+    else
+      # The critical findings (JSON lines on stdout) say which script resolved what; the summary lines say how many.
+      SMOKE_WHY="$(printf '%s\n' "$SMOKE_OUT" | grep -E '"severity":"critical"' | head -n 2)"
+      if command -v jq >/dev/null 2>&1 && [ -n "$SMOKE_WHY" ]; then
+        SMOKE_WHY="$(printf '%s\n' "$SMOKE_WHY" | jq -r '.skill + ": " + .error' 2>/dev/null | cut -c1-400)"
+      fi
+      SMOKE_WHY="$(printf '%s' "$SMOKE_WHY" | tr '\n' ' ')"
+      check FAIL "skill smoke test (consumer .claude/skills)" "exit $SMOKE_RC; ${SMOKE_WHY}$(grep -E '^(Findings|Result):' "$SMOKE_ERR" | tr '\n' ' ')"
+    fi
+    rm -f "$SMOKE_ERR"
   fi
 else
-  check FAIL "skill smoke test" "$SMOKE not found in the installed package"
+  check FAIL "skill smoke test (package root)" "$SMOKE not found in the installed package"
+  check FAIL "skill smoke test (consumer .claude/skills)" "$SMOKE not found in the installed package"
 fi
 
 # --- README step 8: the package's own two node tests ------------------------------

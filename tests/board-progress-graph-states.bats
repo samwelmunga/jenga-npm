@@ -125,6 +125,142 @@ task() { py '[t for t in d["tasks"] if t["id"]=="'"$1"'"][0]["'"$2"'"]'; }
   [ "$(py 'all(t["blocked_by"] != [] for t in d["tasks"] if t["state"] == "locked")')" = "true" ]
 }
 
+# E92_S10_T01: waiting_on states the unsatisfied effective ids (own depends_on, then the story's, each once) for EVERY task
+# not in the done bucket, so the padlock gate never re-derives satisfaction.
+waiting() {
+  mkroot waiting
+  item E01 "In Progress"
+  item E01_S01 Pending
+  item E01_S02 Pending "depends_on: E01_S01"
+  item E01_S01_T01 Pending
+  item E01_S01_T02 Rejected
+  item E01_S01_T03 Passed
+  item E01_S01_T04 "In Progress" "depends_on: [E01_S01_T01, E01_S01_T03]"
+  item E01_S01_T05 Failed "depends_on: E01_S01_T01"
+  item E01_S01_T06 Passed "depends_on: E01_S01_T01"
+  item E01_S01_T07 "In Progress" "depends_on: E01_S01_T02, E01_S01_T03"
+  item E01_S01_T08 Pending "depends_on: E01_S01_T02"
+  item E01_S01_T09 "Some Odd Status" "depends_on: E01_S01_T01"
+  item E01_S02_T01 Rejected
+  item E01_S02_T02 "In Progress" "depends_on: E01_S01_T01"
+  item E01_S02_T03 Passed
+  item E01_S02_T04 Pending
+}
+
+@test "E92_S10_T01: waiting_on lists the unsatisfied effective ids of every task that is not done, [] for a done task" {
+  waiting
+  run_graph --graph
+  [ "$RC" -eq 0 ]
+  [ "$(task E01_S01_T04 waiting_on)" = '["E01_S01_T01"]' ]                # in progress: only the unfinished own id
+  [ "$(task E01_S01_T05 waiting_on)" = '["E01_S01_T01"]' ]                # failed
+  [ "$(task E01_S01_T06 waiting_on)" = '[]' ]                             # done: never waits
+  [ "$(task E01_S01_T07 waiting_on)" = '[]' ]                             # rejected and done dependencies are satisfied
+  [ "$(task E01_S01_T08 waiting_on)" = '[]' ]                             # ready
+  [ "$(task E01_S01_T09 waiting_on)" = '["E01_S01_T01"]' ]                # unknown status
+  [ "$(task E01_S02_T01 waiting_on)" = '["E01_S01"]' ]                    # rejected, its story waits
+  [ "$(task E01_S02_T02 waiting_on)" = '["E01_S01_T01","E01_S01"]' ]      # own first, then the story's
+  [ "$(task E01_S02_T03 waiting_on)" = '[]' ]                             # done although its story waits
+  [ "$(task E01_S02_T04 waiting_on)" = '["E01_S01"]' ]                    # locked only through its story
+  # for a pending task waiting_on is blocked_by; blocked_by keeps its meaning ([] unless locked)
+  [ "$(py 'all(t["waiting_on"] == t["blocked_by"] for t in d["tasks"] if t["bucket"] == "pending")')" = "true" ]
+  [ "$(py 'all(t["blocked_by"] == [] for t in d["tasks"] if t["state"] != "locked")')" = "true" ]
+  [ "$(py 'all(t["waiting_on"] == [] for t in d["tasks"] if t["bucket"] == "done")')" = "true" ]
+  # the key sits after blocked_by, in --within payloads too (E92_S11_T02: unfinished_deps follows it, see below)
+  [ "$(py 'list(d["tasks"][0].keys())')" = '["id","story_id","epic_id","title","status","bucket","state","depends_on","blocked_by","waiting_on","unfinished_deps","unlocked_by"]' ]
+  run_graph --graph --within E01_S02
+  [ "$(task E01_S02_T02 waiting_on)" = '["E01_S01_T01","E01_S01"]' ]
+}
+
+@test "E92_S10_T01: the padlock gate of the shared structure follows waiting_on for every task state" {
+  command -v node >/dev/null 2>&1 || skip "node is not installed"
+  waiting
+  run_graph --graph
+  [ "$RC" -eq 0 ]
+  run node --input-type=module -e '
+    import { pathToFileURL } from "url";
+    import fs from "fs";
+    const { buildDependencyStructure } = await import(pathToFileURL(process.argv[1]).href);
+    const g = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+    const s = buildDependencyStructure(g, "E01", {});
+    console.log(s.tasks.map((t) => t.id.slice(4) + ":" + t.gate).join(","));
+  ' "$BATS_TEST_DIRNAME/../lib/progress/dependency-structure.js" "$BATS_TEST_TMPDIR/out"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "S01_T01:none,S01_T02:none,S01_T03:none,S01_T04:locked,S01_T05:locked,S01_T06:open,S01_T07:open,S01_T08:open,S01_T09:locked,S02_T01:locked,S02_T02:locked,S02_T03:open,S02_T04:locked" ]
+}
+
+# E92_S11_T02 (user decision 2026-11-15: a task done before its dependency did not really depend on it, so flag it):
+# unfinished_deps states, for a task IN the done bucket, the effective ids it would wait on if it were not done (same rule
+# as waiting_on: own depends_on, then the story's, each once; satisfied = done bucket by own status, or rejected).
+unfinished() {
+  mkroot unfinished
+  item E01 "In Progress"
+  item E01_S01 "In Progress"
+  item E01_S02 Pending "depends_on: E01_S01"
+  item E01_S03 Passed
+  item E01_S01_T01 Passed
+  item E01_S01_T02 Failed "dates_previously_completed: [2026-11-01]"
+  item E01_S01_T03 Rejected
+  item E01_S01_T04 Passed "depends_on: [E01_S01_T01, E01_S01_T02]"
+  item E01_S01_T05 Passed "depends_on: E01_S01_T03"
+  item E01_S01_T06 "In Progress" "depends_on: E01_S01_T02"
+  item E01_S01_T07 Pending "depends_on: E01_S01_T02"
+  item E01_S01_T08 Merged "depends_on: E01_S01_T02"
+  item E01_S02_T01 Passed
+  item E01_S02_T02 Passed "depends_on: E01_S01_T02"
+  item E01_S03_T01 Passed "depends_on: E01_S01_T01"
+}
+
+@test "E92_S11_T02: unfinished_deps lists the unsatisfied effective ids of a done task, [] for every other task" {
+  unfinished
+  run_graph --graph
+  [ "$RC" -eq 0 ]
+  [ "$(task E01_S01_T04 unfinished_deps)" = '["E01_S01_T02"]' ]            # done, its own dependency was reopened (Failed)
+  [ "$(task E01_S02_T01 unfinished_deps)" = '["E01_S01"]' ]                # done, its story's dependency is not done
+  [ "$(task E01_S02_T02 unfinished_deps)" = '["E01_S01_T02","E01_S01"]' ]  # own first, then the story's, each once
+  [ "$(task E01_S01_T05 unfinished_deps)" = '[]' ]                         # done, its only dependency is rejected
+  [ "$(task E01_S03_T01 unfinished_deps)" = '[]' ]                         # done, its dependency is done
+  [ "$(task E01_S01_T08 unfinished_deps)" = '["E01_S01_T02"]' ]            # a ladder status (Merged) is in the done bucket
+  [ "$(task E01_S01_T06 unfinished_deps)" = '[]' ]                         # in progress: not done, so it waits instead
+  [ "$(task E01_S01_T07 unfinished_deps)" = '[]' ]                         # pending (locked)
+  [ "$(task E01_S01_T02 unfinished_deps)" = '[]' ]                         # failed, no dependency
+  # the flag changes nothing else: the task stays done, in the done bucket, never waits and is never blocked
+  [ "$(task E01_S01_T04 state)" = "done" ]
+  [ "$(task E01_S01_T04 bucket)" = "done" ]
+  [ "$(task E01_S01_T04 waiting_on)" = '[]' ]
+  [ "$(task E01_S01_T04 blocked_by)" = '[]' ]
+  [ "$(task E01_S01_T06 waiting_on)" = '["E01_S01_T02"]' ]
+  # never both: waiting_on and unfinished_deps hold ids for different buckets
+  [ "$(py 'all(t["unfinished_deps"] == [] for t in d["tasks"] if t["bucket"] != "done")')" = "true" ]
+  [ "$(py 'all(not (t["waiting_on"] and t["unfinished_deps"]) for t in d["tasks"])')" = "true" ]
+  # the done counts are unchanged: every flagged task is counted as done in the story and epic totals
+  [ "$(py '[s["totals"]["done"] for s in d["stories"]]')" = '[4,2,1]' ]
+  [ "$(py 'd["epics"][0]["tasks"]["totals"]["done"]')" = "7" ]
+  # --within keeps the key and its value (state is computed over the whole board first)
+  run_graph --graph --within E01_S02
+  [ "$RC" -eq 0 ]
+  [ "$(task E01_S02_T02 unfinished_deps)" = '["E01_S01_T02","E01_S01"]' ]
+  # --counts-only has no tasks array, so no key to state
+  run_graph --graph --counts-only
+  [ "$(py '"tasks" in d')" = "false" ]
+}
+
+@test "E92_S11_T02: unfinished_deps leaves the padlock gate of the shared structure unchanged (a done task keeps the open one)" {
+  command -v node >/dev/null 2>&1 || skip "node is not installed"
+  unfinished
+  run_graph --graph
+  [ "$RC" -eq 0 ]
+  run node --input-type=module -e '
+    import { pathToFileURL } from "url";
+    import fs from "fs";
+    const { buildDependencyStructure } = await import(pathToFileURL(process.argv[1]).href);
+    const g = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+    const s = buildDependencyStructure(g, "E01", {});
+    console.log(s.tasks.map((t) => t.id.slice(4) + ":" + t.gate + ":" + (t.unfinishedDeps || []).join("+")).join(","));
+  ' "$BATS_TEST_DIRNAME/../lib/progress/dependency-structure.js" "$BATS_TEST_TMPDIR/out"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "S01_T01:none:,S01_T02:none:,S01_T03:none:,S01_T04:open:E01_S01_T02,S01_T05:open:,S01_T06:locked:,S01_T07:locked:,S01_T08:open:E01_S01_T02,S02_T01:open:E01_S01,S02_T02:open:E01_S01_T02+E01_S01,S03_T01:open:" ]
+}
+
 @test "unlocked_by picks the latest date_completed dependency" {
   states
   run_graph --graph

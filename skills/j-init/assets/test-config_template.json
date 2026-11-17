@@ -5,5 +5,7 @@
   "test_run_task": "none",
   "test_run_story": "scoped",
   "test_run_epic": "none",
-  "test_default_suite_set": ""
+  "test_default_suite_set": "",
+  "mirror_gate_threshold_seconds": 50,
+  "manual_only_threshold_seconds": 600
 }

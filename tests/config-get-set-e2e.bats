@@ -79,8 +79,10 @@ jc() {
 }
 
 # cfgval <file-id> <key>: the current value of a scratch config key, as raw text (compact JSON for nested values).
+# An optional key (E92_S08_T03) that the file lacks reads as its descriptor default, which is what `jenga config get` prints.
 cfgval() {
-  jq -r --arg k "$2" '.[$k] | if type == "string" then . else tojson end' "$CFG/$1.json"
+  jq -r --arg k "$2" --argjson d "$(jq -c --arg k "$2" '[.keys[] | select(.key == $k and .optional == true) | .default][0]' "$DESCRIPTORS/$1.json")" \
+    '(if has($k) then .[$k] else $d end) | if type == "string" then . else tojson end' "$CFG/$1.json"
 }
 
 # editable_keys <descriptors-dir>: one "<file-id> <key>" line per editable key of every descriptor.
@@ -145,11 +147,11 @@ make_fixture_descriptors() {
   [ "$(ls "$CFG" | wc -l | tr -d ' ')" -eq 7 ]
 }
 
-@test "the editable keys are audit-config's mode, severity_threshold, offline_behavior and production_only, the integer settings of scope-thresholds and playbook-config plus test-config's two commit_* and three test_run_* strings; checklists and workflow have none" {
+@test "the editable keys are audit-config's mode, severity_threshold, offline_behavior and production_only, the integer settings of scope-thresholds and playbook-config plus test-config's two commit_* and three test_run_* strings and its four run-threshold integers; checklists and workflow have none" {
   run editable_keys "$DESCRIPTORS"
   [ "$status" -eq 0 ]
   [ "$(echo "$output" | cut -d' ' -f1 | sort -u | tr '\n' ' ')" = "audit-config dashboard-config playbook-config scope-thresholds test-config " ]
-  [ "$(echo "$output" | grep '^test-config ' | cut -d' ' -f2 | sort | tr '\n' ' ')" = "commit_prompt_default commit_scope_map_file test_default_suite_set test_run_epic test_run_story test_run_task " ]
+  [ "$(echo "$output" | grep '^test-config ' | cut -d' ' -f2 | sort | tr '\n' ' ')" = "ask_before_run_seconds commit_prompt_default commit_scope_map_file full_run_confirm_file_count manual_only_threshold_seconds mirror_gate_threshold_seconds test_default_suite_set test_run_epic test_run_story test_run_task " ]
   for f in checklists workflow; do
     [ "$(jq '[.keys[] | select(.editable)] | length' "$DESCRIPTORS/$f.json")" -eq 0 ]
     # and no bump rule is declared anywhere in a file with no editable key (checklist_version is pinned to 1)
@@ -190,7 +192,7 @@ make_fixture_descriptors() {
     [ "$(dkey "$DESCRIPTORS" "$f" "$key" '.type')" = "integer" ] || continue
     snap
     counter=$(dkey "$DESCRIPTORS" "$f" "$key" '.bump_on_change // empty')
-    # an integer key without bump_on_change (dashboard-config.dashboard_port) has no counter; it has its own cases
+    # an integer key without bump_on_change (dashboard-config.dashboard_port, test-config's *_threshold_seconds) has no counter; each has its own case
     [ -n "$counter" ] || continue
     before=$(cfgval "$f" "$counter")
     new=$(other_value_for "$f" "$key")
@@ -216,6 +218,29 @@ make_fixture_descriptors() {
   done < <(editable_keys "$DESCRIPTORS")
 }
 
+@test "set on a counter-less integer key (test-config thresholds) writes the value, bumps nothing and changes nothing else" {
+  local key new
+  for key in mirror_gate_threshold_seconds manual_only_threshold_seconds full_run_confirm_file_count ask_before_run_seconds; do
+    [ -z "$(dkey "$DESCRIPTORS" test-config "$key" '.bump_on_change // empty')" ]
+    snap
+    new=$(( $(cfgval test-config "$key") + 7 ))
+    jc set "test-config.$key" "$new"
+    [ "$status" -eq 0 ]
+    [ -z "$stderr" ]
+    [ "$output" = "test-config.$key = $new" ]
+    [ "$(cfgval test-config "$key")" = "$new" ]
+    jq -e --argjson was "$(cat "$BATS_TEST_TMPDIR/snap/test-config.json")" --arg k "$key" \
+      'del(.[$k]) == ($was | del(.[$k])) and ((keys | length) == ($was | keys | length))' "$CFG/test-config.json" >/dev/null
+    local other
+    for other in $CONFIG_FILES; do
+      if [ "$other" != "test-config" ]; then unchanged "$other"; fi
+    done
+    jc get "test-config.$key"
+    [ "$output" = "$new" ]
+    cp "$BATS_TEST_TMPDIR/snap/test-config.json" "$CFG/test-config.json"
+  done
+}
+
 @test "two successful sets bump the counter twice, once each; the same value again does not bump" {
   local before
   before=$(cfgval scope-thresholds threshold_version)
@@ -236,6 +261,8 @@ make_fixture_descriptors() {
   local f key
   snap
   while read -r f key; do
+    # an optional key the file lacks is created by a set, so its first set is a change, not a no-op (own cases below)
+    if [ "$(dkey "$DESCRIPTORS" "$f" "$key" '.optional // false')" = "true" ] && [ "$(jq --arg k "$key" 'has($k)' "$CFG/$f.json")" = "false" ]; then continue; fi
     jc set "$f.$key" "$(cfgval "$f" "$key")"
     [ "$status" -eq 0 ]
     # the confirmation shows the JSON form of the value, so a string is quoted
@@ -280,10 +307,13 @@ make_fixture_descriptors() {
     assert_contains "$stderr" "$key: $((min - 1)) is below the minimum of $min"
     [ -z "$output" ]
     all_unchanged
-    jc set "$f.$key" "$((max + 1))"
-    [ "$status" -eq 4 ]
-    assert_contains "$stderr" "$key: $((max + 1)) is above the maximum of $max"
-    all_unchanged
+    # a key declared without a max (test-config's *_threshold_seconds) has no upper bound to cross
+    if [ -n "$max" ] && [ "$max" != "null" ]; then
+      jc set "$f.$key" "$((max + 1))"
+      [ "$status" -eq 4 ]
+      assert_contains "$stderr" "$key: $((max + 1)) is above the maximum of $max"
+      all_unchanged
+    fi
     for bad in abc 3.5 "" "1e3" "0x10" "true" "[1]"; do
       jc set "$f.$key" "$bad"
       [ "$status" -eq 4 ]
@@ -416,6 +446,81 @@ make_fixture_descriptors() {
 }
 
 # ================================================================================================================
+# dashboard-config.json's optional progress settings (E92_S08_T03): two editable strings with allowed sets, no counter
+# ================================================================================================================
+
+@test "dashboard-config progress keys: get of an absent key prints the default, exit 0, nothing on stderr, file untouched" {
+  [ "$(jq 'has("progress_charset") or has("progress_color")' "$CFG/dashboard-config.json")" = "false" ]
+  snap
+  jc get dashboard-config.progress_charset
+  [ "$status" -eq 0 ]
+  [ "$output" = "utf8" ]
+  [ -z "$stderr" ]
+  jc get dashboard-config.progress_color
+  [ "$status" -eq 0 ]
+  [ "$output" = "auto" ]
+  [ -z "$stderr" ]
+  all_unchanged
+}
+
+@test "dashboard-config progress keys: set writes valid values, keeps dashboard_port, bumps nothing, and get then reads the stored value" {
+  local port
+  port=$(cfgval dashboard-config dashboard_port)
+  jc set dashboard-config.progress_charset ascii
+  [ "$status" -eq 0 ]
+  [ "$output" = 'dashboard-config.progress_charset = "ascii"' ]
+  [ -z "$stderr" ]
+  jc set dashboard-config.progress_color always
+  [ "$status" -eq 0 ]
+  [ "$output" = 'dashboard-config.progress_color = "always"' ]
+  [ "$(jq -c 'keys' "$CFG/dashboard-config.json")" = '["dashboard_port","progress_charset","progress_color"]' ]
+  [ "$(cfgval dashboard-config dashboard_port)" = "$port" ]
+  jc get dashboard-config.progress_charset
+  [ "$output" = "ascii" ]
+  jc get dashboard-config.progress_color
+  [ "$output" = "always" ]
+  # every legal value of both keys is accepted
+  local v
+  for v in utf8 ascii; do jc set dashboard-config.progress_charset "$v"; [ "$status" -eq 0 ]; [ "$(cfgval dashboard-config progress_charset)" = "$v" ]; done
+  for v in auto always never; do jc set dashboard-config.progress_color "$v"; [ "$status" -eq 0 ]; [ "$(cfgval dashboard-config progress_color)" = "$v" ]; done
+}
+
+@test "dashboard-config progress keys: an invalid value exits 4 naming the allowed set and leaves every config byte-identical" {
+  local v
+  snap
+  for v in latin1 UTF8 Ascii "" "utf8 " 1 true; do
+    jc set dashboard-config.progress_charset "$v"
+    [ "$status" -eq 4 ]
+    assert_contains "$stderr" 'progress_charset'
+    assert_contains "$stderr" 'is not one of the allowed values "utf8", "ascii"'
+    [ -z "$output" ]
+    all_unchanged
+  done
+  for v in on off ALWAYS Never "" "auto " 0 false; do
+    jc set dashboard-config.progress_color "$v"
+    [ "$status" -eq 4 ]
+    assert_contains "$stderr" 'progress_color'
+    assert_contains "$stderr" 'is not one of the allowed values "auto", "always", "never"'
+    [ -z "$output" ]
+    all_unchanged
+  done
+}
+
+@test "dashboard-config progress keys: setting the current value again is a no-op (unchanged), and a corrupted stored value is still reported by get, not replaced by the default" {
+  jc set dashboard-config.progress_charset ascii
+  snap
+  jc set dashboard-config.progress_charset ascii
+  [ "$status" -eq 0 ]
+  assert_contains "$output" "(unchanged)"
+  all_unchanged
+  jq '.progress_charset = "latin1"' "$CFG/dashboard-config.json" > "$CFG/dashboard-config.json.new"
+  mv "$CFG/dashboard-config.json.new" "$CFG/dashboard-config.json"
+  jc get dashboard-config.progress_charset
+  [ "$status" -eq 0 ]
+  [ "$output" = "latin1" ]
+}
+
+# ================================================================================================================
 # test-config.json's editable commit options (E72_S01_T04): two string keys, no version counter
 # ================================================================================================================
 
@@ -437,7 +542,7 @@ make_fixture_descriptors() {
   # only that key moved: tools and the other string key are as they were, and no counter appeared
   jq -e --argjson was "$(cat "$BATS_TEST_TMPDIR/snap/test-config.json")" \
     'del(.commit_prompt_default) == ($was | del(.commit_prompt_default))' "$CFG/test-config.json" >/dev/null
-  [ "$(jq -r 'keys | join(",")' "$CFG/test-config.json")" = "commit_prompt_default,commit_scope_map_file,test_default_suite_set,test_run_epic,test_run_story,test_run_task,tools" ]
+  [ "$(jq -r 'keys | join(",")' "$CFG/test-config.json")" = "ask_before_run_seconds,commit_prompt_default,commit_scope_map_file,full_run_confirm_file_count,manual_only_threshold_seconds,mirror_gate_threshold_seconds,test_default_suite_set,test_run_epic,test_run_story,test_run_task,tools" ]
   local other
   for other in $CONFIG_FILES; do
     if [ "$other" != "test-config" ]; then unchanged "$other"; fi

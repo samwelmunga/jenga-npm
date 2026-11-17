@@ -169,8 +169,9 @@ SCRIPT_NAME="baseline-permissions.sh"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # skills/j-test/scripts -> the checkout root, or node_modules/@jenga-ai/agent
 # when installed as a dependency.
-REPO_ROOT="$(cd -- "$SCRIPT_DIR/../../.." && pwd)"
-
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+REPO_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 export LC_ALL=C
 
 MARKER_TAG="jenga:requires-baseline-permissions"
@@ -294,7 +295,7 @@ resolve_root() {
   local resolver out=""
   resolver="$(resolve_helper scripts/resolve-root.sh)" || resolver=""
   if [ -n "$resolver" ]; then
-    out="$(bash "$resolver" 2>/dev/null || true)"
+    out="$(bash "$resolver" root 2>/dev/null || true)"
   fi
   if [ -n "$out" ] && [ -d "$out" ]; then
     printf '%s\n' "$out"

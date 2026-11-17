@@ -50,7 +50,9 @@ set -u
 
 SELF="commit-evidence.sh"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 usage() { sed -n '2,/^# Bash 3.2/p' "$0" | sed 's/^# \{0,1\}//'; }
 die() { printf '%s: %s\n' "$SELF" "$1" >&2; exit "$2"; }
 
@@ -74,7 +76,7 @@ done
 # Locate the resolver: repo layout first (skills/j-reconcile/scripts -> scripts), then a consumer's scripts/, then
 # the installed package.
 RESOLVER=""
-for cand in "$SCRIPT_DIR/../../../scripts/commits-for-item.sh" \
+for cand in "$PACKAGE_ROOT/scripts/commits-for-item.sh" \
             "scripts/commits-for-item.sh" \
             "node_modules/@jenga-ai/agent/scripts/commits-for-item.sh"; do
   if [ -f "$cand" ]; then RESOLVER="$cand"; break; fi

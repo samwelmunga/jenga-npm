@@ -114,6 +114,39 @@ value() {
   [ "$output" = "$(jq -c '.items' "$CFG/checklists.json")" ]
 }
 
+@test "get of an absent optional key (dashboard-config.progress_charset, progress_color) prints its descriptor default, exit 0 (E92_S08_T03)" {
+  [ "$(jq 'has("progress_charset") or has("progress_color")' "$CFG/dashboard-config.json")" = "false" ]
+  snap
+  jc get dashboard-config.progress_charset
+  [ "$status" -eq 0 ]
+  [ "$output" = "utf8" ]
+  jc get dashboard-config.progress_color
+  [ "$status" -eq 0 ]
+  [ "$output" = "auto" ]
+  unchanged dashboard-config.json
+  # a key the descriptor does not list is still an unknown key, optional or not
+  jc get dashboard-config.progress_other
+  [ "$status" -eq 3 ]
+}
+
+@test "set of dashboard-config.progress_charset and progress_color writes valid values and rejects invalid ones with exit 4 (E92_S08_T03)" {
+  jc set dashboard-config.progress_charset ascii
+  [ "$status" -eq 0 ]
+  [ "$(value dashboard-config.json progress_charset)" = "ascii" ]
+  jc set dashboard-config.progress_color always
+  [ "$status" -eq 0 ]
+  [ "$(value dashboard-config.json progress_color)" = "always" ]
+  snap
+  jc set dashboard-config.progress_charset latin1
+  [ "$status" -eq 4 ]
+  assert_contains "$stderr" 'progress_charset: "latin1" is not one of the allowed values "utf8", "ascii"'
+  unchanged dashboard-config.json
+  jc set dashboard-config.progress_color sometimes
+  [ "$status" -eq 4 ]
+  assert_contains "$stderr" 'progress_color: "sometimes" is not one of the allowed values "auto", "always", "never"'
+  unchanged dashboard-config.json
+}
+
 @test "the address splits on the first dot only: a key containing a dot is an unknown key, exit 3" {
   jc get scope-thresholds.inline.max
   [ "$status" -eq 3 ]

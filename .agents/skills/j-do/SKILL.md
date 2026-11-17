@@ -34,7 +34,7 @@ shadow it (Claude Code's native skill resolution is a literal-string, directory-
 
 **Syntax:** `/do <id> --trivial` — a dispatch-time override, distinct from `/todo --trivial` (a creation-time flag documented in `skills/j-todo/SKILL.md`). Where `/todo --trivial` writes a brand-new task straight to `execution_scope: inline`, `/do <id> --trivial` overrides an **already-existing** task's `execution_scope` — whatever it currently is, including absent (legacy tasks with no execution-scope fields at all) — to `inline` at the moment it's dispatched. See `### 4.1.5. \`--trivial\` Dispatch-Time Override` below for the full mechanics.
 
-**No softer fallback tier — hard fallback to the full pipeline instead.** Unlike `light` scope (which sits between `inline` and `task`), `--trivial` always forces `inline` directly, with no intermediate tier to fall back to first. To compensate, a `--trivial`-forced run that fails `scripts/smoke-harness.sh` or shows detected scope creep mid-run automatically re-routes to the full `task` pipeline (worktree + developer + tester) via the same `#### Fallback to Full Task-Scope Pipeline` procedure the `light`-tier fallback uses — see `### 4.2`'s failure-handling branches and the shared Fallback subsection under `### 4.3`.
+**No softer fallback tier — hard fallback to the full pipeline instead.** Unlike `light` scope (which sits between `inline` and `task`), `--trivial` always forces `inline` directly, with no intermediate tier to fall back to first. To compensate, a `--trivial`-forced run that fails `scripts/smoke-harness.sh` (exit 1), gets "nothing verified" from it (exit 3), or shows detected scope creep mid-run automatically re-routes to the full `task` pipeline (worktree + developer + tester) via the same `#### Fallback to Full Task-Scope Pipeline` procedure the `light`-tier fallback uses — see `### 4.2`'s result-handling branches and the shared Fallback subsection under `### 4.3`. The harness does not run the project's test suite: it runs `<project>/scripts/smoke.sh` when the project has one, otherwise only the test files the project's own scope map selects for the changed files, or nothing at all (a docs-only change exits 0; no opt-in or no mapped test exits 3).
 
 **Human-only, same as `/todo --trivial`.** `--trivial` is invoked by a human typing `/do <id> --trivial` — it is never applied autonomously by `/jenga` or the scrum-master's own breakdown/dispatch passes.
 
@@ -508,12 +508,11 @@ path has no subagent, so they are simply shown. With no registry, or an empty on
 
 ### 4.1.3. Progress bar (E92)
 
-Shows the run's one-line progress bar after finished tasks. This section says only **when** to call `skills/j-break/scripts/run-progress.sh`; which tasks the bar covers, the counting and the drawing all live in that script and in the scripts it calls, never here. Write `RP` for `bash "$([ -f skills/j-break/scripts/run-progress.sh ] && echo skills/j-break/scripts/run-progress.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/run-progress.sh)"`.
+Shows a one-line progress bar after each finished task. This section says only **when** to call `skills/j-break/scripts/run-progress.sh`; which story the bar covers, the counting and the drawing all live in that script and in the scripts it calls, never here. Write `RP` for `bash "$([ -f skills/j-break/scripts/run-progress.sh ] && echo skills/j-break/scripts/run-progress.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/run-progress.sh)"`. Copy the lines it prints into your reply as a fenced code block (the tool-call row is folded away in the desktop app); `skills/j-break/SKILL.md` ("Progress lines") has the rest of the rule.
 
-1. **Who prints.** Read the sender object's `progress_owner` (`### 4.4`). Empty or absent: this `/do` is the top-level caller and prints. `caller`: `/jenga` or `/dooo` owns the print, so this `/do` prints nothing and skips the scope call in step 2.
-2. **Resolve the scope once.** Once per standalone invocation, after the selection is final (the ids from steps 1 to 3 or the story id of `### 1.5`), run `RP --resolve-scope --ids <selected ids>` and keep the single word it prints. The scope is resolved once and never re-made per print; the step 8 loop back to step 1 reuses the kept answer. An empty answer means show no bar for the whole invocation.
-3. **Print after each finished task.** Immediately after the ledger record in `### 7`, run `RP --scope <kept answer> --ids <selected ids>` when the kept answer is `run`, or `RP --scope <kept answer> --task <task id>` when it is `story`, and show the single line it prints. It is best-effort exactly like the ledger call: it never blocks, fails or re-statuses a task, and a warning on stderr is not an error.
-4. **Bundle mode prints once.** A story bundle (`### 1.5`) does not print per task. It prints a single line when the bundle finishes, after step 6's cleanup, using the same kept scope and the same command forms.
+1. **Who prints.** Read the sender object's `progress_owner` (`### 4.4`). Empty or absent: this `/do` is the top-level caller and prints. `caller`: `/jenga` or `/dooo` owns the print, so this `/do` prints nothing and skips the print in step 2.
+2. **Print after each finished task.** Immediately after the ledger record in `### 7`, run `RP --scope story --task <the finished task id> --after-story --charset utf8 --color never` and copy the lines it prints into your reply as a fenced code block: the task's bar first, then, only when that task just finished its story, the story's own line. It is best-effort exactly like the ledger call: it never blocks, fails or re-statuses a task, and a warning on stderr is not an error.
+3. **Bundle mode prints once.** A story bundle (`### 1.5`) does not print per task. It prints once, when the bundle finishes, after step 6's cleanup, with `RP --scope story --task <the ids of the bundle's finished tasks> --after-story --charset utf8 --color never`, its lines copied into your reply the same way.
 
 ### 4.1.5. `--trivial` Dispatch-Time Override
 
@@ -577,12 +576,20 @@ After resolving the task context (step 4), passing override validation (step 4.1
    5. Delete the lock file immediately after the write completes.
 3. Implement the task inline — make the required changes to files directly in the current session.
 4. Run the smoke test harness before committing anything:
-   - Run `bash "$([ -f scripts/smoke-harness.sh ] && echo scripts/smoke-harness.sh || echo node_modules/@jenga-ai/agent/scripts/smoke-harness.sh)" <changed_file>...`, passing the paths changed in step 3. With no arguments the harness infers them from `git diff --name-only HEAD`. It exits `0` on pass and `1` on failure.
+   - Run `bash "$([ -f scripts/smoke-harness.sh ] && echo scripts/smoke-harness.sh || echo node_modules/@jenga-ai/agent/scripts/smoke-harness.sh)" <changed_file>...`, passing the paths changed in step 3. With no arguments the harness infers them from `git diff --name-only HEAD`.
+   - **What it runs.** Never the project's test suite. It runs `<project>/scripts/smoke.sh` when the project has one (and returns its status); otherwise, when the project has its own scope map, only the test files that map selects for the changed files (it prints them before running); otherwise nothing. A docs-only change (every changed file `.md` or `.txt`) runs nothing.
+   - **Exit codes.** `0`: the opted-in or mapped tests passed, or the change is docs-only. `1`: an opted-in or mapped test failed. `3`: nothing was verified (no opt-in, no mapped test, no runnable mapped command, or the mapping itself failed); the harness prints a line starting `smoke-harness: nothing verified`. Exit `3` is a non-pass, not a failure.
+   - **Never escalate.** Whatever the harness returns, `/do` never re-runs the check with a broader selection: not `npm test`, not `npm run test:ci`, not `scripts/run-tests.sh --all`, not a full `/test` run. A "nothing verified" result goes to the Tester through the fallback (step 4a), never to a bigger run.
    - If neither `scripts/smoke-harness.sh` nor `node_modules/@jenga-ai/agent/scripts/smoke-harness.sh` exists, log a warning and treat the result as a pass:
      ```
      WARNING [<task_id>]: smoke-harness.sh not found. Smoke test skipped (stub pass).
      ```
-5. **If the smoke test exits non-zero**:
+4a. **If the smoke test exits `3` (nothing verified)**: write neither `status: Passed` nor `status: Failed`, and do not commit here. Emit one log line for the task that records it:
+   ```
+   SMOKE NOTHING VERIFIED [<task_id>]: smoke: nothing verified (<the harness's reason>); handing to the Tester.
+   ```
+   Then invoke the shared `#### Fallback to Full Task-Scope Pipeline` procedure below with reason `nothing-verified` (origin: `trivial` for a `--trivial`-forced run, `inline` otherwise), so the Tester judges the task. Do not proceed with the remaining inline steps below. **Exception:** if `crucial_level: locked`, do not fall back (a locked task never leaves the inline path); leave the status `In Progress`, emit the line above with `halting for the user` in place of `handing to the Tester`, and halt and report, so the user decides how the task is verified.
+5. **If the smoke test exits non-zero other than `3`** (a test failed):
    - **If this is a `--trivial`-forced run** (marker set in step 4.1.5 — and `crucial_level` is not `locked`, which never falls back, per 4.1.5's precedence note): do NOT write `status: Failed`. `--trivial` always forces `inline` with no softer "lightest safe tier" to fall back to first, so a smoke-harness failure here goes straight to the shared `#### Fallback to Full Task-Scope Pipeline` procedure below (origin: `trivial`). Do not proceed with the remaining inline steps below — the Fallback procedure takes over from here.
    - **Otherwise** (an organically-assigned `inline` task, `--trivial` not involved): behavior is unchanged from before —
      - Write `status: Failed` to the task's frontmatter, then record it (best-effort, see step 7): `bash "$([ -f skills/j-break/scripts/record-execution.sh ] && echo skills/j-break/scripts/record-execution.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/record-execution.sh)" <task_id> Failed --source do`.
@@ -591,13 +598,13 @@ After resolving the task context (step 4), passing override validation (step 4.1
        INLINE TASK FAILED [<task_id>]: smoke test returned non-zero exit code. Task marked Failed. Halting.
        ```
      - Do not commit. Do not proceed to the next task.
-6. **If the smoke test passes**:
+6. **If the smoke test passes** (exit `0`):
    - Commit the changes using the standard commit convention (`task(<task_id>): <short description>`) via `/commit` in inline mode (E32_S04_T03).
    - Run the **Intent-vs-Diff Check** (see `### 5.1. Intent-vs-Diff Check` below) for this task.
    - Self-verify the implementation against the acceptance criteria.
    - Write `status: Passed` and `date_completed: <today>` to the task's frontmatter if verification passes.
    - Remove the task from `project/todo.md`.
-7. `inline` tasks do not invoke the tester agent — the smoke test and self-verification are the only gates.
+7. `inline` tasks do not invoke the tester agent — the smoke test and self-verification are the only gates. The exceptions are the fallback re-routes (step 4a's "nothing verified", and a `--trivial`-forced run's failure or scope creep), where the Tester judges the task in the full pipeline.
 8. `inline` tasks always have `needs_docs: false` — skip plan and summary documentation for the implemented task.
 9. Continue to `### 6. Verify documentation`, then `### 7. After successful completion`.
 
@@ -632,13 +639,14 @@ After resolving the task context (step 4), passing override validation (step 4.1
    This is the one concrete difference from the step-5 `task` path: everything else about how the subagent implements the task (reading the task file, following acceptance criteria, following repo conventions) is unchanged.
 
 3. **After the developer subagent reports implementation complete**, first **release the developer concurrency slot** acquired in step 2: `"$([ -f scripts/release-concurrency-slot.sh ] && echo scripts/release-concurrency-slot.sh || echo node_modules/@jenga-ai/agent/scripts/release-concurrency-slot.sh)" developer <task_id> <orchestrator_session_id>` (per `### 4.4` step 2) — this subagent's session has ended, so the slot is released now regardless of what it reports, before the smoke test result is even known. Then run the smoke test harness using the same invocation convention as `### 4.2. Inline Execution Path`:
-   - Run `bash "$([ -f scripts/smoke-harness.sh ] && echo scripts/smoke-harness.sh || echo node_modules/@jenga-ai/agent/scripts/smoke-harness.sh)" <changed_file>...`, passing the paths the subagent changed. With no arguments the harness infers them from `git diff --name-only HEAD`. It exits `0` on pass and `1` on failure.
+   - Run `bash "$([ -f scripts/smoke-harness.sh ] && echo scripts/smoke-harness.sh || echo node_modules/@jenga-ai/agent/scripts/smoke-harness.sh)" <changed_file>...`, passing the paths the subagent changed. With no arguments the harness infers them from `git diff --name-only HEAD`.
+   - It runs what `### 4.2` step 4 describes and nothing more: `<project>/scripts/smoke.sh`, or only the test files the project's own scope map selects, or nothing. It exits `0` (passed, or docs-only), `1` (a test failed) or `3` (nothing verified). The same **never escalate** rule applies: no re-run with `npm test`, `npm run test:ci`, `scripts/run-tests.sh --all` or any broader selection, whatever the result.
    - If neither `scripts/smoke-harness.sh` nor `node_modules/@jenga-ai/agent/scripts/smoke-harness.sh` exists, log a warning and treat the result as a pass:
      ```
      WARNING [<task_id>]: smoke-harness.sh not found. Smoke test skipped (stub pass).
      ```
 
-4. **If the smoke test passes**:
+4. **If the smoke test passes** (exit `0`):
    - The developer subagent self-verifies the implementation against the task's acceptance criteria. No tester subagent is invoked for a `light`-scoped task — this is a deliberate, documented exception to "the tester is the sole status-writer" (`agents/tester.md`), mirroring the same exception already established for `inline` scope in step 6 of `### 4.2`. Since no tester runs, the developer/orchestrator is the one who writes the terminal status for a `light`-scoped task.
    - Commit the changes using the standard commit convention (`task(<task_id>): <short description>`) via `/commit`.
    - Run the **Intent-vs-Diff Check** (see `### 5.1. Intent-vs-Diff Check` below) for this task.
@@ -646,15 +654,21 @@ After resolving the task context (step 4), passing override validation (step 4.1
    - Remove the task from `project/todo.md`.
    - Continue to `### 6. Verify documentation`, then `### 7. After successful completion`.
 
-5. **If the smoke test fails (non-zero exit)**: do NOT write `status: Failed` and do NOT halt. Instead, invoke `#### Fallback to Full Task-Scope Pipeline` below (origin: `light`).
+5. **If the smoke test fails (exit `1`, or any non-zero other than `3`)**: do NOT write `status: Failed` and do NOT halt. Instead, invoke `#### Fallback to Full Task-Scope Pipeline` below (origin: `light`).
+
+6. **If the smoke test exits `3` (nothing verified)**: the subagent's work is not judged by the harness, so write neither `status: Passed` nor `status: Failed` and do not commit here. Emit one log line for the task that records it:
+   ```
+   SMOKE NOTHING VERIFIED [<task_id>]: smoke: nothing verified (<the harness's reason>); handing to the Tester.
+   ```
+   Then invoke `#### Fallback to Full Task-Scope Pipeline` below with reason `nothing-verified` (origin: `light`), so the Tester judges the task.
 
 #### Fallback to Full Task-Scope Pipeline
 
 **The pre-task gate does not fire here.** A fallback is a re-route of a unit already gated once at `### 4.1.2`, not a new unit. Reuse that gate's `RUN_ID` and result, whether the id was minted or adopted from a verified `checklist_run_id` (no second verification either): do not call `checklist.sh check pre-task` again, and do not re-ask any judgment item the user already confirmed. Its `remind` items go to this fallback's developer subagent too.
 
-This is a self-contained, reusable procedure with two current callers — `### 4.2`'s `--trivial`-forced inline failure branches (origin: `trivial`) and `### 4.3`'s `light`-scope smoke-harness failure (origin: `light`) — given a task that was attempted under a reduced-overhead execution scope and failed its smoke-harness check (or, for `trivial`, showed detected scope creep mid-run), do the following. The only thing that varies by caller is the notice text in step 5; steps 1–4 and 6 are identical regardless of origin.
+This is a self-contained, reusable procedure. Its callers: `### 4.2`'s `--trivial`-forced inline failure branches (origin: `trivial`), `### 4.3`'s `light`-scope smoke-harness failure (origin: `light`), and the "nothing verified" branches, `### 4.2` step 4a (origin: `inline` or `trivial`) and `### 4.3` step 6 (origin: `light`), which pass reason `nothing-verified`. Given a task that was attempted under a reduced-overhead execution scope and failed its smoke-harness check, got "nothing verified" from it (exit `3`), or, for `trivial`, showed detected scope creep mid-run, do the following. The only thing that varies by caller is the notice text in step 6; the other steps are identical regardless of origin and reason.
 
-1. **Do not mark the task `Failed`.** A smoke-harness failure (or detected scope creep) under a reduced-overhead scope means the scope was too small for the task, not that the task itself is unworkable — the correct response is to retry under full isolation, not to reject the work.
+1. **Do not mark the task `Failed`** (and, for reason `nothing-verified`, not `Passed` either). A smoke-harness failure (or detected scope creep) under a reduced-overhead scope means the scope was too small for the task, not that the task itself is unworkable — the correct response is to retry under full isolation, not to reject the work. A "nothing verified" result means the harness had no test it could run for the change; the Tester, not a broader test run, decides the status.
 2. **Create a worktree** for the task, named `<E##_S##_T##-short-slug>` per standard Worktree Management conventions, if one does not already exist for this task. (A task dispatched under `light` scope, or forced `inline` via `--trivial`, never had one — both premises skip worktree creation — so this step always creates a fresh worktree in that case.)
 3. **Acquire a developer concurrency slot** (per `### 4.4. Developer Concurrency Slot Enforcement` below, `<id>` = this task's id). This fallback spawn is a distinct developer-subagent lifecycle from whatever `light`/`trivial` attempt preceded it — that attempt's own slot, if any, was already acquired and released around it (`### 4.3` step 2/3, or no slot at all for a `--trivial`-forced inline attempt, which never spawns a subagent) — so this step always acquires its own fresh slot. On a full cap (`capacity_blocked` outcome), do not spawn anything here either: apply `### 4.4`'s Pending-revert/log/consecutive-block handling for this task id and stop the fallback. The task remains exactly as the reduced-overhead attempt left it (any commits already made by that attempt stay in the worktree/branch just created in step 2), and `/jenga` Phase 4 retries it on a later wave once a slot frees up.
 4. **Spawn a developer subagent** in that worktree and have it pick up from the current state of the code (the changes already made by the reduced-overhead attempt are still present in the working tree / already committed, if any commit occurred — the subagent continues from there rather than starting over).
@@ -667,6 +681,10 @@ This is a self-contained, reusable procedure with two current callers — `### 4
    - origin `trivial`:
      ```
      TRIVIAL OVERRIDE FALLBACK [<task_id>]: smoke test failed (or scope creep detected); re-routing to full task-scope pipeline (worktree + developer + tester).
+     ```
+   - reason `nothing-verified` (any origin; this notice replaces the two above):
+     ```
+     NOTHING VERIFIED FALLBACK [<task_id>] (origin <inline|light|trivial>): smoke-harness verified nothing; re-routing to full task-scope pipeline (worktree + developer + tester) so the Tester judges it.
      ```
 7. Resume normal `task`-scope processing (steps 6–8 below) once the tester returns a verdict.
 
@@ -687,7 +705,7 @@ Detecting which case applies is mechanical: if the dispatch context already cont
 
 **`checklist_run_id` (optional, caller-supplied).** The sender object's other caller-supplied field, `assets/sender_template.json`'s `checklist_run_id` (empty string by default), carries the run id under which a foreground caller already ticked the `pre-task` items: `/jenga` Phase 3.5 and Phase 4, `/dooo`, or a standalone `/do` through its own front-loaded foreground step (`### 1.4`). It is passed through verbatim into each dispatched unit's sender object and never regenerated. Its presence alone proves nothing: `### 4.1.2` adopts it as `RUN_ID` only after `scripts/foreground-preflight.sh verify --run <checklist_run_id>` exits `0`, and otherwise ignores it.
 
-**`progress_owner` (optional, caller-supplied).** The sender object's third caller-supplied field, `assets/sender_template.json`'s `progress_owner` (empty string by default), says who prints the progress line (`### 4.1.3`). Empty means this `/do` prints it. `caller` means `/jenga` or `/dooo` owns the print, per wave, and this `/do` prints nothing and does not resolve the scope. Pass it through verbatim into each dispatched unit's sender object; a top-level `/do` leaves it empty.
+**`progress_owner` (optional, caller-supplied).** The sender object's third caller-supplied field, `assets/sender_template.json`'s `progress_owner` (empty string by default), says who prints the progress line (`### 4.1.3`). Empty means this `/do` prints it. `caller` means `/jenga` or `/dooo` owns the print, per wave, and this `/do` prints nothing. Pass it through verbatim into each dispatched unit's sender object; a top-level `/do` leaves it empty.
 
 1. **Acquire.** Before spawning the developer subagent (or the bundle's shared developer subagent), run:
    ```
@@ -825,7 +843,7 @@ Additionally, if the completed work introduces user-facing changes, update `READ
   bash "$([ -f skills/j-break/scripts/record-execution.sh ] && echo skills/j-break/scripts/record-execution.sh || echo node_modules/@jenga-ai/agent/skills/j-break/scripts/record-execution.sh)" <task_id> <status> --source do
   ```
   This call is best-effort and never blocks or fails a task: `record-execution.sh` warns on stderr and exits `0` on any ledger problem. It feeds `/break status`'s "ran this session" marker.
-- **Show the progress line** (`E92`). Immediately after that ledger call, follow `### 4.1.3` step 3 (best-effort, silent when `progress_owner` is `caller`, once per bundle in `### 1.5`).
+- **Show the progress line** (`E92`). Immediately after that ledger call, follow `### 4.1.3` step 2 (best-effort, silent when `progress_owner` is `caller`, once per bundle in `### 1.5`).
 - Check for any `_INSTRUCTIONS.md` files in `project/instructions/` whose ID matches the completed task. If found, present them to the user and explain that these actions must be completed before the feature will work correctly.
 - Invoke the `/commit` skill to commit the work (if not already committed by the developer)
 - Run the **Task-Completion Cleanup Procedure** (`### 7.1` below) with this task's title, to remove the completed task from `project/todo.md` and delete the file if it is now effectively empty

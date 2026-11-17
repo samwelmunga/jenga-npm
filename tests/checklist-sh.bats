@@ -1456,7 +1456,6 @@ EOF
 }
 
 @test "concurrency: two parallel ticks of a run-scoped item pair under the same run id both land (10 rounds)" {
-  skip "disabled until the Linux lost-update race is fixed: CI (ubuntu) loses one of two parallel ticks in round 1 (run 40089429592, runs 40025786735); passes on macOS; see the E77 story filed for it"
   write_registry "$(item pair-a judgment confirm run)" "$(item pair-b judgment confirm run)"
   export WITH_LOCK_TIMEOUT_SECONDS=45 WITH_LOCK_POLL_SECONDS=0.05
   local round run_id start=$SECONDS

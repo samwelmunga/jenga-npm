@@ -230,27 +230,27 @@ make_bin() {
   done
 }
 
-# E43_S02_T01: package.json `test` is now `bash scripts/run-tests.sh`, the parallel aggregate of `bats tests/*.bats`.
+# E43_S02_T01 / E95_S01_T02: `bash scripts/run-tests.sh --all` (this repo's `test:ci`) is the full parallel aggregate of
+# `bats tests/*.bats`; the bare `bash scripts/run-tests.sh` (this repo's `test`) runs only a bounded fast set.
 # Each case builds its own isolated fixture root under BATS_TEST_TMPDIR (no shared repo state).
-@test "npm alias: an aggregate-runner body (bash scripts/run-tests.sh) folds npm test with the bats suites exactly as the literal bats form does" {
+@test "npm alias: the full aggregate-runner body (run-tests.sh --all) folds with the bats suites, and the plain bats entry survives" {
   local body
-  for body in "bash scripts/run-tests.sh" "sh scripts/run-tests.sh" "./scripts/run-tests.sh" "scripts/run-tests.sh" "  bash ./scripts/run-tests.sh  "; do
+  for body in "bash scripts/run-tests.sh --all" "sh scripts/run-tests.sh --all" "./scripts/run-tests.sh --all" "scripts/run-tests.sh --all" "  bash ./scripts/run-tests.sh  --all  "; do
     mkdir -p "$BATS_TEST_TMPDIR/agg"
     jq -n --arg b "$body" '{scripts:{test:$b}}' > "$BATS_TEST_TMPDIR/agg/package.json"
     catalog_ok --root "$BATS_TEST_TMPDIR/agg" --discovery-file "$FIX/npm-alias/discovery.json"
-    json_check '(.runnable | length) == 2 and .runnable[0].id == "npm:test" and .runnable[0].command == "npm test"'
-    json_check '(.runnable[0].also | map(.id)) == ["bats:tests","config:bats:integration"]'
+    # --all is refused outside CI, so the npm script must never be the entry j.test runs.
+    json_check '(.runnable | length) == 2 and .runnable[0].id == "bats:tests" and .runnable[0].command == "bats tests/*.bats"'
+    json_check '(.runnable[0].also | map(.id)) == ["config:bats:integration","npm:test"]'
   done
 }
 
-@test "npm alias: the aggregate-runner body yields the same catalog as the literal bats tests/*.bats body" {
-  mkdir -p "$BATS_TEST_TMPDIR/agg" "$BATS_TEST_TMPDIR/lit"
+@test "npm alias: the bare aggregate runner (the fast set) does not fold, so the whole bats suite keeps its own entry" {
+  mkdir -p "$BATS_TEST_TMPDIR/agg"
   printf '%s' '{"scripts":{"test":"bash scripts/run-tests.sh"}}' > "$BATS_TEST_TMPDIR/agg/package.json"
-  printf '%s' '{"scripts":{"test":"bats tests/*.bats"}}' > "$BATS_TEST_TMPDIR/lit/package.json"
   catalog_ok --root "$BATS_TEST_TMPDIR/agg" --discovery-file "$FIX/npm-alias/discovery.json"
-  local agg="$output"
-  catalog_ok --root "$BATS_TEST_TMPDIR/lit" --discovery-file "$FIX/npm-alias/discovery.json"
-  [ "$agg" = "$output" ]
+  json_check '[.runnable[].id] == ["bats:tests","npm:test","shellcheck:all"]'
+  json_check '.runnable[0].command == "bats tests/*.bats" and (.runnable[0].also | map(.id)) == ["config:bats:integration"]'
 }
 
 @test "npm alias: a body that merely mentions run-tests.sh (extra command or argument) does not fold" {

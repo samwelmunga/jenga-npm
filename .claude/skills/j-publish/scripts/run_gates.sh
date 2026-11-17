@@ -41,6 +41,11 @@ if REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null)"; th
 else
   REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 fi
+# The package that ships this skill (scripts/audit-deps.sh, ...). REPO_ROOT is the project being published, which is
+# the package only in the monorepo; from a consumer's .claude/skills/ mirror "$SCRIPT_DIR/../../.." is only .claude/.
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 PUBLISH_HISTORY="$REPO_ROOT/project/logs/publish-history.json"
 CUSTOM_SCRIPT_PATTERN='^[./a-zA-Z0-9_-]+$'
 
@@ -539,12 +544,14 @@ resolve_gate_command() {
 
 RESULTS=()
 
-# Print the path of a repo-level script, trying the checkout layout first and the npm-installed layout second.
+# Print the path of a package-level script: the package root first (monorepo checkout, installed package, or
+# node_modules/@jenga-ai/agent from a consumer's mirror), then the project's own scripts/, then the project's
+# node_modules copy.
 find_repo_script() {
   local name="$1"
   local candidate
   for candidate in \
-    "$SCRIPT_DIR/../../../scripts/$name" \
+    "$PACKAGE_ROOT/scripts/$name" \
     "$REPO_ROOT/scripts/$name" \
     "$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/$name"; do
     if [[ -f "$candidate" ]]; then

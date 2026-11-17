@@ -1,7 +1,7 @@
 {
   "descriptor_version": 1,
   "file": "dashboard-config.json",
-  "description": "The dashboard's stable per-project port, generated once by scripts/dashboard-port.sh ensure (port = PP*1000+NNN, PP 50..64) so browser state tied to the dashboard origin survives restarts.",
+  "description": "The dashboard's stable per-project port (generated once by scripts/dashboard-port.sh ensure, port = PP*1000+NNN, PP 50..64, so browser state tied to the dashboard origin survives restarts) and the optional glyph and colour settings of the terminal progress renderers.",
   "keys": [
     {
       "key": "dashboard_port",
@@ -12,6 +12,26 @@
       "default": 50000,
       "min": 50000,
       "max": 64999
+    },
+    {
+      "key": "progress_charset",
+      "label": "Progress charset",
+      "type": "string",
+      "description": "Glyph set of the terminal progress renderers (lib/progress): utf8 draws the design glyphs, ascii draws a pure-ASCII twin. Never guessed from LANG or LC_*. Precedence: --charset flag, then JENGA_PROGRESS_CHARSET, then this key, then utf8. Optional: a project that lacks the key uses utf8.",
+      "editable": true,
+      "default": "utf8",
+      "allowed": ["utf8", "ascii"],
+      "optional": true
+    },
+    {
+      "key": "progress_color",
+      "label": "Progress colour",
+      "type": "string",
+      "description": "Colour of the terminal progress renderers (lib/progress): auto is on only for a terminal with NO_COLOR unset or empty, always forces ANSI colour, never turns it off. Precedence: --color flag, then JENGA_PROGRESS_COLOR, then this key, then auto. Optional: a project that lacks the key uses auto.",
+      "editable": true,
+      "default": "auto",
+      "allowed": ["auto", "always", "never"],
+      "optional": true
     }
   ]
 }

@@ -14,7 +14,11 @@ SCAFFOLD_VISIBILITY_SCRIPT="$SCRIPT_DIR/apply-scaffold-visibility.sh"
 # monorepo checkout, where init.sh actually lives at skills/j-init/scripts/ with
 # templates/ and lib/ three levels up. Consumers instead have them inside the
 # installed npm package.
-if [[ -d "$SCRIPT_DIR/../../../templates" ]]; then
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+if PKG_ROOT="$(jenga_package_root "$SCRIPT_DIR")" && [[ -d "$PKG_ROOT/templates" ]]; then
+  :  # monorepo checkout, installed package, or node_modules/@jenga-ai/agent found from the mirror's location
+elif [[ -d "$SCRIPT_DIR/../../../templates" ]]; then
   PKG_ROOT="$SCRIPT_DIR/../../.."
 elif [[ -d "$PWD/node_modules/@jenga-ai/agent/templates" ]]; then
   PKG_ROOT="$PWD/node_modules/@jenga-ai/agent"

@@ -10,14 +10,21 @@
 # Best effort by contract: it ALWAYS exits 0. A missing audit-notice.sh is silent; a failing one yields a single
 # stderr line. It can therefore never change the exit status of setup or validate.
 #
-# audit-notice.sh is found the way run_gates.sh's find_repo_script finds repo scripts (monorepo checkout, git
-# toplevel, installed @jenga-ai/agent package), plus $JENGA_PROJECT_ROOT/scripts when that variable is set.
+# audit-notice.sh is found the way run_gates.sh's find_repo_script finds package scripts (the package root from the
+# shared resolver, git toplevel, installed @jenga-ai/agent package), plus $JENGA_PROJECT_ROOT/scripts when that
+# variable is set.
 #
 # Compatible with macOS bash 3.2.
 
 set -u
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# The package that ships this skill. "$HOOK_DIR/../../.." is only right in the monorepo and in the installed package;
+# in a consumer's .claude/skills/ mirror it is .claude/, so the shared resolver also looks in node_modules/@jenga-ai/agent.
+# shellcheck source=/dev/null
+if [ -f "$HOOK_DIR/../../index/scripts/package-root.sh" ]; then . "$HOOK_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$HOOK_DIR")" || true
 
 find_audit_notice() {
   local root candidate
@@ -27,7 +34,7 @@ find_audit_notice() {
     root="$(cd "$HOOK_DIR/../../.." && pwd)"
   fi
   for candidate in \
-    "$HOOK_DIR/../../../scripts/audit-notice.sh" \
+    "$PACKAGE_ROOT/scripts/audit-notice.sh" \
     "$root/scripts/audit-notice.sh" \
     "${JENGA_PROJECT_ROOT:-$root}/scripts/audit-notice.sh" \
     "$root/node_modules/@jenga-ai/agent/scripts/audit-notice.sh"; do

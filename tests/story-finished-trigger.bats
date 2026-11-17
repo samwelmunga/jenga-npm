@@ -14,6 +14,10 @@
 #   E1_S5  T1 Passed                                 finished (a one-task story)
 #   E1_S6  T1 Rejected                               nothing counted
 #   E1_S7  T1 Passed, T2 Rejected                    finished, one rejected
+#
+# E92_S08_T07: the default drawing is now the Node renderer. This file locks the LEGACY drawing (render-progress-bar.sh,
+# render-story-bar.sh) and the trigger's decision and ledger, so setup pins JENGA_PROGRESS_RENDERER=legacy and every
+# assertion keeps its pre-change meaning. The Node default and the fallback are covered in tests/run-progress.bats.
 
 bats_require_minimum_version 1.5.0
 
@@ -38,6 +42,7 @@ setup() {
 JSON
   printf '{"bundle_lock_ttl_minutes": 30}\n' > "$PROJ/project/configs/scope-thresholds.json"
   export JENGA_PROJECT_ROOT="$PROJ"
+  export JENGA_PROGRESS_RENDERER=legacy
   unset NO_COLOR JENGA_PROGRESS_LANG LC_CTYPE COLUMNS
   export LANG="en_US.UTF-8"
   unset LC_ALL

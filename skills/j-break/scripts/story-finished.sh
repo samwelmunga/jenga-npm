@@ -1,14 +1,25 @@
 #!/usr/bin/env bash
 ################################################################################
-# story-finished.sh - print the after-story progress line once per finished story (epic E92, E92_S06_T23)
+# story-finished.sh - print the after-story progress line once per finished story (epic E92, E92_S06_T23; Node E92_S08_T07)
 #
 # The trigger behind "a story just completed all its tasks". It decides WHETHER a story's line is printed and nothing else:
-# the counts come only from scripts/board-progress.sh (--story) and the drawing only from scripts/render-story-bar.sh. It
-# is normally reached through `run-progress.sh --scope story --task <ids> --after-story`, which prints the after-task bars
-# first and then calls this script with the distinct stories it resolved. It can also be run on its own.
+# the counts come only from scripts/board-progress.sh (--story) and the drawing only from a renderer. It is normally
+# reached through `run-progress.sh --scope story --task <ids> --after-story`, which prints the after-task lines first and
+# then calls this script with the distinct stories it resolved. It can also be run on its own.
 #
 # Usage:
-#   story-finished.sh --story <story id>[,<story id>...] [--cols N] [--color auto|always|never] [--root DIR]
+#   story-finished.sh --story <story id>[,<story id>...] [--cols N] [--color auto|always|never] [--charset utf8|ascii]
+#                     [--legacy] [--root DIR]
+#
+# THE DRAWING (E92_S08_T07). By default the line is drawn by the Node renderer, `node lib/progress/cli.js [--charset C]
+# [--cols N] [--color M] after-story --story <id>` (cli.js found like the other helpers: <root>/lib/progress/cli.js, then
+# node_modules/@jenga-ai/agent/lib/progress/cli.js), with its output captured. `--legacy`, or JENGA_PROGRESS_RENDERER=legacy
+# in the environment, draws with scripts/render-story-bar.sh exactly as before. --charset goes to Node only, and only when
+# given. When the Node drawing is not possible (node not on PATH, cli.js not found, a non-zero exit or no output) ONE
+# `story-finished.sh: warning: ... (legacy drawing used, run unaffected)` line is written and render-story-bar.sh draws
+# that story and every later one of the call. Because the Node output is captured, colour under `auto` is off; colour
+# needs `--color always`. When stdout is a terminal and neither --cols nor COLUMNS is given, the terminal width is passed
+# to Node as --cols.
 #
 # FINISHED: the story has at least one counted task (denominator above 0), none pending, none in progress and none of
 # unknown status. Failed and Rejected tasks are terminal: a story with Failed tasks is finished, and is announced.
@@ -32,7 +43,10 @@ set -o nounset
 
 SCRIPT_NAME="story-finished.sh"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd -- "$SCRIPT_DIR/../../.." && pwd)"
+# Package root (scripts/, templates/, lib/): resolved by the shared helper so it also works from a consumer's .claude/skills mirror.
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+REPO_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 
 TMP_DIR=""; LOCK_DIR=""
 cleanup() {
@@ -53,31 +67,71 @@ resolve_helper() {
   return 1
 }
 
-USAGE="usage: $SCRIPT_NAME --story <id>[,<id>...] [--cols N] [--color auto|always|never] [--root DIR]"
+USAGE="usage: $SCRIPT_NAME --story <id>[,<id>...] [--cols N] [--color auto|always|never] [--charset utf8|ascii] [--legacy] [--root DIR]"
 case "${1:-}" in -h|--help|help) printf '%s\n' "$USAGE"; exit 0 ;; esac
 
-STORIES=""; FWD_COLS=""; FWD_COLOR=""; ROOT=""
+STORIES=""; FWD_COLS=""; FWD_COLOR=""; FWD_CHARSET=""; ROOT=""; LEGACY=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --story) [ "$#" -ge 2 ] || usage_err "--story needs a value"; STORIES="${STORIES:+$STORIES,}$2"; shift 2 ;;
     --cols)  [ "$#" -ge 2 ] || usage_err "--cols needs a value"; FWD_COLS="$2"; shift 2 ;;
     --color) [ "$#" -ge 2 ] || usage_err "--color needs a value"; FWD_COLOR="$2"; shift 2 ;;
+    --charset) [ "$#" -ge 2 ] || usage_err "--charset needs a value"; FWD_CHARSET="$2"; shift 2 ;;
+    --legacy) LEGACY=1; shift ;;
     --root)  [ "$#" -ge 2 ] || usage_err "--root needs a value"; ROOT="$2"; shift 2 ;;
     *) usage_err "unknown argument: $1" ;;
   esac
 done
 [ -n "$STORIES" ] || usage_err "--story needs at least one story id"
+case "$FWD_CHARSET" in ""|utf8|ascii) ;; *) usage_err "--charset must be utf8 or ascii, got: $FWD_CHARSET" ;; esac
+# The environment form of --legacy. Any other value is the Node default.
+[ "${JENGA_PROGRESS_RENDERER:-}" != "legacy" ] || LEGACY=1
 [ -z "$ROOT" ] || export JENGA_PROJECT_ROOT="$ROOT"
+
+# The terminal width, for the Node renderer only (its output is captured, so it cannot see the terminal itself).
+TTY_COLS=""
+if [ "$LEGACY" -eq 0 ] && [ -z "$FWD_COLS" ] && [ -z "${COLUMNS:-}" ] && [ -t 1 ]; then
+  exec 3>&1
+  TTY_COLS="$(stty size <&3 2>/dev/null | awk '{print $2}')"
+  exec 3>&-
+  case "$TTY_COLS" in ''|*[!0-9]*) TTY_COLS="" ;; esac
+fi
 
 # ---- from here on every failure is a warning, never a failed run --------------------------------------------------
 command -v jq >/dev/null 2>&1 || { note "jq is not available"; end_ok; }
 BOARD_PROGRESS="$(resolve_helper scripts/board-progress.sh)" || { note "could not locate scripts/board-progress.sh"; end_ok; }
-RENDER="$(resolve_helper scripts/render-story-bar.sh)" || { note "could not locate scripts/render-story-bar.sh"; end_ok; }
+# The legacy renderer is needed up front only in legacy mode; the Node path looks it up when it falls back.
+RENDER=""
+if [ "$LEGACY" -eq 1 ]; then
+  RENDER="$(resolve_helper scripts/render-story-bar.sh)" || { note "could not locate scripts/render-story-bar.sh"; end_ok; }
+fi
 RESOLVE_ROOT="$(resolve_helper scripts/resolve-root.sh)" || { note "could not locate scripts/resolve-root.sh"; end_ok; }
 TMP_DIR="$(mktemp -d 2>/dev/null)" || { note "could not create a temporary directory"; end_ok; }
-ERR_FILE="$TMP_DIR/err"; JSON_FILE="$TMP_DIR/progress.json"
+ERR_FILE="$TMP_DIR/err"; JSON_FILE="$TMP_DIR/progress.json"; NODE_OUT="$TMP_DIR/node.out"; NODE_CLI=""
 
 first_line() { head -n 1 "$1" 2>/dev/null | tr -d '\r'; }
+last_line() { grep -v '^[[:space:]]*$' "$1" 2>/dev/null | tail -n 1 | tr -d '\r'; }
+fallback_note() { printf '%s: warning: %s (legacy drawing used, run unaffected)\n' "$SCRIPT_NAME" "$1" >&2; }
+
+# draw_node <story id>: the Node after-story line, output captured. Prints it and returns 0, or writes ONE warning and
+# returns 1 with nothing printed.
+draw_node() {
+  local why
+  command -v node >/dev/null 2>&1 || { fallback_note "node is not on PATH"; return 1; }
+  [ -n "$NODE_CLI" ] || NODE_CLI="$(resolve_helper lib/progress/cli.js)" || { fallback_note "could not locate lib/progress/cli.js"; return 1; }
+  local cols="${FWD_COLS:-$TTY_COLS}"
+  local -a node_args=()
+  [ -z "$FWD_CHARSET" ] || node_args+=(--charset "$FWD_CHARSET")
+  [ -z "$cols" ]        || node_args+=(--cols "$cols")
+  [ -z "$FWD_COLOR" ]   || node_args+=(--color "$FWD_COLOR")
+  if node "$NODE_CLI" ${node_args[@]+"${node_args[@]}"} after-story --story "$1" >"$NODE_OUT" 2>"$ERR_FILE" && [ -s "$NODE_OUT" ]; then
+    cat "$NODE_OUT"
+    return 0
+  fi
+  why="$(last_line "$ERR_FILE")"
+  fallback_note "the Node renderer failed for $1: ${why:-it printed nothing}"
+  return 1
+}
 
 QUEUE_DIR="$(bash "$RESOLVE_ROOT" get queue 2>"$ERR_FILE")" || { note "could not resolve the queue directory: $(first_line "$ERR_FILE")"; end_ok; }
 [ -n "$QUEUE_DIR" ] || { note "the queue directory resolved to an empty path"; end_ok; }
@@ -140,6 +194,18 @@ process_story() { # <story id>
   signature="$done_n:$prog_n:$fail_n:$pend_n:$rej_n:$unk_n:$den_n"
   [ "$(recorded_signature "$story")" != "$signature" ] || return 0
 
+  # The Node line first (default). A failure is warned about once, and the legacy renderer draws this story and every
+  # later one of the call.
+  if [ "$LEGACY" -eq 0 ]; then
+    if draw_node "$story"; then
+      record "$story" "$signature" || true
+      return 0
+    fi
+    LEGACY=1
+  fi
+  if [ -z "$RENDER" ]; then
+    RENDER="$(resolve_helper scripts/render-story-bar.sh)" || { note "could not locate scripts/render-story-bar.sh"; return 0; }
+  fi
   local -a render_args=(--file "$JSON_FILE")
   [ -z "$FWD_COLS" ]  || render_args+=(--cols "$FWD_COLS")
   [ -z "$FWD_COLOR" ] || render_args+=(--color "$FWD_COLOR")

@@ -126,6 +126,20 @@ if [ -n "$PKG_ROOT" ]; then
   fi
 fi
 
+# ── 1b. The package root the shared resolver finds (a consumer install: node_modules/@jenga-ai/agent) ──
+# Candidate 1 is only right in the monorepo and in the installed package itself; from the consumer's
+# .claude/skills/ mirror it lands on .claude/. This does not depend on the caller's cwd or on git.
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+RESOLVED_PKG_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
+if [ -n "$RESOLVED_PKG_ROOT" ] && [ "$RESOLVED_PKG_ROOT" != "$PKG_ROOT" ]; then
+  CANDIDATES_TRIED+=("$RESOLVED_PKG_ROOT/project/app")
+  if RESOLVED="$(try_base "$RESOLVED_PKG_ROOT")"; then
+    echo "$RESOLVED"
+    exit 0
+  fi
+fi
+
 # ── 2 & 3. Git repo root, then the package inside it (consumer install) ───────
 REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -n "$REPO_ROOT" ]; then

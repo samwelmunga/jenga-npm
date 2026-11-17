@@ -4,6 +4,8 @@
 #
 # For one epic or one story prints (1) the dependency tree as indented text, stories as groups and tasks as nodes with
 # their depends_on, (2) the "Ready to take" list and (3) one "X unlocked by Y" line per unlocked_by.
+# The tree is drawn whenever the scope has at least one task, with or without dependency edges; the tree_empty label
+# appears only for a scope with no tasks (E92_S09_T01, user request 2026-11-15).
 #
 # This script does no counting and no readiness or dependency logic. It reads the board ONCE with
 # `scripts/board-progress.sh --graph --within <id>` and only lays out what that JSON states (state, ready, unlocked_by,
@@ -36,7 +38,9 @@ set -u
 
 SCRIPT_NAME="render-status-scope.sh"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 usage() { sed -n '/^# USAGE/,/^# SIBLING FILES/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; }
 usage_err() { printf '%s: %s\n' "$SCRIPT_NAME" "$1" >&2; exit 2; }
 warn() { printf '%s: warning: %s (status scope block skipped)\n' "$SCRIPT_NAME" "$1" >&2; exit 0; }
@@ -69,7 +73,7 @@ id="$(printf '%s' "$id" | tr 'es' 'ES')"
 find_file() {
   local override="$1" rel="$2" cand
   if [ -n "$override" ]; then [ -f "$override" ] && printf '%s' "$override"; return 0; fi
-  for cand in "$SCRIPT_DIR/../../../scripts/$rel" "scripts/$rel" "node_modules/@jenga-ai/agent/scripts/$rel"; do
+  for cand in "$PACKAGE_ROOT/scripts/$rel" "scripts/$rel" "node_modules/@jenga-ai/agent/scripts/$rel"; do
     if [ -f "$cand" ]; then printf '%s' "$cand"; return 0; fi
   done
   return 0
@@ -130,11 +134,10 @@ out="$(printf '%s\n' "$json" | jq -r \
   | ($d.tasks // []) as $tasks | ($d.stories // []) as $stories
   | (if ($d.scope.within // "") != "" then ($d.scope.within | clean) else $id end) as $scope
   | ( ($stories | length) > 0 and ($stories | all(.complete == true)) ) as $all_complete
-  | ([$stories[] | select((.depends_on // []) | length > 0)] + [$tasks[] | select((.depends_on // []) | length > 0)] | length > 0) as $has_edges
   | ( (if $all_complete then g.star else g.goal end) + " " + $t_goal + ": " + $scope ) as $goal_line
   | [ paint("1"; $t_title + " (" + $scope + ")"),
       paint("36"; $goal_line),
-      ( if $has_edges | not then "  " + $t_empty
+      ( if ($tasks | length) == 0 then "  " + $t_empty
         elif $cols < 50 then
           ( $tasks[] | (.state | sym) as $y | paint($y.c; $y.s) + " " + (.id | clean) + " " + (.state | word) )
         else

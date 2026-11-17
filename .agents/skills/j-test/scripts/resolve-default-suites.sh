@@ -154,8 +154,9 @@ set -euo pipefail
 
 SCRIPT_NAME="resolve-default-suites.sh"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd -- "$SCRIPT_DIR/../../.." && pwd)"
-
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+REPO_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 export LC_ALL=C
 export GIT_OPTIONAL_LOCKS=0
 
@@ -256,7 +257,7 @@ if [ -n "$ROOT_ARG" ]; then
 else
   RESOLVER="$(resolve_helper scripts/resolve-root.sh)" \
     || die 3 "no --root given and scripts/resolve-root.sh was not found"
-  ROOT="$(bash "$RESOLVER" 2>/dev/null || true)"
+  ROOT="$(bash "$RESOLVER" root 2>/dev/null || true)"
   [ -n "$ROOT" ] && [ -d "$ROOT" ] || die 3 "could not resolve the project root; pass --root"
 fi
 

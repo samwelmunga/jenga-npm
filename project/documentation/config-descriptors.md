@@ -52,6 +52,7 @@ Per key entry:
 | `pattern` | string | optional | A JavaScript regular expression the value must match. `string` keys only. |
 | `pointer` | string | read-only keys | A non-empty one-line pointer to the validator, script, document or wizard that owns the content. |
 | `bump_on_change` | string | optional | Name of the version-counter key a successful set increments by 1. Editable keys only. |
+| `optional` | boolean | optional | `true` marks a key a config file may lack (`E92_S08_T03`). The coverage check does not report it absent, and `jenga config get` on an absent optional key prints its `default` (exit `0`) instead of exiting `3`; `set` creates it. Editable keys only, so it always has a `default`. Absence is the supported state, not a gap to repair: the consumer falls back to the same `default`. Today only `dashboard-config.progress_charset` and `dashboard-config.progress_color` carry it. |
 
 Rules:
 
@@ -69,7 +70,8 @@ Rules:
 - **Full coverage**: every top-level key in the real config file must have a descriptor entry, and every
   descriptor entry must name a key that exists in the file. `lib/config/descriptors.js`'s `checkAgainstConfig`
   reports both directions, so a key added to a config file without a descriptor is caught, as is a typo in a
-  descriptor. It also reports a key whose current value does not match its declared `type`.
+  descriptor. It also reports a key whose current value does not match its declared `type`. The one exception is a
+  key the descriptor marks `optional: true`, which may be absent from the file.
 - **Pointers must be real.** A pointer names something that exists in the repo: a path such as
   `scripts/validate-checklists.sh`, or a skill such as `j.tools`. Tests resolve every shipped pointer.
 

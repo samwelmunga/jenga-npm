@@ -21,7 +21,8 @@
     "allowed": { "kind": "array_of_scalars", "required": "never", "only_when": "editable", "applies_to": ["integer", "string", "boolean"] },
     "pattern": { "kind": "regex", "required": "never", "only_when": "editable", "applies_to": ["string"] },
     "pointer": { "kind": "string", "required": "readonly", "only_when": "readonly", "single_line": true, "non_empty": true },
-    "bump_on_change": { "kind": "key_ref", "required": "never", "only_when": "editable" }
+    "bump_on_change": { "kind": "key_ref", "required": "never", "only_when": "editable" },
+    "optional": { "kind": "boolean", "required": "never", "only_when": "editable" }
   },
   "bump_target": { "type": "integer", "editable": false },
   "exit_codes": {

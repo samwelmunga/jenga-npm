@@ -135,6 +135,10 @@ while [ -h "$SCRIPT_PATH" ]; do
   esac
 done
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+# Package root (scripts/, templates/): resolved so it also works from a consumer's .claude/skills mirror.
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 
 REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)"
 [ -n "$REPO_ROOT" ] || die "could not locate repo root (git rev-parse failed from $SCRIPT_DIR)"
@@ -143,16 +147,16 @@ PUBLICIGNORE="$REPO_ROOT/.publicignore"
 [ -f "$PUBLICIGNORE" ] || die ".publicignore not found at $PUBLICIGNORE"
 
 # Package-relative first (REPO_ROOT is the consumer's repo when run from node_modules/), node_modules fallback.
-WITH_LOCK_SCRIPT="$SCRIPT_DIR/../../../scripts/with-lock.sh"
+WITH_LOCK_SCRIPT="$PACKAGE_ROOT/scripts/with-lock.sh"
 [ -f "$WITH_LOCK_SCRIPT" ] || WITH_LOCK_SCRIPT="$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/with-lock.sh"
 UPDATE_FRONTMATTER_SCRIPT="$SCRIPT_DIR/update-task-frontmatter.sh"
 EVENTS_FILE="$REPO_ROOT/project/logs/events.json"
 
-EVENTS_APPEND_SCRIPT="$SCRIPT_DIR/../../../scripts/events-append.sh"
+EVENTS_APPEND_SCRIPT="$PACKAGE_ROOT/scripts/events-append.sh"
 [ -f "$EVENTS_APPEND_SCRIPT" ] || EVENTS_APPEND_SCRIPT="$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/events-append.sh"
 
 # The shared commit resolver (E79_S02_T07). Same lookup order as the helpers above.
-COMMITS_FOR_ITEM_SCRIPT="$SCRIPT_DIR/../../../scripts/commits-for-item.sh"
+COMMITS_FOR_ITEM_SCRIPT="$PACKAGE_ROOT/scripts/commits-for-item.sh"
 [ -f "$COMMITS_FOR_ITEM_SCRIPT" ] || COMMITS_FOR_ITEM_SCRIPT="$REPO_ROOT/node_modules/@jenga-ai/agent/scripts/commits-for-item.sh"
 
 [ -f "$WITH_LOCK_SCRIPT" ] || die "expected script not found: $WITH_LOCK_SCRIPT"

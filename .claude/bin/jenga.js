@@ -19,9 +19,15 @@ Usage:
   jenga init      Run the setup wizard (creates jenga.cli.json, registers hook)
   jenga attach    Write MCP config for this project so new sessions route through Jenga
   jenga status    Show router status and active session
+  jenga sync [--dry-run]
+                  Bring .claude/, .agents/, the Copilot files and the Jenga block in CLAUDE.md
+                  and AGENTS.md in line with the installed version. Non-interactive; run it
+                  after upgrading (or when npm/pnpm blocked the postinstall script).
+                  --dry-run prints what would change and writes nothing.
   jenga doctor    Scan .agents/ and .claude/ for orphaned package files and clean up
                   interactively (alias: jenga clean). Add --dry-run to preview only.
   jenga config    List and edit Jenga settings (also: config get|set <file>.<key> [value])
+  jenga progress  Show board progress in the terminal (colour on; see also: jenga progress --help)
   jenga dashboard start [--port <n>] [--api-only]
                   Start the project dashboard API and UI (--api-only serves the API
                   without the UI). Port defaults to 3001, or JENGA_API_PORT if set.
@@ -65,6 +71,11 @@ async function main() {
       await runStatus(args);
       break;
     }
+    case "sync": {
+      const { runSync } = await import("../lib/commands/sync.js");
+      await runSync(args);
+      break;
+    }
     case "doctor":
     case "clean": {
       // Both names are the same code path (E26_S08_T02) — "doctor" and "clean" are
@@ -76,6 +87,11 @@ async function main() {
     case "config": {
       const { runConfig } = await import("../lib/commands/config.js");
       await runConfig(args);
+      break;
+    }
+    case "progress": {
+      const { runProgress } = await import("../lib/commands/progress.js");
+      await runProgress(args);
       break;
     }
     case "dashboard": {

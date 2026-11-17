@@ -1,7 +1,7 @@
 {
   "descriptor_version": 1,
   "file": "test-config.json",
-  "description": "The tester's tool stack, the commit-time test options, the per-scope test-run policy and the bounded default suite set. The tool list is read-only here and changes only through the tester's user-approval flow; the two commit_* keys, the three test_run_* keys and test_default_suite_set are plain strings you can set.",
+  "description": "The tester's tool stack, the commit-time test options, the per-scope test-run policy, the bounded default suite set the long-running test thresholds and the two run-budget numbers. The tool list is read-only here and changes only through the tester's user-approval flow; the two commit_* keys, the three test_run_* keys and test_default_suite_set are plain strings you can set, and the two *_threshold_seconds keys, full_run_confirm_file_count and ask_before_run_seconds are integers.",
   "keys": [
     {
       "key": "tools",
@@ -81,6 +81,46 @@
       "editable": true,
       "default": "",
       "pattern": "^$|^[A-Za-z0-9_./*?-]+(,[A-Za-z0-9_./*?-]+)*$"
+    },
+    {
+      "key": "mirror_gate_threshold_seconds",
+      "label": "Pre-push gate threshold (seconds)",
+      "type": "integer",
+      "description": "A shipping test file whose runtime, run alone, exceeds this many seconds is too slow for the pre-push test gate and is a candidate for the gate's exclusion list (it still runs in local runs); read only through skills/j-test/scripts/test-thresholds.sh.",
+      "editable": true,
+      "default": 50,
+      "min": 1,
+      "max": 2147483647
+    },
+    {
+      "key": "manual_only_threshold_seconds",
+      "label": "Manual-only threshold (seconds)",
+      "type": "integer",
+      "description": "A test file whose runtime, run alone, exceeds this many seconds should be tagged manual-only (never run automatically, even locally); an advisory figure for the human tagging it, because the in-file marker, not this number, defines a manual-only file; read only through skills/j-test/scripts/test-thresholds.sh.",
+      "editable": true,
+      "default": 600,
+      "min": 1,
+      "max": 2147483647
+    },
+    {
+      "key": "full_run_confirm_file_count",
+      "label": "Full-run confirm file count",
+      "type": "integer",
+      "description": "A test-runner selection of more test files than this is refused unless the caller passes --confirm-full, so an expensive run is always a deliberate choice; read only through skills/j-test/scripts/test-thresholds.sh (get confirm-file-count).",
+      "editable": true,
+      "default": 60,
+      "min": 1,
+      "max": 2147483647
+    },
+    {
+      "key": "ask_before_run_seconds",
+      "label": "Ask-before-run threshold (seconds)",
+      "type": "integer",
+      "description": "An agent asks the user before starting a test run whose up-front estimate (scripts/test-estimate.sh) exceeds this many seconds; read only through skills/j-test/scripts/test-thresholds.sh (get ask-before-run).",
+      "editable": true,
+      "default": 300,
+      "min": 1,
+      "max": 2147483647
     }
   ]
 }

@@ -272,7 +272,7 @@ d | e | f"
 
 @test "live catalog: whatever the harness reports as critical renders as rows that all validate as error_table" {
   local findings
-  findings="$("$BASH_BIN" "$HARNESS" 2> /dev/null || true)"
+  findings="$("$BASH_BIN" "$HARNESS" --no-exec 2> /dev/null || true)"
   render --rows-only <<< "$findings"
   [ "$status" -eq 0 ]
   if [ -z "$output" ]; then

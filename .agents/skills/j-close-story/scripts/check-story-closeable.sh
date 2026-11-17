@@ -32,6 +32,10 @@ usage() {
 # this directory's siblings: check-privatized.sh:138 and
 # compute-scope-divergence.sh:54.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Package root (scripts/, templates/): resolved so it also works from a consumer's .claude/skills mirror.
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 PROJECT_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -z "$PROJECT_ROOT" ]]; then
   echo "ERROR: could not locate project root (git rev-parse --show-toplevel failed from $SCRIPT_DIR)" >&2
@@ -40,7 +44,7 @@ fi
 # Shared board-ID shapes (epic E86). Resolved relative to this script, then the installed package, then the
 # repo root; there is deliberately no fallback regex here, so a missing file is an error rather than a silent
 # return to a two-digit-only guard.
-for _bid_dir in "$SCRIPT_DIR/../../../scripts/lib" "$PROJECT_ROOT/node_modules/@jenga-ai/agent/scripts/lib" "$PROJECT_ROOT/scripts/lib"; do
+for _bid_dir in "$PACKAGE_ROOT/scripts/lib" "$PROJECT_ROOT/node_modules/@jenga-ai/agent/scripts/lib" "$PROJECT_ROOT/scripts/lib"; do
   if [[ -f "$_bid_dir/board-ids.sh" ]]; then
     # shellcheck source=../../../scripts/lib/board-ids.sh
     . "$_bid_dir/board-ids.sh"

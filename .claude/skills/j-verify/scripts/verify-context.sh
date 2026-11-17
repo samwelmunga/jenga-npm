@@ -128,8 +128,10 @@ PROJECT_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || tr
 
 # The package root holds skills/ and templates/: this checkout, or the installed package for a consumer.
 # Same repo-or-node_modules fallback the sibling skills use.
-if [ -f "$PROJECT_ROOT/skills/j-close-task/scripts/close-task-context.sh" ]; then PKG_ROOT="$PROJECT_ROOT"
-else PKG_ROOT="$PROJECT_ROOT/node_modules/@jenga-ai/agent"; fi
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PKG_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
+[ -f "$PKG_ROOT/skills/j-close-task/scripts/close-task-context.sh" ] || PKG_ROOT="$PROJECT_ROOT/node_modules/@jenga-ai/agent"
 CLOSE_CTX="$PKG_ROOT/skills/j-close-task/scripts/close-task-context.sh"
 [ -f "$CLOSE_CTX" ] || die "missing helper: $CLOSE_CTX"
 

@@ -323,6 +323,45 @@ At the end of Phase 4, if any DoD gaps were found across any stories, include a 
 
 **Important:** Gap detection is **report-only**. Do not automatically change the status of any story or epic based on unchecked DoD boxes — surface the gaps so a human can review and decide.
 
+#### Done before its dependency
+
+A task that is done although one of its dependencies is not done is a board contradiction (`E92_S11_T02`, user decision
+2026-11-15: a task done before its dependency did not really depend on it). It appears when a dependency was done and later
+reopened (`Failed` on re-judgment, `j.redo`, set back to `Pending`), or when `depends_on` is simply wrong. Run:
+
+```bash
+skills/j-reconcile/scripts/detect-done-before-dependency.sh            # unscoped
+skills/j-reconcile/scripts/detect-done-before-dependency.sh --within <E##>   # scope_type "epic"
+```
+
+It reads `scripts/board-progress.sh --graph` (whose `unfinished_deps` key states the contradiction, with the same
+effective-dependency rule as `waiting_on`: the task's own `depends_on`, then its story's) and prints
+`{"count": N, "findings": [{task, title, status, story_id, epic_id, unfinished_deps: [{id, level, status}]}]}`. For
+`scope_type: "range"`, run it with `--within <epic>` for each id in `epic_ids` and keep only the findings whose `story_id`
+is one of the resolved stories. A non-zero exit is a failure to read the board: report it and continue.
+
+**This finding is report-only.** Never change the task's or the dependency's status, never edit a `depends_on`, and never
+offer an automatic fix: which side is wrong (the reopened dependency, the task, or the `depends_on` line) is the user's
+call. When `count` is above 0, list each finding under **"DONE BEFORE ITS DEPENDENCY"** in the report (see
+`assets/report_format.md`), naming the task and each unfinished dependency with its status, and offer to inspect the
+dependency, in the numbered form from `CLAUDE.md`'s Interaction Pattern:
+
+```
+<N> task(s) are done although a dependency is not done:
+  1. E##_S##_T## · <title> (<status>)  — depends on <dependency id> (<its status>)
+
+How would you like to handle it?
+1. Inspect the dependency of <first task> (open its board file and its history)
+2. Inspect a different finding
+3. Skip for now — carry on with the rest of the reconcile pass
+4. Other (describe below)
+```
+
+The offer is non-blocking: declining it changes nothing, and the rest of the run continues. Inspecting means reading the
+dependency's board file and its `dates_previously_completed` / `reopened_reason`, then telling the user what was found; it
+writes nothing. With `count` 0, report nothing new (omit the section). The task still counts as done everywhere; the
+dependency views mark it with a yellow `?` (`project/documentation/progress-visualisation.md`, section 30.12).
+
 ### 5. Detect unlinked code (no board provenance)
 Phases 2 and 3 ask "does this board item exist in the code?". This phase asks the inverse —
 **"does this code exist on the board?"** — and finds paths with no Jenga provenance at all.

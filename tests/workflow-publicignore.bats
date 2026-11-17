@@ -38,6 +38,7 @@ ignore_line() {
     '+ project/.workflows/scripts/npm-login-wait.sh' \
     '+ project/.workflows/scripts/stage-wait-ready.sh' \
     '+ project/.workflows/scripts/st-test-run.sh' \
+    '+ project/.workflows/scripts/st-test-mock-board.sh' \
     '+ project/.workflows/scripts/finalize-release.sh'
   do
     run grep -Fxc -e "$rule" "$PUBLICIGNORE"
@@ -88,6 +89,7 @@ ignore_line() {
     'project/.workflows/deploy-stage.json' \
     'project/.workflows/scripts/check-release-ready.sh' \
     'project/.workflows/scripts/st-test-run.sh' \
+    'project/.workflows/scripts/st-test-mock-board.sh' \
     'project/.workflows/scripts/finalize-release.sh'
   do
     run bash "$MATCHER" "$public"

@@ -92,6 +92,15 @@ Show the script's one-line confirmation verbatim, then explain what it means in 
 
 A non-zero exit from a script means the script itself failed, not that a break was requested. Report its stderr verbatim and do not claim a break is in place.
 
+## Progress lines (`run-progress.sh`)
+
+`/do`, `/dooo` and `/jenga` print the after-task and after-story lines through `scripts/run-progress.sh` in this skill (`E92`); their own sections say only **when**. The rule for every one of those calls:
+
+- **Copy the lines into the reply.** Run it as `run-progress.sh --scope story --task <ids> --after-story --charset utf8 --color never` and copy its stdout into your reply as a fenced code block. The tool-call row is folded away in the desktop app, so a line left there is never seen.
+- **Colour needs `--color always` in a real terminal.** The Node drawing is captured by the script so that it can fall back, so the default `auto` never colours it; `--color never` is the right choice for the copy in the reply.
+- **Node is the default renderer** (`lib/progress/cli.js after-task` and `after-story`). `--legacy`, or `JENGA_PROGRESS_RENDERER=legacy` in the environment, draws with the old bash renderers instead, byte for byte as before. Without `node`, or when the Node renderer fails, the script writes one warning on stderr and draws with the old renderers itself.
+- **Never an error.** A warning on stderr, or no line at all, never blocks, fails or re-statuses a task; only a usage error exits 2.
+
 ## What this does not do
 
 `/break` halts the **dispatcher**, not a running agent. Every checkpoint sits at a task boundary, so a wedged agent in the middle of a task has no boundary to stop at — that is by design. The only intervention that reaches inside a running agent is `TaskStop`, which `j.check-in` offers behind a second confirmation.

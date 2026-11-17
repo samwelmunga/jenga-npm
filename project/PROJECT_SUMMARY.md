@@ -95,6 +95,14 @@ Jenga AI supports two distribution paths:
 - **E84** — Await-answer marker for skills that delegate their conversation to a sub-agent *(Pending — filed 2026-10-22 via `/j-error`, from an upstream change request by the Kazi project (`../agent-gui`) written against `@jenga-ai/agent` 4.3.0; one story `E84_S01`, see below)*
 - **E85** — Security audits, monitoring and credential-access transparency *(Passed with remarks 2026-10-26 — filed 2026-10-25 via `/j.todo`; reopened 2026-10-25 for `E85_S04` and `E85_S05`; all five stories `Passed with remarks`, all 46 tasks terminal and merged into local main. Delivered: consent-gated, opt-in npm dependency audit for Jenga and for generated services (`scripts/audit-deps.sh`, `audit-config.json`, `audit_result` events) wired into the tester, pre-flight checklists and `/j-publish` gates; audit jobs in Jenga's own CI (`dependency-audit.yml`, a gating job in `npm-publish.yml`) and in the CI `/j-publish` generates; a one-time audit opt-in notice; the scanner-issue response (findings audit, `credential-access-audit.md`, `What this skill touches` sections in `j-connect`/`j-publish`/`j-uncharted`, a bats credential-access guard, and a `j-uncharted` secret-file skip); a dashboard Security tab (live and in `--snapshot`); and remediation of the first real audit's findings in all five of Jenga's lockfile directories, with a clean re-audit recorded 2026-10-26. Open items: the epic-level full-suite gate was not re-run after the reopening (targeted suites stood in); `tests/mirror-test-subject-invariant.bats` never completed; the reply draft `project/documentation/credential-access-issue-reply-draft.md` is for the user to post on the public repo after mirroring and releasing (fill its `<version>` placeholder first); regenerating through `/j-publish` would replace the hand-added `npm-publish.yml` audit job; the stale `project/app/api/package-lock.json` is to be removed in a follow-up. Agents never post to the public repo or run the mirror)*
 - **E86** — Width-agnostic board IDs (support E100, E1000 and beyond) *(Pending — filed 2026-10-25 via `/j.brainstorm`; makes every board-ID parser, sorter, generator and resolver width-agnostic so `E01` and `E1001` coexist, with no renaming of existing files and no migration step (upgrade-and-go); no fixed-width padding going forward, numeric (never filename-text) ordering, stories and tasks may pass 99 too. S01 shared ID-pattern source + the strict two-digit parsers (`validate-board.sh`, `cascade-resolve.sh`, `board_index.py`, close-story scripts, e25 scripts); S02 numeric sort helper adopted by scans, index, resume scripts and the dashboard; S03 user-approved revision of the `resolve-id.sh` fuzzy-ID grammar (letters or separators required for 3+ digit values, bare ambiguous runs invalid); S04 numeric-max next-ID allocator and the `SCRUM_BOARD_SCHEMA.md` contract rewrite ("minimum two digits, no maximum"); S05 audit of commit names, branch/worktree names, queue triggers, hooks and dashboard, including the new `E10`-prefix-of-`E100` substring-match bug class; S06 mixed-width fixture and the old-board regression check. Rejected: renaming ~1,900 existing files (cost, not policy). Stories filed without tasks; `/jenga` decomposes them)*
+- **E91** — Major-release capture: record why a release is major and which epics carry the breaking changes *(Pending — filed 2026-11-10 via `/j.brainstorm`; five stories `E91_S01`-`E91_S05`, 17 tasks. New skill `j.breaking-change` (alias `j.major-release`) asks the reason a release is major and which epic(s) hold the breaking changes, and writes a record, a CHANGELOG entry and a `BREAKING CHANGE:` footer commit; `deploy-public` runs it right after `pick_version` on a major bump and shows a soft, overridable warning at `approve` when no record exists. Motivated by v5.0.0 being staged on 2026-11-09 with no documented breaking change; no retroactive record for v5.0.0. See below)*
+- **E92** — Progress Visualisation: see how far a run, a story, an epic or the backlog has come *(Passed with remarks 2026-11-16 — filed 2026-11-12 via `/j.brainstorm`; first rolled up 2026-11-12, reopened for `E92_S06` (epic card bars and overlay dependency tree), `E92_S07` (fullscreen progress map), `E92_S08` (Node terminal renderers), `E92_S09` to `E92_S11` (a tree for every epic, the padlock rule, no goal while a story has failed, state readable without colour), and rolled up a fourth time 2026-11-16 with all 11 stories and 89 tasks terminal. Delivered: one deterministic counting script, `scripts/board-progress.sh`, read by every view (decision 1: no parallel counting stack); a terminal progress bar after each task or wave in `/jenga`, `j.do` and `j.dooo`; `j.status` bars, overview and scoped views, drawn by Node renderers under `lib/progress/` (`jenga progress` for colour in a real terminal, `--legacy` keeps the bash path); dashboard pie charts for tasks, stories, epics and the `todo.md` backlog, a pipeline diagram, epic card bars and a dependency tree with ready and locked states and a fullscreen view, all in the `j.dashboard --snapshot` export; a report-only `j.reconcile` finding for a done task whose dependency is not done. Colours: green done, yellow in progress, red failed or blocked, grey pending; `Rejected` is excluded from the bar's denominator. Docs: `project/documentation/progress-visualisation.md`. Open: the `E92_S08` remarks (stale section 30.9, `--layout` missing from the `cli.js` usage), the skipped `E92_S11` story gate, several unresolved task remark rapports, and `.claude/`/`.agents/` mirrors not synced)*
+- **E93** — Convention Survey & Synced Conventions Document *(Pending — filed 2026-11-15 via `/j.brainstorm` from `project/rapports/analysis/conventions-survey-and-synced-document-eval.md`; builds on E69 without reopening it; nine stories `E93_S01`-`E93_S09`, filed without tasks. `j.conventions` gains a survey phase 0 (and a standalone `survey` mode), a section template that drives survey, wizard, document and `conv-` item text, per-category example references with hashes, a conventions document at `paths.conventions_doc` rendered inside the atomic commit, a drift check, and 12 new categories. MVP: `S01`-`S06` plus the wrap-up part of `S09`. See below)*
+- **E95** — Test-suite budget: no implicit full runs, test tiers, and pruning *(Pending — filed 2026-11-16 via `/j.brainstorm` after the 2026-11-15 incident in which the `--trivial` task `E92_S11_T03` ran the whole bats suite (394 files, 8,219 tests, about 3 h) through `scripts/smoke-harness.sh` -> `npm test`; a new epic, not a reopening of E72 or E77. Six stories `E95_S01`-`E95_S06`; `E95_S01` broken into four tasks. See below)*
+- **E96** — Release Planning: model and flow *(Pending — filed 2026-11-16 via `/j.brainstorm`; seven stories `E96_S01`-`E96_S07`, filed without tasks. Moves from a free-picked todo list to planned releases: a release is a version, items are grouped into releases and milestones, size is in calibrated bricks (median epic = 10 bricks) as quartile ranges, `j.release` plans, activates and closes a release, `j.publish` and `j.breaking-change` read its version, and `project/todo.md` becomes a generated view of the active release with an inbox for `j.btw`/`j.todo`. Depends on `E90` (public cost-weighted measure, backfilled measurements); `E96_S01` depends on `E90_S03`. Known limit: only about 446 of 1719 tasks were measured at brainstorm time and the task token spread is about 390x, so estimates are ranges)*
+- **E97** — Release Planning: interface *(Pending — filed 2026-11-16 via `/j.brainstorm`; three stories `E97_S01`-`E97_S03`, filed without tasks; depends on `E96`. A Release tab as the first tab of the todo bubble (`E47_S10`) with a brick bar and range, move between releases and the inbox, and a roadmap view (milestones, releases, epics, cross-release dependencies, reusing the `E92` tree), verified in light and dark mode and on a narrow viewport)*
+- **E98** — Mirrored skill scripts resolve package assets in a consumer install *(Passed with remarks — closed 2026-11-16. Filed from a `j.error` against Jenga 5.0.1: skill scripts derived the package root as `"$SCRIPT_DIR/../../.."`, which is `.claude/` in a consumer (postinstall mirrors only `skills/` and `agents/`), so wizards such as `conventions-entry.sh` and `j-tidy` `classify.sh` crashed. Delivered by three stories `E98_S01`-`E98_S03` (ten tasks, all Passed with remarks): the shared resolver `skills/index/scripts/package-root.sh` with every affected script migrated, audited and swept; an execution-based mirror-layout check in `j.smoke-test` plus `st-test-run.sh` running the smoke test over both the package root and the consumer `.claude/skills`; and `scripts/consumer-smoke-after-sync.sh` hooked into `j.self-sync`, documented in `project/documentation/consumer-smoke-test.md`. Known limits, recorded in the epic's Rollup section: the origin reproductions were verified in a scratch consumer, not in `../st-test` itself; the execution check runs `--help` or a declared `# smoke-invoke:` invocation only; four scripts declare one since commit `7f1aba51`, so it does catch the 5.0.1 defect on the unfixed tree, but 85 scripts remain unverifiable (36 with no `--help` handler, 48 maintainer-only, 1 sourced library), including shipped `j-publish`, `j-init`, `j-distribute` and `j-dashboard`; the scrubbed environment is not an OS sandbox; no story scope gate ran (no-commits, exit 3); the epic gate policy is `none`)*
+- **E99** — E98 follow-ups: consumer-layout verification gaps and stale records *(Pending — filed 2026-11-16 at the user's request from the `E98` Rollup remarks, which are not reopened; a new small epic because no open epic owns the theme and a closed one cannot take stories. Three stories, 16 tasks. `E99_S01` shrinks the 85 scripts the `j.smoke-test` execution phase cannot verify: `--help` handler or `# smoke-invoke:` declaration for the 36 that have neither (`T01`-`T03`), four `--help` exits-1 fixes (`T04`), a user decision on how shipped maintainer-only skills (`j-publish` 24, `j-init` 4, `j-distribute` 3, `j-dashboard` 3, others never shipped) are verified in a consumer layout instead of skipped (`T05`, decided 2026-11-16 as option 1 plus 2 with option 4 for the 8 scripts that cannot be run, option 3 rejected: skip only never-shipped skills read from `.publicignore`, honour `# smoke-invoke:` in shipped maintainer-only skills, harden the fixture so `npm publish`/`git push`/`rsync` to a target are unreachable; implemented by `T07` fixture hardening, `T08` .publicignore-derived skip, `T09` declarations for the 18 shipped scripts without a handler, `T10` documentation; `T11` is a separate decision on why `j-distribute` ships although it cannot work in a consumer), and a cheap ratchet test (`T06`, now also depending on `T08`-`T10`). `E99_S02` runs the `E98` story scope gate once with the explicit range `6066afa8^..7f1aba51` (199 test files; slowness probe first) or records why not (`T01`), and corrects stale `E98` text (`T02`: the epic's execution-check remark, skill-authoring audit rows that name `--help` probes for scripts that do not handle `--help`; the `../st-test` literal-reading deviation stays as recorded). `E99_S03` makes `skills/j-publish/SKILL.md` and its adapters, wizards and assets run scripts by a path that resolves in a consumer layout, with a bats check. Noted, not filed: the same bare `bash skills/j-...` form exists in `j-uncharted` (31), `j-cloud-connect`, `j-connect`, `j-distribute` and others)*
 
 ## Project-Scoped Pre-Flight Checklists (E67)
 Filed 2026-10-03 via the `idea-to-committed` playbook (`/j-idea` → `/j-brainstorm` → `/j-todo`), from the
@@ -913,6 +921,82 @@ incomplete: **two** playbooks chain `j-brainstorm`, `idea-to-committed` and `bra
 story carries a regression guard for the hook behaviour instead of a fix, and explicitly excludes wiring the
 watcher. One story, no tasks yet; the headless acceptance criterion is verifiable only in the requester's harness
 and must be recorded as unverified rather than silently ticked if they cannot run it.
+
+## Major-Release Capture (E91)
+
+Filed 2026-11-10 from a brainstorm. v5.0.0 was staged on 2026-11-09 with no documented breaking change: no commit has
+a `BREAKING CHANGE` footer or a `type!:` marker (the two patterns `skills/j-publish/scripts/suggest_semver_bump.sh`
+matches at lines 66-70), `CHANGELOG.md` holds only an empty `[Unreleased]`, and no release note exists. Candidate
+breaking items that surfaced: `E72_S08` (scope-gate defaults `test_run_task`/`story`/`epic` now `none`/`scoped`/`none`),
+`E86` (board ID grammar) and `E21_S02` (`/clearify` renamed to `/clarify`). A retroactive record for v5.0.0 was
+declined by the user.
+
+`E91` adds `j.breaking-change` (`skills/j-breaking-change/`, alias `j.major-release` in `skills/j-major-release/`, made by
+hand like `skills/j-wtf/`). It asks the reason the release is major and the epic(s) holding the breaking changes (a
+numbered picker of epics completed since the baseline, a switch to all epics, free text validated against the board),
+and produces a record at `<paths.documentation>/breaking-changes/<version>.md`, a CHANGELOG entry (through the existing
+`finalize_changelog.sh` and `generate_release_notes.sh` only) and a `BREAKING CHANGE:` footer commit. It runs manually at
+any time and from the `deploy-public` workflow right after `pick_version` when the picked version is a major bump over
+the baseline; an existing record for that version is reused. The gate is soft: a compute step feeds a warning into
+`approve`'s prompt, never a refusal.
+
+Design constraints recorded in the epic: workflows have only five step types (`skill`, `playbook`, `confirm`,
+`compute`, `render`) and no conditional, so "only on a major bump" lives in scripts that exit clean and ask nothing on a
+non-major bump; `deploy-public-prep.sh features <base>` (private) is the data source for the epic picker, so the shipped
+scripts fall back to `git log` when it is absent. `E91_S04_T01` is an explicit research task, to run first, that decides
+where the footer commit must live given `j.mirror-public`'s single squash commit per run and the release-branch commits
+that must not return to `main`. Stories: `S01` record + skill + alias, `S02` major detection + picker, `S03` workflow
+wiring + soft gate, `S04` changelog + footer, `S05` docs + bats. `deploy-public` has never run end to end, so no live run
+is part of the epic's verification.
+
+## Convention Survey & Synced Conventions Document (E93)
+
+Filed 2026-11-15 from a brainstorm on the evaluation rapport
+`project/rapports/analysis/conventions-survey-and-synced-document-eval.md`. `j.conventions` (E69) only used detection
+as a per-category hint inside the wizard, missed commit size, namespacing and code patterns, and produced no
+human-readable document. E93 refines the skill (no playbook, no workflow): the survey always runs as phase 0 of bare
+`j.conventions` and standalone as `j.conventions survey`, and leaves a persisted JSON plus Markdown report.
+
+A declarative **section template** (first-class artifact, `E93_S01`) defines per category a section and its sub-areas,
+each with a heading and a content type (bullet list, table, code example, value, prose). It drives the survey's
+coverage, the wizard's questions, the document's structure and the `conv-` item text (one item per recorded category).
+`conventions.json` stays the single source of truth; each category gets an `examples` list of single-line references
+(`ref` `path:start-end`, `note`, `hash`), and the document at `paths.conventions_doc` (default
+`project/documentation/CONVENTIONS.md`) is rendered inside `conventions-entry.sh commit` under the existing rollback,
+with managed blocks and preserved hand-written rationale. `render --check` flags config drift and stale example hashes
+through `conv-doc-sync` and `j.status`, never blocking and never re-pinning on its own.
+
+Detection keeps E69's "never a guess" rule: a preselection only when a deterministic threshold rule fires, otherwise
+signals and evidence only; the detector never reads secret values. New categories (12): `commit-size` (recorded norm,
+advisory), `namespacing`, `code-patterns` (architecture), `language-idioms`, `error-handling`, code size and
+complexity, release and versioning, review and PR rules, dependency policy, generated-versus-hand-edited boundaries,
+security hygiene, configuration and environment; `commit-format` and `naming` are deepened and `testing` gains test
+conventions. This supersedes E69's 9-category set and its deferred-category list. Stories: `S01` template, `S02`
+survey, `S03` examples, `S04` document, `S05` drift + template-derived items, `S06`-`S09` category packs (`S09` also
+holds the wrap-up). MVP: `S01`-`S06` plus `S09`'s wrap-up. No `conventions.json` instance exists in this repository,
+so verification runs against fixture repositories.
+
+## Test-Suite Budget (E95)
+
+Filed 2026-11-16 from a brainstorm on the 2026-11-15 incident: `j.do`'s inline / light / `--trivial` path calls
+`scripts/smoke-harness.sh`, whose step 2 ran `npm test`, which is `scripts/run-tests.sh` and the whole bats suite.
+E72 had made the full suite the default and then closed full-run routes by name; its call-site audit
+(`project/documentation/full-run-call-site-audit.md`) wrongly stated that nothing in the board flow calls `npm test`,
+because its greps never searched for it. The suite also had no growth budget (113 files on 2026-10-07, 394 on
+2026-11-15), largely from documentation criteria verified by bats tests that grep prose and from per-script lint tests.
+
+E95's principle is to **change the default and enforce it in the runner, and find callers by measurement, not by
+grep**. Settled decisions: `npm test` never runs everything (fast tier, about 90 s budget); a local full run needs an
+explicit tier plus `--confirm-full` (CI uses `npm run test:ci`); the full non-manual run targets under 20 minutes;
+smoke-harness runs a consumer's tests only on explicit opt-in (`scripts/smoke.sh` or a project scope map) and otherwise
+reports "nothing verified" (exit 3) instead of inferring a runner; prose tests are removed except script-read contracts;
+the runner prints a duration estimate and progress, and agents may not hide test output or start a long run without
+asking; every run logs its caller; the epic adds at most about 20 new bats tests (`E95_S01` at most 5). Stories: `S01`
+stop the bleeding (smoke-harness, interim fast `npm test`, `test:ci` and the public CI gate, audit correction), `S02`
+bats file-tag tiers and deliberate full runs (supersedes `E77_S02`'s marker with `tier:manual`), `S03` audit report
+classifying every test file, `S04` pruning in user-approved batches (approval granularity still open), `S05` prevention
+(tester/developer instructions, test-file lint, per-task test budget, checklist item), `S06` caller telemetry and a
+proposal for the unfinished E77 stories (no E77 status changed without the user).
 
 ## Conventions
 - Board items use `E##_S##_T##` naming convention

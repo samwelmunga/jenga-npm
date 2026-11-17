@@ -128,7 +128,10 @@ RAPPORT_DIR="$PROJECT_ROOT/project/rapports/problems"
 # the evidence root alone would silently make every probe "undeterminable" in
 # every fixture — a blind collector that still looked like a working one.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd -- "$SCRIPT_DIR/../../.." && pwd)"
+# Package root (scripts/, templates/, lib/): resolved by the shared helper so it also works from a consumer's .claude/skills mirror.
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+REPO_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 
 resolve_helper() {
   local rel="$1" candidate

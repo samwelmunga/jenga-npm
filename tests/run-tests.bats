@@ -1,6 +1,8 @@
 #!/usr/bin/env bats
 #
-# Coverage for scripts/run-tests.sh (E43_S02_T01): parallel bats with a dependency check and a serial fallback.
+# Coverage for scripts/run-tests.sh (E43_S02_T01): parallel bats with a dependency check and a serial fallback;
+# since E95_S01_T02 the no-argument run is a bounded fast set under a timeout and the full run is `--all`, refused
+# unless CI=true or --confirm-full. The two-pass cases below therefore call `--all --confirm-full`.
 #
 # Isolation: every test runs a COPY of the script inside its own temp "repo" (the script resolves its repository
 # root from its own location), against a fake tests/ directory, with a PATH that contains only stubs and the two
@@ -15,7 +17,8 @@
 bats_require_minimum_version 1.5.0
 
 SCRIPT_SRC="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)/scripts/run-tests.sh"
-REPO_PKG="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)/package.json"
+REPO_DIR="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
+REPO_PKG="$REPO_DIR/package.json"
 
 PERM="tests/mirror-permission-level-invariant.bats"
 SUBJ="tests/mirror-test-subject-invariant.bats"
@@ -37,10 +40,14 @@ setup() {
   : > "$FAKE/$SUBJ"
   # Inputs under tests/fixtures/ must never be run (some are deliberately failing).
   : > "$FAKE/tests/fixtures/broken.bats"
+  # The fast set `npm test` runs (no arguments).
+  printf '# fast set\ntests/a.bats\ntests/b.bats\n' > "$FAKE/tests/fast-set.txt"
 
   # The two real tools the script shells out to (plus bash, for the stubs' shebang).
   ln -s "$(command -v dirname)" "$TOOLS/dirname"
   ln -s "$(command -v grep)" "$TOOLS/grep"
+  # The fast run's watchdog polls with sleep.
+  ln -s "$(command -v sleep)" "$TOOLS/sleep"
   # The stubs are bash scripts started through `#!/usr/bin/env bash`, which resolves bash on the restricted PATH.
   ln -s "$BASH" "$TOOLS/bash"
 
@@ -68,9 +75,13 @@ EOF
   export STUB_CORES=4
 }
 
-# run_script: the script under the stub PATH. Extra "VAR=value" words become env vars of that one run.
+# run_script: the FULL run (`--all --confirm-full`) under the stub PATH. Extra "VAR=value" words become env vars of
+# that one run. run_fast: the no-argument run (the fast set), the same way. CI is cleared so the host's CI cannot leak.
 run_script() {
-  run env PATH="$STUBS:$TOOLS" "$@" "$BASH" "$FAKE/scripts/run-tests.sh"
+  run env PATH="$STUBS:$TOOLS" CI= "$@" "$BASH" "$FAKE/scripts/run-tests.sh" --all --confirm-full
+}
+run_fast() {
+  run env PATH="$STUBS:$TOOLS" CI= "$@" "$BASH" "$FAKE/scripts/run-tests.sh"
 }
 
 add_parallel() { printf '#!/usr/bin/env bash\nexit 0\n' > "$STUBS/parallel"; chmod +x "$STUBS/parallel"; }
@@ -98,12 +109,13 @@ log_count() { wc -l < "$STUB_LOG" | tr -d '[:space:]'; }
   [ "$(log_line 1) " = "$expected" ]
 }
 
-@test "no parallel binary: a failing bats makes the script exit non-zero" {
+@test "no parallel binary: a failing bats in the fast set (npm test) makes the script exit non-zero" {
   STUB_FAIL_ON="tests/b.bats"
   export STUB_FAIL_ON
-  run_script
+  run_fast
   [ "$status" -ne 0 ]
   [ "$(log_count)" -eq 1 ]
+  [ "$(log_line 1)" = "tests/a.bats tests/b.bats" ]
 }
 
 @test "jobs below 2 (RUN_TESTS_JOBS=1) with a parallel binary present falls back to one serial invocation" {
@@ -315,14 +327,51 @@ log_count() { wc -l < "$STUB_LOG" | tr -d '[:space:]'; }
 # Wiring
 # ---------------------------------------------------------------------------------------------------------------
 
-@test "package.json's test script delegates to scripts/run-tests.sh and nothing else" {
+@test "package.json's test script delegates to scripts/run-tests.sh and nothing else; test:ci is --all, and CI runs it" {
   run jq -r '.scripts.test' "$REPO_PKG"
   [ "$status" -eq 0 ]
   [ "$output" = "bash scripts/run-tests.sh" ]
+  run jq -r '.scripts["test:ci"]' "$REPO_PKG"
+  [ "$status" -eq 0 ]
+  [ "$output" = "bash scripts/run-tests.sh --all" ]
+  # The public staging gate keeps the full suite: its test job runs npm run test:ci, not npm test.
+  grep -q '^        run: npm run test:ci$' "$REPO_DIR/.github/workflows/mirror-staging-gate.yml"
+  ! grep -q '^        run: npm test$' "$REPO_DIR/.github/workflows/mirror-staging-gate.yml"
 }
 
 @test "the script lists exactly the two known shared-state files as serial" {
   run grep -c '^  "tests/mirror-.*-invariant\.bats"$' "$SCRIPT_SRC"
   [ "$status" -eq 0 ]
   [ "$output" = "2" ]
+}
+
+# ---------------------------------------------------------------------------------------------------------------
+# E95_S01_T02: npm test is a bounded fast set; the full run is deliberate only
+# ---------------------------------------------------------------------------------------------------------------
+
+@test "--list in this repository prints at most 40 fast-set files, none in SERIAL_FILES, and runs nothing" {
+  # The real script and the real tests/fast-set.txt, but the stub bats: --list must not invoke it at all.
+  run env PATH="$STUBS:$TOOLS" CI= "$BASH" "$SCRIPT_SRC" --list
+  [ "$status" -eq 0 ]
+  [ "$(log_count)" -eq 0 ]
+  local n=0 f
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    n=$((n + 1))
+    case "$f" in tests/*/*) false ;; tests/*.bats) ;; *) false ;; esac
+    [ -f "$REPO_DIR/$f" ]
+    [ "$f" != "$PERM" ]
+    [ "$f" != "$SUBJ" ]
+  done <<< "$output"
+  [ "$n" -ge 1 ]
+  [ "$n" -le 40 ]
+}
+
+@test "--all without CI=true and without --confirm-full runs nothing and exits 2, naming --confirm-full" {
+  add_parallel
+  run env PATH="$STUBS:$TOOLS" CI= "$BASH" "$FAKE/scripts/run-tests.sh" --all
+  [ "$status" -eq 2 ]
+  [ "$(log_count)" -eq 0 ]
+  case "$output" in *"--confirm-full"*) ;; *) false ;; esac
+  case "$output" in *"npm run test:ci"*) ;; *) false ;; esac
 }

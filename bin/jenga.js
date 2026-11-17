@@ -27,6 +27,7 @@ Usage:
   jenga doctor    Scan .agents/ and .claude/ for orphaned package files and clean up
                   interactively (alias: jenga clean). Add --dry-run to preview only.
   jenga config    List and edit Jenga settings (also: config get|set <file>.<key> [value])
+  jenga progress  Show board progress in the terminal (colour on; see also: jenga progress --help)
   jenga dashboard start [--port <n>] [--api-only]
                   Start the project dashboard API and UI (--api-only serves the API
                   without the UI). Port defaults to 3001, or JENGA_API_PORT if set.
@@ -86,6 +87,11 @@ async function main() {
     case "config": {
       const { runConfig } = await import("../lib/commands/config.js");
       await runConfig(args);
+      break;
+    }
+    case "progress": {
+      const { runProgress } = await import("../lib/commands/progress.js");
+      await runProgress(args);
       break;
     }
     case "dashboard": {

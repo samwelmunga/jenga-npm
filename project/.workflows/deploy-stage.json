@@ -1,7 +1,7 @@
 {
   "id": "deploy-stage",
   "name": "Stage deploy and consumer verification",
-  "description": "Verify origin/main carries an unreleased version, get npm web auth in place (forwarding the login URL, cancelling after 60 minutes), dispatch the GitHub Actions stage job, wait for the stage to be ready, run the README consumer verification against the ST-Test project, then report the results and offer to promote the stage to a live npm release and tag it.",
+  "description": "Verify origin/main carries an unreleased version, get npm web auth in place (forwarding the login URL, cancelling after 60 minutes), dispatch the GitHub Actions stage job, wait for the stage to be ready, run the README consumer verification against the ST-Test project, replace its mock board data and show it with j.dashboard-share, j.status and j.status E01, then report the results and offer to promote the stage to a live npm release and tag it.",
   "keywords": [
     "stage deploy",
     "staged release",
@@ -145,6 +145,47 @@
           "type": "text"
         }
       ]
+    },
+    {
+      "id": "mock_board",
+      "type": "compute",
+      "command": "project/.workflows/scripts/st-test-mock-board.sh",
+      "args": [
+        "${inputs.st_test_path}"
+      ],
+      "timeout_seconds": 120,
+      "checkpoint": true,
+      "outputs": [
+        {
+          "name": "report",
+          "kind": "data",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "share_dashboard",
+      "type": "skill",
+      "skill": "j.dashboard-share",
+      "args": {
+        "invoke": "run it from the ST-Test project at ${inputs.st_test_path}: change into that directory first, so the snapshot and upload scripts of the staged package under node_modules/@jenga-ai/agent are the ones that run. The board now holds the mock data from the previous step. Use the only configured rclone remote, or ask which one if there are several."
+      }
+    },
+    {
+      "id": "status_overview",
+      "type": "skill",
+      "skill": "j.status",
+      "args": {
+        "invoke": "run it from the ST-Test project at ${inputs.st_test_path} (change into that directory first) with no arguments, and show its output unchanged"
+      }
+    },
+    {
+      "id": "status_epic",
+      "type": "skill",
+      "skill": "j.status",
+      "args": {
+        "invoke": "E01, run from the ST-Test project at ${inputs.st_test_path} (change into that directory first), and show its output unchanged"
+      }
     },
     {
       "id": "record_stage_tested",

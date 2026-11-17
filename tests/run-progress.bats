@@ -6,6 +6,11 @@
 # E92_S06_T22: the after-task call is `--scope story --task <id>[,<id>...]` (one line per distinct parent story, in
 # first-seen order). `--resolve-scope` and `--scope run` are kept for compatibility and keep their tests below.
 #
+# E92_S08_T07: story scope draws with the Node renderer (lib/progress/cli.js after-task / after-story) by default;
+# `--legacy` and JENGA_PROGRESS_RENDERER=legacy keep the old bash drawing, locked byte for byte against output captured
+# from the script before E92_S08_T07 (the GOLDEN_* values below). Tests that lock the old drawing pass `--legacy`.
+# Every Node call pays the label-table cost (seconds on a slow machine), so the Node tests are kept to what they prove.
+#
 # Each test builds a throwaway project root (JENGA_PROJECT_ROOT) with a fixture board and a fixture ledger written the
 # way tests/record-execution.bats does (through record-execution.sh). The real board, queue and ledger are never read or
 # written. Tests that need a board-progress.sh of their own run the wrapper from a copied script tree whose
@@ -87,6 +92,72 @@ EOF
 
 # strip ANSI colour escapes
 plain() { printf '%s' "$1" | sed $'s/\033\\[[0-9;]*m//g'; }
+
+# b64 <base64>: the decoded bytes on stdout.
+b64() { python3 -c 'import base64, sys; sys.stdout.buffer.write(base64.b64decode(sys.argv[1]))' "$1"; }
+
+# The Node entry point the script calls, run the way it runs it.
+CLI="$REPO_ROOT/lib/progress/cli.js"
+
+# A PATH with every executable of the current PATH except node.
+nodeless_path() {
+  local stub="$BATS_TEST_TMPDIR/nodeless-bin" dir f n
+  mkdir -p "$stub"
+  local IFS=:
+  for dir in $PATH; do
+    [ -d "$dir" ] || continue
+    for f in "$dir"/*; do
+      n="${f##*/}"
+      [ "$n" != "node" ] && [ -x "$f" ] && [ ! -e "$stub/$n" ] && ln -s "$f" "$stub/$n"
+    done
+  done
+  printf '%s' "$stub"
+}
+
+# A full copy of the scripts, the j-break scripts and (optionally) the Node renderer, so a test can replace one piece.
+# make_full_tree [with-node]  ->  $FULL (root), $FULL_RP
+make_full_tree() {
+  FULL="$BATS_TEST_TMPDIR/full"
+  rm -rf "$FULL"; mkdir -p "$FULL/skills/j-break/scripts/lib" "$FULL/lib"
+  cp -R "$REPO_ROOT/scripts" "$FULL/scripts"
+  cp "$RP" "$REPO_ROOT/skills/j-break/scripts/story-finished.sh" "$FULL/skills/j-break/scripts/"
+  cp "$REPO_ROOT/skills/j-break/scripts/lib/ledger_reader.py" "$FULL/skills/j-break/scripts/lib/"
+  if [ "${1:-}" = "with-node" ]; then
+    cp -R "$REPO_ROOT/lib/progress" "$REPO_ROOT/lib/config" "$FULL/lib/"
+    printf '{"type": "module"}\n' > "$FULL/package.json"
+  fi
+  FULL_RP="$FULL/skills/j-break/scripts/run-progress.sh"
+}
+
+# Output of the script before E92_S08_T07 on this file's fixture board, captured with the pre-change script (base64,
+# exact bytes). Each is the story-scope call named next to it, with a fresh queue directory.
+#   A  --task E1_S2_T2 --color never --cols 80                        [━━━━━╌╌╌╌╌]⚑ 1/2 · 1 red
+#   B  --task E1_S2_T1,E1_S1_T1 --color never --cols 80                (two lines: E1_S2, then E1_S1)
+#   C  --task E1_S2_T2 --color always --cols 80                        (ANSI colour)
+#   D  --task E1_S2_T2 --color never --cols 14                         1/2 · 1 red
+#   E  --task E1_S1_T1,E1_S2_T2 --after-story --color never --cols 80  (two bars, then the E1_S2 story line)
+#   F  --task E1_S2_T2 --after-story --color always --cols 80          (ANSI colour, bar and story line)
+#   G  LANG=C, --task E1_S2_T2 --after-story --color never --cols 80   (ASCII fallback of the legacy renderers)
+GOLDEN_A='W+KUgeKUgeKUgeKUgeKUgeKVjOKVjOKVjOKVjOKVjF3impEgMS8yIMK3IDEgcmVkCg=='
+GOLDEN_B='W+KUgeKUgeKUgeKUgeKUgeKVjOKVjOKVjOKVjOKVjF3impEgMS8yIMK3IDEgcmVkClvilIHilIHilIHilIHilIHilYzilYzilYzilYzilYxd4pqRIDIvNCDCtyAxIGluIHByb2dyZXNzCg=='
+GOLDEN_C='WxtbMzJt4pSB4pSB4pSB4pSB4pSBG1swbRtbMzFt4pWM4pWM4pWM4pWM4pWMG1swbV3impEgMS8yIMK3IDEgcmVkCg=='
+GOLDEN_D='MS8yIMK3IDEgcmVkCg=='
+GOLDEN_E='W+KUgeKUgeKUgeKUgeKUgeKVjOKVjOKVjOKVjOKVjF3impEgMi80IMK3IDEgaW4gcHJvZ3Jlc3MKW+KUgeKUgeKUgeKUgeKUgeKVjOKVjOKVjOKVjOKVjF3impEgMS8yIMK3IDEgcmVkCkUxX1MyICDilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHilIHimIUgMS8yIMK3IDUwICUgIOKclSAxIGZhaWxlZAo='
+GOLDEN_F='WxtbMzJt4pSB4pSB4pSB4pSB4pSBG1swbRtbMzFt4pWM4pWM4pWM4pWM4pWMG1swbV3impEgMS8yIMK3IDEgcmVkChtbMzZtRTFfUzIbWzBtICAbWzMybeKUgeKUgeKUgeKUgeKUgeKUgeKUgeKUgeKUgeKUgeKUgeKUgeKUgeKUgeKUgRtbMG0bWzMxbeKUgeKUgeKUgeKUgeKUgeKUgeKUgeKUgeKUgeKUgeKUgeKUgeKUgeKUgeKUgRtbMG0bWzMxbeKYhRtbMG0gG1sxbTEvMhtbMG0gwrcgNTAgJSAgG1szMW3inJUgMSBmYWlsZWQbWzBtCg=='
+GOLDEN_G='WyMjIyMjLS0tLS1dPiAxLzIgLSAxIHJlZApFMV9TMiAgIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjKiAxLzIgLSA1MCAlICAhIDEgZmFpbGVkCg=='
+
+# golden_args <letter>: the run-progress.sh arguments of that golden case (LANG is set by the caller for G).
+golden_args() {
+  case "$1" in
+    A) echo "--scope story --task E1_S2_T2 --color never --cols 80" ;;
+    B) echo "--scope story --task E1_S2_T1,E1_S1_T1 --color never --cols 80" ;;
+    C) echo "--scope story --task E1_S2_T2 --color always --cols 80" ;;
+    D) echo "--scope story --task E1_S2_T2 --color never --cols 14" ;;
+    E) echo "--scope story --task E1_S1_T1,E1_S2_T2 --after-story --color never --cols 80" ;;
+    F) echo "--scope story --task E1_S2_T2 --after-story --color always --cols 80" ;;
+    G) echo "--scope story --task E1_S2_T2 --after-story --color never --cols 80" ;;
+  esac
+}
 
 # ---------------------------------------------------------------------------------------------------------------------
 
@@ -242,26 +313,26 @@ plain() { printf '%s' "$1" | sed $'s/\033\\[[0-9;]*m//g'; }
 
 @test "--scope story with a list asks board-progress.sh once per distinct story, in first-seen order" {
   make_stub_tree
-  run bash "$TREE_RP" --scope story --task E1_S2_T2,E1_S1_T1,E1_S2_T1,E1_S1_T4 --color never --cols 80
+  run bash "$TREE_RP" --scope story --task E1_S2_T2,E1_S1_T1,E1_S2_T1,E1_S1_T4 --legacy --color never --cols 80
   [ "$status" -eq 0 ]
   [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" = "2" ]
   [ "$(cat "$ARGLOG")" = "$(printf -- '--story E1_S2\n--story E1_S1')" ]
 }
 
-@test "the single-story line is byte-identical to the renderer fed the story's counts directly" {
+@test "--legacy: the single-story line is byte-identical to the legacy renderer fed the story's counts directly" {
   local bp="$REPO_ROOT/scripts/board-progress.sh" rd="$REPO_ROOT/scripts/render-progress-bar.sh" mode
   bash "$bp" --story E1_S2 > "$BATS_TEST_TMPDIR/direct.json"
   for mode in "--color never --cols 80" "--color always --cols 80" "--color never --cols 14"; do
     bash "$rd" --file "$BATS_TEST_TMPDIR/direct.json" $mode > "$BATS_TEST_TMPDIR/expected"
-    bash "$RP" --scope story --task E1_S2_T2 $mode > "$BATS_TEST_TMPDIR/actual"
+    bash "$RP" --scope story --task E1_S2_T2 --legacy $mode > "$BATS_TEST_TMPDIR/actual"
     cmp "$BATS_TEST_TMPDIR/expected" "$BATS_TEST_TMPDIR/actual" || { echo "differs for: $mode" >&2; return 1; }
   done
   # NO_COLOR and the ASCII fallback go through the same renderer, unchanged
   NO_COLOR=1 bash "$rd" --file "$BATS_TEST_TMPDIR/direct.json" --cols 80 > "$BATS_TEST_TMPDIR/expected"
-  NO_COLOR=1 bash "$RP" --scope story --task E1_S2_T2 --cols 80 > "$BATS_TEST_TMPDIR/actual"
+  NO_COLOR=1 bash "$RP" --scope story --task E1_S2_T2 --legacy --cols 80 > "$BATS_TEST_TMPDIR/actual"
   cmp "$BATS_TEST_TMPDIR/expected" "$BATS_TEST_TMPDIR/actual"
   LANG=C bash "$rd" --file "$BATS_TEST_TMPDIR/direct.json" --color never --cols 80 > "$BATS_TEST_TMPDIR/expected"
-  LANG=C bash "$RP" --scope story --task E1_S2_T2 --color never --cols 80 > "$BATS_TEST_TMPDIR/actual"
+  LANG=C bash "$RP" --scope story --task E1_S2_T2 --legacy --color never --cols 80 > "$BATS_TEST_TMPDIR/actual"
   cmp "$BATS_TEST_TMPDIR/expected" "$BATS_TEST_TMPDIR/actual"
 }
 
@@ -295,9 +366,9 @@ plain() { printf '%s' "$1" | sed $'s/\033\\[[0-9;]*m//g'; }
 @test "--scope story: a missing helper warns and exits 0, for a single id and for a list" {
   make_stub_tree
   rm "$TREE/scripts/render-progress-bar.sh"
-  run --separate-stderr bash "$TREE_RP" --scope story --task E1_S1_T1 --color never
+  run --separate-stderr bash "$TREE_RP" --scope story --task E1_S1_T1 --legacy --color never
   [ "$status" -eq 0 ]; [ -z "$output" ]; [[ "$stderr" == *"warning"*"render-progress-bar.sh"* ]]
-  run --separate-stderr bash "$TREE_RP" --scope story --task E1_S1_T1,E1_S2_T1 --color never
+  run --separate-stderr bash "$TREE_RP" --scope story --task E1_S1_T1,E1_S2_T1 --legacy --color never
   [ "$status" -eq 0 ]; [ -z "$output" ]; [[ "$stderr" == *"warning"*"render-progress-bar.sh"* ]]
   make_stub_tree
   rm "$TREE/scripts/resolve-root.sh"
@@ -440,7 +511,8 @@ plain() { printf '%s' "$1" | sed $'s/\033\\[[0-9;]*m//g'; }
   for args in "" "--scope" "--scope run" "--scope story" "--scope other --ids E1_S1" "--resolve-scope" \
               "--scope run --ids E1_S1 --task E1_S1_T1" "--scope story --task E1_S1_T1 --ids E1_S1" "--scope story --task" \
               "--resolve-scope --scope run --ids E1_S1" "--resolve-scope --ids E1_S1 --task E1_S1_T1" \
-              "--scope run --ids" "--wat"; do
+              "--scope run --ids" "--wat" "--scope story --task E1_S1_T1 --charset latin1" \
+              "--scope story --task E1_S1_T1 --charset"; do
     run --separate-stderr bash -c "bash '$RP' $args"
     [ "$status" -eq 2 ] || { echo "args [$args] exited $status" >&2; return 1; }
     [ -z "$output" ]
@@ -465,9 +537,9 @@ plain() { printf '%s' "$1" | sed $'s/\033\\[[0-9;]*m//g'; }
   [ "$(cat "$ARGLOG")" = "--ids E1_S1_T1,E1_S1_T2" ]
 }
 
-@test "story scope asks board-progress.sh for the parent story and nothing else" {
+@test "story scope asks board-progress.sh for the parent story and nothing else (--legacy)" {
   make_stub_tree
-  run bash "$TREE_RP" --scope story --task E1_S2_T2 --color never --cols 80
+  run bash "$TREE_RP" --scope story --task E1_S2_T2 --legacy --color never --cols 80
   [ "$status" -eq 0 ]
   [[ "$output" == *" 7/9"* ]]
   [ "$(cat "$ARGLOG")" = "--story E1_S2" ]
@@ -490,4 +562,193 @@ plain() { printf '%s' "$1" | sed $'s/\033\\[[0-9;]*m//g'; }
   [ "$status" -eq 0 ]
   after="$(cd "$PROJ" && find . -type f | sort | xargs cksum | cksum)"
   [ "$before" = "$after" ]
+}
+
+# --- E92_S08_T07: the Node drawing is the default in story scope ------------------------------------------------------
+
+@test "default: the after-task line is the Node after-task line of the story, byte for byte, UTF-8 with no locale and no colour on a pipe" {
+  LANG= node "$CLI" --color never --cols 80 after-task --story E1_S2 > "$BATS_TEST_TMPDIR/expected"
+  [ -s "$BATS_TEST_TMPDIR/expected" ]
+  run --separate-stderr env LANG= bash "$RP" --scope story --task E1_S2_T2 --cols 80
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+  [ "$output" = "$(cat "$BATS_TEST_TMPDIR/expected")" ]
+  [[ "$output" == "E1_S2  "*" 1/2"* ]]                             # led by the story id (the Node line)
+  [[ "$output" != *$'\033['* ]]                                    # auto colour is off: the output is a pipe
+  [ "$(printf '%s' "$output" | LC_ALL=C tr -d '\000-\177' | wc -c | tr -d ' ')" != "0" ]   # UTF-8 glyphs
+}
+
+@test "default: a list is ONE Node call for the distinct stories in first-seen order" {
+  node "$CLI" --color never --cols 80 after-task --story E1_S2,E1_S1 > "$BATS_TEST_TMPDIR/expected"
+  run --separate-stderr bash "$RP" --scope story --task E1_S2_T2,E1_S1_T1,E1_S2_T1 --color never --cols 80
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+  [ "$output" = "$(cat "$BATS_TEST_TMPDIR/expected")" ]
+  [ "${#lines[@]}" -eq 2 ]
+  [[ "${lines[0]}" == "E1_S2  "* ]]
+  [[ "${lines[1]}" == "E1_S1  "* ]]
+}
+
+@test "default: --charset ascii and --color always are forwarded to Node" {
+  run --separate-stderr bash "$RP" --scope story --task E1_S2_T2 --charset ascii --color never --cols 80
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  [ "$(printf '%s' "$output" | LC_ALL=C tr -d '\000-\177' | wc -c | tr -d ' ')" = "0" ]
+  run --separate-stderr bash "$RP" --scope story --task E1_S2_T2 --color always --cols 80
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'\033['* ]]
+  [[ "$(plain "$output")" == "E1_S2  "*" 1/2"* ]]
+}
+
+@test "default with --after-story: the task lines first, then the Node story line once; the ledger decides as before" {
+  node "$CLI" --color never --cols 80 after-story --story E1_S2 > "$BATS_TEST_TMPDIR/story-line"
+  run --separate-stderr bash "$RP" --scope story --task E1_S1_T1,E1_S2_T2 --after-story --color never --cols 80
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+  [ "${#lines[@]}" -eq 3 ]
+  [[ "${lines[0]}" == "E1_S1  "* ]]
+  [[ "${lines[1]}" == "E1_S2  "*"1/2 · 1 red" ]]
+  [ "${lines[2]}" = "$(cat "$BATS_TEST_TMPDIR/story-line")" ]
+  [[ "${lines[2]}" == *"1/2 · 50 %"* ]]
+  [ "$(cat "$PROJ/project/queue/story-finished-ledger.tsv")" = "E1_S2"$'\t'"1:0:1:0:0:0:2" ]
+  run --separate-stderr bash "$RP" --scope story --task E1_S2_T2 --after-story --color never --cols 80
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -eq 1 ]                                         # same finished state: no story line again
+}
+
+@test "default: an unknown id or a task naming no story still prints nothing and never reaches the renderer" {
+  printf -- '---\nid: E1_S1_T7\ntitle: orphan\nstatus: Pending\n---\n' > "$PROJ/project/board/tasks/E1_S1_T7_x.md"
+  for t in E1_S1_T99 E1_S1_T1,E1_S1_T7 nonsense; do
+    run --separate-stderr bash "$RP" --scope story --task "$t" --after-story --color never --cols 80
+    [ "$status" -eq 0 ]; [ -z "$output" ]
+    [[ "$stderr" == "run-progress.sh: warning: "* ]]
+    [ "$(printf '%s\n' "$stderr" | wc -l | tr -d ' ')" = "1" ]
+  done
+}
+
+@test "default: counts still come only from board-progress.sh (a stub decides the Node line too)" {
+  make_full_tree with-node
+  ARGLOG="$BATS_TEST_TMPDIR/stub-args"
+  cat > "$FULL/scripts/board-progress.sh" <<STUB
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$ARGLOG"
+cat <<'JSON'
+{"schema_version":1,"scope":{"type":"story","ids":["E1_S2"]},"levels":{"tasks":{"counts":{},"totals":{"done":7,"in_progress":1,"failed":0,"pending":1,"rejected":0,"unknown":0,"denominator":9}}},"warnings":[]}
+JSON
+STUB
+  run --separate-stderr bash "$FULL_RP" --scope story --task E1_S2_T2,E1_S1_T1 --color never --cols 80
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+  [[ "${lines[0]}" == "E1_S2  "*" 7/9"* ]]
+  [[ "${lines[1]}" == "E1_S1  "*" 7/9"* ]]
+  [ "$(cat "$ARGLOG")" = "$(printf -- '--story E1_S2\n--story E1_S1')" ]
+}
+
+# --- E92_S08_T07: --legacy and JENGA_PROGRESS_RENDERER=legacy print the pre-change bytes ------------------------------
+
+@test "--legacy and JENGA_PROGRESS_RENDERER=legacy print exactly the bytes the script printed before E92_S08_T07" {
+  local c want form
+  for c in A B C D E F G; do
+    want="$BATS_TEST_TMPDIR/golden-$c"
+    b64 "$(eval "echo \$GOLDEN_$c")" > "$want"
+    for form in flag env; do
+      rm -rf "$PROJ/project/queue"
+      if [ "$form" = "flag" ]; then
+        if [ "$c" = "G" ]; then LANG=C bash "$RP" $(golden_args "$c") --legacy > "$BATS_TEST_TMPDIR/actual" 2>/dev/null
+        else bash "$RP" $(golden_args "$c") --legacy > "$BATS_TEST_TMPDIR/actual" 2>/dev/null; fi
+      else
+        if [ "$c" = "G" ]; then LANG=C JENGA_PROGRESS_RENDERER=legacy bash "$RP" $(golden_args "$c") > "$BATS_TEST_TMPDIR/actual" 2>/dev/null
+        else JENGA_PROGRESS_RENDERER=legacy bash "$RP" $(golden_args "$c") > "$BATS_TEST_TMPDIR/actual" 2>/dev/null; fi
+      fi
+      cmp "$want" "$BATS_TEST_TMPDIR/actual" || { echo "case $c ($form) differs from the pre-change output" >&2; return 1; }
+    done
+  done
+}
+
+@test "--legacy matches the pre-change script itself, run from git (skipped where that commit is not in history)" {
+  local base=4225b162
+  git -C "$REPO_ROOT" cat-file -e "$base:skills/j-break/scripts/run-progress.sh" 2>/dev/null || skip "commit $base is not in this repository's history"
+  OLD="$BATS_TEST_TMPDIR/old"; mkdir -p "$OLD"
+  git -C "$REPO_ROOT" archive "$base" scripts skills/j-break/scripts | tar -x -C "$OLD"
+  local c
+  for c in A B E F; do
+    rm -rf "$PROJ/project/queue"
+    bash "$OLD/skills/j-break/scripts/run-progress.sh" $(golden_args "$c") > "$BATS_TEST_TMPDIR/expected" 2>/dev/null
+    rm -rf "$PROJ/project/queue"
+    bash "$RP" $(golden_args "$c") --legacy > "$BATS_TEST_TMPDIR/actual" 2>/dev/null
+    cmp "$BATS_TEST_TMPDIR/expected" "$BATS_TEST_TMPDIR/actual" || { echo "case $c differs from the script at $base" >&2; return 1; }
+  done
+}
+
+@test "JENGA_PROGRESS_RENDERER with any other value keeps the Node default; --legacy needs no node at all" {
+  run --separate-stderr env JENGA_PROGRESS_RENDERER=whatever bash "$RP" --scope story --task E1_S2_T2 --color never --cols 80
+  [ "$status" -eq 0 ]; [ -z "$stderr" ]
+  [[ "$output" == "E1_S2  "* ]]
+  stub="$(nodeless_path)"
+  run --separate-stderr env PATH="$stub" bash "$RP" --scope story --task E1_S2_T2 --legacy --color never --cols 80
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+  [ "$output" = "$(b64 "$GOLDEN_A")" ]
+}
+
+# --- E92_S08_T07: never fail -- no node, or a failing Node renderer, is one warning and the legacy lines --------------
+
+@test "node missing from PATH: one warning, the legacy lines (after-story included) and exit 0" {
+  stub="$(nodeless_path)"
+  run env PATH="$stub" bash -c 'command -v node'
+  [ "$status" -ne 0 ]
+  run --separate-stderr env PATH="$stub" bash "$RP" $(golden_args E)
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(b64 "$GOLDEN_E")" ]
+  [ "$(printf '%s\n' "$stderr" | grep -c .)" -eq 1 ]
+  [[ "$stderr" == "run-progress.sh: warning: node is not on PATH (legacy drawing used, run unaffected)" ]]
+}
+
+@test "a failing Node renderer (warning and no output, or a non-zero exit) is one warning and the legacy line, exit 0" {
+  make_full_tree with-node
+  for body in 'process.stderr.write("cli.js: warning: boom\n");' 'process.stderr.write("kaput\n"); process.exit(1);'; do
+    printf '%s\n' "$body" > "$FULL/lib/progress/cli.js"
+    rm -rf "$PROJ/project/queue"
+    run --separate-stderr bash "$FULL_RP" $(golden_args E)
+    [ "$status" -eq 0 ]
+    [ "$output" = "$(b64 "$GOLDEN_E")" ]
+    [ "$(printf '%s\n' "$stderr" | grep -c .)" -eq 1 ]
+    [[ "$stderr" == "run-progress.sh: warning: the Node renderer failed: "*"(legacy drawing used, run unaffected)" ]]
+  done
+  [[ "$stderr" == *"kaput"* ]]
+}
+
+@test "a missing cli.js is one warning and the legacy line, exit 0" {
+  make_full_tree
+  run --separate-stderr bash "$FULL_RP" $(golden_args A)
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(b64 "$GOLDEN_A")" ]
+  [ "$stderr" = "run-progress.sh: warning: could not locate lib/progress/cli.js (legacy drawing used, run unaffected)" ]
+}
+
+@test "story-finished.sh on its own: a failing Node renderer warns once, draws the legacy story line and records it" {
+  make_full_tree with-node
+  printf 'process.exit(3);\n' > "$FULL/lib/progress/cli.js"
+  run --separate-stderr bash "$FULL/skills/j-break/scripts/story-finished.sh" --story E1_S2 --color never --cols 80
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(b64 "$GOLDEN_E" | sed -n 3p)" ]
+  [ "$stderr" = "story-finished.sh: warning: the Node renderer failed for E1_S2: it printed nothing (legacy drawing used, run unaffected)" ]
+  [ "$(cat "$PROJ/project/queue/story-finished-ledger.tsv")" = "E1_S2"$'\t'"1:0:1:0:0:0:2" ]
+}
+
+@test "story-finished.sh: --charset is validated (exit 2) and --legacy is accepted" {
+  run --separate-stderr bash "$REPO_ROOT/skills/j-break/scripts/story-finished.sh" --story E1_S2 --charset latin1
+  [ "$status" -eq 2 ]; [ -z "$output" ]
+  run --separate-stderr bash "$REPO_ROOT/skills/j-break/scripts/story-finished.sh" --story E1_S2 --legacy --color never --cols 80
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(b64 "$GOLDEN_E" | sed -n 3p)" ]
+}
+
+# --- E92_S08_T07: permissions -------------------------------------------------------------------------------------------
+
+@test "the Node command is not blocked at the Guarded level: Bash(*) is allowed and no deny rule matches bash or node" {
+  G="$REPO_ROOT/templates/permission-levels/level-2-guarded.json"
+  [ "$(jq -r '.permissions.allow | index("Bash(*)") != null' "$G")" = "true" ]
+  # The skills run `bash <run-progress.sh> ...`, which runs node inside the script; neither word starts a deny rule.
+  [ "$(jq -r '[.permissions.deny[] | select(test("^Bash\\((bash|node)( |\\*|\\))"))] | length' "$G")" = "0" ]
 }

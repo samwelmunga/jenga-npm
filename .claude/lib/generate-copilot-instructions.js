@@ -81,8 +81,8 @@ function buildSkillList(skillsDir) {
  * directory, mirroring the sibling buildAllowedSkillIds in lib/generate-agent-context.js so
  * both routing paths share the one committed artifact.
  */
-function buildAllowedSkillIds(projectRoot, packageRoot) {
-  const ids = readSkillAllowList(projectRoot, packageRoot);
+function buildAllowedSkillIds(projectRoot, packageRoot, override) {
+  const ids = Array.isArray(override) ? override : readSkillAllowList(projectRoot, packageRoot);
   return ids.length > 0 ? ids.map((id) => `\`${id}\``).join(", ") : "_No skills found._";
 }
 
@@ -90,11 +90,14 @@ function buildAllowedSkillIds(projectRoot, packageRoot) {
  * Replace only the JENGA:START..JENGA:END block in an existing copilot-instructions.md with the
  * freshly rendered one, preserving everything outside the markers. If no existing file, write
  * the rendered template in full. If the existing file has no markers, append the block.
+ *
+ * Returns true when the file's bytes change (or the file is created). With `dryRun` nothing is
+ * written; the return value says what a real run would have done (E26_S11_T01).
  */
-function writeCopilotInstructions(path, rendered) {
+function writeCopilotInstructions(path, rendered, dryRun = false) {
   if (!existsSync(path)) {
-    writeFileSync(path, rendered, "utf8");
-    return;
+    if (!dryRun) writeFileSync(path, rendered, "utf8");
+    return true;
   }
 
   const existing = readFileSync(path, "utf8");
@@ -112,7 +115,9 @@ function writeCopilotInstructions(path, rendered) {
     // No existing markers — append the block.
     updated = existing + (existing.endsWith("\n") ? "" : "\n") + newBlock + "\n";
   }
-  writeFileSync(path, updated, "utf8");
+  if (updated === existing) return false;
+  if (!dryRun) writeFileSync(path, updated, "utf8");
+  return true;
 }
 
 /**
@@ -125,16 +130,23 @@ function writeCopilotInstructions(path, rendered) {
  * @param {string} skillsDir - path to the skills directory, resolved relative to projectRoot if
  *   not already absolute (e.g. ".agents/skills" from postinstall, or the user's chosen
  *   skillsPath from the `jenga init` wizard)
- * @returns {{written: boolean, path?: string, skipped?: boolean}}
+ * @param {object} [options]
+ * @param {boolean} [options.dryRun=false] - compute what a real run would write and compare it with
+ *   the file on disk, but create no directory and write no file (E26_S11_T01).
+ * @param {string[]} [options.allowedSkillIds] - render this allow-list instead of reading
+ *   `lib/skill-allow-list.json` (lets a dry run reflect an allow-list a real run would regenerate first).
+ * @returns {{written: boolean, changed: boolean, path?: string, skipped?: boolean, dryRun?: boolean}}
+ *   `changed` is true when a real run alters the file's bytes; with `dryRun` `written` is false.
  */
 export function generateCopilotInstructions(
   projectRoot = process.cwd(),
   packageRoot = DEFAULT_PACKAGE_ROOT,
-  skillsDir
+  skillsDir,
+  { dryRun = false, allowedSkillIds: allowedOverride } = {}
 ) {
   const tplPath = resolveTemplatePath(projectRoot, packageRoot);
   if (!tplPath) {
-    return { written: false, skipped: true };
+    return { written: false, changed: false, skipped: true };
   }
 
   const tpl = readFileSync(tplPath, "utf8");
@@ -143,7 +155,7 @@ export function generateCopilotInstructions(
     ? (skillsDir.startsWith("/") ? skillsDir : join(projectRoot, skillsDir))
     : undefined;
   const skillList = buildSkillList(resolvedSkillsDir);
-  const allowedSkillIds = buildAllowedSkillIds(projectRoot, packageRoot);
+  const allowedSkillIds = buildAllowedSkillIds(projectRoot, packageRoot, allowedOverride);
   const rendered = tpl
     .replace("{{SKILL_LIST}}", skillList)
     .replace("{{ALLOWED_SKILL_IDS}}", allowedSkillIds);
@@ -151,9 +163,14 @@ export function generateCopilotInstructions(
   const githubDir = join(projectRoot, ".github");
   const copilotInstructionsPath = join(githubDir, "copilot-instructions.md");
 
+  if (dryRun) {
+    const changed = writeCopilotInstructions(copilotInstructionsPath, rendered, true);
+    return { written: false, changed, path: copilotInstructionsPath, dryRun: true };
+  }
+
   if (!existsSync(githubDir)) mkdirSync(githubDir, { recursive: true });
 
-  writeCopilotInstructions(copilotInstructionsPath, rendered);
+  const changed = writeCopilotInstructions(copilotInstructionsPath, rendered);
 
-  return { written: true, path: copilotInstructionsPath };
+  return { written: true, changed, path: copilotInstructionsPath };
 }

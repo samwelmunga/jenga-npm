@@ -16,8 +16,14 @@
 # PROGRESS_LABEL_DEFAULT_LANG below.
 #
 # rejected_note, unlocked_by and card_bar_aria are printf format strings and keep their % placeholders for the
-# caller to fill in (card_bar_aria: %d of %d stories complete, %d%% of tasks done; the same three placeholders in
-# the same order in every language).
+# caller to fill in (card_bar_aria: %d of %d stories complete, %d%% of the epic done; the same three placeholders in
+# the same order in every language). goal_failed (%s: the first failed story id) and goal_failed_more (%s: the first
+# failed story id, %d: how many more) are filled the same way (E92_S10_T02), the placeholders in the same order in
+# every language. So are dep_unfinished (%s: the unfinished dependency id) and dep_unfinished_more (%s: the first id, %d:
+# how many more) (E92_S11_T02), the words of the "?" mark on a done task whose dependency is not done; they use " - ",
+# not an en dash, as goal_failed does, so --charset ascii keeps them readable.
+# story_undecomposed_aria (E92_S12_T03) is a printf format with one %s: the story id and title, already joined by the
+# caller; story_undecomposed is the short plain text drawn on the node of a story that has no tasks yet.
 
 PROGRESS_LABEL_DEFAULT_LANG='en'
 PROGRESS_LABEL_LANGS='sv en'
@@ -41,9 +47,9 @@ _progress_label_raw() {
     sv:state_locked)  printf '%s\n' 'Låst' ;;
     sv:state_failed)  printf '%s\n' 'Misslyckad' ;;
     sv:state_rejected) printf '%s\n' 'Avvisad' ;;
-    sv:tree_empty)    printf '%s\n' 'Inga beroenden i detta omfång' ;;
+    sv:tree_empty)    printf '%s\n' 'Inga uppgifter i detta omfång' ;;
     sv:nothing_ready) printf '%s\n' 'Inget är redo att ta just nu' ;;
-    sv:card_bar_aria) printf '%s\n' '%d av %d berättelser klara, %d%% av uppgifterna gjorda' ;;
+    sv:card_bar_aria) printf '%s\n' '%d av %d berättelser klara, %d%% av epicen klar' ;;
     en:ready_to_take) printf '%s\n' 'Ready to take' ;;
     en:unlocked_by)   printf '%s\n' '%s unlocked by %s' ;;
     en:tree_title)    printf '%s\n' 'Dependency tree' ;;
@@ -53,9 +59,9 @@ _progress_label_raw() {
     en:state_locked)  printf '%s\n' 'Locked' ;;
     en:state_failed)  printf '%s\n' 'Failed' ;;
     en:state_rejected) printf '%s\n' 'Rejected' ;;
-    en:tree_empty)    printf '%s\n' 'No dependencies in this scope' ;;
+    en:tree_empty)    printf '%s\n' 'No tasks in this scope' ;;
     en:nothing_ready) printf '%s\n' 'Nothing is ready to take right now' ;;
-    en:card_bar_aria) printf '%s\n' '%d of %d stories complete, %d%% of tasks done' ;;
+    en:card_bar_aria) printf '%s\n' '%d of %d stories complete, %d%% of the epic done' ;;
     en:in_progress)   printf '%s\n' 'in progress' ;;
     en:failed)        printf '%s\n' 'red' ;;
     en:rejected_note) printf '%s\n' '⊘ %d rejected (not counted)' ;;
@@ -121,6 +127,22 @@ _progress_label_raw() {
     en:tip_unlocks) printf '%s\n' 'Unlocks' ;;
     en:tip_goal_direct) printf '%s\n' 'Leads straight to the goal' ;;
     # --- end E92_S06_T20 ---
+    # --- begin E92_S09_T04 (the epic percent: decomposed stories beside it, section 5.1) ---
+    sv:epic_decomposed) printf '%s\n' '%d/%d berättelser nedbrutna' ;;
+    en:epic_decomposed) printf '%s\n' '%d/%d stories decomposed' ;;
+    # --- end E92_S09_T04 ---
+    # --- begin E92_S10_T02 (no goal while a story of the epic has failed: the goal line names it) ---
+    sv:goal_failed) printf '%s\n' 'Målet ej nått - %s har misslyckats' ;;
+    sv:goal_failed_more) printf '%s\n' 'Målet ej nått - %s och %d till har misslyckats' ;;
+    en:goal_failed) printf '%s\n' 'Goal not reached - %s has failed' ;;
+    en:goal_failed_more) printf '%s\n' 'Goal not reached - %s and %d more have failed' ;;
+    # --- end E92_S10_T02 ---
+    # --- begin E92_S11_T02 (a done task whose dependency is not done: the "?" mark's words) ---
+    sv:dep_unfinished) printf '%s\n' 'Klar trots att beroendet %s inte är klart - kontrollera beroendet' ;;
+    sv:dep_unfinished_more) printf '%s\n' 'Klar trots att beroendet %s och %d till inte är klara - kontrollera beroendena' ;;
+    en:dep_unfinished) printf '%s\n' 'Done although dependency %s is not done - check the dependency' ;;
+    en:dep_unfinished_more) printf '%s\n' 'Done although dependency %s and %d more are not done - check the dependencies' ;;
+    # --- end E92_S11_T02 ---
     # --- begin E92_S06_T25 (j.status scope renderer labels) ---
     sv:sc_hidden) printf '%s\n' '%d klara berättelser dolda, --all visar dem' ;;
     sv:sc_hidden_one) printf '%s\n' '%d klar berättelse dold, --all visar den' ;;
@@ -183,6 +205,12 @@ _progress_label_raw() {
     en:fullscreen_hint) printf '%s\n' 'Press Esc to exit' ;;
     en:fullscreen_layer) printf '%s\n' 'Dependency tree, full screen' ;;
     # --- end E92_S07_T02 ---
+    # --- begin E92_S12_T03 (an undecomposed story on the epic progress map: the node text and its aria sentence) ---
+    sv:story_undecomposed) printf '%s\n' 'Inte nedbruten ännu' ;;
+    sv:story_undecomposed_aria) printf '%s\n' '%s - ännu inte nedbruten i uppgifter' ;;
+    en:story_undecomposed) printf '%s\n' 'Not broken down yet' ;;
+    en:story_undecomposed_aria) printf '%s\n' '%s - not broken down into tasks yet' ;;
+    # --- end E92_S12_T03 ---
     *) return 1 ;;
   esac
 }
@@ -230,3 +258,15 @@ PROGRESS_LABEL_KEYS="$PROGRESS_LABEL_KEYS zoom_group zoom_out zoom_in zoom_fit z
 # --- begin E92_S07_T02 (key list of the fullscreen button labels) ---
 PROGRESS_LABEL_KEYS="$PROGRESS_LABEL_KEYS fullscreen_enter fullscreen_exit fullscreen_hint fullscreen_layer"
 # --- end E92_S07_T02 ---
+# --- begin E92_S09_T04 (key list of the epic percent label) ---
+PROGRESS_LABEL_KEYS="$PROGRESS_LABEL_KEYS epic_decomposed"
+# --- end E92_S09_T04 ---
+# --- begin E92_S10_T02 (key list of the failed-story goal labels) ---
+PROGRESS_LABEL_KEYS="$PROGRESS_LABEL_KEYS goal_failed goal_failed_more"
+# --- end E92_S10_T02 ---
+# --- begin E92_S11_T02 (key list of the done-before-dependency labels) ---
+PROGRESS_LABEL_KEYS="$PROGRESS_LABEL_KEYS dep_unfinished dep_unfinished_more"
+# --- end E92_S11_T02 ---
+# --- begin E92_S12_T03 (key list of the undecomposed-story labels) ---
+PROGRESS_LABEL_KEYS="$PROGRESS_LABEL_KEYS story_undecomposed story_undecomposed_aria"
+# --- end E92_S12_T03 ---

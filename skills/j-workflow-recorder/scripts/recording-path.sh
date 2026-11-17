@@ -130,9 +130,12 @@ resolve_target_dir() {
   elif [ -n "${JENGA_RECORDING_DIR:-}" ]; then
     dir="$JENGA_RECORDING_DIR"
   else
-    # The resolver lives at the repository's scripts/ directory; this script is two levels below it under
-    # skills/<skill>/scripts/, so climb rather than name any path from the project root.
-    local resolver="$SCRIPT_DIR/../../../scripts/resolve-root.sh"
+    # The resolver lives in the package's scripts/ directory (monorepo root, or node_modules/@jenga-ai/agent in a
+    # consumer install where .claude/ holds only skills/ and agents/); never name a path from the project root.
+    # shellcheck source=/dev/null
+    if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+    local resolver
+    resolver="$(jenga_package_root "$SCRIPT_DIR")/scripts/resolve-root.sh"
     if [ ! -f "$resolver" ]; then
       err "could not find resolve-root.sh (looked for $resolver)"
       return 3

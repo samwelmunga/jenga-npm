@@ -95,12 +95,16 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Package root (scripts/, lib/, templates/): resolved so it also works from a consumer's .claude/skills mirror.
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 # Resolve JENGA_PROJECT_DIR the same way every other script in this repo
 # does (CLAUDE_PROJECT_DIR -> git toplevel -> cwd). Falls back to locating
 # the repo root relative to this script if the shared helper is missing.
-if [ -f "$SCRIPT_DIR/../../../lib/resolve-project-dir.sh" ]; then
+if [ -f "$PACKAGE_ROOT/lib/resolve-project-dir.sh" ]; then
   # shellcheck source=lib/resolve-project-dir.sh
-  source "$SCRIPT_DIR/../../../lib/resolve-project-dir.sh"
+  source "$PACKAGE_ROOT/lib/resolve-project-dir.sh"
 elif [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
   JENGA_PROJECT_DIR="$CLAUDE_PROJECT_DIR"
 else
@@ -124,7 +128,7 @@ fi
 # mirror, and in node_modules/@jenga-ai/agent. There is deliberately no fallback sort if it is missing.
 BOARD_IDS_LIB=""
 for _cand in \
-  "$SCRIPT_DIR/../../../scripts/lib" \
+  "$PACKAGE_ROOT/scripts/lib" \
   "$SCRIPT_DIR/../../../node_modules/@jenga-ai/agent/scripts/lib"; do
   if [ -f "$_cand/board_ids.py" ]; then
     BOARD_IDS_LIB="$(cd "$_cand" && pwd)"

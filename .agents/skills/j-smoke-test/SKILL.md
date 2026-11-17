@@ -1,6 +1,6 @@
 ---
 name: j.smoke-test
-description: Run a structural smoke test across every skill in the catalog (frontmatter, name versus directory, preferred agent, referenced scripts and assets) and report a pass/fail summary with findings classified as critical or minor.
+description: Run a structural smoke test across every skill in the catalog (frontmatter, name versus directory, preferred agent, referenced scripts and assets), then execute each skill script in the layout a consumer has, and report a pass/fail summary with findings classified as critical or minor.
 keywords:
   - smoke test
   - skill health
@@ -20,9 +20,9 @@ examples:
 
 ## Boundaries
 
-- **Structural, not functional.** It checks that each skill loads and its references resolve. It does not run `tests/*.bats`, and a clean smoke test says nothing about whether a skill behaves correctly.
+- **Structural, not functional, plus one execution check.** It checks that each skill loads and its references resolve, then runs each skill script's `--help` (or a declared safe invocation) from a throwaway consumer layout and fails critical when a script resolves a package asset (`templates/`, `scripts/`, `lib/`, `hooks/`) against `.claude/`. It does not run `tests/*.bats`, and a clean smoke test says nothing about whether a skill behaves correctly.
 - It is **not** `scripts/smoke-harness.sh`, which smoke-tests the diff of one in-flight inline task.
-- Read-only: it never edits a skill and never writes board status. A finding is information for the user, not a verdict on any board item.
+- Read-only: it never edits a skill and never writes board status. The execution phase works in a temp directory (working directory, `HOME` and `TMPDIR` all inside it) and removes it afterwards. A finding is information for the user, not a verdict on any board item.
 
 ## Instructions
 
@@ -41,7 +41,11 @@ Shell variables do not survive between separate commands: define `SMOKE_DIR` aga
 bash "$SMOKE_DIR/smoke-test-skills.sh" > "$FINDINGS"
 ```
 
-Its stderr is the pass/fail summary: relay it unchanged. Findings are JSON lines in `$FINDINGS`. Exit `0`: no critical finding. Exit `1`: at least one critical finding. Exit `2`: usage error or `jq` missing; show its stderr and stop.
+Its stderr is the pass/fail summary: relay it unchanged, including the `Execution check:` line and the `unverifiable:` list under it (scripts that were not executed, each with its reason). Findings are JSON lines in `$FINDINGS`. Exit `0`: no critical finding. Exit `1`: at least one critical finding. Exit `2`: usage error or `jq` missing; show its stderr and stop.
+
+The execution phase is on by default. Add `--no-exec` for a structural-only run; `--exec-timeout <seconds>` changes the per-script timeout (default 10). Run over a consumer's mirror root (`--root <consumer>/.claude`, optionally `--package-root <dir>`) it resolves package assets against the package, not the mirror, and executes the mirror's own scripts in a throwaway copy of that consumer. The phase's rules (what counts as a safe invocation, `# smoke-invoke:`, the unverifiable list, the finding ids `exec-package-asset`, `exec-failed`, `exec-timeout`, `exec-fixture-failed`) are the contract in the script's header; do not restate them.
+
+A script declares its own safe invocation in its first 40 lines: `# smoke-invoke: <args>` (repeatable; no arguments after the colon means a bare run) or `# smoke-invoke: none <reason>` to be listed as unverifiable. A script with neither a `--help` handler nor a declaration is listed as unverifiable and never executed.
 
 ### 2. Render the critical-error table
 
@@ -54,7 +58,7 @@ Print its stdout verbatim. The table (columns **Feature**, **Error**, **Conseque
 ### 3. Interpret the result
 
 - Exit `0` with no findings: say every skill passed.
-- Exit `0` with minor findings: say the catalog passed and list the minor findings briefly (`skill`, `error`).
+- Exit `0` with minor findings: say the catalog passed and list the minor findings briefly (`skill`, `error`). Mention how many scripts were unverifiable.
 - Exit `1`: the table from step 2 is the report; do not restate its rows. Offer next steps:
 
   ```

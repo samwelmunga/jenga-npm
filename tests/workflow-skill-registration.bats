@@ -34,6 +34,17 @@ quiet_route() {
   node "$ROUTE" "$@" 2>/dev/null
 }
 
+# Skips the calling case when the router subject is absent. tests/helpers/router-route.mjs and mcp/router/ are
+# private tooling blocklisted in .publicignore, while this file ships, so in the public tree the router cases
+# below have nothing to drive (E77_S07_T01). The trigger is absence only: a file/directory test on the two
+# paths, with no environment variable, no .publicignore parsing and no platform check, so it can never fire in
+# the private tree. Deliberately per case rather than a file-level skip: the other cases stay valid publicly.
+require_router() {
+  if [ ! -f "$ROUTE" ] || [ ! -d "$REPO_ROOT/mcp/router" ]; then
+    skip "router helper (tests/helpers/router-route.mjs / mcp/router) is private tooling and absent from the public tree"
+  fi
+}
+
 # Succeeds when the JSON array in $1 contains the exact string $2.
 json_array_has() {
   node -e 'const a=JSON.parse(process.argv[1]);process.exit(a.some(x=>(typeof x==="string"?x:x&&x.name)===process.argv[2])?0:1)' "$1" "$2"
@@ -71,12 +82,14 @@ json_array_has() {
 }
 
 @test "the router's allow-list for the real skills/ tree contains workflow" {
+  require_router
   run node "$ROUTE" allow-list "$SKILLS"
   [ "$status" -eq 0 ]
   json_array_has "$output" workflow
 }
 
 @test "j.workflow is trusted as passthrough" {
+  require_router
   run node "$ROUTE" route "$SKILLS" "j.workflow run x"
   [ "$status" -eq 0 ]
   [ "$(json_field "$output" action)" = "passthrough" ]
@@ -84,12 +97,14 @@ json_array_has() {
 }
 
 @test "the legacy j: separator for workflow is also trusted as passthrough" {
+  require_router
   run node "$ROUTE" route "$SKILLS" "j:workflow run x"
   [ "$status" -eq 0 ]
   [ "$(json_field "$output" action)" = "passthrough" ]
 }
 
 @test "the /j-workflow directory form is not claimed by the router (resolved natively by directory name)" {
+  require_router
   run node "$ROUTE" route "$SKILLS" "/j-workflow run x"
   [ "$status" -eq 0 ]
   [ "$output" = "null" ]
@@ -97,18 +112,21 @@ json_array_has() {
 }
 
 @test "the router skill index lists workflow" {
+  require_router
   run quiet_route index "$SKILLS"
   [ "$status" -eq 0 ]
   json_array_has "$output" workflow
 }
 
 @test "Stage 2 emits the canonical j.workflow invocation for the indexed skill" {
+  require_router
   run quiet_route emit "$SKILLS" workflow "run x"
   [ "$status" -eq 0 ]
   [ "$output" = '"j.workflow run x"' ]
 }
 
 @test "j.workflownope stays guarded (no masquerading)" {
+  require_router
   run node "$ROUTE" route "$SKILLS" "j.workflownope run x"
   [ "$status" -eq 0 ]
   [ "$(json_field "$output" action)" = "unrecognized" ]

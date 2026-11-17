@@ -38,7 +38,8 @@
 #
 # SIBLING FILES, first match wins
 #   env JENGA_BOARD_PROGRESS / JENGA_PROGRESS_LABELS (test seam: a stub that prints a --graph --within JSON fixture),
-#   then <this dir>/../../../scripts/<name> and scripts/lib/progress-labels.sh, then node_modules/@jenga-ai/agent/scripts/.
+#   then <package root>/scripts/<name> and scripts/lib/progress-labels.sh (the package root comes from
+#   skills/index/scripts/package-root.sh, see lib/status-render-common.sh), then ./scripts/ and ./node_modules/@jenga-ai/agent/scripts/.
 #
 # A PROBLEM NEVER FAILS j.status
 #   Missing script or labels, board-progress.sh failing (unknown id included), malformed JSON, jq missing: ONE stderr
@@ -110,6 +111,11 @@ for k in $LABEL_KEYS; do
   [ -n "$v" ] || sr_warn "progress labels missing"
   label_args+=(--arg "l_$k" "$v")
 done
+# E92_S09_T04: the "decomposed/stories" note beside an epic's percent; optional (an empty label drops the note).
+label_args+=(--arg l_epic_decomposed "$(progress_label epic_decomposed 2>/dev/null || true)")
+# E92_S10_T02: the goal line that names a failed story (goal_failed / goal_failed_more); optional (empty: no line).
+label_args+=(--arg l_goal_failed "$(progress_label goal_failed 2>/dev/null || true)")
+label_args+=(--arg l_goal_failed_more "$(progress_label goal_failed_more 2>/dev/null || true)")
 
 sr_detect_utf
 sr_resolve_color "$color"
@@ -159,11 +165,22 @@ def iscomp: (.complete == true) and ((.totals.denominator // 0) > 0);
     else (reduce $stories[] as $s ({done: 0, denominator: 0}; .done += ($s.totals.done // 0) | .denominator += ($s.totals.denominator // 0))) end
   ) as $T
 | (if $is_story then ($stories[0].title // $scope) else (($d.epics // [])[0].title // $scope) end | txt) as $title
-| ($T | pct) as $p
+| (($d.epics // [])[0].epic_progress // {}) as $ep
+# an epic shows the epic percent the script states (epic_progress, E92_S09_T04), never recomputed; a story its task percent
+| (if $is_story then ($T | pct) else ([($ep.percent // 0), 100] | min) end) as $p
 | ($stories | map(select(iscomp))) as $hidden
 | (if $all == 1 then $stories else ($stories | map(select(iscomp | not))) end) as $shown
-| ($stories | map(select(((.totals.denominator // 0) > 0) and (.complete != true))) | length) as $left
-| (($stories | length) > 0 and $left == 0 and (($T.denominator // 0) > 0)) as $allcomplete
+| (if $is_story then ($stories | map(select(((.totals.denominator // 0) > 0) and (.complete != true))) | length)
+   else ([(($ep.stories // 0) - ($stories | map(select(.complete == true)) | length)), 0] | max) end) as $left
+| (if $is_story then (($stories | length) > 0 and $left == 0 and (($T.denominator // 0) > 0))
+   else ($ep.goal_reached == true) end) as $allcomplete
+# E92_S10_T02: the script states the failed stories and caps the percent at 99 while there is one; at that cap the
+# message names the first failed story (and how many more) where the done message would have been
+| ([($ep.failed_stories // [])[] | select(type == "string" and . != "")]) as $failed
+| (if ($is_story | not) and ($allcomplete | not) and ($failed | length) > 0 and $p >= 99 then
+     (if ($failed | length) == 1 then $l_goal_failed else $l_goal_failed_more end)
+     | if . == "" then null else (sub("%s"; $failed[0]) | sub("%d"; (($failed | length) - 1 | tostring))) end
+   else null end) as $failedmsg
 | ($shown | map(.id)) as $shown_ids
 | ($tasks | map(select(.story_id as $sid | $shown_ids | index($sid) != null))) as $shown_tasks
 | (([$shown_tasks[] | tshort(.) | length] | max // 3) | [., 3] | max) as $idw
@@ -213,7 +230,7 @@ def iscomp: (.complete == true) and ((.totals.denominator // 0) > 0);
     | (4 + $n * ($w + 1)) as $tlen
     | if $n == 0 or $cols < 50 or $tlen > $cols then empty
       else
-        ($T.denominator > 0 and $T.done == $T.denominator) as $alldone
+        $allcomplete as $alldone
         | ( [[g.start, "35"]]
             + ([ $stories[] | . as $s | ($s.totals) as $t
                  | (if ($t.denominator // 0) > 0 then (($t.done * $w / $t.denominator) | round) else 0 end) as $fill
@@ -233,6 +250,7 @@ def iscomp: (.complete == true) and ((.totals.denominator // 0) > 0);
     if $is_story then (if $allcomplete then $l_sc_msg_done else null end)
     elif ($stories | length) == 0 then null
     elif $allcomplete then $l_sc_msg_done
+    elif $failedmsg != null then $failedmsg
     elif $left == 1 then $l_sc_msg_last
     elif $p >= 80 then lab1($l_sc_msg_almost; $left)
     elif $p >= 50 then lab1($l_sc_msg_half; $left)
@@ -243,12 +261,15 @@ def iscomp: (.complete == true) and ((.totals.denominator // 0) > 0);
     else ($l_ready_to_take + ": " + ($ready[:2] | map(txt) | join(", ")) + (if ($ready | length) > 2 then " (+" + (($ready | length) - 2 | tostring) + ")" else "" end)) end;
   # 1. header
   ( ($id | txt) as $hid
-    | ($p | tostring) + " %" as $pc
+    | (if ($is_story | not) and (($ep.decomposed // 0) < ($ep.stories // 0)) and $l_epic_decomposed != "" then
+         ($l_epic_decomposed | sub("%d"; (($ep.decomposed // 0) | tostring)) | sub("%d"; (($ep.stories // 0) | tostring))) + " " + g.sep + " "
+       else "" end) as $note
+    | $note + ($p | tostring) + " %" as $pc
     | ([$cols, 64] | min) as $width
     | ($scope + " " + g.sep + " " + $title | clip([$cols - ($pc | length) - 2, 1] | max)) as $head
     | [[$head, "1"], [rep(" "; [2, $width - ($head | length) - ($pc | length)] | max), ""], [$pc, "1"]] | emit ),
   ( if $is_story then empty else track end ),
-  ( [ (message as $m | if $m != null then [$m, (if $allcomplete then "32" else "33" end)] else empty end),
+  ( [ (message as $m | if $m != null then [$m, (if $allcomplete then "32" elif $m == $failedmsg then "31" else "33" end)] else empty end),
       (readynext as $r | if $r != null then [$r, "35"] else empty end) ] as $parts
     | if ($parts | length) == 0 then empty
       else ($parts | to_entries | map((if .key > 0 then [["  " + g.next + "  ", "90"]] else [] end) + [.value]) | add) | emit end ),

@@ -17,9 +17,10 @@
 # --graph (E92_S06_T01): the batch call behind the epic cards, the overlay dependency tree and the scoped j.status block.
 # Prints {"schema_version":1,"scope":{"type":"graph"},"epics":[...],"stories":[...],"tasks":[...],"warnings":[]} in numeric
 # id order. epics[] carry id, title, depends_on, stories {totals, complete} (totals over the epic's stories, complete = the
-# number of stories whose complete flag is true) and tasks {totals} (over every task under the epic: the card percent is
-# done / denominator of these). stories[] carry id, epic_id, title, depends_on, totals (over the story's tasks), complete
-# (task denominator > 0 and done == denominator; rejected tasks are excluded as everywhere) and stop, the story's single
+# number of stories whose complete flag is true), tasks {totals} (over every task under the epic, by each task's own
+# epic_id) and epic_progress (the epic percent, see below). stories[] carry id, epic_id, title, depends_on, totals (over
+# the story's tasks), complete (task denominator > 0 and done == denominator; rejected tasks are excluded as everywhere),
+# decomposed (E92_S12_T01, below) and stop, the story's single
 # colour bucket: rejected (the story's own status is Rejected), done (complete), failed (any failed task), in_progress (any
 # task in progress, or some but not all done), else pending. tasks[] carry id, story_id, epic_id, title, status, bucket and
 # depends_on. The totals are the very objects --epic/--story print: the same load stage, status table and bucket
@@ -30,6 +31,16 @@
 # of its own (combining it with another scope flag, --items or --summary is a usage error, exit 2) and exits 3 only when
 # the board has no epic file at all.
 #
+# decomposed (E92_S12_T01): every stories[] entry of --graph (full board, --counts-only and --within alike) states
+# whether the story has been broken down into tasks, by the same figures epic_progress uses (no second counting pass):
+#   true   a counted story (its own bucket is not rejected and not unknown) with at least one counted task (task
+#          denominator > 0, a task counts under its story as for epic_progress)
+#   false  a counted story with no counted task: no task files, every task rejected, or every task of unknown status
+#   null   a story that is not counted at all (its own status is Rejected or unknown); a view must not draw it as "not
+#          broken down", because epic_progress.stories does not count it either
+# Invariant per epic: the number of true entries equals epic_progress.decomposed and the number of false entries equals
+# epic_progress.stories - epic_progress.decomposed. The key sits after complete; an added key, schema_version stays 1.
+#
 # --graph states (E92_S06_T02). Every task also carries state, blocked_by and unlocked_by, and the payload gains ready,
 # ready_count and (with --within) external, so no consumer re-derives the dependency semantics.
 #   state: done, in_progress, failed (the failed bucket: Failed and Blocked), rejected, unknown (a status outside the table),
@@ -39,6 +50,18 @@
 #     of unknown status is not satisfied, so a task depending on a failed item stays locked. An id that names no board item
 #     does not block and gives an unknown_dependency warning ({kind, id, detail}, id = the dependent).
 #   blocked_by: the unsatisfied ids (the task's own, then its story's, each once); [] unless state is locked.
+#   waiting_on (E92_S10_T01): the same unsatisfied ids, by the same rule, for EVERY task that is not in the done bucket (in
+#     progress, failed, rejected and unknown too, not only pending); [] for a done task and for a task whose effective
+#     dependencies are all satisfied. For a pending task it equals blocked_by. It is what the padlock gate reads (closed
+#     exactly when the task is not done and waiting_on is not empty), so no consumer re-derives satisfaction; an added key
+#     (blocked_by keeps its meaning), so schema_version stays 1.
+#   unfinished_deps (E92_S11_T02): the same unsatisfied ids, by the same rule, for a task IN the done bucket; [] for every
+#     other task and for a done task whose effective dependencies are all satisfied. A done task with a non-empty list is
+#     a board contradiction (user decision 2026-11-15: a task done before its dependency did not really depend on it): a
+#     dependency reopened after the task was done, or a wrong depends_on. It changes nothing else: the task stays in the
+#     done bucket and counts as done everywhere, its state stays done and its padlock gate open (E92_S10_T01). The views
+#     mark it with a yellow "?" and j.reconcile reports it (skills/j-reconcile/scripts/detect-done-before-dependency.sh).
+#     waiting_on and unfinished_deps never both hold ids for one task. An added key; schema_version stays 1.
 #   unlocked_by: for a ready, in_progress or done task with at least one depends_on, the done dependency of its OWN
 #     depends_on that finished last: the larger date_completed wins, a tie or missing dates fall back to the larger id by
 #     numeric order (E10 > E9); null when there is none.
@@ -58,7 +81,36 @@
 # same totals object and the same status table and denominator rule as every other mode (it reuses the load stage and the
 # bucket/total arithmetic; there is no second implementation). An epic with no stories and a story with no tasks are
 # listed with all-zero totals; the mode exits 3 only when the board has no epic file at all. It is a scope of its own: it
-# cannot be combined with another scope flag, --items or --summary (usage error, exit 2).
+# cannot be combined with another scope flag, --items or --summary (usage error, exit 2). Each epic entry also carries
+# epic_progress (below), after its totals; story entries do not.
+#
+# epic_progress (E92_S09_T03): the epic percent that counts undecomposed stories, the one figure every view shows as an
+# epic's percent. {stories, decomposed, tasks_done, tasks_denominator, percent, goal_reached,
+# failed_stories}:
+#   stories            the epic's counted stories: own bucket not rejected and not unknown (= its stories denominator)
+#   decomposed         counted stories with at least one counted task (task denominator > 0; a story whose tasks are all
+#                      rejected or of unknown status is not decomposed)
+#   tasks_done, tasks_denominator   done and denominator over the tasks of the decomposed stories; a task counts under
+#                      its story when its own story_id names the story AND its own epic_id names the story's epic
+#   percent            floor(100 * tasks_done * decomposed / (tasks_denominator * stories)), exact integer arithmetic;
+#                      0 when stories or decomposed is 0 (no division by zero). The user's formula: the task fraction of
+#                      the decomposed stories times decomposed / stories. At most 99 while failed_stories is not empty.
+#   goal_reached       true exactly when stories > 0, decomposed == stories, tasks_done == tasks_denominator AND
+#                      failed_stories is empty (E92_S10_T02, user decision 2026-11-15: no goal while a story has failed)
+#   failed_stories     (E92_S10_T02) the ids of the epic's counted stories whose OWN status is in the failed bucket
+#                      (Failed and Blocked; the user named Failed, Blocked follows the bucket by default and can be
+#                      narrowed later), numeric id order, [] when none. While it is not empty the goal is not reached and
+#                      percent is capped at 99 (below 100 unchanged), so a view never shows 100 without the goal; a view
+#                      names these stories where it would have shown the congratulation (labels goal_failed and
+#                      goal_failed_more). A story whose tasks include a failed task is already below 100 (that task is not
+#                      done); this rule is about the story's own status only.
+# Printed in --graph (every epic entry, with --counts-only and --within too), --by-parent (every epic entry), --epic <id>
+# (top level, between levels and warnings) and --epic <id> --summary (one `epic` line after the level lines:
+# `epic     30% · 3/5 stories decomposed · 3/6 tasks done`, with ` · failed stories: <ids>` appended only while
+# failed_stories is not empty). --story, --ids, --all and --backlog do not carry it.
+# tasks.totals, stories.totals and stories.complete keep their meaning; an added key, so schema_version stays 1. A view
+# that shows percent shows tasks_done/tasks_denominator beside it (not tasks.totals) and decomposed/stories whenever
+# decomposed < stories, so the numbers next to the percent never contradict it.
 #
 # --summary (E92_S05_T01): replaces the JSON with a compact plain-text overview, one line per level the scope holds
 # (tasks, stories, epics, in that order), built by the same render pass from the same totals and the same status table as
@@ -68,7 +120,8 @@
 # when greater than 0. The rejected count is a note and is never part of done/denominator. The words in progress, failed,
 # unknown and the rejected note come from scripts/lib/progress-labels.sh in the effective language (JENGA_PROGRESS_LANG;
 # default en); `done` and `pending` and the level names are fixed words because that library has no key for them. The
-# block carries no colour and no ESC byte, and is byte-identical across runs. Warnings follow the block as
+# block carries no colour and no ESC byte, and is byte-identical across runs. --epic adds the epic_progress line after
+# the level lines (its words are fixed English too, for the same reason). Warnings follow the block as
 # `warning: <kind> <id>: <detail>` lines (control bytes in the detail become `?`). Exit codes are those of the JSON
 # mode (empty scope 3, unknown id 2); --items has no meaning here and is ignored.
 #
@@ -581,6 +634,64 @@ function render_levels(   nl, ls, i, j, p, present, fl) {
   }
   return fl
 }
+# The epic percent (E92_S09_T03), computed once per run for every epic key from the member records, with the same bucket()
+# and the denominator rule. A counted story is a story whose own bucket is not rejected and not unknown; a decomposed story
+# is a counted story with at least one counted task. A task counts toward a story when its own story_id names that story
+# AND its own epic_id names the story's epic, so --epic <id> (whose records are selected by each item's own epic_id) and
+# --graph / --by-parent give the same object for the same epic.
+function epic_progress_calc(   i, id, b, sk, ek) {
+  if (epc_ran) return
+  epc_ran = 1
+  for (i = 1; i <= no; i++) {
+    id = order[i]
+    if (lvl[id] != "task") continue
+    b = bucket(st[id])
+    if (b == "rejected" || b == "unknown") continue
+    sk = gps[id] SUBSEP gpe[id]
+    epc_den[sk]++
+    if (b == "done") epc_dn[sk]++
+  }
+  for (i = 1; i <= no; i++) {
+    id = order[i]
+    if (lvl[id] != "story") continue
+    b = bucket(st[id])
+    if (b == "rejected" || b == "unknown") continue
+    ek = gpe[id]; sk = gkey[id] SUBSEP ek
+    ep_st[ek]++
+    # E92_S10_T02: a counted story whose own status is in the failed bucket (Failed and Blocked) blocks the goal; ids in
+    # the numeric id order of the run (order[] is board_id_sort order).
+    if (b == "failed") { ep_nf[ek]++; ep_fl[ek] = ep_fl[ek] (ep_nf[ek] > 1 ? "," : "") id }
+    if (epc_den[sk] > 0) { ep_dec[ek]++; ep_td[ek] += epc_dn[sk]; ep_tden[ek] += epc_den[sk] }
+  }
+}
+# The figures of one epic key into ev_*. percent = floor(100 * tasks_done * decomposed / (tasks_denominator * stories)), in
+# exact integer arithmetic, 0 when there is no counted story or no decomposed one (no division by zero); goal_reached is true
+# exactly when percent is 100: every counted story decomposed, every counted task of them done, and (E92_S10_T02) no
+# counted story in the failed bucket by its own status. While there is such a story the percent is capped at 99, so 100 is
+# never printed without the goal; below 100 the formula is unchanged. ev_fl is the comma list of those story ids.
+function epic_progress_vals(ek,   num, den) {
+  epic_progress_calc()
+  ev_s = ep_st[ek] + 0; ev_d = ep_dec[ek] + 0; ev_td = ep_td[ek] + 0; ev_tden = ep_tden[ek] + 0; ev_pct = 0
+  ev_nf = ep_nf[ek] + 0; ev_fl = ep_fl[ek]
+  if (ev_s > 0 && ev_d > 0) { num = 100 * ev_td * ev_d; den = ev_tden * ev_s; ev_pct = (num - num % den) / den }
+  if (ev_nf > 0 && ev_pct > 99) ev_pct = 99
+  ev_goal = (ev_s > 0 && ev_d == ev_s && ev_td == ev_tden && ev_nf == 0) ? "true" : "false"
+}
+# The epic_progress object of one epic key, indented like totals_obj().
+function epic_progress_obj(ek, ind) {
+  epic_progress_vals(ek)
+  printf "{\n%s  \"stories\": %d,\n%s  \"decomposed\": %d,\n%s  \"tasks_done\": %d,\n%s  \"tasks_denominator\": %d,\n", ind, ev_s, ind, ev_d, ind, ev_td, ind, ev_tden
+  printf "%s  \"percent\": %d,\n%s  \"goal_reached\": %s,\n", ind, ev_pct, ind, ev_goal
+  printf "%s  \"failed_stories\": %s\n%s}", ind, deps_json(ev_fl), ind
+}
+# The --epic --summary line of the same figures: `epic     30% · 3/5 stories decomposed · 3/6 tasks done`, plus
+# ` · failed stories: E92_S08` (E92_S10_T02) only while failed_stories is not empty (the line is otherwise unchanged).
+function epic_progress_line(ek,   fl) {
+  epic_progress_vals(ek)
+  printf "%-8s %d%% \302\267 %d/%d stories decomposed \302\267 %d/%d tasks done", "epic", ev_pct, ev_d, ev_s, ev_td, ev_tden
+  if (ev_nf > 0) { fl = ev_fl; gsub(/,/, ", ", fl); printf " \302\267 failed stories: %s", plain(fl) }
+  printf "\n"
+}
 # The totals object, as block() prints it: same keys, same bucket arithmetic, the denominator rule of the contract.
 function totals_obj(t, ind) {
   printf "{\n%s  \"done\": %d,\n%s  \"in_progress\": %d,\n%s  \"failed\": %d,\n%s  \"pending\": %d,\n", ind, t["done"] + 0, ind, t["in_progress"] + 0, ind, t["failed"] + 0, ind, t["pending"] + 0
@@ -604,6 +715,7 @@ function parent_list(key, L, CL, clabel,   i, id, p, b, first, k) {
     for (k in bk) tt[k] = ptot[id, k] + 0
     printf "%s\n    {\n      \"id\": \"%s\",\n      \"level\": \"%s\",\n      \"totals\": ", (first ? "" : ","), jesc(id), clabel
     totals_obj(tt, "      ")
+    if (L == "epic") { printf ",\n      \"epic_progress\": "; epic_progress_obj(gkey[id], "      ") }
     printf "\n    }"
     first = 0
   }
@@ -688,9 +800,14 @@ function derive_states(   i, id, b, n, a, j, v, best, sidk, sj, d, w) {
     if (incyc[id]) { nw[id]++; wk[id, nw[id]] = "dependency_cycle"; wd[id, nw[id]] = "depends_on closes a dependency cycle" }
     if (lvl[id] != "task") continue
     b = bucket(st[id]); blk = ""
+    # The unsatisfied effective ids (own depends_on, then the story's, each once), one rule for every task (E92_S10_T01):
+    # blocked_by for a pending task, waiting_on for any task not in the done bucket, unfinished_deps (E92_S11_T02) for a
+    # task in the done bucket (the same ids it would wait on if it were not done: a board contradiction to flag).
+    collect_blockers(gdep[id])
+    if ((gps[id] in kid) && lvl[kid[gps[id]]] == "story") collect_blockers(gdep[kid[gps[id]]])
+    twait[id] = (b == "done") ? "" : blk
+    tunf[id] = (b == "done") ? blk : ""
     if (b == "pending") {
-      collect_blockers(gdep[id])
-      if ((gps[id] in kid) && lvl[kid[gps[id]]] == "story") collect_blockers(gdep[kid[gps[id]]])
       tstate[id] = (blk == "") ? "ready" : "locked"
       tblk[id] = blk
       if (blk == "") { rdy[++nrdy] = id; rcs[gps[id]]++; rce[gpe[id]]++ }
@@ -709,7 +826,8 @@ function derive_states(   i, id, b, n, a, j, v, best, sidk, sj, d, w) {
     tunl[id] = best
   }
 }
-function graph_end(   i, id, b, k, first, tt, den, ek, v, n, a, j, ex) {
+function graph_end(   i, id, b, k, first, tt, den, ek, v, n, a, j, ex, sb, dec) {
+  epic_progress_calc()
   bk["done"] = 1; bk["in_progress"] = 1; bk["failed"] = 1; bk["pending"] = 1; bk["rejected"] = 1; bk["unknown"] = 1
   derive_states()
   for (i = 1; i <= no; i++) {
@@ -738,7 +856,9 @@ function graph_end(   i, id, b, k, first, tt, den, ek, v, n, a, j, ex) {
     printf ",\n        \"complete\": %d\n      },\n      \"tasks\": {\n        \"totals\": ", ecomp[ek] + 0
     split("", tt); for (k in bk) tt[k] = ett[ek, k] + 0
     totals_obj(tt, "        ")
-    printf "\n      },\n      \"ready_count\": %d\n    }", rce[ek] + 0
+    printf "\n      },\n      \"epic_progress\": "
+    epic_progress_obj(ek, "      ")
+    printf ",\n      \"ready_count\": %d\n    }", rce[ek] + 0
     first = 0
   }
   printf "%s],\n  \"stories\": [", (first ? "" : "\n  ")
@@ -754,7 +874,12 @@ function graph_end(   i, id, b, k, first, tt, den, ek, v, n, a, j, ex) {
     else stop = "pending"
     printf "%s\n    {\n      \"id\": \"%s\",\n      \"epic_id\": \"%s\",\n      \"title\": \"%s\",\n      \"depends_on\": %s,\n      \"totals\": ", (first ? "" : ","), jesc(id), jesc(geid[id]), jesc(gttl[id]), deps_json(gdep[id])
     totals_obj(tt, "      ")
-    printf ",\n      \"complete\": %s,\n      \"stop\": \"%s\",\n      \"ready_count\": %d\n    }", (scomp[id] ? "true" : "false"), stop, rcs[gkey[id]] + 0
+    # E92_S12_T01: decomposed, from the very figures epic_progress_calc derived (same counted-story test, same task
+    # denominator epc_den, same key); null for a story that is not counted.
+    sb = bucket(st[id])
+    if (sb == "rejected" || sb == "unknown") dec = "null"
+    else dec = (epc_den[gkey[id] SUBSEP gpe[id]] > 0) ? "true" : "false"
+    printf ",\n      \"complete\": %s,\n      \"decomposed\": %s,\n      \"stop\": \"%s\",\n      \"ready_count\": %d\n    }", (scomp[id] ? "true" : "false"), dec, stop, rcs[gkey[id]] + 0
     first = 0
   }
   printf "%s],\n", (first ? "" : "\n  ")
@@ -764,7 +889,7 @@ function graph_end(   i, id, b, k, first, tt, den, ek, v, n, a, j, ex) {
     for (i = 1; i <= no; i++) {
       id = order[i]
       if (lvl[id] != "task" || !inscope(id)) continue
-      printf "%s\n    {\n      \"id\": \"%s\",\n      \"story_id\": \"%s\",\n      \"epic_id\": \"%s\",\n      \"title\": \"%s\",\n      \"status\": \"%s\",\n      \"bucket\": \"%s\",\n      \"state\": \"%s\",\n      \"depends_on\": %s,\n      \"blocked_by\": %s,\n      \"unlocked_by\": %s\n    }", (first ? "" : ","), jesc(id), jesc(gsid[id]), jesc(geid[id]), jesc(gttl[id]), jesc(st[id]), bucket(st[id]), tstate[id], deps_json(gdep[id]), deps_json(tblk[id]), (tunl[id] == "" ? "null" : "\"" jesc(tunl[id]) "\"")
+      printf "%s\n    {\n      \"id\": \"%s\",\n      \"story_id\": \"%s\",\n      \"epic_id\": \"%s\",\n      \"title\": \"%s\",\n      \"status\": \"%s\",\n      \"bucket\": \"%s\",\n      \"state\": \"%s\",\n      \"depends_on\": %s,\n      \"blocked_by\": %s,\n      \"waiting_on\": %s,\n      \"unfinished_deps\": %s,\n      \"unlocked_by\": %s\n    }", (first ? "" : ","), jesc(id), jesc(gsid[id]), jesc(geid[id]), jesc(gttl[id]), jesc(st[id]), bucket(st[id]), tstate[id], deps_json(gdep[id]), deps_json(tblk[id]), deps_json(twait[id]), deps_json(tunf[id]), (tunl[id] == "" ? "null" : "\"" jesc(tunl[id]) "\"")
       first = 0
     }
     printf "%s],\n", (first ? "" : "\n  ")
@@ -795,6 +920,7 @@ function graph_end(   i, id, b, k, first, tt, den, ek, v, n, a, j, ex) {
 }
 function summary_end(   i, j, id, line) {
   render_levels()
+  if (scope_type == "epic") epic_progress_line(norm(scope_ids))
   for (i = 1; i <= no; i++) {
     id = order[i]
     for (j = 1; j <= nw[id]; j++) {
@@ -813,7 +939,9 @@ END {
   for (i = 1; i <= ni; i++) if (sid[i] != "") { printf "%s\"%s\"", (fi ? "" : ", "), jesc(sid[i]); fi = 0 }
   printf "]\n  },\n  \"levels\": {"
   fl = render_levels()
-  printf "%s},\n  \"warnings\": [", (fl ? "" : "\n  ")
+  printf "%s},\n", (fl ? "" : "\n  ")
+  if (scope_type == "epic") { printf "  \"epic_progress\": "; epic_progress_obj(norm(scope_ids), "  "); printf ",\n" }
+  printf "  \"warnings\": ["
   fw = 1
   for (i = 1; i <= no; i++) {
     id = order[i]

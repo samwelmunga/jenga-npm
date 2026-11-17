@@ -937,6 +937,235 @@ and, for maintainer-only scripts, one covers the non-git fallback. See
 
 ---
 
+## Locating the package root (`E98`)
+
+> Context: the 5.0.1 defect. A script mirrored under `.claude/skills/<skill>/scripts/` used `$SCRIPT_DIR/../../..`
+> as the package root. That is `.claude/` in a consumer, which holds `skills/` and `agents/` only; the package
+> (`scripts/`, `templates/`, `lib/`, `hooks/`) is `node_modules/@jenga-ai/agent`. The sweep, the fixture check and
+> the post-sync probes are described in [consumer-smoke-test.md](consumer-smoke-test.md).
+
+### What "package root" means, and why `../../..` is wrong in a mirror
+
+The package root is the directory that holds `scripts/resolve-root.sh` and `templates/`. A script's own
+location says where it is, not where the package is, because the same file is deployed at four depths:
+
+| Where the script runs | `$SCRIPT_DIR/../../..` is | Package root is |
+|---|---|---|
+| this monorepo, `skills/<skill>/scripts/` | the repo root | the repo root |
+| this monorepo's own mirror, `.claude/skills/<skill>/scripts/` | `.claude/` (self-sync copies `scripts/` and `templates/` there) | `.claude/` or the repo root |
+| installed package, `node_modules/@jenga-ai/agent/skills/<skill>/scripts/` | the package root | the package root |
+| **consumer mirror**, `.claude/skills/<skill>/scripts/` (and `.agents/`) | **`.claude/`, which has no `scripts/` or `templates/`** | **`node_modules/@jenga-ai/agent`** |
+
+Two further cases a cwd-relative or git-relative guess gets wrong, both found by the audit below: the consumer
+project is a *subdirectory* of the git repository (`git rev-parse --show-toplevel` is then not the directory that
+holds `node_modules`), and the script is run from a *subdirectory* of the project (`scripts/x.sh` and
+`node_modules/@jenga-ai/agent/scripts/x.sh` written relative to the cwd then find nothing).
+
+### The idiom
+
+Every skill script that needs a package asset sources the shared resolver and asks it:
+
+```bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
+# then: "$PACKAGE_ROOT/scripts/...", "$PACKAGE_ROOT/templates/...", "$PACKAGE_ROOT/lib/..."
+```
+
+- `skills/index/scripts/package-root.sh` is mirrored together with every skill (`skills/index/` is mirrored too), so
+  `../../index/scripts/package-root.sh` exists wherever a skill script does. A script nested one level deeper
+  (`scripts/lib/`) uses `../../../index/...` and passes its own directory; the resolver climbs to the enclosing
+  `skills/` directory itself.
+- The `else` branch is the old behaviour. It exists only for the unit tests that stage a bare copy of one script in
+  a temporary tree with no `skills/index/` beside it; it is never reached in a real layout.
+- **Resolution order** (first hit wins; a directory "is the package" when it has `scripts/resolve-root.sh` *and*
+  `templates/`): the install root implied by the script's location (the directory above the enclosing `skills/`),
+  then `node_modules/@jenga-ai/agent` under `JENGA_PROJECT_ROOT`, `CLAUDE_PROJECT_DIR`, that install root, each
+  ancestor of the script directory, and each ancestor of `$PWD`. A half-installed copy (only one of the two
+  markers) is never chosen; `tests/package-root.bats` pins this with decoys.
+- **The bash 3.2 `set -e` gotcha.** Never write `. package-root.sh || fallback`. In bash 3.2 (the stock macOS
+  shell, checked on 3.2.57) sourcing a file that does not exist ends a non-interactive `set -e` shell on the spot:
+  `set -e; . /missing || echo fallback; echo after` prints neither line, and wrapping it in a function does not
+  help. The `||` never gets to run. Test with `[ -f ... ]` first, as above. The same reasoning is why
+  the call is `X="$(jenga_package_root ...)" || true`: the resolver returns 1 when nothing qualifies, and under
+  `set -e` a bare assignment from a failing command substitution would end the script.
+- **Do not use `$PUBLISH_REPO_ROOT`, `$REPO_ROOT` or git's toplevel for package assets.** Those are the *project*
+  (see "Resolving the project root from inside a script" above); the project is the package only in this monorepo.
+
+### Failure behaviour: what the resolver does, and what a script should do
+
+When nothing qualifies, `jenga_package_root` prints the old three-levels-up candidate on **stdout**, writes one
+line to **stderr** (`package-root.sh: no Jenga package found for <dir> (looked for ...); is @jenga-ai/agent
+installed?`) and returns **1**. stdout is never anything but a path, so a caller that ignores the status behaves
+exactly as it did before the resolver existed; the stderr line is what turns the old "file not found under
+`.claude/`" into a message that names the cause. Nearly every caller does `|| true`, so the status is rarely read.
+
+A script should therefore:
+
+1. Keep `|| true` on the assignment (never let a failed lookup end a script that has a useful degraded path).
+2. Check for the *specific asset* it needs before using it (`[ -f "$PACKAGE_ROOT/scripts/x.sh" ]`), as
+   `skills/j-uncharted/scripts/validate-proposed-items.sh` and `skills/j-publish/scripts/run_gates.sh` do.
+3. When the asset is required, fail with a message that names the asset and the directory it looked in, and use the
+   same words existing tests assert on (`board-ids.sh not found`, `board_ids.py not found`), exiting non-zero.
+4. When the asset is optional (a notice, a usage measurement), degrade silently *only if the skill documents the
+   silent no-op* (`persist-task-usage.sh` does: absent means "not shipped here"). An optional asset that is
+   skipped for the wrong reason, such as `audit:skipped (audit-deps.sh not found)` in a consumer, is a defect, not
+   a feature; the audit below found two of those.
+
+Python and Node scripts have no `source`; they implement the same order themselves (see `_find_board_ids_lib` in
+`skills/index/scripts/board_index.py`, which fails with a one-line `SystemExit` message instead of a traceback).
+
+### The audit (`E98_S01_T03`, 2026-11-16)
+
+**Method.** Every script under `skills/` that still contained `../../..` (and every script with a
+`node_modules/@jenga-ai/agent` or cwd-relative lookup but no resolver) was run from a fixture consumer built by
+`scripts/consumer-layout-fixture.sh` (package in `node_modules/@jenga-ai/agent`, `skills/` and `agents/` mirrored
+into `.claude/` and `.agents/`, `git init`, an `npm` project, a board with one `Passed` task), from three working
+directories: **A** the consumer root, **B** a subdirectory of it (`src/deep`), **C** a subdirectory of a consumer
+that sits *below* the git root (`<git>/app/src/deep`, the package in `<git>/app/node_modules`). Each probe was a
+safe, non-mutating invocation (`--help`, bare usage, a read-only subcommand, or a rehearsal that stops before any
+publish); a probe that proves the package asset was found is named in the table. Scripts with no safe invocation
+(publish, deploy, mirror and distribute pipelines) were classified by reading their code, marked **read**.
+Release-affecting actions (`npm publish`, `git push`, `rsync` to a target) were never run.
+
+**Counts: 36 scripts audited. 6 failed and were fixed, 13 work as they are, 11 need no package asset, 5 are not
+shipped, 1 is owned by `E98_S02`.**
+
+| # | Script | Probe, cwd A/B/C | Result | Reason | Fix |
+|---|---|---|---|---|---|
+| 1 | `index/scripts/board_index.py` (`board-index`) | `graph::nodes` A/B/C | **fails** | `sys.path` gets `parents[3]/scripts/lib`, which is `.claude/scripts/lib` in a mirror: `ImportError: board_ids`. Also broke `smoke_test.sh`. The comment claimed every layout worked | `_find_board_ids_lib()`: same order as the resolver, lenient predicate (`scripts/lib/board_ids.py`); one-line `SystemExit` when absent |
+| 2 | `j-publish/scripts/generate_release_notes.sh` | `--output`, and the standing `CHANGELOG.md`, A/B/C | **fails** | board-ids lookup was `$SCRIPT_DIR/../../../{scripts/lib,node_modules/...}` (`.claude/...`); the changelog template was read from `$PUBLISH_REPO_ROOT/templates` (the project, not the package) | `PUBLISH_PACKAGE_ROOT` from `publish_common.sh`; a project-level template still wins, then the package's |
+| 3 | `j-publish/scripts/run_gates.sh` | `pre t publish.json --non-interactive` A/B/C | **fails (C)** | audit gate fell to `$REPO_ROOT/node_modules/...` (git toplevel), which is not where `node_modules` is when the project is below the git root: **the dependency audit was silently skipped** (`audit:skipped (audit-deps.sh not found)`). Worked in A and B only through that fallback | `find_repo_script` tries `$PACKAGE_ROOT/scripts` first; the project's own `scripts/` and `$REPO_ROOT/node_modules` stay as later candidates |
+| 4 | `j-publish/scripts/audit_notice_hook.sh` | run, check the marker, A/B/C | **fails (C)** | same lookup, same silent skip (the hook exits 0 by contract, so nothing showed) | `$PACKAGE_ROOT/scripts/audit-notice.sh` first |
+| 5 | `j-close-story/scripts/persist-task-usage.sh` | `E1_S01` A/B/C | **fails (B, C)** | `scripts/task-usage.sh` / `node_modules/...` relative to the **cwd**; from a subdirectory neither exists and the documented silent no-op hid it. `task-usage.sh` ships since the E76 reversal, so absent is no longer the normal case | look in the cwd and every directory above it; silent no-op kept when absent everywhere |
+| 6 | `j-close-story/scripts/write-story-usage.sh` | `E1_S01` A/B/C | **fails (B, C)** | same | same |
+| 7 | `j-uncharted/scripts/validate-proposed-items.sh` | `--help` (resolves validators first) A/B/C | works | `$PACKAGE_ROOT/scripts` is tried first; the `../../..` on line 53 is only the non-git project-root fallback and the `$REPO_ROOT/node_modules` branch is redundant after the resolver; neither is reached in a real layout | none (not rewritten to look uniform) |
+| 8 | `j-uncharted/scripts/run-engine.sh` | `--help`, `--mode segment` A/B/C | works | `$PACKAGE_ROOT/scripts/lib` first; the second candidate (`$SCRIPT_DIR/../../../node_modules/...`) is `.claude/node_modules` in a mirror and so unreachable, harmless | none |
+| 9 | `jenga/scripts/board-scan.sh` | `--help` A/B | works | same shape as 8 | none |
+| 10 | `jenga/scripts/cascade-resolve.sh` | `--help` A/B | works | same shape as 8 | none |
+| 11 | `j-init/scripts/init.sh` | unknown argument (stops after the package lookup) A/B/C | works | resolver first; the two `elif` fallbacks after it are redundant | none |
+| 12 | `j-dashboard/scripts/resolve-app-dir.sh` (+ `launch.sh`, `snapshot.sh`) | `--marker package.json`, with a stub `project/app` in the package, A/B/C | works | candidate 1 is the monorepo shortcut; step 1b uses the shared resolver; then git root and an upward walk | none |
+| 13 | `j-status/scripts/render-status-overview.sh` | default view A/B | works | package files found through `sr_find_file` (shared resolver) in `lib/status-render-common.sh`; the header comment still names `../../../scripts` and is stale | none (comment only) |
+| 14 | `j-status/scripts/render-status-scope-view.sh` | `--help` A/B | works | same | none |
+| 15 | `jenga/scripts/load-playbooks.sh` | list A/B/C | works | resolver first, `$JENGA_PROJECT_DIR/node_modules` redundant | none |
+| 16 | `jenga/scripts/load-nl-catalog.sh` | run A/B/C | works | same | none |
+| 17 | `jenga/scripts/run-playbook-step.sh` | **read** | works | same shape as 15 | none |
+| 18 | `j-uncharted/scripts/write-backfilled-epics.sh` | **read** | works | `$PACKAGE_ROOT` candidate in a list | none |
+| 19 | `j-uncharted/scripts/elicitation-state.sh` | **read** | works | resolver, then `$REPO_ROOT/node_modules` | none |
+| 20-25 | `j-publish/scripts/{droplet,ios,npm,npm_ci,npm_stage}_pipeline.sh`, `npm_stage_inspect.sh` | `--help` / bare usage A/B/C | no package asset needed | `REPO_ROOT` is the **project being published** (git toplevel; `../../..` only when the script is in no git work tree, where publishing cannot work anyway). Package files are not read. `npm_pipeline.sh:218` reads the *project's* optional `scripts/generate-legacy-shipped-paths.js`, guarded and allowlisted | none |
+| 26 | `j-publish/scripts/publish_common.sh` | sourced A/B/C | no package asset needed | project root as above; it now also exports `PUBLISH_PACKAGE_ROOT` for the scripts that source it | `PUBLISH_PACKAGE_ROOT` added |
+| 27 | `index/scripts/smoke_test.sh` | A/B/C | no package asset needed | maintainer self-test of this repo's board (`>= 22 epics`); fails in a consumer by design, its only package asset (`board_index.py`) is fixed in 1 | none |
+| 28-29 | `j-distribute/scripts/{commit-version-bump,distribute-changes}.sh` | **read** | no package asset needed | project/monorepo root, git first; maintainer tooling (`distribute-changes-root-climb.bats`) | none |
+| 30 | `jenga-config/scripts/run-config.sh` | **read** | no package asset needed | installs a pinned CLI into a per-user cache | none |
+| 31-33 | `j-mirror-public/scripts/{test-subject-paths,mark-publicized,shipping-tests-lib}.sh` | **read** | not shipped | `skills/j-mirror-public/` is in `.publicignore`; runs only in this monorepo (source, or its own `.claude/` mirror, where self-sync copies `scripts/`) | none |
+| 34-35 | `j-self-sync/scripts/{run.js,mark-merged.sh}` | **read** | not shipped | same (`skills/j-self-sync/` is in `.publicignore`) | none |
+| 36 | `j-smoke-test/scripts/smoke-test-skills.sh` (+ `render-error-table.sh`) | **read** | owned by `E98_S02` | `ROOT` is the explicit `--root` tree to inspect, allowlisted | not touched here |
+
+**Observation, not a package-root defect.** In layout C, `jenga/scripts/board-scan.sh`, `cascade-resolve.sh` and
+`run_gates.sh` take the *project* from `git rev-parse --show-toplevel`, so a project below the git root reads
+`<git>/project/board` instead of `<git>/app/project/board`. That is the project-root convention above, unchanged;
+it is recorded so the next person does not mistake it for a missing package.
+
+### The `j-publish` decision
+
+`skills/j-publish/` **ships.** Evidence: `package.json` `"files"` lists `skills/` whole; `.publicignore` blocks the
+old bare `skills/publish/`, `.claude/skills/publish/` and `.agents/skills/publish/` but no `skills/j-publish/` entry
+(`rsync -an --exclude-from=.publicignore` lists `skills/j-publish/` among the shipped skills); `lib/sync.js`
+mirrors `skills/` as a whole. `j-distribute` ships for the same reason; `j-mirror-public`, `j-self-sync`,
+`j-dev-done`, `j-train`, `j-strategy` and `j-convert` do not.
+
+Decision: **`j-publish` scripts must work in the consumer layout.** The audit found three that did not
+(rows 2 to 4); they are fixed and covered by `tests/package-root.bats`. The remaining `../../..` in the pipeline
+scripts is the non-git project-root fallback, which needs no package asset and was left alone (rows 20 to 26).
+
+<!-- E98_S02: the smoke test's consumer-layout phase is documented below this line. -->
+
+### The execution phase of `j.smoke-test` (E98_S02)
+
+`j.smoke-test` has two parts. The structural checks inspect each skill in the package layout. The **execution phase**
+(on by default, `--no-exec` turns it off, `--exec-timeout <s>` or `JENGA_SMOKE_EXEC_TIMEOUT` sets the per-script limit, 10 s
+by default) runs the skill's scripts in the layout a consumer has. It builds a throwaway consumer with
+`scripts/consumer-layout-fixture.sh`: the package at `node_modules/@jenga-ai/agent`, and `.claude/` and `.agents/` holding
+only `skills/` and `agents/`. It then runs one safe invocation of every `skills/<skill>/scripts/**/*.sh` from
+`.claude/skills/<skill>/scripts/`. The working directory is the consumer root, the environment is scrubbed, `HOME`,
+`TMPDIR` and `CLAUDE_PROJECT_DIR` point inside the temp directory and stdin is `/dev/null`. This is a scrubbed environment,
+not an OS sandbox: a script that writes to a hard-coded absolute path is not blocked.
+
+A script that exits non-zero and names a package asset under `.claude/` (`templates/`, `scripts/`, `lib/`, `hooks/` and so
+on) is a **critical** finding (`exec-package-asset`): it resolves package assets against the mirror instead of the
+package. Locate the package with `skills/index/scripts/package-root.sh` (`jenga_package_root "$SCRIPT_DIR"`), never
+`"$SCRIPT_DIR/../../.."`. Any other non-zero exit is minor (`exec-failed`, `exec-timeout`, `exec-fixture-failed`).
+
+**Declaring a safe invocation.** By default the check runs `--help`, but only for a script whose code (comments excluded)
+handles `--help` or `-h`. A script with no such handler is never run blindly: it is listed as *unverifiable* on stderr and
+counted in the `Execution check:` summary line. To get a script verified, either handle `--help` (print usage, exit 0,
+write nothing) or declare a read-only invocation in its first 40 lines:
+
+```
+# smoke-invoke: show --quiet      one invocation; repeatable; words split on whitespace, no quoting
+# smoke-invoke:                   one bare invocation with no arguments
+# smoke-invoke: none <reason>     declared unverifiable, reason shown in the list
+```
+
+The invocation must be read-only and finish within the timeout. Scripts of maintainer-only skills (`j-init`, `j-distribute`,
+`j-mirror-public`, `j-publish`, `j-self-sync`, `j-dashboard*`), `tests/` directories and sourced `lib/` files are never
+executed and are listed as skipped.
+
+**Mirror mode.** `smoke-test-skills.sh --root <consumer>/.claude --package-root <consumer>/node_modules/@jenga-ai/agent`
+checks a consumer's mirror: bare script names and assets resolve against the package root, because a mirror root holds
+only `skills/` and `agents/`. `project/.workflows/scripts/st-test-run.sh` step 7 runs it that way as its own check
+(`skill smoke test (consumer .claude/skills)`), next to the package-root check.
+
+#### Decision: shipped maintainer-only skills (`E99_S01_T05`, user decision 2026-11-16)
+
+The paragraphs above describe what the execution phase does **today**: it skips `j-init`, `j-distribute`, `j-mirror-public`,
+`j-publish`, `j-self-sync` and `j-dashboard*` by a hard-coded name list. That list is wrong in both directions, because
+five of those seven skills **ship** and are run by consumers. The decision below replaces it; the tasks that implement it are
+`E99_S01_T07` to `E99_S01_T11`, and until they land the behaviour above stands. The evaluation (per-script line references,
+timings, the worst case per script) is `project/rapports/analysis/E99_S01_T05-maintainer-only-skills-options.md`.
+
+**Decision: option 1 plus option 2, with option 4 for what cannot be run safely; option 3 is not chosen.**
+
+| Option | Verifies of the 35 shipped scripts | Cost | Outcome |
+|---|---|---|---|
+| 1 Skip only never-shipped skills, list from `.publicignore` | 17 on `--help` | about +7 s | **Chosen** |
+| 2 Honour `# smoke-invoke:` in a maintainer-only skill | +3 with no fixture change (+7 with a fixture `publish.json`) | +1 to +4 s | **Chosen** |
+| 3 Per-pipeline rehearsal with stubbed `npm`, `git` remote, `rsync` | about 10 end to end | estimated +10 to +25 s | Rejected |
+| 4 Keep the skip, more bats and post-sync probes | 3 today (`tests/package-root.bats`) | 0 s on the smoke test | Chosen for the 8 scripts with no safe invocation |
+
+- **Shipped (run, or declared):** `j-publish` 24 scripts, `j-init` 4, `j-distribute` 3, `j-dashboard` 3, `j-dashboard-share` 1 = 35.
+  Produced by `rsync -an --exclude-from=.publicignore --out-format='%n' ./ <empty-dir>/` and confirmed per skill with
+  `scripts/check-publicignore-match.sh skills/<skill>/SKILL.md`.
+- **Never shipped (skipped, reason "never shipped"):** `j-mirror-public` 11 scripts and `j-self-sync` 2, plus `j-dev-done` 2,
+  which the old list missed. They are the only skips derived from `.publicignore` membership, not from a hard-coded name list.
+  `npm pack` of the private checkout still contains them, so "shipped" is read from `.publicignore`, never from the pack list.
+- **Why 3 was rejected:** a rehearsal drives `npm publish`, `git push`, `gh workflow run` and `git tag` on purpose and is safe
+  only through stubs; the safety rests on every pipeline author keeping `--dry-run` side-effect free, and it costs a
+  fixture `publish.json` per target type, a stub set and upkeep each time a pipeline gains a command, for about 10 scripts. The
+  cheaper options reach most of the same defect class (a script that fails at start-up in a consumer layout).
+- **What makes the wider run safe.** Option 1 plus 2 runs more scripts, so the fixture is hardened at the same time
+  (`E99_S01_T07`): a stub directory first on `PATH` whose `npm`, `npx`, `gh`, `ssh`, `scp`, `curl`, `wget`, `rclone`, `xcrun`
+  and `doctl` log to `blocked.log` and exit 97, and whose `rsync` accepts only paths inside the work directory; a `git`
+  wrapper that refuses `push`, tag creation, `fetch`, `pull`, `clone`, `ls-remote` and `remote add`; `GIT_CONFIG_NOSYSTEM=1`,
+  `GIT_CONFIG_GLOBAL=/dev/null` and the two `NPM_CONFIG_*` files set to `/dev/null`; and a **critical** finding when
+  `blocked.log` is not empty after an invocation, so a mis-declared invocation fails loudly. This is sound for tools resolved
+  through `PATH`, which is every call the 35 scripts make; it is still not a sandbox, and a script that opens a socket itself
+  or uses an absolute path bypasses it. Every `# smoke-invoke:` line in a maintainer-only skill is read-only by rule and is
+  reviewed against the worst-case table in the evaluation.
+- **Residual risk:** 15 to 18 of the 35 shipped scripts stay unverified in a consumer layout: the 8 with no safe invocation
+  (`init.sh`, `commit-version-bump.sh`, `publish_common.sh`, `ios_pipeline.sh`, `finalize_changelog.sh`, `run_gates.sh`,
+  `check-version.sh`, `distribute-changes.sh`, each declared `# smoke-invoke: none <reason>`) and the 7 validators that need a
+  `project/configs/publish.json` the fixture does not create (declared `none` until a fixture file is added, optional and
+  deferred). A `--help` check proves a script starts and finds its libraries, not that a pipeline body works, so the 5.0.1
+  wrong-package-root class is caught only for code that runs before or during argument parsing and for the declared read-only
+  calls. Stub coverage is by command name, not by behaviour.
+- **Separate follow-up, not an execution-phase fix (`E99_S01_T11`):** `j-distribute` ships to consumers but its scripts need
+  the monorepo `package.json` and `distribute.config.json`, so they cannot succeed in a consumer layout by design. Whether it
+  should ship at all is a distribution question for the user.
+
+---
+
 ## Service descriptors (`j.connect`)
 
 Skills that connect third-party services (a vendor CLI plus, where one exists, an MCP server) do not get

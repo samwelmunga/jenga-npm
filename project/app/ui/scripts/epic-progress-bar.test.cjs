@@ -36,9 +36,14 @@ esbuild.buildSync({
 const { React, renderToStaticMarkup, EpicProgressBar, buildEpicBarModel } = require(out)
 const render = (epic, stories, labels) => renderToStaticMarkup(React.createElement(EpicProgressBar, { epic, stories, labels }))
 
-const LABELS = { card_bar_aria: '%d of %d stories complete, %d%% of tasks done' }
+const LABELS = { card_bar_aria: '%d of %d stories complete, %d%% of the epic done' }
 const totals = (done, denominator) => ({ done, in_progress: 0, failed: 0, pending: 0, rejected: 0, unknown: 0, denominator })
-const epic = (complete, done, denominator) => ({ id: 'E01', stories: { complete }, tasks: { totals: totals(done, denominator) } })
+// E92_S09_T04: the percent is the script's epic_progress.percent, stated here as the script would print it (section 5.1);
+// tasks.totals is deliberately a different fraction so a test fails if the model reads it instead.
+const progress = (stories, decomposed, tasksDone, tasksDen, percent, goalReached = false) =>
+  ({ stories, decomposed, tasks_done: tasksDone, tasks_denominator: tasksDen, percent, goal_reached: goalReached })
+const epic = (complete, done, denominator, ep) =>
+  ({ id: 'E01', stories: { complete }, tasks: { totals: totals(done, denominator) }, ...(ep ? { epic_progress: ep } : {}) })
 const story = (id, stop, complete = false) => ({ id, stop, complete })
 
 const STORIES = [
@@ -48,7 +53,7 @@ const STORIES = [
   story('E01_S04', 'pending'),
   story('E01_S05', 'rejected'),
 ]
-const EPIC = epic(1, 7, 20)
+const EPIC = epic(1, 7, 20, progress(5, 3, 3, 6, 30))
 
 const stopsOf = (html) => html.split('<span class="epic-bar-stop"').slice(1).map(s => s.split('</span>')[0])
 const count = (html, needle) => html.split(needle).length - 1
@@ -56,19 +61,41 @@ const count = (html, needle) => html.split(needle).length - 1
 let n = 0
 const test = (name, fn) => { fn(); n++; console.log('ok  ' + name) }
 
-test('model: one stop per story in order with the script bucket, percent from tasks.totals, aria filled', () => {
+test('model: one stop per story in order with the script bucket, percent from epic_progress, aria filled', () => {
   const m = buildEpicBarModel(EPIC, STORIES, LABELS)
   assert.deepStrictEqual(m.stops.map(s => s.id), STORIES.map(s => s.id))
   assert.deepStrictEqual(m.stops.map(s => s.bucket), ['done', 'in_progress', 'failed', 'pending', 'rejected'])
-  assert.strictEqual(m.percent, 35)
+  assert.strictEqual(m.percent, 30)
   assert.strictEqual(m.completeStories, 1)
   assert.strictEqual(m.totalStories, 5)
-  assert.strictEqual(m.ariaLabel, '1 of 5 stories complete, 35% of tasks done')
+  assert.strictEqual(m.ariaLabel, '1 of 5 stories complete, 30% of the epic done')
 })
 
-test('model: percent rounds to a whole number', () => {
-  assert.strictEqual(buildEpicBarModel(epic(0, 1, 3), [], LABELS).percent, 33)
-  assert.strictEqual(buildEpicBarModel(epic(0, 2, 3), [], LABELS).percent, 67)
+// E92_S09_T04 replaces 'model: percent rounds to a whole number' (the model no longer divides tasks.totals: the script's
+// floor of section 5.1 is the one rounding rule, so the model takes the percent as stated).
+test('E92_S09_T04: 5 stories, 3 decomposed: half their tasks done 30 %, all done 60 %, every story done 100 %', () => {
+  assert.strictEqual(buildEpicBarModel(epic(0, 3, 6, progress(5, 3, 3, 6, 30)), [], LABELS).percent, 30)
+  assert.strictEqual(buildEpicBarModel(epic(3, 6, 6, progress(5, 3, 6, 6, 60)), [], LABELS).percent, 60)
+  assert.strictEqual(buildEpicBarModel(epic(5, 10, 10, progress(5, 5, 10, 10, 100, true)), [], LABELS).percent, 100)
+})
+
+test('E92_S09_T04: the percent is read, never recomputed: tasks.totals is ignored, a missing epic_progress gives 0', () => {
+  assert.strictEqual(buildEpicBarModel(epic(0, 2, 3, progress(1, 1, 199, 200, 99)), [], LABELS).percent, 99)
+  assert.strictEqual(buildEpicBarModel(epic(0, 6, 6), [], LABELS).percent, 0)
+  assert.strictEqual(buildEpicBarModel(epic(0, 6, 6, { percent: 'x' }), [], LABELS).percent, 0)
+})
+
+// E92_S10_T02: every story decomposed and every task done, but one story's own status Failed (or Blocked): board-progress.sh
+// states no goal, the percent capped at 99 and failed_stories. The bar shows the stated 99 %, never 100 %, recomputing nothing.
+test('E92_S10_T02: a failed story: the bar shows the stated 99 %, never 100 %, though every story is complete by its tasks', () => {
+  const failed = epic(5, 10, 10, { ...progress(5, 5, 10, 10, 99, false), failed_stories: ['E01_S03'] })
+  const stories = [1, 2, 3, 4, 5].map(k => story(`E01_S0${k}`, 'done', true))
+  const m = buildEpicBarModel(failed, stories, LABELS)
+  assert.strictEqual(m.percent, 99)
+  assert.strictEqual(m.ariaLabel, '5 of 5 stories complete, 99% of the epic done')
+  const html = render(failed, stories, LABELS)
+  assert.ok(html.includes('<span class="epic-bar-percent" aria-hidden="true">99%</span>'), html)
+  assert.ok(!html.includes('100%'), html)
 })
 
 test('model: only a complete story is done; a partly done story is in progress', () => {
@@ -81,7 +108,7 @@ test('render: one stop per story, no text inside the stops, percent text beside 
   const stops = stopsOf(html)
   assert.strictEqual(stops.length, 5)
   stops.forEach(s => assert.ok(s.endsWith('>'), 'stop has no content: ' + s))
-  assert.ok(html.includes('<span class="epic-bar-percent" aria-hidden="true">35%</span>'))
+  assert.ok(html.includes('<span class="epic-bar-percent" aria-hidden="true">30%</span>'))
   assert.ok(html.indexOf('epic-bar-track') < html.indexOf('epic-bar-percent'))
   assert.strictEqual(count(html, 'data-bucket="done"'), 1)
   assert.strictEqual(count(html, 'data-bucket="in_progress"'), 1)
@@ -91,9 +118,9 @@ test('render: one stop per story, no text inside the stops, percent text beside 
 test('render: wrapper is role=img with the filled aria-label and no other label text', () => {
   const html = render(EPIC, STORIES, LABELS)
   assert.ok(html.includes('role="img"'))
-  assert.ok(html.includes('aria-label="1 of 5 stories complete, 35% of tasks done"'))
+  assert.ok(html.includes('aria-label="1 of 5 stories complete, 30% of the epic done"'))
   const text = html.replace(/<[^>]*>/g, '')
-  assert.strictEqual(text, '35%')
+  assert.strictEqual(text, '30%')
 })
 
 test('render: 0 stories, stories with 0 tasks, and missing labels do not throw', () => {

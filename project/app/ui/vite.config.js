@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig, searchForWorkspaceRoot } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // E47_S08_T03 - the dev server binds a verified-free port (5173 first) and proxies /v1 to whichever port the
@@ -49,6 +49,10 @@ export default defineConfig(async ({ command }) => ({
         server: {
           port: await findFreePort({ start: 5173 }),
           strictPort: true,
+          // E92_S08_T02 - the tree model imports its graph structure from <repo>/lib/progress/ (shared with the Node terminal
+          // renderer, and shipped through the package's `lib/` entry), which sits outside the workspace root that Vite allows
+          // by default. Setting `allow` replaces that default, so it is listed again. The production build needs no setting.
+          fs: { allow: [searchForWorkspaceRoot(process.cwd()), path.resolve(here, '../../../lib/progress')] },
           proxy: { '/v1': { target: `http://localhost:${apiPort()}`, changeOrigin: true } },
         },
       }

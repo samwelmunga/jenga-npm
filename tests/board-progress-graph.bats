@@ -94,11 +94,18 @@ print(v if isinstance(v, str) else json.dumps(v, separators=(",", ":")))
   [ "$(py '[e["id"] for e in d["epics"]]')" = '["E01","E02"]' ]
   [ "$(py '[s["id"] for s in d["stories"]]')" = '["E01_S01","E01_S02","E02_S01"]' ]
   [ "$(py 'len(d["tasks"])')" = "7" ]
-  [ "$(py 'list(d["epics"][0].keys())')" = '["id","title","depends_on","stories","tasks","ready_count"]' ]
+  # E92_S09_T03: every epic entry gains epic_progress (the epic percent that counts undecomposed stories) between tasks and
+  # ready_count; an added key, so schema_version stays 1 and stories/tasks keep their keys (asserted on the next lines).
+  [ "$(py 'list(d["epics"][0].keys())')" = '["id","title","depends_on","stories","tasks","epic_progress","ready_count"]' ]
+  # E92_S10_T02: epic_progress gains failed_stories after goal_reached (an added key).
+  [ "$(py 'list(d["epics"][0]["epic_progress"].keys())')" = '["stories","decomposed","tasks_done","tasks_denominator","percent","goal_reached","failed_stories"]' ]
   [ "$(py 'list(d["epics"][0]["stories"].keys())')" = '["totals","complete"]' ]
   [ "$(py 'list(d["epics"][0]["tasks"].keys())')" = '["totals"]' ]
-  [ "$(py 'list(d["stories"][0].keys())')" = '["id","epic_id","title","depends_on","totals","complete","stop","ready_count"]' ]
-  [ "$(py 'list(d["tasks"][0].keys())')" = '["id","story_id","epic_id","title","status","bucket","state","depends_on","blocked_by","unlocked_by"]' ]
+  # E92_S12_T01: stories gain decomposed after complete (an added key; schema_version stays 1, nothing else changes).
+  [ "$(py 'list(d["stories"][0].keys())')" = '["id","epic_id","title","depends_on","totals","complete","decomposed","stop","ready_count"]' ]
+  # E92_S10_T01: tasks gain waiting_on after blocked_by (an added key; blocked_by keeps its meaning, schema_version stays 1).
+  # E92_S11_T02: and unfinished_deps after waiting_on (an added key: the unsatisfied effective ids of a DONE task).
+  [ "$(py 'list(d["tasks"][0].keys())')" = '["id","story_id","epic_id","title","status","bucket","state","depends_on","blocked_by","waiting_on","unfinished_deps","unlocked_by"]' ]
   [ "$(py 'd["tasks"][0]["title"]')" = "Title of E01_S01_T01" ]
 }
 
@@ -196,4 +203,74 @@ print(v if isinstance(v, str) else json.dumps(v, separators=(",", ":")))
   [ "$RC" -eq 0 ]
   [ "$(find "$ROOT" -type f | sort | xargs cksum)" = "$before" ]
   ! grep -Eq '(^|[^a-z_])jq |claude ' "$SCRIPT"
+}
+
+# ---- E92_S12_T01: stories[].decomposed -----------------------------------------------------------------------------
+
+# One story per decomposed case, all under E04, plus an epic E05 for --within; ids ascend with the case.
+decomp() {
+  mkroot decomp
+  item E04 "In Progress"
+  item E04_S01 Pending; item E04_S01_T01 Pending                                  # a counted task: true
+  item E04_S02 Pending                                                            # no task files: false
+  item E04_S03 Pending; item E04_S03_T01 Rejected; item E04_S03_T02 Rejected      # all tasks rejected: false
+  item E04_S04 Pending; item E04_S04_T01 "Weird status"                           # all tasks unknown: false
+  item E04_S05 Pending; item E04_S05_T01 Passed; item E04_S05_T02 Rejected        # counted and rejected: true
+  item E04_S06 Rejected; item E04_S06_T01 Passed                                  # Rejected story: null
+  item E04_S07 "Weird status"; item E04_S07_T01 Passed                            # unknown-status story: null
+  item E04_S08 Passed; item E04_S08_T01 Passed                                    # done story: true
+  item E05 Pending
+  item E05_S01 Pending                                                            # the only story: false
+}
+
+@test "decomposed: true with a counted task, false with none, null for a story that is not counted" {
+  decomp
+  run_graph --graph
+  [ "$RC" -eq 0 ]
+  [ "$(py '[[s["id"], s["decomposed"]] for s in d["stories"] if s["epic_id"] == "E04"]')" = '[["E04_S01",true],["E04_S02",false],["E04_S03",false],["E04_S04",false],["E04_S05",true],["E04_S06",null],["E04_S07",null],["E04_S08",true]]' ]
+  [ "$(py '[s["decomposed"] for s in d["stories"] if s["epic_id"] == "E05"]')" = '[false]' ]
+}
+
+@test "decomposed: the printed value is a bare JSON literal, true, false or null" {
+  decomp
+  run_graph --graph
+  grep -c '"decomposed": true,'  "$BATS_TEST_TMPDIR/out" | grep -qx 3
+  grep -c '"decomposed": false,' "$BATS_TEST_TMPDIR/out" | grep -qx 4
+  grep -c '"decomposed": null,'  "$BATS_TEST_TMPDIR/out" | grep -qx 2
+}
+
+@test "decomposed: true count equals epic_progress.decomposed, false count equals stories minus decomposed" {
+  decomp
+  run_graph --graph
+  [ "$(py 'all(sum(1 for s in d["stories"] if s["epic_id"] == e["id"] and s["decomposed"] is True) == e["epic_progress"]["decomposed"] and sum(1 for s in d["stories"] if s["epic_id"] == e["id"] and s["decomposed"] is False) == e["epic_progress"]["stories"] - e["epic_progress"]["decomposed"] for e in d["epics"])')" = "true" ]
+  # the mixed epic in numbers: 6 counted stories (S06 and S07 are not counted), 3 decomposed (S01, S05, S08), so 3 ghost bands
+  [ "$(py '[[e["epic_progress"]["stories"], e["epic_progress"]["decomposed"]] for e in d["epics"]]')" = '[[6,3],[1,0]]' ]
+}
+
+@test "decomposed: the same value for the same story under --within, an epic or a story, and with --counts-only" {
+  decomp
+  run_graph --graph
+  cp "$BATS_TEST_TMPDIR/out" "$BATS_TEST_TMPDIR/full.json"
+  all="$(py 'json.dumps({s["id"]: s["decomposed"] for s in d["stories"]}, sort_keys=True)')"
+  run_graph --graph --within E04
+  [ "$(py 'json.dumps({s["id"]: s["decomposed"] for s in d["stories"]}, sort_keys=True)')" = "$(py 'json.dumps({s["id"]: s["decomposed"] for s in d["stories"] if s["epic_id"] == "E04"}, sort_keys=True)' "$BATS_TEST_TMPDIR/full.json")" ]
+  run_graph --graph --within E05
+  [ "$(py 'json.dumps({s["id"]: s["decomposed"] for s in d["stories"]}, sort_keys=True)')" = '{"E05_S01": false}' ]
+  for sid in E04_S01 E04_S02 E04_S03 E04_S04 E04_S05 E04_S06 E04_S07 E04_S08; do
+    run_graph --graph --within "$sid"
+    [ "$(py '[s["decomposed"] for s in d["stories"]]')" = "$(py '[[s["decomposed"] for s in d["stories"] if s["id"] == "'"$sid"'"][0]]' "$BATS_TEST_TMPDIR/full.json")" ]
+  done
+  run_graph --graph --counts-only
+  [ "$(py 'json.dumps({s["id"]: s["decomposed"] for s in d["stories"]}, sort_keys=True)')" = "$all" ]
+}
+
+@test "decomposed: two runs print identical output, and no other story or epic key moved" {
+  decomp
+  run_graph --graph
+  cp "$BATS_TEST_TMPDIR/out" "$BATS_TEST_TMPDIR/a.json"
+  run_graph --graph
+  cmp "$BATS_TEST_TMPDIR/a.json" "$BATS_TEST_TMPDIR/out"
+  [ "$(py 'd["schema_version"]')" = "1" ]
+  [ "$(py 'list(d.keys())')" = '["schema_version","scope","epics","stories","tasks","ready","warnings"]' ]
+  [ "$(py 'list(d["epics"][0].keys())')" = '["id","title","depends_on","stories","tasks","epic_progress","ready_count"]' ]
 }

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: show --layer project
 # Read and write entries in a preferred-tools registry layer (E66_S03_T02).
 #
 # The deterministic half of the j.tools wizard (skills/j-tools/SKILL.md): every write
@@ -72,7 +73,10 @@ set -u
 SELF="tools-entry.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PACKAGE_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+# Package root (scripts/, templates/, lib/): resolved by the shared helper so it also works from a consumer's .claude/skills mirror.
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 VALIDATOR="$PACKAGE_ROOT/scripts/validate-tools-registry.sh"
 RESOLVE_ROOT="$PACKAGE_ROOT/scripts/resolve-root.sh"
 SHIPPED_FILE="$PACKAGE_ROOT/skills/j-tools/assets/shipped-tools.json"

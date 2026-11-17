@@ -57,12 +57,33 @@ const TARGETS = [
  * skill-list extraction already used for the Copilot template in
  * lib/commands/init.js.
  */
-function buildSkillList(projectRoot) {
-  const candidates = [".claude/skills", ".agents/skills"].map((p) => join(projectRoot, p));
-  const skillsDir = candidates.find(existsSync);
-  if (!skillsDir) return "_No skills found._";
+function buildSkillList(projectRoot, skillsDirOverride) {
+  const entries = listSkillEntries(projectRoot, skillsDirOverride);
+  if (entries === null) return "_No skills found._";
+  const skillLines = entries.map(formatSkillLine);
+  return skillLines.length > 0 ? skillLines.join("\n") : "_No skills found._";
+}
 
-  const skillLines = [];
+/** The one place the rendered skill-list line format is defined; `parseSkillNamesFromBlock` is its inverse. */
+function formatSkillLine({ name, description }) {
+  return `- **${name}**${description ? `: ${description}` : ""}`;
+}
+
+/**
+ * The skill directories the {{SKILL_LIST}} is built from: `{name, description}` per immediate
+ * subdirectory of the first existing skills directory (an explicit `skillsDirOverride`, else
+ * `.claude/skills`, else `.agents/skills` under projectRoot). Returns null when there is none.
+ * Shared by the generator and by lib/sync-drift.js so a drift check cannot disagree with what a
+ * sync would write (E26_S11_T05).
+ */
+export function listSkillEntries(projectRoot, skillsDirOverride) {
+  const candidates = skillsDirOverride
+    ? [skillsDirOverride]
+    : [".claude/skills", ".agents/skills"].map((p) => join(projectRoot, p));
+  const skillsDir = candidates.find(existsSync);
+  if (!skillsDir) return null;
+
+  const entries = [];
   for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const skillMdPath = join(skillsDir, entry.name, "SKILL.md");
@@ -72,9 +93,36 @@ function buildSkillList(projectRoot) {
       const match = content.match(/^description:\s*(.+)$/m);
       if (match) description = match[1].trim();
     }
-    skillLines.push(`- **${entry.name}**${description ? `: ${description}` : ""}`);
+    entries.push({ name: entry.name, description });
   }
-  return skillLines.length > 0 ? skillLines.join("\n") : "_No skills found._";
+  return entries;
+}
+
+/** Skill directory names a sync would list (see listSkillEntries); `null` when no skills directory exists. */
+export function listSkillNames(projectRoot, skillsDirOverride) {
+  const entries = listSkillEntries(projectRoot, skillsDirOverride);
+  return entries === null ? null : entries.map((e) => e.name);
+}
+
+/**
+ * The text between the Jenga START/END markers of an agent-context file's content (markers
+ * included), or null when the file carries no complete block.
+ */
+export function extractJengaBlock(content) {
+  const startIdx = content.indexOf(CONTENT_START);
+  const endIdx = content.indexOf(CONTENT_END);
+  if (startIdx === -1 || endIdx === -1 || startIdx >= endIdx) return null;
+  return content.slice(startIdx, endIdx + CONTENT_END.length);
+}
+
+/** Skill names listed in a rendered Jenga block, in order (inverse of formatSkillLine). */
+export function parseSkillNamesFromBlock(block) {
+  const names = [];
+  for (const line of block.split("\n")) {
+    const m = line.match(/^- \*\*(.+?)\*\*(?::|$)/);
+    if (m) names.push(m[1]);
+  }
+  return names;
 }
 
 /**
@@ -86,8 +134,8 @@ function buildSkillList(projectRoot) {
  * scan of skills/, so this list always matches the artifact the MCP router
  * (E50_S02_T03) and postinstall/self-sync regeneration also read from.
  */
-function buildAllowedSkillIds(projectRoot, packageRoot) {
-  const ids = readSkillAllowList(projectRoot, packageRoot);
+function buildAllowedSkillIds(projectRoot, packageRoot, override) {
+  const ids = Array.isArray(override) ? override : readSkillAllowList(projectRoot, packageRoot);
   return ids.length > 0 ? ids.map((id) => `\`${id}\``).join(", ") : "_No skills found._";
 }
 
@@ -120,18 +168,23 @@ function replaceManagedBlock(existingContent, newBlock) {
  * to `path`. If the file doesn't exist, write it in full. If it does,
  * replace only the managed block, preserving any content outside it (e.g.
  * a user's own edits to the title line of a Jenga-owned file).
+ *
+ * Returns true when the file's bytes change (or the file is created). With `dryRun` nothing is
+ * written; the return value says what a real run would have done (E26_S11_T01).
  */
-function writeManagedFile(path, rendered) {
+function writeManagedFile(path, rendered, dryRun = false) {
   if (!existsSync(path)) {
-    writeFileSync(path, rendered, "utf8");
-    return;
+    if (!dryRun) writeFileSync(path, rendered, "utf8");
+    return true;
   }
   const existing = readFileSync(path, "utf8");
   const renderedStart = rendered.indexOf(CONTENT_START);
   const renderedEnd = rendered.indexOf(CONTENT_END);
   const newBlock = rendered.slice(renderedStart, renderedEnd + CONTENT_END.length);
   const updated = replaceManagedBlock(existing, newBlock);
-  if (updated !== existing) writeFileSync(path, updated, "utf8");
+  if (updated === existing) return false;
+  if (!dryRun) writeFileSync(path, updated, "utf8");
+  return true;
 }
 
 /**
@@ -140,8 +193,10 @@ function writeManagedFile(path, rendered) {
  * at the J-<NAME>.md copy. Idempotent via its own REF marker pair, kept
  * distinct from CONTENT_START/CONTENT_END so the two replace passes never
  * interfere with each other in the same file.
+ *
+ * Returns true when the file's bytes change. With `dryRun` nothing is written (E26_S11_T01).
  */
-function insertOrUpdateReference(path, jFilename) {
+function insertOrUpdateReference(path, jFilename, dryRun = false) {
   const refBlock =
     `${REF_START}\n` +
     `> **Jenga framework note:** This project also uses [Jenga](https://github.com/samwelmunga/jenga-npm) — ` +
@@ -162,7 +217,9 @@ function insertOrUpdateReference(path, jFilename) {
     // the existing file's structure.
     updated = refBlock + "\n\n" + existing;
   }
-  if (updated !== existing) writeFileSync(path, updated, "utf8");
+  if (updated === existing) return false;
+  if (!dryRun) writeFileSync(path, updated, "utf8");
+  return true;
 }
 
 /**
@@ -172,17 +229,33 @@ function insertOrUpdateReference(path, jFilename) {
  * @param {string} projectRoot - project root directory (default: cwd)
  * @param {string} packageRoot - installed jenga-agent package root (default:
  *   derived from this file's own location)
- * @returns {{written: Array<{filename: string, mode: string}>, skipped?: boolean}}
+ * @param {object} [options]
+ * @param {boolean} [options.dryRun=false] - compute what a real run would write and compare it with
+ *   the files on disk, but write nothing (E26_S11_T01).
+ * @param {string} [options.skillsDir] - scan this directory for the {{SKILL_LIST}} instead of
+ *   `.claude/skills` / `.agents/skills` under projectRoot (lets a dry run reflect a mirror it has not run).
+ * @param {string[]} [options.allowedSkillIds] - render this allow-list instead of reading
+ *   `lib/skill-allow-list.json`.
+ * @returns {{written: Array<{filename: string, mode: string, file: string, changed: boolean}>,
+ *            changed: boolean, skipped?: boolean, dryRun?: boolean}}
+ *   Each entry's `file` is the file that carries the Jenga block (`J-<name>` on a collision) and
+ *   `changed` is true when a real run alters any byte of the block file or of the reference in the
+ *   user's own file. The top-level `changed` is true when any entry changed. With `dryRun` nothing
+ *   is written; `written` then lists what a real run would write.
  */
-export function generateAgentContext(projectRoot = process.cwd(), packageRoot = DEFAULT_PACKAGE_ROOT) {
+export function generateAgentContext(
+  projectRoot = process.cwd(),
+  packageRoot = DEFAULT_PACKAGE_ROOT,
+  { dryRun = false, skillsDir, allowedSkillIds: allowedOverride } = {}
+) {
   const tplPath = resolveTemplatePath(projectRoot, packageRoot);
   if (!tplPath) {
-    return { written: [], skipped: true };
+    return { written: [], changed: false, skipped: true };
   }
 
   const tpl = readFileSync(tplPath, "utf8");
-  const skillList = buildSkillList(projectRoot);
-  const allowedSkillIds = buildAllowedSkillIds(projectRoot, packageRoot);
+  const skillList = buildSkillList(projectRoot, skillsDir);
+  const allowedSkillIds = buildAllowedSkillIds(projectRoot, packageRoot, allowedOverride);
   const written = [];
 
   for (const target of TARGETS) {
@@ -200,11 +273,11 @@ export function generateAgentContext(projectRoot = process.cwd(), packageRoot = 
       // A J- file can only ever have been created by Jenga — this is a
       // repeat run after a prior collision. Update it in place; never
       // re-derive collision handling from it (no J-J-CLAUDE.md).
-      writeManagedFile(jPath, rendered);
+      let changed = writeManagedFile(jPath, rendered, dryRun);
       if (existsSync(targetPath)) {
-        insertOrUpdateReference(targetPath, jFilename);
+        changed = insertOrUpdateReference(targetPath, jFilename, dryRun) || changed;
       }
-      written.push({ filename: target.filename, mode: "updated-j-file" });
+      written.push({ filename: target.filename, mode: "updated-j-file", file: jFilename, changed });
       continue;
     }
 
@@ -213,24 +286,24 @@ export function generateAgentContext(projectRoot = process.cwd(), packageRoot = 
       if (existingContent.includes(CONTENT_START)) {
         // Jenga's own file from a prior *non-collision* run — update in
         // place rather than treating it as a fresh collision.
-        writeManagedFile(targetPath, rendered);
-        written.push({ filename: target.filename, mode: "direct-update" });
+        const changed = writeManagedFile(targetPath, rendered, dryRun);
+        written.push({ filename: target.filename, mode: "direct-update", file: target.filename, changed });
       } else {
         // Genuine pre-existing user file — collision. Write Jenga's copy
         // as J-<NAME>.md and insert a reference into the user's file.
-        writeFileSync(jPath, rendered, "utf8");
-        insertOrUpdateReference(targetPath, jFilename);
-        written.push({ filename: target.filename, mode: "collision-created-j-file" });
+        if (!dryRun) writeFileSync(jPath, rendered, "utf8");
+        insertOrUpdateReference(targetPath, jFilename, dryRun);
+        written.push({ filename: target.filename, mode: "collision-created-j-file", file: jFilename, changed: true });
       }
       continue;
     }
 
     // Neither the target nor its J- copy exists — first-run, no collision.
-    writeManagedFile(targetPath, rendered);
-    written.push({ filename: target.filename, mode: "direct-write" });
+    const changed = writeManagedFile(targetPath, rendered, dryRun);
+    written.push({ filename: target.filename, mode: "direct-write", file: target.filename, changed });
   }
 
-  return { written };
+  return { written, changed: written.some((w) => w.changed), ...(dryRun ? { dryRun: true } : {}) };
 }
 
 // CLI guard — allows `node lib/generate-agent-context.js [projectRoot]`,

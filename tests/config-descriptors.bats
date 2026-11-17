@@ -87,7 +87,7 @@ EOF
   run jq -r '[.top_level | keys[]] | join(",")' "$REPO_ROOT/templates/config-descriptor-schema.json"
   [ "$output" = "description,descriptor_version,file,keys" ]
   run jq -r '[.key_fields | keys[]] | sort | join(",")' "$REPO_ROOT/templates/config-descriptor-schema.json"
-  [ "$output" = "allowed,bump_on_change,default,description,editable,key,label,max,min,pattern,pointer,type" ]
+  [ "$output" = "allowed,bump_on_change,default,description,editable,key,label,max,min,optional,pattern,pointer,type" ]
 }
 
 @test "the guide's exit-code table lists every code the schema defines" {
@@ -128,7 +128,7 @@ EOF
   # boolean: audit-config production_only; integer: the scope-thresholds and playbook-config settings; string: audit-config mode, severity_threshold and offline_behavior, test-config's two commit_* keys (E72_S01_T04) and three test_run_* keys (E72_S06_T01)
   [ "$(printf '%s' "$output" | jq -c .)" = '["boolean","integer","string"]' ]
   run jq -s '[.[].keys[] | select(.editable == true and .type == "string") | .key] | sort' "$SHIPPED"/*.json
-  [ "$(printf '%s' "$output" | jq -c .)" = '["commit_prompt_default","commit_scope_map_file","mode","offline_behavior","severity_threshold","test_default_suite_set","test_run_epic","test_run_story","test_run_task"]' ]
+  [ "$(printf '%s' "$output" | jq -c .)" = '["commit_prompt_default","commit_scope_map_file","mode","offline_behavior","progress_charset","progress_color","severity_threshold","test_default_suite_set","test_run_epic","test_run_story","test_run_task"]' ]
   run jq -s '[.[].keys[] | select(.type == "array" or .type == "object") | .editable] | unique' "$SHIPPED"/*.json
   [ "$(printf '%s' "$output" | jq -c .)" = '[false]' ]
 }
@@ -149,6 +149,51 @@ EOF
   [ "$output" -eq 0 ]
 }
 
+# --- dashboard-config.json: the optional terminal-progress settings (E92_S08_T03) ---------------------------------
+# Decision of 2026-11-14 (E92_S08 "Decisions" 3): the two keys live in the EXISTING dashboard-config.json, are editable
+# strings with an `allowed` list, and are `optional: true` because this repository's own file (and every existing
+# project's) lacks them and the defaults apply: there is no migration.
+
+@test "dashboard-config: progress_charset and progress_color are optional editable strings with allowed sets and the agreed defaults" {
+  local d="$SHIPPED/dashboard-config.json"
+  [ "$(jq -r '[.keys[].key] | join(",")' "$d")" = "dashboard_port,progress_charset,progress_color" ]
+  run jq -c '.keys[] | select(.key == "progress_charset") | [.type, .editable, .default, .allowed, .optional, has("bump_on_change")]' "$d"
+  [ "$output" = '["string",true,"utf8",["utf8","ascii"],true,false]' ]
+  run jq -c '.keys[] | select(.key == "progress_color") | [.type, .editable, .default, .allowed, .optional, has("bump_on_change")]' "$d"
+  [ "$output" = '["string",true,"auto",["auto","always","never"],true,false]' ]
+  # the port key is unchanged and not optional
+  [ "$(jq -c '.keys[0] | [.key, .optional]' "$d")" = '["dashboard_port",null]' ]
+}
+
+@test "dashboard-config: this repo's own file lacks both keys and the descriptor still validates against it" {
+  [ "$(jq 'has("progress_charset") or has("progress_color")' "$REPO_ROOT/project/configs/dashboard-config.json")" = "false" ]
+  run bash "$VALIDATE" "$SHIPPED/dashboard-config.json"
+  [ "$status" -eq 0 ]
+  assert_output_contains "PASS $SHIPPED/dashboard-config.json"
+}
+
+@test "optional: a descriptor key marked optional may be absent from the config file; an unmarked one may not" {
+  mutate '.keys[3].optional = true'
+  jq 'del(.flag)' "$FIX/demo-config.json" > "$PROJ/project/configs/demo.json"
+  run bash "$VALIDATE" "$DESC/demo.json"
+  [ "$status" -eq 0 ]
+  # the same absence without the marker is still a problem
+  demo_setup "$FIX/demo-config-missing-flag.json"
+  run bash "$VALIDATE" "$DESC/demo.json"
+  [ "$status" -eq 1 ]
+  assert_output_contains 'key "flag": named by the descriptor but absent from demo.json'
+}
+
+@test "optional: a present optional key is still type-checked, and optional is rejected on a read-only key" {
+  mutate '.keys[3].optional = true'
+  jq '.flag = "yes"' "$FIX/demo-config.json" > "$PROJ/project/configs/demo.json"
+  run bash "$VALIDATE" "$DESC/demo.json"
+  [ "$status" -eq 1 ]
+  assert_output_contains 'key "flag": declared type boolean'
+  rejects '.keys[0].optional = true' 'field "optional" is only legal on editable keys'
+  rejects '.keys[3].optional = "yes"' 'field "optional" must be a boolean'
+}
+
 # --- test-config.json: the editable commit options (E72_S01_T04) -------------------------------------------------
 # Route 1 of the E72_S01_T04 decision: two FLAT editable string keys. The story's nested commit_options object is not
 # expressible because editable: true is legal on scalar types only (lib/config/descriptors.js), so the schema is
@@ -156,7 +201,7 @@ EOF
 
 @test "test-config: commit_prompt_default and commit_scope_map_file are editable strings with the agreed defaults and rules" {
   local d="$SHIPPED/test-config.json"
-  [ "$(jq -r '[.keys[].key] | join(",")' "$d")" = "tools,commit_prompt_default,commit_scope_map_file,test_run_task,test_run_story,test_run_epic,test_default_suite_set" ]
+  [ "$(jq -r '[.keys[].key] | join(",")' "$d")" = "tools,commit_prompt_default,commit_scope_map_file,test_run_task,test_run_story,test_run_epic,test_default_suite_set,mirror_gate_threshold_seconds,manual_only_threshold_seconds,full_run_confirm_file_count,ask_before_run_seconds" ]
   run jq -c '.keys[] | select(.key == "commit_prompt_default") | [.type, .editable, .default, .allowed]' "$d"
   [ "$output" = '["string",true,"",["","skip","scoped","full"]]' ]
   run jq -c '.keys[] | select(.key == "commit_scope_map_file") | [.type, .editable, .default]' "$d"
@@ -218,6 +263,35 @@ EOF
   [ "$(jq '[.keys[] | select(.key == "test_run")] | length' "$d")" -eq 0 ]
   # tools is untouched and still the only read-only key
   [ "$(jq -r '[.keys[] | select(.editable | not) | .key] | join(",")' "$d")" = "tools" ]
+}
+
+# --- test-config.json: the long-running test thresholds (E77_S06_T02) -------------------------------------------
+# Two FLAT editable integer keys with no version counter (the file has none), read only through
+# skills/j-test/scripts/test-thresholds.sh. Defaults 50 (pre-push gate) and 600 (manual-only, advisory).
+
+@test "test-config: mirror_gate_threshold_seconds and manual_only_threshold_seconds are editable integers defaulting to 50 and 600, min 1, no bump rule" {
+  local d="$SHIPPED/test-config.json" key
+  run jq -c '.keys[] | select(.key == "mirror_gate_threshold_seconds") | [.type, .editable, .default, .min]' "$d"
+  [ "$output" = '["integer",true,50,1]' ]
+  run jq -c '.keys[] | select(.key == "manual_only_threshold_seconds") | [.type, .editable, .default, .min]' "$d"
+  [ "$output" = '["integer",true,600,1]' ]
+  for key in mirror_gate_threshold_seconds manual_only_threshold_seconds full_run_confirm_file_count ask_before_run_seconds; do
+    [ "$(jq -r --arg k "$key" '.keys[] | select(.key == $k) | (.label | length > 0) and (.description | length > 0)' "$d")" = "true" ]
+    [ "$(jq --arg k "$key" '.keys[] | select(.key == $k) | has("bump_on_change")' "$d")" = "false" ]
+    # the live config carries the key at the descriptor default
+    [ "$(jq -c --arg k "$key" '.[$k]' "$REPO_ROOT/project/configs/test-config.json")" = "$(jq -c --arg k "$key" '.keys[] | select(.key == $k) | .default' "$d")" ]
+  done
+  # tools is still the only read-only key
+  [ "$(jq -r '[.keys[] | select(.editable | not) | .key] | join(",")' "$d")" = "tools" ]
+}
+
+@test "test-config: the live config and the init template carry the two long-running threshold keys at the descriptor defaults (E77_S06_T02)" {
+  local c="$REPO_ROOT/project/configs/test-config.json" t="$REPO_ROOT/skills/j-init/assets/test-config_template.json"
+  local f
+  for f in "$c" "$t"; do
+    run jq -c '[.mirror_gate_threshold_seconds, .manual_only_threshold_seconds]' "$f"
+    [ "$output" = '[50,600]' ] || { echo "$f has the wrong threshold values: $output" >&2; return 1; }
+  done
 }
 
 @test "test-config: the live config and the init template carry the three test_run_* keys at the descriptor defaults" {

@@ -41,7 +41,9 @@ INCOMPLETE_STATUSES="Pending|In Progress|Failed|Rejected|Blocked|Backlog"
 COMPLETED_STATUSES="Done|Passed|Passed with remarks"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 schema=""
 classify=""
 have_classify=0
@@ -65,7 +67,7 @@ if [ -z "$schema" ]; then
   # Relative to this script first (repo root, .claude/ and .agents/ mirrors, node_modules install),
   # then the same cwd fallbacks the agent definitions use.
   for candidate in \
-    "$SCRIPT_DIR/../../../templates/SCRUM_BOARD_SCHEMA.md" \
+    "$PACKAGE_ROOT/templates/SCRUM_BOARD_SCHEMA.md" \
     "templates/SCRUM_BOARD_SCHEMA.md" \
     "node_modules/@jenga-ai/agent/templates/SCRUM_BOARD_SCHEMA.md"; do
     if [ -f "$candidate" ]; then schema="$candidate"; break; fi

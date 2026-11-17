@@ -186,9 +186,13 @@ done
 # shellcheck source=./target-ref.sh disable=SC1091
 . "$SELF_DIR/target-ref.sh" || die "cannot source target-ref.sh"
 
-# scripts/check-worktree-liveness.sh sits three levels up from this skill's scripts directory, both
-# in this repo and in a consumer install (node_modules/@jenga-ai/agent/...).
-LIVENESS="$SELF_DIR/../../../scripts/check-worktree-liveness.sh"
+# scripts/check-worktree-liveness.sh lives in the package root: three levels up from this skill's scripts
+# directory in this repo and inside the installed package, but under node_modules/@jenga-ai/agent in a
+# consumer project (whose .claude/skills mirror carries no scripts/), so the shared helper resolves it.
+# shellcheck source=/dev/null
+if [ -f "$SELF_DIR/../../index/scripts/package-root.sh" ]; then . "$SELF_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SELF_DIR")" || true
+LIVENESS="$PACKAGE_ROOT/scripts/check-worktree-liveness.sh"
 if [ ! -x "$LIVENESS" ]; then
   printf '%s: cannot find an executable scripts/check-worktree-liveness.sh (looked at %s).\n' \
     "$SELF_NAME" "$LIVENESS" >&2

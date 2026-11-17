@@ -1,6 +1,6 @@
 {
   "name": "@jenga-ai/agent",
-  "version": "5.1.0",
+  "version": "5.2.0",
   "description": "Jenga AI is an agentic ai-framework for AI-driven development on large codebases — new projects and existing applications, across multiple repositories. Persistent Epic/Story/Task board, an isolated git worktree per task, and a separate tester agent that runs your test suite before anything is marked done. Works with Claude Code, Copilot, and Codex.",
   "type": "module",
   "publishConfig": {
@@ -22,6 +22,7 @@
     "generate:legacy-paths": "node scripts/generate-legacy-shipped-paths.js",
     "graph:populate": "node scripts/populate-knowledge-graph.js",
     "test": "bash scripts/run-tests.sh",
+    "test:ci": "bash scripts/run-tests.sh --all",
     "validate:npm-metadata": "bash scripts/validate_npm_metadata.sh",
     "ui:dev": "npm run ui:dev --prefix project/app --",
     "ui:build": "npm run ui:build --prefix project/app --",

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -63,10 +64,55 @@ def _resolve_project_root() -> Path:
 
 ROOT_DIR = _resolve_project_root()
 
-# Board-ID shapes come from the shared module scripts/lib/board_ids.py (epic E86). In every layout this
-# script is deployed in (skills/index/scripts/, .claude/ and .agents/ mirrors, node_modules/@jenga-ai/agent/)
-# the module sits at <parents[3]>/scripts/lib. This only locates the module; ROOT_DIR above is unrelated.
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts" / "lib"))
+
+def _find_board_ids_lib() -> Path:
+    """Locate scripts/lib (the shared board_ids module) in the package this script belongs to.
+
+    The package is NOT "three directories up from this file" in every layout: that is right in the monorepo
+    (skills/index/scripts -> repo root) and inside the installed package (node_modules/@jenga-ai/agent/skills/...),
+    but in a consumer project this file sits in the postinstall mirror `.claude/skills/index/scripts/`, where three
+    levels up is `.claude/` (no scripts/). The package is then node_modules/@jenga-ai/agent. Same resolution order as
+    skills/index/scripts/package-root.sh: the install root implied by this file's own location first, then
+    node_modules/@jenga-ai/agent looked up from JENGA_PROJECT_ROOT, CLAUDE_PROJECT_DIR, the install root, every
+    ancestor of this file, and every ancestor of the cwd. A directory counts when it has scripts/lib/board_ids.py.
+    """
+    here = Path(__file__).resolve().parent
+
+    def lib_of(root: Path) -> Path | None:
+        lib = root / "scripts" / "lib"
+        return lib if (lib / "board_ids.py").is_file() else None
+
+    install = None
+    for d in (here, *here.parents):
+        if d.name == "skills":
+            install = d.parent
+            break
+    if install is None and len(here.parents) >= 2:
+        install = here.parents[2]
+    if install is not None and lib_of(install):
+        return lib_of(install)  # type: ignore[return-value]
+
+    bases = [os.environ.get("JENGA_PROJECT_ROOT"), os.environ.get("CLAUDE_PROJECT_DIR")]
+    bases.append(str(install) if install is not None else None)
+    bases.extend(str(d) for d in (here, *here.parents))
+    cwd = Path.cwd()
+    bases.extend(str(d) for d in (cwd, *cwd.parents))
+    for base in bases:
+        if not base:
+            continue
+        found = lib_of(Path(base) / "node_modules" / "@jenga-ai" / "agent")
+        if found:
+            return found
+
+    sys.exit(
+        "board_index.py: shared board_ids.py not found (looked for scripts/lib/board_ids.py above skills/ and under "
+        "node_modules/@jenga-ai/agent from this file's directory and the cwd). Is @jenga-ai/agent installed?"
+    )
+
+
+# Board-ID shapes come from the shared module scripts/lib/board_ids.py (epic E86). This only locates the module;
+# ROOT_DIR above is unrelated.
+sys.path.insert(0, str(_find_board_ids_lib()))
 from board_ids import (  # noqa: E402
     BOARD_ID_RE,
     PLAN_RE,

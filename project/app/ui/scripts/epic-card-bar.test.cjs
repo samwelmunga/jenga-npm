@@ -44,13 +44,15 @@ const EPICS = [
   { id: 'E02', title: 'Second', status: 'Pending', stories: [] },
 ]
 const CARDS = {
-  epics: [{ id: 'E01', stories: { complete: 1 }, tasks: { totals: totals(3, 4) } }],
+  // E92_S09_T04: the card shows epic_progress.percent (floor(100*3*1/(4*2)) = 37), not tasks.totals (3/4 = 75 %).
+  epics: [{ id: 'E01', stories: { complete: 1 }, tasks: { totals: totals(3, 4) },
+    epic_progress: { stories: 2, decomposed: 1, tasks_done: 3, tasks_denominator: 4, percent: 37, goal_reached: false } }],
   stories: [
     { id: 'E01_S01', epic_id: 'E01', complete: true, stop: 'done' },
     { id: 'E01_S02', epic_id: 'E01', complete: false, stop: 'pending' },
     { id: 'E09_S01', epic_id: 'E09', complete: true, stop: 'done' },
   ],
-  labels: { card_bar_aria: '%d of %d stories complete, %d%% of tasks done' },
+  labels: { card_bar_aria: '%d of %d stories complete, %d%% of the epic done' },
   lang: 'en',
 }
 
@@ -60,13 +62,31 @@ const test = (name, fn) => { fn(); n++; console.log('ok  ' + name) }
 test('an epic with an entry renders the bar and percent in its header; an epic without one renders as before', () => {
   const html = render(EPICS, CARDS)
   assert.strictEqual(count(html, 'class="epic-bar"'), 1)
-  assert.ok(html.includes('>75%</span>'))
+  assert.ok(html.includes('>37%</span>'))
   assert.strictEqual(count(html, 'class="epic-bar-stop"'), 2, 'only this epic\'s own stories become stops')
-  assert.ok(html.includes('aria-label="1 of 2 stories complete, 75% of tasks done"'))
+  assert.ok(html.includes('aria-label="1 of 2 stories complete, 37% of the epic done"'))
   const e2 = html.slice(html.indexOf('Second'))
   assert.ok(!e2.includes('epic-bar'))
   const header = html.slice(html.indexOf('epic-header'), html.indexOf('epic-bar'))
   assert.ok(header.includes('epic-title') && header.includes('epic-id'), 'bar follows title and id inside the header')
+})
+
+// E92_S10_T02: an epic whose stories are all complete by their tasks but one story's own status Failed: the script states
+// 99 % and no goal; the card header shows that figure, never 100 %.
+test('E92_S10_T02: a failed story keeps the card at the stated 99 %, never 100 %', () => {
+  const cards = {
+    ...CARDS,
+    epics: [{ id: 'E01', stories: { complete: 2 }, tasks: { totals: totals(4, 4) },
+      epic_progress: { stories: 2, decomposed: 2, tasks_done: 4, tasks_denominator: 4, percent: 99, goal_reached: false, failed_stories: ['E01_S02'] } }],
+    stories: [
+      { id: 'E01_S01', epic_id: 'E01', complete: true, stop: 'done' },
+      { id: 'E01_S02', epic_id: 'E01', complete: true, stop: 'done' },
+    ],
+  }
+  const html = render(EPICS, cards)
+  assert.ok(html.includes('>99%</span>'), html)
+  assert.ok(!html.includes('100%'), html)
+  assert.ok(html.includes('aria-label="2 of 2 stories complete, 99% of the epic done"'))
 })
 
 test('no card data (loading, failed request, snapshot without the key): board identical to before, no bar, no banner', () => {

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: categories
 # conventions-entry.sh - the deterministic backend of the j.conventions wizard (E69_S04).
 #
 # skills/j-conventions/SKILL.md runs the conversation; this script does everything that is deterministic:
@@ -128,7 +129,10 @@ set -u
 
 SELF="conventions-entry.sh"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PACKAGE_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+# Package root (scripts/, templates/, lib/): resolved by the shared helper so it also works from a consumer's .claude/skills mirror.
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 VALIDATOR="$PACKAGE_ROOT/scripts/validate-conventions.sh"
 RESOLVE_ROOT="$PACKAGE_ROOT/scripts/resolve-root.sh"
 DETECT="$SCRIPT_DIR/detect-conventions.sh"

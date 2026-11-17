@@ -151,9 +151,9 @@ write_records() {
 }
 
 @test "j.smoke-test reports no critical finding for j-tidy" {
-  run bash "$REPO_ROOT/skills/j-smoke-test/scripts/smoke-test-skills.sh" --root "$REPO_ROOT"
+  run bash "$REPO_ROOT/skills/j-smoke-test/scripts/smoke-test-skills.sh" --no-exec --root "$REPO_ROOT"
   assert_output_contains "Result: PASS"
-  run bash -c "bash '$REPO_ROOT/skills/j-smoke-test/scripts/smoke-test-skills.sh' --root '$REPO_ROOT' | grep '\"skill\":\"j-tidy\"' | grep '\"severity\":\"critical\"'"
+  run bash -c "bash '$REPO_ROOT/skills/j-smoke-test/scripts/smoke-test-skills.sh' --no-exec --root '$REPO_ROOT' | grep '\"skill\":\"j-tidy\"' | grep '\"severity\":\"critical\"'"
   [ "$status" -ne 0 ]
 }
 

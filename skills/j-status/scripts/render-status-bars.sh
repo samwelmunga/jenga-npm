@@ -48,7 +48,9 @@ set -u
 
 SCRIPT_NAME="render-status-bars.sh"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 usage() {
   sed -n '/^# USAGE/,/^# SIBLING SCRIPTS/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'
 }
@@ -79,7 +81,7 @@ find_script() {
     [ -f "$override" ] && printf '%s' "$override"
     return 0
   fi
-  for cand in "$SCRIPT_DIR/../../../scripts/$name" "scripts/$name" "node_modules/@jenga-ai/agent/scripts/$name"; do
+  for cand in "$PACKAGE_ROOT/scripts/$name" "scripts/$name" "node_modules/@jenga-ai/agent/scripts/$name"; do
     if [ -f "$cand" ]; then printf '%s' "$cand"; return 0; fi
   done
   return 0

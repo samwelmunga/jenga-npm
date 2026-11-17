@@ -60,9 +60,11 @@
 #
 # THE npm TWIN. build-catalog.sh folds suites that would run the same thing, and
 # for an npm suite it keys on the BODY of the npm script read from package.json.
-# Here `scripts.test` is `bats tests/*.bats` (or, since E43_S02_T01, the aggregate
-# `bash scripts/run-tests.sh`, normalised to it), so `npm:test` currently folds onto
-# `bats:tests`; its header warns that without this "a run-all would run the
+# A body of `bats tests/*.bats`, or the FULL aggregate runner
+# `bash scripts/run-tests.sh --all` (normalised to it; this repository's `test:ci`
+# since E95_S01_T02), folds onto `bats:tests`. The bare `bash scripts/run-tests.sh`
+# runs only a bounded fast set since E95_S01_T02 and is NOT normalised, so it is no
+# twin. build-catalog.sh's header warns that without the fold "a run-all would run the
 # hour-long bats suite twice". Rewriting only the bats suite would therefore
 # UN-FOLD them and run the catalog twice. So when an npm suite's script body is
 # byte-equal to the pre-rewrite command of a bats suite in the same discovery,
@@ -157,8 +159,9 @@ set -euo pipefail
 
 SCRIPT_NAME="narrow-suites.sh"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd -- "$SCRIPT_DIR/../../.." && pwd)"
-
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+REPO_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 export LC_ALL=C
 export GIT_OPTIONAL_LOCKS=0
 
@@ -327,9 +330,10 @@ if [ -f "$ROOT/package.json" ]; then
     | [ $s | to_entries[] | select((.value | type) == "string" and .value != "")
         | {key: ("npm:" + .key),
            # Same aggregate-runner normalisation as build-catalog.sh read_scripts
-           # (E43_S02_T01): `bash scripts/run-tests.sh` runs the files of
-           # `bats tests/*.bats`, so it is the same twin key.
-           value: (.value | if test("^\\s*(?:(?:bash|sh)\\s+)?(?:\\./)?scripts/run-tests\\.sh\\s*$")
+           # (AGGREGATE_ALL_RE there; E43_S02_T01, E95_S01_T02): the full runner
+           # `bash scripts/run-tests.sh --all` runs the files of `bats tests/*.bats`,
+           # so it is the same twin key. The bare runner (the fast set) is not.
+           value: (.value | if test("^\\s*(?:(?:bash|sh)\\s+)?(?:\\./)?scripts/run-tests\\.sh(?:\\s+--confirm-full)*\\s+--all(?:\\s+--confirm-full)*\\s*$")
                             then "bats tests/*.bats" else . end)} ] | from_entries
   ' > "$NPM_BODIES_FILE" 2>/dev/null || printf '{}\n' > "$NPM_BODIES_FILE"
 fi

@@ -51,8 +51,10 @@ PROJECT_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || tr
 [ -n "$PROJECT_ROOT" ] || die "could not locate the project root from $SCRIPT_DIR"
 
 # The package root holds scripts/ and templates/: this checkout, or the installed package for a consumer.
-if [ -f "$PROJECT_ROOT/scripts/commits-for-item.sh" ]; then PKG_ROOT="$PROJECT_ROOT"
-else PKG_ROOT="$PROJECT_ROOT/node_modules/@jenga-ai/agent"; fi
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PKG_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
+[ -f "$PKG_ROOT/scripts/commits-for-item.sh" ] || PKG_ROOT="$PROJECT_ROOT/node_modules/@jenga-ai/agent"
 COMMITS="$PKG_ROOT/scripts/commits-for-item.sh"
 STATUSES="$PKG_ROOT/skills/j-reconcile/scripts/completed-statuses.sh"
 SCHEMA="$PKG_ROOT/templates/SCRUM_BOARD_SCHEMA.md"

@@ -82,10 +82,10 @@ RESOLVER_CMD='bash "$([ -f skills/j-status/scripts/resolve-status-mode.sh ] && e
   [ "$(printf '%s\n' "$output" | sed 's/^\([0-9]*\):\([0-9.]*\)\..*/\2/' | tr '\n' ' ')" = "1.5 2 " ]
 }
 
-@test "SKILL.md names the default path: render replaces mode, stdout is printed unchanged, overview and scope" {
+@test "SKILL.md names the default path: render replaces mode, stdout is copied into the reply (E92_S08_T06), overview and scope" {
   grep -q 'the \*\*default path\*\*' "$SKILL"
   grep -q 'command with `render` in place of `mode`' "$SKILL"
-  grep -q 'stdout unchanged' "$SKILL"
+  grep -q 'copy its stdout into the reply' "$SKILL"
   grep -q '`overview` (no argument) or `scope`' "$SKILL"
 }
 
@@ -102,9 +102,9 @@ RESOLVER_CMD='bash "$([ -f skills/j-status/scripts/resolve-status-mode.sh ] && e
   [ "$status" -eq 1 ]
 }
 
-@test "the resolver sends the default to the overview renderer and --legacy to render-status-bars.sh, the one step 6.9 runs" {
+@test "the resolver sends the default to the Node overview renderer and --legacy to render-status-bars.sh, the one step 6.9 runs" {
   D="$REPO/skills/j-status/scripts"
-  [ "$(bash "$D/resolve-status-mode.sh" plan)" = "render-status-overview.sh" ]
+  [ "$(bash "$D/resolve-status-mode.sh" plan)" = "node lib/progress/cli.js overview" ]
   [ "$(bash "$D/resolve-status-mode.sh" plan --legacy)" = "render-status-bars.sh" ]
   [ "$(bash "$D/resolve-status-mode.sh" plan --all)" = "render-status-bars.sh" ]
   grep -qF 'skills/j-status/scripts/render-status-bars.sh' "$SKILL"

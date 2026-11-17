@@ -64,18 +64,25 @@
 #      suite (ecosystem `npm`, id `npm:<key>`) the key is that script body when
 #      it is a non-empty string, else its command. Here scripts.test is
 #      `bats tests/*.bats`, so `npm:test` shares a key with `bats:tests`; without
-#      this a run-all would run the hour-long bats suite twice. Since E43_S02_T01
-#      `scripts.test` may instead be `bash scripts/run-tests.sh` (also `sh`, with or
-#      without `./`, and nothing else on the line), the parallel aggregate that runs
-#      the same files; that body is normalised to `bats tests/*.bats` before keying,
-#      so the fold is unchanged. A missing,
-#      unreadable or unparseable package.json just means no alias (no error).
+#      this a run-all would run the hour-long bats suite twice. A body that is the
+#      FULL aggregate runner, `bash scripts/run-tests.sh --all` (also `sh`, with or
+#      without `./`, and nothing else on the line; this repository's `test:ci`), runs
+#      the same files and is normalised to `bats tests/*.bats` before keying, so it
+#      folds. Since E95_S01_T02 the BARE `bash scripts/run-tests.sh` (this
+#      repository's `test`) runs only a bounded fast set, so it is NOT normalised:
+#      `npm test` keeps its own key and its own entry, and never stands in for the
+#      whole bats suite. A missing, unreadable or unparseable package.json just means
+#      no alias (no error).
 #   3. SURVIVOR of a group: the first `npm` entry (the project's own declared entry
 #      point), else the first non-`config` entry, else the first `config` entry;
 #      "first" is `id` order. Everyone else goes into the survivor's `also`. A
 #      group of one is not folded. The npm entry wins because its command is how
 #      the project itself says to run those tests; a config-only entry carries
-#      no information the others lack.
+#      no information the others lack. EXCEPTION (E95_S01_T02): an npm suite whose
+#      body is the `run-tests.sh --all` aggregate is never the survivor, because
+#      that runner refuses `--all` outside CI (exit 2) unless `--confirm-full` is
+#      given; the plain `bats tests/*.bats` entry survives and the npm script is
+#      listed under `also`.
 #   4. Empty-command suites never join a group; they go straight to not_runnable.
 #   5. SECOND PASS, on the final `command` (E72_S07_T02 fix round). The surviving
 #      entries of rules 1-3 are grouped once more by their literal `command` and
@@ -135,8 +142,9 @@ SCRIPT_NAME="build-catalog.sh"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # skills/j-test/scripts -> the checkout root, or node_modules/@jenga-ai/agent
 # when installed as a dependency.
-REPO_ROOT="$(cd -- "$SCRIPT_DIR/../../.." && pwd)"
-
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+REPO_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 # Locale must not influence sort order or tool output.
 export LC_ALL=C
 
@@ -188,6 +196,11 @@ def norm: {
   ecosystem: (.ecosystem | str("")),
   command: (.command | str(""))
 };
+# An npm suite whose body is the CI-gated full aggregate never survives a fold.
+def pick: (map(select(.ecosystem == "npm" and ((.id | ltrimstr("npm:")) as $k | ($gated | index($k)) == null)))[0]
+           // map(select(.ecosystem != "config" and (.ecosystem != "npm" or ((.id | ltrimstr("npm:")) as $k | ($gated | index($k)) == null))))[0]
+           // map(select(.ecosystem != "config"))[0]
+           // .[0]);
 (.suites | map(norm) | sort_by(.id)) as $all
 | ($all | map(select(.command == ""))) as $nr
 | ($all | map(select(.command != "")
@@ -198,9 +211,7 @@ def norm: {
         else .command end)})) as $run
 # Pass 1: the documented key (command, or an npm suite's package.json script body).
 | ($run | group_by(.key) | map(
-    (map(select(.ecosystem == "npm"))[0]
-      // map(select(.ecosystem != "config"))[0]
-      // .[0]) as $sv
+    pick as $sv
     | {sv: $sv,
        also: (map(select(.id != $sv.id)) | map({id, name, type}) | sort_by(.id))}
   )) as $pass1
@@ -216,9 +227,7 @@ def norm: {
 # keeps its label. With no two commands coinciding this pass is the identity.
 | ($pass1 | group_by(.sv.command) | map(
     (map(.sv)) as $svs
-    | ((($svs | map(select(.ecosystem == "npm"))) | .[0])
-       // (($svs | map(select(.ecosystem != "config"))) | .[0])
-       // ($svs | .[0])) as $sv
+    | ($svs | pick) as $sv
     | {sv: $sv,
        also: (((map(.also) | add) + ($svs | map({id, name, type})))
               | map(select(.id != $sv.id)) | unique_by(.id) | sort_by(.id))}
@@ -257,6 +266,12 @@ EOF
 
 # ---- helpers ----------------------------------------------------------------
 
+# The full aggregate runner body: `[bash|sh] [./]scripts/run-tests.sh --all`, optionally
+# with `--confirm-full` in either order, nothing else on the line. Kept in step with
+# narrow-suites.sh's npm-twin normalisation. A body without `--confirm-full` is the
+# CI-gated form (refused outside CI), which read_gated reports.
+AGGREGATE_ALL_RE='^\s*(?:(?:bash|sh)\s+)?(?:\./)?scripts/run-tests\.sh(?:\s+--confirm-full)*\s+--all(?:\s+--confirm-full)*\s*$'
+
 # package.json `scripts` as a JSON object of string values, or {} on any problem.
 read_scripts() {
   local root="$1" manifest
@@ -265,15 +280,34 @@ read_scripts() {
     printf '{}'
     return 0
   fi
-  jq -c 'if type == "object" and (.scripts | type) == "object"
+  jq -c --arg agg "$AGGREGATE_ALL_RE" \
+     'if type == "object" and (.scripts | type) == "object"
          then .scripts | with_entries(select(.value | type == "string"))
-              # The aggregate runner (E43_S02_T01) runs exactly the files of
-              # `bats tests/*.bats`, in parallel where safe. Its body is therefore
-              # the same key as the literal command, so npm:test still folds.
-              | with_entries(.value |= if test("^\\s*(?:(?:bash|sh)\\s+)?(?:\\./)?scripts/run-tests\\.sh\\s*$")
+              # The FULL aggregate runner (`run-tests.sh --all`, E43_S02_T01 and
+              # E95_S01_T02) runs exactly the files of `bats tests/*.bats`, in
+              # parallel where safe, so its body is the same key as the literal
+              # command and folds. The bare runner is the fast set: not normalised.
+              | with_entries(.value |= if test($agg)
                                        then "bats tests/*.bats" else . end)
          else {} end' \
     "$manifest" 2>/dev/null || printf '{}'
+}
+
+# Keys of package.json scripts whose body is the full aggregate runner, as a JSON
+# array, or [] on any problem. Such an npm suite never survives a fold (rule 3).
+read_gated() {
+  local root="$1" manifest
+  manifest="$root/package.json"
+  if [ -z "$root" ] || [ ! -f "$manifest" ] || [ ! -r "$manifest" ]; then
+    printf '[]'
+    return 0
+  fi
+  jq -c --arg agg "$AGGREGATE_ALL_RE" \
+    'if type == "object" and (.scripts | type) == "object"
+     then [.scripts | to_entries[] | select((.value | type) == "string" and (.value | test($agg))
+                                        and ((.value | test("--confirm-full")) | not)) | .key]
+     else [] end' \
+    "$manifest" 2>/dev/null || printf '[]'
 }
 
 # The directory package.json is read from: --root, else the resolver's root, else
@@ -301,7 +335,7 @@ do_render() {
 }
 
 do_build() {
-  local discovery scripts_json="{}" root
+  local discovery scripts_json="{}" gated_json="[]" root
   if [ -n "$DISCOVERY_FILE" ]; then
     [ -f "$DISCOVERY_FILE" ] && [ -r "$DISCOVERY_FILE" ] \
       || fail "discovery file is not a readable file: $DISCOVERY_FILE"
@@ -325,9 +359,10 @@ do_build() {
   if printf '%s' "$discovery" | jq -e '.suites | any(.ecosystem == "npm")' >/dev/null 2>&1; then
     root="$(alias_root)"
     scripts_json="$(read_scripts "$root")"
+    gated_json="$(read_gated "$root")"
   fi
 
-  printf '%s' "$discovery" | jq -c --argjson scripts "$scripts_json" "$BUILD_PROGRAM" \
+  printf '%s' "$discovery" | jq -c --argjson scripts "$scripts_json" --argjson gated "$gated_json" "$BUILD_PROGRAM" \
     || fail "could not build the catalog from discovery output"
 }
 

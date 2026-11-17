@@ -1,47 +1,55 @@
 ## Default views (`E92_S06_T26`)
 
-`j.status` with no argument prints the overview of `render-status-overview.sh`, and `j.status <epic|story id>` prints the
-scope view of `render-status-scope-view.sh`. SKILL.md step 1.5 calls `resolve-status-mode.sh` to choose between them and
-prints the renderer's stdout **unchanged**; nothing in this file's legacy layout below applies to that text. After the
-overview the sections for open rapports, the queue, the `todo.md` formatting warning and the dependency audit follow, in
-the banner style shown under "Output Format"; a scope view prints only the view. `j.status --all` (no id) and
-`j.status --legacy [<id>]` use the legacy layout below. Real output of `bash skills/j-status/scripts/resolve-status-mode.sh
-render --cols 80 --color never` (UTF-8 locale, abridged to a few rows per group; the script prints every row):
+`j.status` with no argument prints the overview, and `j.status <epic|story id>` prints the scope view; since `E92_S08_T06`
+both are drawn by the Node renderer (`node lib/progress/cli.js overview|scope <id>`). SKILL.md step 1.5 calls
+`resolve-status-mode.sh render --charset utf8 --color never <args>` and **copies its stdout into the reply as a fenced code
+block**, byte for byte (a tool call's output is folded away in the desktop app); nothing in this file's legacy layout below
+applies to that text. `--color never` is used for the copy because ANSI colour cannot render in chat markdown; colour needs
+`--color always` in a real terminal. After the overview the sections for open rapports, the queue, the `todo.md` formatting
+warning and the dependency audit follow, in the banner style shown under "Output Format"; a scope view prints only the view.
+`j.status --all` (no id) and `j.status --legacy [<id>]` use the legacy layout below, and so does `render` when `node` is not
+on `PATH` (one warning on stderr). The E92_S06 bash views `render-status-overview.sh` and `render-status-scope-view.sh` stay
+on disk but are no longer routed. Real output of `bash skills/j-status/scripts/resolve-status-mode.sh render --charset utf8
+--color never --cols 80` (abridged to a few rows per group; the renderer prints every row):
 
 ```
-Board · 92 epics · 1438/1575 tasks · 91 %
-  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╌╌╌⚑
-  ◉ 2 in progress  ✕ 6 red  ○ 129 pending  ⊘ 101 rejected (not counted)
+Board · 92 epics · 1445/1575 tasks · 92 %
+  ▰▰▰▰▰▰▰▰▰▰▰▱⚑ 1445/1575 · 1 in progress · 6 red · ⊘ 101 rejected (not counted)
+  ○ 123 pending
 
 Needs attention (4)
-  E70 ━━━━━━━━━━━━━━ 16/17 94 %  ✕1  Retire Jenga's Own Use of docs/ (Site Sour…
-  E87 ━━━━━━━━━━━━━╌ 14/18 78 %  ✕2  Epic wrap-up workflow, task closure and a …
-
-In progress (1)
-  E92 ━━━━━━━━━━━━━━ 58/59 98 %  ◉1  Progress Visualisation: see how far a run,…
+  E70 ▰▰▰▰▰▰▰▰▰▰▰▰▰▰ 16/17 94 %  ✕1  Retire Jenga's Own Use of docs/ (Site Sour…
+  E87 ▰▰▰▰▰▰▰▰▰▰▰▰▰▱ 14/18 78 %  ✕2  Epic wrap-up workflow, task closure and a …
 
 Started (16)
-  E22 ━━━━━━━━━━━━━╌ 30/31 97 %    /publish Skill — Deployment Pipeline Orchest…
+  E22 ▰▰▰▰▰▰▰▰▰▰▰▰▰▱ 30/31 97 %    /publish Skill — Deployment Pipeline Orchest…
+  E92 ▰▰▰▰▰▰▰▰▰▰▰▰▰▱ 63/69 91 %    Progress Visualisation: see how far a run, a…
 
-★ Complete (59)  977 tasks · hidden
+Not started (3)
+  E52 ▱▱▱▱▱▱▱▱▱▱▱▱▱▱ 0/2 0 %    Agent Orchestration — Cross-Session Message Iso…
+
+★ Complete (60)  1034 tasks · hidden
 ⊘ Only rejected or empty (9): E02, E04, E23, E48, E55, E81, E82, E84, E90
 
 Details for one epic: j.status <id>  ·  all rows: j.status --all
 ```
 
-Real output of `... render E92_S06 --cols 80 --color never` (abridged to four task rows):
+Real output of `... render E92_S08 --charset utf8 --color never --cols 80` (abridged to four task rows):
 
 ```
-E92_S06 · Epic progress on cards, dependency tree in overlay, and restyle…  96 %
+E92_S08 · Node terminal progress renderers with the new design, explicit …  40 %
+Ready to take: E92_S08_T02, E92_S08_T03 (+1)
 
-◉ E92_S06  Epic progress on cards, dependency tree in overlay, a… ━━━━━━━━ 25/26
-    ● T01 done        Add the --graph mode to scripts/board-progress.sh: per-ep…
-    ● T02 done        Derive task states (ready, loc…  after T01 ✓
-    ● T04 done        Add GET /v1/progress-cards to …  after T01 ✓, T03 ✓
-    ◉ T26 in progress j.status --legacy switch, SKIL…  after T21 ✓, T23 ✓, T25 ✓
+E92_S08  ▰▰▰▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱▱⚑ 4/10
 
-Ready to take (0)
-  Nothing is ready to take right now
+NODE TERMINAL PROGRESS RENDERERS WITH THE NEW DESIGN, EXPLICIT UTF-8 AND … 4/10
+  ● Decision: narrow-terminal layout of the scope tree, what the milestone line…
+    └─▸ ◉ Node render core: explicit charset and colour, width, label and data …
+          └─▸ ◉ Wire j.status to the Node renderer, keep --legacy on the bash p…
+            └─▸ ○ Wire run-progress.sh, j.do, j.dooo, j.jenga and j.break to th…
+
+Ready to take: Extract the graph-struc… · Node render core: expli…
+Wire run-progress.sh, j… unlocked by Wire j.status to the No…
 ```
 
 ## Output Format (legacy layout: `j.status --all`, `j.status --legacy`, and the fallback)

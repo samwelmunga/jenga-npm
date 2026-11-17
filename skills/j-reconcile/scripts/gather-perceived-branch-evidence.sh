@@ -79,7 +79,10 @@
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-PERCEIVED_BRANCH="$SCRIPT_DIR/../../../scripts/perceived-branch.sh"
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
+PERCEIVED_BRANCH="$PACKAGE_ROOT/scripts/perceived-branch.sh"
 
 err() { printf 'gather-perceived-branch-evidence: %s\n' "$*" >&2; }
 die() {

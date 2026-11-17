@@ -97,7 +97,7 @@ function mount(props) {
 }
 
 const EN = {
-  goal: 'Goal', ready_to_take: 'Ready to take', nothing_ready: 'Nothing ready', tree_empty: 'No dependencies to show',
+  goal: 'Goal', ready_to_take: 'Ready to take', nothing_ready: 'Nothing ready', tree_empty: 'No tasks to show',
   unlocked_by: '%s unlocked by %s', state_done: 'Done', state_ready: 'Ready', state_locked: 'Locked',
   state_failed: 'Failed', state_rejected: 'Rejected', in_progress: 'In progress',
   gate_waiting: 'W', gate_open: 'O', group_tasks: '%d tasks', show_all: 'Show all %d', collapse: 'Collapse',

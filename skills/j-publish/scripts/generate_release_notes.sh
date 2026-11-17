@@ -314,16 +314,13 @@ _pi_task_is_fully_blocked() {
 _load_board_id_sort() {
   local cand
   declare -F board_id_sort >/dev/null 2>&1 && return 0
-  for cand in \
-    "$SCRIPT_DIR/../../../scripts/lib" \
-    "$SCRIPT_DIR/../../../node_modules/@jenga-ai/agent/scripts/lib"; do
-    if [[ -f "$cand/board-ids.sh" ]]; then
-      # shellcheck source=/dev/null
-      . "$cand/board-ids.sh"
-      return 0
-    fi
-  done
-  echo "generate_release_notes.sh: shared board-ids.sh not found (looked in scripts/lib and node_modules/@jenga-ai/agent/scripts/lib relative to $SCRIPT_DIR)" >&2
+  cand="$PUBLISH_PACKAGE_ROOT/scripts/lib"
+  if [[ -f "$cand/board-ids.sh" ]]; then
+    # shellcheck source=/dev/null
+    . "$cand/board-ids.sh"
+    return 0
+  fi
+  echo "generate_release_notes.sh: shared board-ids.sh not found (looked in $cand; the package root is the monorepo checkout, the installed package, or node_modules/@jenga-ai/agent)" >&2
   return 1
 }
 
@@ -623,7 +620,9 @@ if (( STANDALONE )); then
 
   printf '📝 Release notes draft written to %s\n' "$OUTPUT_PATH"
 else
+  # A project's own templates/CHANGELOG_TEMPLATE.md wins; otherwise the package's (a consumer has no templates/ of its own).
   CHANGELOG_TEMPLATE="$PUBLISH_REPO_ROOT/templates/CHANGELOG_TEMPLATE.md"
+  [[ -f "$CHANGELOG_TEMPLATE" ]] || CHANGELOG_TEMPLATE="$PUBLISH_PACKAGE_ROOT/templates/CHANGELOG_TEMPLATE.md"
   if [[ ! -f "$OUTPUT_PATH" ]]; then
     [[ -f "$CHANGELOG_TEMPLATE" ]] || {
       echo "Changelog template not found: $CHANGELOG_TEMPLATE" >&2

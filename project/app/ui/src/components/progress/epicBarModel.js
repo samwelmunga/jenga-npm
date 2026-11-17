@@ -3,8 +3,10 @@
  *
  * Pure (React-free, DOM-free) view model for the compact epic card progress bar. Input is one epic entry and its story
  * entries from `GET /v1/progress-cards` (the output of `scripts/board-progress.sh --graph --counts-only`) plus the
- * payload's `labels`. It counts nothing: `stop` is the script's story bucket, and the percent comes from
- * `tasks.totals` (done / denominator). Only a `complete` story is ever `done`.
+ * payload's `labels`. It counts nothing: `stop` is the script's story bucket, and the percent is the epic's
+ * `epic_progress.percent` as the script states it (E92_S09_T04; the epic percent of section 5.1 of
+ * project/documentation/progress-visualisation.md, which counts undecomposed stories). It is never recomputed here: an
+ * entry without `epic_progress` shows 0. Only a `complete` story is ever `done`.
  */
 
 export const STOP_BUCKETS = ['done', 'in_progress', 'failed', 'pending', 'rejected']
@@ -34,9 +36,8 @@ export function fillAria(template, complete, total, percent) {
 /** -> `{ stops: [{id, bucket}], percent, completeStories, totalStories, ariaLabel }`. */
 export function buildEpicBarModel(epicEntry, storyEntries, labels) {
   const stories = Array.isArray(storyEntries) ? storyEntries.filter(s => s && typeof s === 'object') : []
-  const totals = (epicEntry && epicEntry.tasks && epicEntry.tasks.totals) || {}
-  const denominator = num(totals.denominator)
-  const percent = denominator > 0 ? Math.round((num(totals.done) * 100) / denominator) : 0
+  const ep = (epicEntry && epicEntry.epic_progress) || {}
+  const percent = Math.min(100, num(ep.percent))
   const stops = stories.map(s => ({ id: s.id, bucket: stopBucket(s) }))
   const fromScript = epicEntry && epicEntry.stories && epicEntry.stories.complete
   const completeStories = typeof fromScript === 'number' ? num(fromScript) : stops.filter(s => s.bucket === 'done').length

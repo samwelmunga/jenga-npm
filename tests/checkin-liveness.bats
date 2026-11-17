@@ -809,6 +809,15 @@ EOF
   # asserted above, statically and behaviourally, is what makes that safe.
   local real_events="$REPO_ROOT/project/logs/events.json"
   [ -f "$real_events" ] || skip "no real events.json in this checkout"
+  # The log's shape is a property of the checkout, not of the collector: a mirror or
+  # consumer install can hold a legacy pretty-printed JSON array, or a log with no
+  # session ids yet. Skip rather than fail unless the file is JSONL (every non-empty
+  # line parses as a JSON object) and mentions at least one session_id.
+  jq -Rn '[inputs | select(test("\\S")) | (try (fromjson | type == "object") catch false)] | all' \
+    "$real_events" 2>/dev/null | grep -qx true \
+    || skip "this checkout's events.json is not JSONL (a line that is not a JSON object, e.g. the legacy array form)"
+  grep -q '"session_id": *"[^"]*"' "$real_events" \
+    || skip "this checkout's events.json contains no session_id"
 
   local agents
   agents=$(grep -o '"session_id": *"[^"]*"' "$real_events" \

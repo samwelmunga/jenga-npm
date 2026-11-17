@@ -96,7 +96,9 @@ setup() { pf_setup; }
   pf_run --epic E01
   [ "$PF_RC" -eq 0 ]
   [ ! -s "$PF_ERR" ]
-  [ "$(pf_py "list(d)")" = '["schema_version","scope","levels","warnings"]' ]
+  # E92_S09_T03: --epic gains the top-level epic_progress object (the epic percent that counts undecomposed stories),
+  # between levels and warnings; an added key, so schema_version stays 1. --story, --ids, --all and --backlog do not carry it.
+  [ "$(pf_py "list(d)")" = '["schema_version","scope","levels","epic_progress","warnings"]' ]
   [ "$(pf_py "d['schema_version']")" = "1" ]
   [ "$(pf_py "d['scope']")" = '{"type":"epic","ids":["E01"]}' ]
   [ "$(pf_py "list(d['levels'])")" = '["tasks","stories"]' ]
@@ -105,6 +107,7 @@ setup() { pf_setup; }
   pf_run --epic E01 --items
   [ "$(pf_py "list(d['levels']['tasks'])")" = '["counts","totals","items"]' ]
   pf_run --story E01_S02
+  [ "$(pf_py "list(d)")" = '["schema_version","scope","levels","warnings"]' ]
   [ "$(pf_py "d['scope']")" = '{"type":"story","ids":["E01_S02"]}' ]
   [ "$(pf_py "list(d['levels'])")" = '["tasks"]' ]
 }

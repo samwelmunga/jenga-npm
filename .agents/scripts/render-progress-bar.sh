@@ -5,7 +5,7 @@
 # Reads ONE JSON document in the E92_S01 contract (project/documentation/progress-visualisation.md, section 3) and
 # prints ONE line on stdout, for example (language sv, 10 cells):
 #
-#   [████████░░] 8/10 · 1 pågår · 1 röd · ⊘ 2 avvisade (ej räknade)
+#   [━━━━━━━━╌╌]⚑ 8/10 · 1 pågår · 1 röd · ⊘ 2 avvisade (ej räknade)
 #
 # The renderer does no counting. It picks one levels.<level>.totals block and only allocates bar cells. It holds no
 # status names: statuses were already bucketed by scripts/board-progress.sh. It reads nothing but its input and the
@@ -29,10 +29,12 @@
 #             refuses to wait for input and exits 2.
 #
 # LINE FORMAT
-#   [bar] <done>/<denominator>[ · <n> <in progress label>][ · <n> <failed label>][ · <n> <unknown label>][ · <rejected note>]
+#   [bar]<goal> <done>/<denominator>[ · <n> <in progress label>][ · <n> <failed label>][ · <n> <unknown label>][ · <rejected note>]
 #   Each optional segment appears only when its number is greater than 0. The text carries every number, so the line
 #   is complete without colour. Denominator 0 prints an all-grey bar and "0/0 · <nothing label>"; there is no division
-#   by zero. Labels come from scripts/lib/progress-labels.sh (default language en; JENGA_PROGRESS_LANG=sv for Swedish).
+#   by zero. <goal> is ⚑ while work remains and ★ when the denominator is above 0 and everything counted is done (nothing
+#   pending, in progress, failed or unknown); with denominator 0 there is no goal symbol. The goal symbol belongs to the
+#   bar form: the text-only fallback prints no symbol. Labels come from scripts/lib/progress-labels.sh (default language en; JENGA_PROGRESS_LANG=sv for Swedish).
 #
 # BAR
 #   Cells are drawn in order: done as a filled cell (green), then in_progress (yellow), failed (red) and pending (grey),
@@ -48,7 +50,8 @@
 #
 # GLYPH FALLBACK
 #   When the locale is not UTF-8 (the first non-empty of LC_ALL, LC_CTYPE, LANG does not name UTF-8, or all are empty)
-#   the output uses '#' (filled) and '-' (empty) for cells, '(x)' for the rejected symbol and '-' for the separator '·'.
+#   the output uses '#' (filled) and '-' (empty) for cells (UTF-8: '━' and '╌'), '(x)' for the rejected symbol '⊘', '-' for
+#   the separator '·', '>' for the goal '⚑' and '*' for the star '★'. No multibyte character is printed.
 #
 # WIDTH (E92_S02_T03)
 #   The width W is taken from the first of: --cols N; the COLUMNS environment variable (when a positive integer, else
@@ -223,8 +226,8 @@ _loc="${LC_ALL:-}"
 [ -n "$_loc" ] || _loc="${LC_CTYPE:-}"
 [ -n "$_loc" ] || _loc="${LANG:-}"
 case "$_loc" in
-  *[Uu][Tt][Ff]-8*|*[Uu][Tt][Ff]8*) G_FULL='█'; G_EMPTY='░'; G_SEP='·'; G_REJ='⊘'; G_ELL='…' ;;
-  *) G_FULL='#'; G_EMPTY='-'; G_SEP='-'; G_REJ='(x)'; G_ELL='~' ;;
+  *[Uu][Tt][Ff]-8*|*[Uu][Tt][Ff]8*) G_FULL='━'; G_EMPTY='╌'; G_SEP='·'; G_REJ='⊘'; G_ELL='…'; G_GOAL='⚑'; G_STAR='★' ;;
+  *) G_FULL='#'; G_EMPTY='-'; G_SEP='-'; G_REJ='(x)'; G_ELL='~'; G_GOAL='>'; G_STAR='*' ;;
 esac
 
 use_color=0
@@ -333,13 +336,19 @@ _render_line() {
   if [ "$n_den" -eq 0 ]; then
     seg_base="$seg_base $G_SEP $L_nothing"
   fi
+  # Goal symbol after the bar: a star when the scope is fully complete, a flag while work remains, none for 0/0.
+  MARK=""; mark_w=0
+  if [ "$n_den" -gt 0 ]; then
+    mark_w=1
+    if [ $((n_prog + n_fail + n_pend + n_unk)) -eq 0 ] && [ "$n_done" -eq "$n_den" ]; then MARK="$G_STAR"; else MARK="$G_GOAL"; fi
+  fi
 
   keep_prog=1; keep_unk=1; keep_rej=1
   show_bar=1
   _build_text; _vlen "$TEXT"; text_len=$VLEN
-  # "[" + bar + "] " is cells + 3 visible cells.
-  if [ $((bar_cells + 3 + text_len)) -gt "$width" ]; then
-    _room=$((width - 3 - text_len))
+  # "[" + bar + "]" + goal symbol + " " is cells + 3 + mark_w visible cells (mark_w is 0 for 0/0).
+  if [ $((bar_cells + 3 + mark_w + text_len)) -gt "$width" ]; then
+    _room=$((width - 3 - mark_w - text_len))
     if [ "$_room" -ge "$MIN_BAR_CELLS" ]; then
       bar_cells=$_room
     else
@@ -416,7 +425,7 @@ _render_line() {
   _seg 33 "$G_EMPTY" "${C[1]}"
   _seg 31 "$G_EMPTY" "${C[2]}"
   _seg 90 "$G_EMPTY" "${C[3]}"
-  LINE="[$BAR] $TEXT"
+  LINE="[$BAR]$MARK $TEXT"
 }
 
 if [ -n "$each" ]; then

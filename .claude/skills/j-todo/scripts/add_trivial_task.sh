@@ -40,11 +40,18 @@ if [[ -z "$REPO_ROOT" ]]; then
   echo "ERROR: could not locate project root (git rev-parse --show-toplevel failed from $SCRIPT_DIR)" >&2
   exit 1
 fi
+# Package root (scripts/, templates/): in a consumer install .claude/ holds only skills/ and agents/, so the shared
+# scripts live in node_modules/@jenga-ai/agent and not under the project root or the mirror.
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_DIR/../../index/scripts/package-root.sh" ]; then . "$SCRIPT_DIR/../../index/scripts/package-root.sh"; else jenga_package_root() { (cd "$1/../../.." && pwd); }; fi
+PACKAGE_ROOT="$(jenga_package_root "$SCRIPT_DIR")" || true
 cd "$REPO_ROOT"
 
 TASKS_DIR="project/board/tasks"
 STORIES_DIR="project/board/stories"
-UPDATE_STORY_SCRIPT="skills/j-todo/scripts/update_story_tasks.py"
+UPDATE_STORY_SCRIPT="$SCRIPT_DIR/update_story_tasks.py"
+[ -f "$UPDATE_STORY_SCRIPT" ] || UPDATE_STORY_SCRIPT="skills/j-todo/scripts/update_story_tasks.py"
+shared_script() { if [ -f "scripts/$1" ]; then printf '%s\n' "scripts/$1"; else printf '%s\n' "$PACKAGE_ROOT/scripts/$1"; fi; }
 
 story_id=""
 title=""
@@ -128,7 +135,7 @@ fi
 # up beside the other shared scripts this script already needs (scripts/with-lock.sh): in the project root, then next
 # to the skills/ directory this script is deployed under (the source tree, or the .claude/ / .agents/ mirror).
 ALLOCATOR=""
-for cand in "${REPO_ROOT}/scripts/next-board-id.sh" "${SCRIPT_DIR}/../../../scripts/next-board-id.sh"; do
+for cand in "${REPO_ROOT}/scripts/next-board-id.sh" "${PACKAGE_ROOT}/scripts/next-board-id.sh" "${REPO_ROOT}/node_modules/@jenga-ai/agent/scripts/next-board-id.sh"; do
   if [ -f "$cand" ]; then
     ALLOCATOR="$cand"
     break
@@ -239,13 +246,13 @@ EOF
 echo "Wrote task file: ${task_file}"
 
 # Register the new task under its parent story's tasks: frontmatter list.
-if ! scripts/with-lock.sh "$story_file" -- python3 "$UPDATE_STORY_SCRIPT" "$story_file" "$task_id"; then
+if ! bash "$(shared_script with-lock.sh)" "$story_file" -- python3 "$UPDATE_STORY_SCRIPT" "$story_file" "$task_id"; then
   echo "Error: failed to register ${task_id} in ${story_file}'s tasks: list (lock timeout or write failure)." >&2
   exit 1
 fi
 
 # Register the todo entry using the FULL task ID, so /do routes straight into
 # its Inline Execution Path without a redundant breakdown pass.
-bash scripts/todo_manager.sh add "${title}: ${task_id}"
+bash "$(shared_script todo_manager.sh)" add "${title}: ${task_id}"
 
 echo "${task_id}"

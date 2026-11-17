@@ -195,9 +195,10 @@ cmd_of() { jq -r --arg i "$1" '.suites[] | select(.id == $i) | .command' "$OUT";
   [ "$(printf '%s' "$output" | jq -r '.runnable | length')" = "1" ]
 }
 
-@test "the npm twin is recognised when scripts.test is the aggregate runner (bash scripts/run-tests.sh), excluded and still folded" {
-  # E43_S02_T01: package.json `test` became the parallel aggregate of `bats tests/*.bats`.
-  printf '{"scripts":{"test":"bash scripts/run-tests.sh"}}\n' > "$FX/package.json"
+@test "the npm twin is recognised when scripts.test is the full aggregate runner (bash scripts/run-tests.sh --all), excluded and still folded" {
+  # E43_S02_T01 / E95_S01_T02: `run-tests.sh --all` is the parallel aggregate of `bats tests/*.bats` (the bare
+  # runner is only the fast set and is no twin).
+  printf '{"scripts":{"test":"bash scripts/run-tests.sh --all"}}\n' > "$FX/package.json"
   marked_test delta "needs the baseline"
   elevate
   run_narrow
