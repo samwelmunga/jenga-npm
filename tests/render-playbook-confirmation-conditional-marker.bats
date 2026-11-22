@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # Fixture-based coverage for render-playbook-confirmation.sh's conditional marker display
 # (E53_S04_T04) -- "(may be skipped depending on step N's result)".

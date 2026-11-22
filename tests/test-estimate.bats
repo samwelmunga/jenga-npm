@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for scripts/test-estimate.sh, the up-front duration estimate for a selection of
 # test files (E95_S02_T02). Fixture only: the timing log is a throwaway file under

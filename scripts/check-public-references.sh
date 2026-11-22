@@ -31,7 +31,7 @@
 # maintainer-side view of what a real push would refuse, so it calls
 # never_public_severity with strict=1, exactly as
 # check_never_public_refs_invariant in skills/j-mirror-public/scripts/mirror.sh
-# does. Check 6 of j.smoke-test is the consumer-side equivalent and
+# does. Check 6 of the catalog smoke test (maintainer-only, not shipped) is the consumer-side equivalent and
 # deliberately keeps name hits minor.
 #
 # Declared exemptions (E28_S21_T03): scripts/never-public-exemptions.conf lists the few files that legitimately name

@@ -23,6 +23,23 @@
 
 set -euo pipefail
 
+# --help / -h: print usage on stdout and exit 0 before anything is parsed, read or written (E99_S01_T02).
+case "${1:-}" in
+  --help|-h)
+    cat <<'USAGE'
+extract-task-diff-stats.sh - actual git diff stats for a single task
+
+Usage: extract-task-diff-stats.sh <task-id>
+       extract-task-diff-stats.sh --help | -h
+
+Prints actual_files_changed and actual_lines_delta over the task's commits.
+Read-only: reads git history, writes nothing.
+  Example: extract-task-diff-stats.sh E32_S06_T01
+USAGE
+    exit 0
+    ;;
+esac
+
 # Shared board-ID shapes (epic E86). Resolved relative to this script, then the installed package, then the
 # repo root; there is deliberately no fallback regex here, so a missing file is an error rather than a silent
 # return to a two-digit-only guard.

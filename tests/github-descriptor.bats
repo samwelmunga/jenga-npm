@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # Coverage for the real GitHub CLI auth descriptor
 # skills/j-connect/descriptors/github.json (E65_S03_T01).

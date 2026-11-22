@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the revised fuzzy-ID grammar of skills/jenga/scripts/resolve-id.sh (E86_S03_T03): item
 # numbers of three or more digits, run on a MIXED-WIDTH board. tests/resolve-id-grammar.bats (T01) stays

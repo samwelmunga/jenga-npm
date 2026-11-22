@@ -16,6 +16,13 @@
  * that carries them returns them with their numeric values, and an item that does not stays without
  * them (absent, never `null`, never `0`, so a consumer can say "not measured"). Do not add defaults
  * or coercion for those keys. Covered by `board.usage-fields.test.js`.
+ *
+ * E90_S01_T08 — the same holds for the derived cost-unit fields (part of the shipped contract, E90 decision 6;
+ * an item without one is a data case, "not priced" in the Budget tab, not a missing-module case): `usage_cost_units` on tasks and
+ * `usage_tasks_cost_units`, `usage_overhead_cost_units`, `usage_cost_units` on stories pass through
+ * `...data` with the same rules as the raw fields (absent stays absent, an explicit 0 stays 0, a
+ * wrong-typed value is passed through verbatim, never coerced; rejecting it is `validate-board.sh`'s
+ * job, as for the raw fields). Epics carry none. Covered by `board.usage-fields.test.js`.
  */
 
 const fs = require('fs');

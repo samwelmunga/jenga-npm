@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Byte-identical regression suite for a project with NO commit-format.template and NO commit-trace (E79_S03_T01).
 #

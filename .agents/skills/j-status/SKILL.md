@@ -43,8 +43,8 @@ examples:
      renderer. Run the same command with `render` in place of `mode` and `--charset utf8 --color never` before the user's
      arguments, after step 6.5 (so the renderer sees reconciled statuses), and copy its stdout into the reply (see the
      block below). For `overview` the output stands for the board listing, so skip steps 2-4, 6.9 and 6.10 and the board
-     listing of step 7, and still do steps 5, 6, 6.5, 6.7 and 6.8 and print their sections (open rapports, queue, the
-     `todo.md` warning, the dependency audit) after it, as laid out in `assets/output_format.md`. For `scope` the view is
+     listing of step 7, and still do steps 5, 6, 6.5, 6.7, 6.8 and 6.85 and print their sections (open rapports, queue, the
+     `todo.md` warning, the dependency audit, the settings requirements) after it, as laid out in `assets/output_format.md`. For `scope` the view is
      the whole answer: print it and stop. When `render` prints nothing or fails, fall back to the legacy path below and
      show no error for it.
    - `legacy` (`--legacy`, or `--all` with no id) or `legacy-scope` (`--legacy <id>`): the **legacy path**, which is
@@ -102,6 +102,19 @@ directly rather than adding a third skill-local wrapper script:
    It is read-only (no audit is run, no npm call, no file written) and always exits `0`; capture its
    stdout verbatim for step 7 and add nothing to it. Do not parse or reinterpret its output here.
 
+6.85. **Check the settings requirements** (`E100_S05_T04`, both paths, overview and legacy views; a scope view prints only
+   its view and skips this step) — invoke
+   ```
+   bash "$([ -f scripts/settings-doctor.sh ] && echo scripts/settings-doctor.sh || echo node_modules/@jenga-ai/agent/scripts/settings-doctor.sh)" --quiet
+   ```
+   and decide by its exit status, never by parsing beyond it. Exit `0` (nothing printed): run the same command once more
+   without `--quiet` and count its `: active` lines as N; the section is the single line `Settings requirements: all N
+   active`. Exit `1`: the section lists each inactive requirement with its indented fix lines, copied unchanged from stdout.
+   Exit `2`, a missing script or anything else: the section is the single line `Settings requirements: could not be
+   checked`. This step is **non-fatal** like 6.5: no error is shown and `j.status` never fails or blocks on it. The
+   section is printed as plain text outside the renderer's fenced block, so the renderer stdout copied into the reply is
+   unchanged.
+
 6.9. **Collect the progress bars** (legacy path only) — invoke, once,
    ```
    bash "$([ -f skills/j-status/scripts/render-status-bars.sh ] && echo skills/j-status/scripts/render-status-bars.sh || echo node_modules/@jenga-ai/agent/skills/j-status/scripts/render-status-bars.sh)"
@@ -124,7 +137,8 @@ directly rather than adding a third skill-local wrapper script:
    rest of this step is the legacy path) following the layout and icon conventions in `assets/output_format.md`, adding each
    step 6.9 bar at the end of the epic or story row whose id it carries. After the
    queue section, add a `Dependency audit` heading (same banner style as the other sections) and print step
-   6.8's output under it unchanged. When step 6.10 returned a block, print it unchanged after the scoped part of the
+   6.8's output under it unchanged. After it, add the `Settings requirements` section from step 6.85, as laid out in
+   `assets/output_format.md`. When step 6.10 returned a block, print it unchanged after the scoped part of the
    overview, as laid out in `assets/output_format.md`.
 
 8. If no epics exist, print: `No board items found. Run /pi-plan to define epics or /todo to add items.`

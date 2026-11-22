@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S01_T04: the story and task ID guards in j-close-story and j-uncharted read their shapes from the shared
 # board-ID source (scripts/lib/board-ids.sh), so three-plus digit IDs pass while malformed ones are still rejected.

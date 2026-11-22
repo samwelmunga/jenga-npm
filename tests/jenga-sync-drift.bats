@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Drift warnings in `jenga status` and `jenga doctor` (E26_S11_T05).
 #

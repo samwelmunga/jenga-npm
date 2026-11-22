@@ -32,6 +32,23 @@
 
 set -euo pipefail
 
+# -h / --help: print the usage on stdout and exit 0 before anything is parsed, read or written (E99_S01_T01).
+case "${1:-}" in
+  -h|--help)
+    cat <<'USAGE'
+Usage: load-nl-catalog.sh [-h|--help]
+
+Print the natural-language skill catalog (JSON, stdout) that /jenga's
+natural-language branch matches against, built from the package's skills.
+Takes no arguments; read-only.
+
+Exit codes: 0 catalog printed; 2 setup failure (package root or node not found,
+or the Node helper failed).
+USAGE
+    exit 0
+    ;;
+esac
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Package root (scripts/, lib/, templates/): resolved so it also works from a consumer's .claude/skills mirror.

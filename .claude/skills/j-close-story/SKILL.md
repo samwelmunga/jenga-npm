@@ -229,6 +229,15 @@ The helper locates `task-usage.sh` with the same idiom as `persist-task-usage.sh
 overhead part, total: see `templates/SCRUM_BOARD_SCHEMA.md`, "Usage fields on stories") with
 `update-task-frontmatter.sh`, and prints the ready-made `Story usage (...)` block for Step 5. It calculates nothing
 itself: the three numbers are `task-usage.sh`'s, and it refuses to write unless total = task part + overhead part.
+- **Cost units (E90_S01_T07).** When `task-usage.sh --report --stories` also carries the derived cost-equivalent unit,
+  the helper writes `usage_tasks_cost_units`, `usage_overhead_cost_units` and `usage_cost_units` beside the raw
+  fields (same refusal: the total must equal the task part plus the overhead part, else nothing is written). A story
+  with an unpriced task or model gets none of the three and the report says `not priced: <reason>`, never a number.
+  The price-ratio loader and config (`scripts/token-price-ratios.sh`, `project/configs/token-price-ratios.json`) are a
+  direct dependency of `task-usage.sh` (E90_S02_T02): when either is missing, `task-usage.sh` exits 10 and the helper
+  reports `not measured: price-ratio dependency missing, nothing written (...)`; a report without the derived keys is
+  reported the same way. It never falls back to the raw-only output of before E90. The "silent when absent" rule below
+  is only for `task-usage.sh` itself being absent and is unchanged.
 - **Non-blocking.** Whatever the helper prints, the close continues and the story's `status` and `date_completed` are
   not touched by it. Keep its output verbatim for Step 5.
 - **Never a guess.** When the numbers cannot be produced the helper writes no story field and its block says
@@ -260,12 +269,15 @@ If any task had `0` for both fields, note it as potentially untracked:
 If the Step 2 usage helper printed anything, include its block verbatim, after the diff-stat lines. It lists, per
 task, the persisted totals (`total=<N> tokens (...)`), or `not measured: <reason>` for a task nothing could be
 measured for (never a zero), flags a task whose persisted total is marked `usage_possibly_incomplete`, and shows any
-failure as a prominent `WARNING` naming the task and the reason. A usage failure never changes the closing status:
+failure as a prominent `WARNING` naming the task and the reason. A task that carries `usage_cost_units` also shows
+`cost_units=<N> (derived cost-equivalent unit)` next to the raw counts; one without it (an unpriced model, never a guess) shows the raw counts only. A missing price-ratio loader or config shows one
+`WARNING: price-ratio dependency missing` line and no per-task lines. A usage failure never changes the closing status:
 say so in the report and carry on. If the helper printed nothing (`task-usage.sh` not installed), omit the section.
 
 ```
 Usage (task-usage.sh --persist --story <story-id>):
   <task-id>: total=<N> tokens (input=<N>, output=<N>, cache_write=<N>, cache_read=<N>), transcripts=<N>
+  <task-id>: total=<N> tokens (...), transcripts=<N>, cost_units=<N> (derived cost-equivalent unit)
   <task-id>: total=<N> tokens (...), transcripts=<N> [usage_possibly_incomplete: the transcripts looked partly pruned]
   <task-id>: not measured: <reason>
 ```
@@ -276,7 +288,9 @@ If the Step 4 story-usage helper printed anything, include its block verbatim, a
 the diff-stat lines when that section is omitted). It shows the story's task part, its allocated overhead part and
 their total (the total is always the task part plus the overhead part), the story's tasks that have no measurement
 (the task part is then a lower bound), and any unallocated overhead of the story's session, so the numbers' origin is
-visible. When the numbers could not be produced it shows `not measured: <reason>`, and no story field was written. A
+visible. The `cost units` line is the derived cost-equivalent unit next to the raw counts: a number for a fully priced
+story and `not priced: <reason>` for a partial one (an unpriced model).
+When the numbers could not be produced it shows `not measured: <reason>`, and no story field was written. A
 failure never changes the closing status: say so and carry on. If the helper printed nothing (`task-usage.sh` not
 installed), omit the section.
 
@@ -285,6 +299,8 @@ Story usage (task-usage.sh --report --stories <story-id>):
   tasks:    total=<N> tokens (input=<N>, output=<N>, cache_write=<N>, cache_read=<N>)
   overhead: total=<N> tokens (input=<N>, output=<N>, cache_write=<N>, cache_read=<N>)
   story:    total=<N> tokens (tasks <N> + overhead <N>)
+  cost units (derived cost-equivalent unit, not a currency amount): total=<N> (tasks <N> + overhead <N>)
+  cost units (derived cost-equivalent unit): not priced: <reason>
   unallocated overhead in this story's session: none | <total and reason>
   recorded in project/board/stories/<story-id>_<slug>.md
   not measured: <reason>

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the uncharted state, baseline and validation scripts under skills/j-uncharted/scripts/ (E43_S01_T02):
 #

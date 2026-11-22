@@ -6,10 +6,12 @@
  * field names are the ones in `templates/SCRUM_BOARD_SCHEMA.md` ("Usage fields (per-task token accounting)"
  * and "Usage fields on stories"):
  *   task:  usage_input_tokens, usage_output_tokens, usage_cache_write_tokens, usage_cache_read_tokens,
- *          usage_total_tokens, usage_transcripts, usage_measured_on, usage_possibly_incomplete
+ *          usage_total_tokens, usage_transcripts, usage_measured_on, usage_possibly_incomplete,
+ *          usage_cost_units (E90_S01)
  *   story: usage_tasks_{input,output,cache_write,cache_read,total}_tokens (the task part),
  *          usage_overhead_{input,output,cache_write,cache_read,total}_tokens (the overhead part),
- *          usage_total_tokens (task part plus overhead part), usage_measured_on, usage_possibly_incomplete
+ *          usage_total_tokens (task part plus overhead part), usage_measured_on, usage_possibly_incomplete,
+ *          usage_tasks_cost_units, usage_overhead_cost_units, usage_cost_units (E90_S01)
  *
  * Rules this module owns:
  *   - A number is "measured" only when it is a finite, non-negative number. An absent key, null, a string
@@ -17,12 +19,22 @@
  *     never turned into 0. An explicit 0 in frontmatter is a measured 0 and stays 0.
  *   - The guard (E76 epic decision 6): `hasUsageData` is true only when some task or story carries at least
  *     one measured token field. With no usage anywhere the view renders nothing and the tab is not offered.
- *   - Nothing here knows about prices. There is no pricing table and none is derived.
+ *   - No currency amount is computed here and nothing is looked up in a price list. The only derived figure is the
+ *     cost-equivalent unit (E90_S01_T09), read as a number the board already carries (`usage_cost_units` and the
+ *     two story part fields, written by `task-usage.sh --persist` from per-model ratios). It is a relative unit,
+ *     NOT a currency amount, and a labelled derived view that sits beside the four raw counts and replaces none of
+ *     them. It follows the same absence rule per item: an absent field is `null` (never 0), and an item that has
+ *     raw counts but no derived number is shown as "not priced".
  */
 
 export const NOT_MEASURED = 'not measured'
 
 export const TOKEN_UNIT = 'tokens'
+
+/** Shown for an item that has raw counts but no derived number (an unpriced model, or never derived). */
+export const NOT_PRICED = 'not priced'
+
+export const COST_UNIT_NAME = 'cost-equivalent units'
 
 /** The four breakdown fields, in display order, with the task-level and story-part frontmatter keys. */
 export const FIELDS = [
@@ -82,15 +94,16 @@ function taskRow(task) {
     status: task.status ?? null,
     fields,
     total,
+    cost: measured(task.usage_cost_units),
     measured: any,
     possiblyIncomplete: any && incomplete(task),
   }
 }
 
-function storyPart(story, key, totalKey) {
+function storyPart(story, key, totalKey, costKey) {
   const fields = breakdown(story, key)
   const total = measured(story[totalKey])
-  return { fields, total, measured: total !== null || Object.values(fields).some(v => v !== null) }
+  return { fields, total, cost: measured(story[costKey]), measured: total !== null || Object.values(fields).some(v => v !== null) }
 }
 
 /**
@@ -103,8 +116,8 @@ export function buildBudgetRows(epics) {
   let unmeasuredStories = 0
   for (const { epic, story } of storiesOf(epics)) {
     const tasks = (Array.isArray(story.tasks) ? story.tasks : []).map(taskRow)
-    const tasksPart = storyPart(story, 'tasks', 'usage_tasks_total_tokens')
-    const overheadPart = storyPart(story, 'overhead', 'usage_overhead_total_tokens')
+    const tasksPart = storyPart(story, 'tasks', 'usage_tasks_total_tokens', 'usage_tasks_cost_units')
+    const overheadPart = storyPart(story, 'overhead', 'usage_overhead_total_tokens', 'usage_overhead_cost_units')
     const total = measured(story.usage_total_tokens)
     const storyMeasured = tasksPart.measured || overheadPart.measured || total !== null
     if (!storyMeasured && !tasks.some(t => t.measured)) {
@@ -118,6 +131,7 @@ export function buildBudgetRows(epics) {
       tasksPart,
       overheadPart,
       total,
+      cost: measured(story.usage_cost_units),
       measured: storyMeasured,
       possiblyIncomplete: storyMeasured && incomplete(story),
       tasks,

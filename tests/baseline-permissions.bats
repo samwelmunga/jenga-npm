@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for skills/j-test/scripts/baseline-permissions.sh (E72_S07_T02).
 #
@@ -186,6 +187,31 @@ plain_file() {
   cp "$L5" "$FX/templates/permission-levels/level-2-guarded.json"
   run bash "$SCRIPT" check --root "$FX"
   [ "$status" -eq 1 ]
+}
+
+@test "the verdict does not depend on the template's non-policy keys: policy-only and full level-2 templates agree" {
+  # E100_S04_T06: templates now carry only defaultMode, permissions.deny and autoMode. The
+  # former full template also carried env, hooks and permissions.allow. The check must give the
+  # same answer for both, for satisfied and for elevated settings.
+  local full="$BATS_TEST_TMPDIR/full-level-2.json"
+  jq '. + {env:{X:"1"}, hooks:{PreToolUse:[{matcher:"Bash",hooks:[{type:"command",command:"x"}]}]}}
+      | .permissions.allow = ["Bash(ls *)"]' "$L2" > "$full"
+  jq -e 'has("hooks") and has("env") and (.permissions|has("allow"))' "$full" >/dev/null
+
+  cp "$L2" "$FX/templates/permission-levels/level-2-guarded.json"
+  run bash "$SCRIPT" check --root "$FX"; local slim_ok="$status"
+  cp "$full" "$FX/templates/permission-levels/level-2-guarded.json"
+  run bash "$SCRIPT" check --root "$FX"; local full_ok="$status"
+  [ "$slim_ok" -eq 0 ]
+  [ "$full_ok" -eq "$slim_ok" ]
+
+  elevate ".claude/settings.json"
+  cp "$L2" "$FX/templates/permission-levels/level-2-guarded.json"
+  run bash "$SCRIPT" check --root "$FX"; local slim_bad="$status"
+  cp "$full" "$FX/templates/permission-levels/level-2-guarded.json"
+  run bash "$SCRIPT" check --root "$FX"; local full_bad="$status"
+  [ "$slim_bad" -eq 1 ]
+  [ "$full_bad" -eq "$slim_bad" ]
 }
 
 @test "list never reads the baseline template, so its absence from both places is harmless" {

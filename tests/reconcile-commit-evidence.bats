@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for skills/j-reconcile/scripts/commit-evidence.sh (E79_S02_T06): /j-reconcile's commit-evidence lookup,
 # now a thin wrapper over the shared resolver scripts/commits-for-item.sh.

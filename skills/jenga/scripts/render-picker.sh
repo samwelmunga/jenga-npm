@@ -163,6 +163,24 @@
 
 set -euo pipefail
 
+# -h / --help: print the usage on stdout and exit 0 before anything is parsed, read or written (E99_S01_T01).
+case "${1:-}" in
+  -h|--help)
+    cat <<'USAGE'
+Usage: render-picker.sh                              # start a new picker session
+       render-picker.sh <state_file> "<raw_reply>"    # continue an existing session
+       render-picker.sh -h|--help
+
+Render /jenga's numbered, hierarchical board picker (from board-scan.sh) and
+interpret the user's reply. Start mode creates a state file under TMPDIR and
+prints its path on stderr.
+
+Exit codes: 0 rendered; 2 usage error or setup failure.
+USAGE
+    exit 0
+    ;;
+esac
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BOARD_SCAN="$SCRIPT_DIR/board-scan.sh"
 

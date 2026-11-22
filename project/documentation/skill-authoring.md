@@ -1072,8 +1072,8 @@ it is recorded so the next person does not mistake it for a missing package.
 `skills/j-publish/` **ships.** Evidence: `package.json` `"files"` lists `skills/` whole; `.publicignore` blocks the
 old bare `skills/publish/`, `.claude/skills/publish/` and `.agents/skills/publish/` but no `skills/j-publish/` entry
 (`rsync -an --exclude-from=.publicignore` lists `skills/j-publish/` among the shipped skills); `lib/sync.js`
-mirrors `skills/` as a whole. `j-distribute` ships for the same reason; `j-mirror-public`, `j-self-sync`,
-`j-dev-done`, `j-train`, `j-strategy` and `j-convert` do not.
+mirrors `skills/` as a whole. `j-distribute` shipped for the same reason until `E99_S01_T13` blocklisted it; `j-mirror-public`,
+`j-self-sync`, `j-dev-done`, `j-distribute`, `j-smoke-test` (`E99_S01_T18`), `j-train`, `j-strategy` and `j-convert` do not ship.
 
 Decision: **`j-publish` scripts must work in the consumer layout.** The audit found three that did not
 (rows 2 to 4); they are fixed and covered by `tests/package-root.bats`. The remaining `../../..` in the pipeline
@@ -1083,14 +1083,19 @@ scripts is the non-git project-root fallback, which needs no package asset and w
 
 ### The execution phase of `j.smoke-test` (E98_S02)
 
+`j.smoke-test` is a **private maintainer tool**. It is not in the npm package or the public repository (`.publicignore`,
+`E99_S01_T18`), so a consumer never runs it. It runs from the maintainer's checkout and verifies the scripts that consumers
+receive, against the package root and against a consumer mirror (mirror mode, below).
+
 `j.smoke-test` has two parts. The structural checks inspect each skill in the package layout. The **execution phase**
 (on by default, `--no-exec` turns it off, `--exec-timeout <s>` or `JENGA_SMOKE_EXEC_TIMEOUT` sets the per-script limit, 10 s
 by default) runs the skill's scripts in the layout a consumer has. It builds a throwaway consumer with
 `scripts/consumer-layout-fixture.sh`: the package at `node_modules/@jenga-ai/agent`, and `.claude/` and `.agents/` holding
 only `skills/` and `agents/`. It then runs one safe invocation of every `skills/<skill>/scripts/**/*.sh` from
 `.claude/skills/<skill>/scripts/`. The working directory is the consumer root, the environment is scrubbed, `HOME`,
-`TMPDIR` and `CLAUDE_PROJECT_DIR` point inside the temp directory and stdin is `/dev/null`. This is a scrubbed environment,
-not an OS sandbox: a script that writes to a hard-coded absolute path is not blocked.
+`TMPDIR` and `CLAUDE_PROJECT_DIR` point inside the temp directory and stdin is `/dev/null`. The environment is scrubbed
+and the fixture is sandboxed (see "The fixture sandbox" below), but neither is an OS sandbox: a script that writes to a
+hard-coded absolute path is not blocked.
 
 A script that exits non-zero and names a package asset under `.claude/` (`templates/`, `scripts/`, `lib/`, `hooks/` and so
 on) is a **critical** finding (`exec-package-asset`): it resolves package assets against the mirror instead of the
@@ -1108,9 +1113,76 @@ write nothing) or declare a read-only invocation in its first 40 lines:
 # smoke-invoke: none <reason>     declared unverifiable, reason shown in the list
 ```
 
-The invocation must be read-only and finish within the timeout. Scripts of maintainer-only skills (`j-init`, `j-distribute`,
-`j-mirror-public`, `j-publish`, `j-self-sync`, `j-dashboard*`), `tests/` directories and sourced `lib/` files are never
-executed and are listed as skipped.
+The invocation must be read-only and finish within the timeout.
+
+**What is skipped.** Only three kinds of script are never executed, and each is listed as unverifiable with its reason on
+stderr and counted in the `Execution check:` line:
+
+- scripts of a **never-shipped skill**, whose directory is blocked by `.publicignore` (read at run time by `never_public_load`; no
+  skill name is hard-coded in the script). On 2026-11-21 the blocked `j-` directories are `j-mirror-public`, `j-self-sync`,
+  `j-dev-done`, `j-distribute`, `j-smoke-test`, `j-train`, `j-strategy` and `j-convert`; the last three hold no scripts, so five
+  skills contribute skipped scripts (21 of them);
+- scripts under a `tests/` or `test/` directory;
+- sourced `lib/` files.
+
+A skill that **ships** is never skipped for being maintainer-oriented. `j-publish`, `j-init`, `j-dashboard` and `j-dashboard-share`
+(32 scripts) go through the ordinary rule above: the script runs `--help` when its code handles it, runs its `# smoke-invoke:`
+declaration when it has one, and is otherwise declared `# smoke-invoke: none <reason>` and listed as unverifiable. A root with no
+`.publicignore` (a consumer's mirror, a fixture) has no never-shipped skills, so nothing extra is skipped there.
+
+**The ratchet (`E99_S01_T06`).** A new script under `skills/<skill>/scripts/` that ships needs either a `--help`/`-h` handler in its code
+(a mention in a comment does not count) or a `# smoke-invoke: <args>` declaration in its first 40 lines, where `# smoke-invoke: none <reason>`
+is a declaration; otherwise the smoke test classifies it `undeclared` and `tests/smoke-test-ratchet.bats` fails. That test calls
+`smoke-test-skills.sh --classify-only`, which runs the smoke test's own classification (the function the execution phase uses), prints one
+`<class><TAB>skills/<path><TAB><reason or arguments>` line per script and executes none, so it takes seconds, not the execution phase's
+minute. Check locally with `bash skills/j-smoke-test/scripts/smoke-test-skills.sh --classify-only | grep '^undeclared'`. The test also pins
+the number of `declared-none` scripts: a new `none` declaration raises it and a removed one lowers it, and either change edits the pin in the
+same commit.
+
+**The fixture sandbox.** Running more scripts, among them the release pipeline's, means a mis-declared invocation could reach
+a real remote or registry, so every invocation (package mode and mirror mode alike) runs in a sandbox built once by
+`smoke-test-skills.sh` and `skills/j-smoke-test/scripts/build-exec-stubs.sh` (`E99_S01_T07`). The full rationale and the
+refused-operations list are in the "Amendment 2026-11-19, fixture sandbox revised" bullet below; in short:
+
+- **A local bare `origin`.** The fixture repository's `origin` is `git init --bare` at `<temp dir>/origin.git`, so a declared
+  invocation may really `git commit`, `git push` and `git tag`; the objects land there and go with the directory.
+- **A stub directory is the only `PATH` entry.** `npm`, `npx`, `gh`, `ssh`, `scp`, `curl`, `wget`, `rclone`, `xcrun` and `doctl`
+  append `"<name> <args>"` to `<temp dir>/blocked.log` and exit 97; `rsync` runs only on paths inside the temp directory; the rest
+  of `PATH` is links to `bash`, `sh`, `env`, `jq`, `node`, `python3` and coreutils-class tools, so a script that needs another tool
+  exits 127.
+- **A `git` wrapper** (second layer) refuses `push`, `fetch`, `pull`, `ls-remote` and `clone` to a URL, a `host:path` or a path
+  outside the temp directory, `remote add` and `remote set-url` to one, and `credential.*`, `url.*.insteadOf` and `core.sshCommand`
+  settings; a refusal is logged to `blocked.log` and exits 97.
+- **Environment settings** (the primary layer, which also holds for a script that calls git by an absolute path):
+  `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_ALLOW_PROTOCOL=file`, `NPM_CONFIG_USERCONFIG=/dev/null`,
+  `NPM_CONFIG_GLOBALCONFIG=/dev/null`, `GIT_TERMINAL_PROMPT=0` and a fixed git identity, under `env -i` so no token or
+  `SSH_AUTH_SOCK` is inherited.
+- **A pre-flight check.** Before the first invocation, `tests/helpers/assert-sandboxed.bash` runs under that same environment with
+  the temp directory as root. If it refuses, the run is an internal error: exit **3**, and nothing is executed.
+- **A critical finding when the log is not empty.** After each invocation a non-empty `blocked.log` is the **critical** finding
+  `exec-blocked-tool` (it quotes the first line of the log, for example `first: npm publish`), and the log is emptied for the next
+  invocation. A push to the fixture's own `origin` writes nothing to it.
+
+**Residual risk, stated plainly.** This is not an OS sandbox and it is not hermetic. The stubs cover tools by command name, not by
+behaviour: a script that opens a socket itself, or runs a non-git tool by an absolute path, is not stopped, and no OS-level network
+sandbox (`sandbox-exec`, `unshare -n`) is used. A `--help` run proves that a script starts and finds its libraries, not that a
+pipeline body works, so a defect in a pipeline body is caught only by a declared read-only invocation or by the bats tests.
+`run_gates.sh` evals the gate commands configured in `publish.json`, so any invocation of it runs arbitrary configured commands;
+it is declared `none` and covered by bats only.
+
+**Numbers from a fresh run (2026-11-21, after `E99_S01_T18`, on `E99_S01_T10`'s branch, default options):**
+
+```
+Execution check: 148 invoked, 148 exited 0, 44 unverifiable
+```
+
+Of the 44, 21 are scripts of never-shipped skills (`j-mirror-public` 11, `j-distribute` 3, `j-smoke-test` 3, `j-self-sync` 2,
+`j-dev-done` 2), 1 is a sourced `lib/` file, 9 are declared `none` outside the maintainer-only skills (`skills/index` 2,
+`skills/jenga` 3, `j-gitignore`, `j-skillify`, `j-workflow-recorder`, `jenga-config` 1 each) and 13 are shipped maintainer-only
+scripts. Of the 32 shipped maintainer-only scripts, 19 are verified and 13 are not: `j-init` 1 (`init.sh`) and `j-publish` 12
+(`check_target_config.sh`, `finalize_changelog.sh`, `ios_pipeline.sh`, `publish_common.sh`, `run_gates.sh`, `validate_config.sh`,
+the five `validate_*_env.sh` scripts and `write_ledger_entry.sh`); `j-dashboard` and `j-dashboard-share` are fully verified. The
+numbers change whenever a script is added, removed or re-declared; re-run the skill rather than trusting this paragraph.
 
 **Mirror mode.** `smoke-test-skills.sh --root <consumer>/.claude --package-root <consumer>/node_modules/@jenga-ai/agent`
 checks a consumer's mirror: bare script names and assets resolve against the package root, because a mirror root holds
@@ -1119,11 +1191,17 @@ only `skills/` and `agents/`. `project/.workflows/scripts/st-test-run.sh` step 7
 
 #### Decision: shipped maintainer-only skills (`E99_S01_T05`, user decision 2026-11-16)
 
-The paragraphs above describe what the execution phase does **today**: it skips `j-init`, `j-distribute`, `j-mirror-public`,
-`j-publish`, `j-self-sync` and `j-dashboard*` by a hard-coded name list. That list is wrong in both directions, because
-five of those seven skills **ship** and are run by consumers. The decision below replaces it; the tasks that implement it are
-`E99_S01_T07` to `E99_S01_T11`, and until they land the behaviour above stands. The evaluation (per-script line references,
-timings, the worst case per script) is `project/rapports/analysis/E99_S01_T05-maintainer-only-skills-options.md`.
+**Resolved (2026-11-21): the implementation landed.** Before this decision the execution phase skipped `j-init`, `j-distribute`,
+`j-mirror-public`, `j-publish`, `j-self-sync` and `j-dashboard*` by a hard-coded name list. That list was wrong in both directions,
+because five of those seven skills **ship** and are run by consumers. The decision below replaced it, and the paragraphs above now
+describe the result. The final tasks are `E99_S01_T07` (the fixture sandbox), `E99_S01_T08` (the never-shipped skip derived from
+`.publicignore`), `E99_S01_T09` (`# smoke-invoke:` declarations on the shipped maintainer-only scripts), `E99_S01_T13` (`j-distribute`
+stops shipping), `E99_S01_T18` (`j-smoke-test` stops shipping) and `E99_S01_T10` (this documentation update); the follow-up
+`E99_S01_T11` decision and the 2026-11-19 amendments below are unchanged. The decision-time counts in the table and the "Shipped" and
+"Residual risk" bullets below are the **expected** numbers of 2026-11-16; the numbers from a fresh run are in "Numbers from a fresh
+run" above (32 shipped maintainer-only scripts after `E99_S01_T13`, 19 verified, 13 unverified). The rationale below is kept as
+written. The evaluation (per-script line references, timings, the worst case per script) is
+`project/rapports/analysis/E99_S01_T05-maintainer-only-skills-options.md`.
 
 **Decision: option 1 plus option 2, with option 4 for what cannot be run safely; option 3 is not chosen.**
 
@@ -1160,9 +1238,53 @@ timings, the worst case per script) is `project/rapports/analysis/E99_S01_T05-ma
   deferred). A `--help` check proves a script starts and finds its libraries, not that a pipeline body works, so the 5.0.1
   wrong-package-root class is caught only for code that runs before or during argument parsing and for the declared read-only
   calls. Stub coverage is by command name, not by behaviour.
-- **Separate follow-up, not an execution-phase fix (`E99_S01_T11`):** `j-distribute` ships to consumers but its scripts need
-  the monorepo `package.json` and `distribute.config.json`, so they cannot succeed in a consumer layout by design. Whether it
-  should ship at all is a distribution question for the user.
+- **Decided 2026-11-18 (`E99_S01_T11`, user): `j-distribute` stops shipping to consumers, and is removed from the README and
+  the skill reference documentation, because consumers receive Jenga through npm and the skill needs monorepo files
+  (`distribute.config.json`, the monorepo `package.json`) that a consumer does not have, so it cannot work in a consumer layout.**
+  The skill stays in the private monorepo for maintainers. No change is needed to the decision above except the counts: once
+  `E99_S01_T13` lands, the shipped maintainer-only set is 32 scripts rather than 35 (`j-publish` 24, `j-init` 4, `j-dashboard` 3,
+  `j-dashboard-share` 1), `E99_S01_T08`'s derived skip covers `j-distribute`, and the declarations `E99_S01_T09` plans for its three scripts
+  are moot (`E99_S01_T10` states the final numbers from a fresh run). Implementing tasks: `E99_S01_T12` (documentation and the shipped
+  files that point into `skills/j-distribute/`, first, because the mirror push gate refuses a blocklisted skill that shipped files still name),
+  `E99_S01_T13` (`.publicignore` plus the tests that follow their subject) and `E99_S01_T14` (the `check-version.sh` root-resolution defect,
+  maintainer-only, low priority).
+
+- **Amendment 2026-11-19, `j-smoke-test` is private (user decision).** `j.smoke-test` is not published: `E99_S01_T15` (README, skill reference, `AGENTS.md`,
+  two shipped comments), `E99_S01_T16` (`st-test-run.sh` step 7, which ran the skill from the installed package and would fail without it), `E99_S01_T17` (tests and config that
+  mix it with shipped behaviour) and then `E99_S01_T18` (`.publicignore`, the four tests and the one template that serve only it) implement that, references first and the blocklist
+  last. Consequences for this decision: the never-shipped set read from `.publicignore` gains `j-smoke-test` (`E99_S01_T08` picks it up with no code change); this execution phase is a
+  **private maintainer tool** that verifies the scripts consumers receive, not something a consumer runs; and `scripts/consumer-smoke-after-sync.sh` (already private) plus the
+  stage procedure's use of the checkout's copy (`E99_S01_T16`) are the consumer-layout checks before release. The numbers above are unchanged by this amendment.
+- **Amendment 2026-11-19, fixture sandbox revised and built (`E99_S01_T07`, the `E95_S04` push-suite precedent).** The "What makes the wider run safe" bullet above said the `git`
+  wrapper refuses `push`, tag creation, `fetch`, `pull`, `clone`, `ls-remote` and `remote add` outright. That blanket refusal is replaced by this sandbox, implemented in
+  `skills/j-smoke-test/scripts/smoke-test-skills.sh` and `skills/j-smoke-test/scripts/build-exec-stubs.sh`, in package mode and in mirror mode alike:
+  - **A real, local bare `origin`.** The fixture repo's `origin` is `git init --bare` at `<temp dir>/origin.git`, so a declared invocation may really `git commit`, `git push` and
+    `git tag` + `git push --tags`; the objects land only there and go with the directory. A fixture that already has an `origin` keeps it, and it is checked like the new one.
+  - **Environment of every invocation**, built once and used for the pre-flight check too: `GIT_CONFIG_NOSYSTEM=1` (needed because `HOME=<tmp>` does not hide the system gitconfig, which
+    is where the leaking `osxkeychain` credential helper from Xcode's gitconfig comes from), `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_ALLOW_PROTOCOL=file` (any git operation on an `https://`,
+    `ssh://` or `host:path` remote fails inside git, `fatal: transport 'https' not allowed`, even when a script calls git by an absolute path), `NPM_CONFIG_USERCONFIG=/dev/null` and
+    `NPM_CONFIG_GLOBALCONFIG=/dev/null`. `GIT_TERMINAL_PROMPT=0` and a fixed git identity (`GIT_AUTHOR_*`, `GIT_COMMITTER_*`) are also set so that `git commit` works without a
+    configuration. `NODE_AUTH_TOKEN`, `GH_TOKEN`, `NPM_TOKEN` and `SSH_AUTH_SOCK` are absent because the run is under `env -i`. `GIT_CONFIG_NOSYSTEM=1` and `GIT_ALLOW_PROTOCOL=file` are
+    the two additions `E95_S04`'s push-suite spec did not have; its story carries a cross-reference asking it to adopt both.
+  - **One shared check, `tests/helpers/assert-sandboxed.bash`** (bash 3.2, no bats dependency, no reference to the skill): `assert_sandboxed [<root>] [<path-or-remote> ...]` prints every
+    violated condition on stderr and returns non-zero unless every target and `origin` resolve under `<root>` (symlinks resolved), `HOME` is under it, `GIT_CONFIG_GLOBAL=/dev/null`,
+    `GIT_CONFIG_NOSYSTEM=1`, `GIT_ALLOW_PROTOCOL=file`, `SSH_AUTH_SOCK`, `GIT_ASKPASS` and `SSH_ASKPASS` are unset and `git config --get-all credential.helper` is empty. The smoke test runs it,
+    under the invocation environment, with the temp directory as root before the first invocation; a refusal is an internal error, **exit 3**, and nothing is executed. `E95_S04` reuses
+    this file and adds only the bats `setup()` wrapper. Its own case is `tests/assert-sandboxed.bats`.
+  - **Stub directory as the only `PATH` entry** (`build-exec-stubs.sh`): `npm`, `npx`, `gh`, `ssh`, `scp`, `curl`, `wget`, `rclone`, `xcrun` and `doctl` append `"<name> <args>"` to
+    `<temp dir>/blocked.log` and exit 97; `rsync` runs only when no argument contains `:` or starts with `rsync://` and every path argument resolves under the temp directory; the rest of
+    `PATH` is links to `bash`, `sh`, `env`, `jq`, `node`, `python3` and coreutils-class tools, so a script that needs another tool exits 127.
+  - **The `git` wrapper stays as a second layer, with a narrower rule.** It resolves the real git by an absolute path recorded when the stub directory is built, skips global options (`-C`,
+    `-c`, `--git-dir`, ...) and passes everything except: `push`, `fetch`, `pull`, `ls-remote` and `clone` whose target is a URL, a `host:path`, or a path outside the temp directory (a remote
+    name is resolved with `remote get-url`, so `origin` passes only while it is local); `remote add` and `remote set-url` to such a target; and `config` or `-c` setting `credential.*`,
+    `url.*.insteadOf`, `url.*.pushInsteadOf` or `core.sshCommand`. A refusal is logged to `blocked.log` and exits 97.
+  - **Pass criterion.** After each invocation `blocked.log` must be empty, otherwise the finding is **critical**, `exec-blocked-tool` (it quotes the first line of the log, for example
+    `first: npm publish`), and the log is emptied for the next invocation. A push to the fixture's own `origin` writes nothing to the log. A non-zero exit from git itself, such as the `https`
+    transport refusal, is the existing minor `exec-failed`.
+  - **Not added: an OS network sandbox** (`sandbox-exec` on macOS, `unshare -n` on Linux). It is not available inside an already sandboxed session and differs per platform, so it is not cheap
+    and portable; the stubs, the environment and the pre-flight check are the only layers.
+  This only widens **git** coverage: the 8 scripts with no safe invocation have non-git reasons, so no verified count is claimed from it. "Residual risk" above otherwise stands, and its
+  remark that "stub coverage is by command name, not by behaviour" still applies: a script that opens a socket itself, or runs a non-git tool by an absolute path, is not stopped.
 
 ---
 
@@ -1604,3 +1726,203 @@ unaddressed concern.
 
 This residual risk is a deliberate scope boundary of `E50_S02`, not an oversight.
 - Keep the skill body focused on *what to do*, not *how Claude works*.
+
+## Settings fragments (`E100_S02`)
+
+A skill or hook that needs something in a client project's Claude Code settings does not ship its own merge script. It
+declares the need in a **settings fragment**, a small JSON file next to the feature. One general merge (`E100_S03`) reads
+every shipped fragment, and one validator (`E100_S02_T02`) checks each fragment before it ships. This section only defines
+the format; it declares and does not merge. The contract it is derived from is
+[`client-settings-requirements.md`](client-settings-requirements.md) (written "the contract" below; "section N" always means
+a section of the contract).
+
+### File name and location
+
+One fragment file per skill or hook, next to the feature it serves:
+
+| Feature | Path of its fragment |
+|---|---|
+| a skill | `skills/j-<name>/settings-fragment.json` |
+| a hook | `hooks/<hook-file-name>.fragment.json`, for example `hooks/on_recording_step.sh` is served by `hooks/on_recording_step.fragment.json` |
+
+The fragment is **shipped in the package**, like the feature it sits next to. This is required, not a convenience: the
+contract identifies a Jenga-owned entry as one equal to an entry declared in a fragment shipped with the installed package
+(section 2), so a fragment that is not shipped makes the entries it describes unidentifiable and therefore never removable.
+Edit the fragment in the root directory; the `.claude/` and `.agents/` copies are generated.
+
+### Format
+
+A fragment is one JSON object with these keys and no others:
+
+| Key | Required | Meaning |
+|---|---|---|
+| `id` | yes | Stable identifier of the fragment: lower-case letters, digits and `-`, starting with a letter or digit, unique across all shipped fragments (for example `workflow-recorder`). It is the value later recorded as `fragment` in the manifest (section 6), so renaming it makes the old entries look like they came from a dropped fragment. |
+| `version` | yes | Version of the fragment format, the integer `1`. A validator that does not know the value rejects the fragment. |
+| `hooks` | no | Object keyed by hook event name (`UserPromptSubmit`, `PreToolUse`, ...). Each value is a non-empty list of the same entry objects Claude Code uses: an optional `matcher` string and a `hooks` array of handler objects (`type`, `command`, `timeout`, ...). Handler fields are not interpreted here; they are copied as written. |
+| `permissions` | no | Object holding only `allow`: a list of rule objects `{"rule": "<rule string>", "optIn": true}`. |
+| `env` | no | Object mapping an environment variable name (`[A-Za-z_][A-Za-z0-9_]*`) to a **string** value. Numbers and booleans are written as strings (`"1"`). |
+
+At least one of `hooks`, `permissions`, `env` must be present, since a fragment that declares nothing is a mistake. The three
+blocks map one to one to the keys Jenga may write (section 1).
+
+### Opt-in is part of the format
+
+`permissions.allow` is the only key class that needs a user's yes (section 4). The format makes that impossible to forget:
+every allow rule is an object, and its `optIn` member must be the literal boolean `true`. A bare string in
+`permissions.allow`, an object without `optIn`, or `optIn` set to anything but `true` is invalid, so **no allow rule can be
+declared without being marked opt-in**. The marker only states that the merge must show the diff and obtain a yes before
+writing the rule; it is never a yes. It is not written to the client's file: what is written (and recorded and compared) is
+the rule string alone.
+
+### Keys a fragment cannot declare
+
+The fragment has no place for any of the following, and a fragment that contains one, at any depth the validator inspects,
+is rejected. The right-hand column names the contract section that forbids it.
+
+| Key (anywhere a settings key could appear) | Why it is out of contract | Contract section |
+|---|---|---|
+| `permissions.deny` | client or permission-level policy; takes effect immediately | section 1, "Keys Jenga never writes" |
+| `permissions.ask` | same | section 1, "Keys Jenga never writes" |
+| `defaultMode` and every other scalar setting (`theme`, `effortLevel`, `outputStyle`, ...) | scalars are the client's; on a scalar conflict the client wins | sections 1 and 3 |
+| `model`, `fallbackModel`, `modelPicker`, `availableModels`, `modelSettings` | model choice is never written | section 1, "Keys Jenga never writes" |
+| `enabledPlugins` and any other key not listed in the format table above | not named by the contract, so not written | section 1 (last paragraph of "Keys Jenga never writes") |
+| any other member of `permissions` besides `allow` | only `allow` is writable | section 1, "Keys Jenga may write" |
+
+### Normalisation and comparing entries
+
+A fragment entry and an entry in a settings file are compared after **JSON normalisation**: the value is parsed, every
+object's keys are sorted, whitespace is ignored, and the result is compared for exact equality. No other leniency applies
+(no case folding, no trimming inside strings, no reordering of arrays).
+
+| Key | What is normalised and compared |
+|---|---|
+| `hooks.<Event>[]` | the entry object (`matcher` plus its `hooks` array) |
+| `permissions.allow[]` | the rule string (the `rule` member, without the `optIn` wrapper) |
+| `env.<KEY>` | the key and its string value together |
+
+Equality of the normalised forms is exactly the contract's identification rule (section 2): an entry that differs at all is
+the client's, however similar it looks. The same normalised form is what the manifest records as `entry` and hashes into `id`
+(section 6).
+
+### `env` fragments must not declare secrets
+
+The manifest records every `env` value and the settings file is committed, so a secret declared in a fragment would be
+written into the client's repository. Section 6 leaves enforcing this to this story. The validator therefore rejects an `env`
+entry when either holds:
+
+1. **the name looks secret**: it contains, case-insensitively, `SECRET`, `TOKEN`, `PASSWORD`, `PASSWD`, `CREDENTIAL`,
+   `PRIVATE_KEY`, `API_KEY` or `APIKEY`;
+2. **the value looks secret**: it begins `sk-`, `ghp_`, `gho_`, `github_pat_`, `xoxb-`, `xoxp-` or `AKIA`, contains
+   `-----BEGIN`, or looks like a JWT (three base64url segments, the first starting `eyJ`).
+
+This is a heuristic backstop for the mistake of pasting a key, not a proof that a value is harmless. The author remains
+responsible: a feature that needs a secret documents where the user sets it (the task's `_INSTRUCTIONS.md`) and never
+declares it. A name that trips the rule for a legitimate reason cannot be exempted per fragment; rename the variable.
+
+### Validator contract (`E100_S02_T02`)
+
+The validator is `scripts/validate-settings-fragment.sh` (run bare, it validates every shipped fragment found under the package and exits 0 when there are none), written from this section alone. It takes one or more fragment paths and checks each fully (it does not stop
+at the first problem in a file or at the first bad file).
+
+- **Exit codes:** `0` every fragment is valid; `1` at least one fragment is invalid (a violation of this section);
+  `2` usage error (no path given), or a fragment that cannot be read or is not valid JSON, so it could not be judged.
+  When one run has both kinds of problem, the exit code is `1`.
+- **Message shape:** one line on stderr per problem, nothing else on stderr, in this exact form:
+
+  `settings-fragment: <fragment-path>: <key-path>: <reason>`
+
+  `<fragment-path>` is the path as given; `<key-path>` is a dotted path (`permissions.deny`, `hooks.PreToolUse[0].hooks`,
+  `env.GITHUB_TOKEN`, or `$` for the whole object); `<reason>` is a short phrase that names the contract section when a
+  contract rule is the cause, for example `not allowed in a fragment (contract section 1)`. Every rejection names both the
+  fragment and the key.
+- **Output on success:** one line on stdout per valid fragment, `ok: <fragment-path> (<id>)`. Nothing on stdout for an
+  invalid one.
+- **What it checks:** the key set and types in the format table, `id` shape and `version` value, that every allow rule has
+  `optIn: true`, that every `env` value is a string and every name well formed, the out-of-contract keys above, the secret
+  rules above, and that a fragment declares at least one block. Across fragments given in one run it also rejects a duplicate `id`.
+
+### Complete example
+
+This is the existing `j.workflow-recorder` requirement (the `UserPromptSubmit` hook that feeds the recorder), expressed as a
+fragment at `hooks/on_recording_step.fragment.json`. The `allow` and `env` blocks are shown so every block appears once; the
+recorder itself declares only the hook, and `Bash(jq:*)` and `JENGA_X` are illustrative values, not requirements.
+
+```json
+{
+  "id": "workflow-recorder",
+  "version": 1,
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "for H in \"${CLAUDE_PROJECT_DIR:-.}/hooks/on_recording_step.sh\" \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/on_recording_step.sh\" \"${CLAUDE_PROJECT_DIR:-.}/node_modules/@jenga-ai/agent/hooks/on_recording_step.sh\"; do [ -x \"$H\" ] && exec \"$H\"; done; exit 0\n"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      { "rule": "Bash(jq:*)", "optIn": true }
+    ]
+  },
+  "env": {
+    "JENGA_X": "1"
+  }
+}
+```
+
+Merged into a client's `.claude/settings.json`, the hook entry is added next to the client's own, the rule is offered as a
+diff and written only on a yes, and `JENGA_X` is added as one key without touching the rest of `env` (sections 3 to 5).
+
+## Settings doctor (`E100_S05`)
+
+`scripts/settings-doctor.sh` answers one question for a project: is each requirement a shipped fragment declares actually
+in effect? It reads every shipped fragment (`skills/j-*/settings-fragment.json`, `hooks/*.fragment.json`) and compares each
+requirement (a hook entry, an allow rule, an env key) with the configuration Claude Code reads. It finds the package
+through `skills/index/scripts/package-root.sh`, so it runs the same from this repository and from
+`node_modules/@jenga-ai/agent/scripts/`. It is read-only: it writes no settings file and nothing else.
+
+```
+settings-doctor.sh [--fragment <id>] [--skill <j-name>] [--quiet] [--json] [--project-dir <dir>] [--home <dir>]
+```
+
+- **Layers read:** `<project>/.claude/settings.json`, `<project>/.claude/settings.local.json`,
+  `<home>/.claude/settings.json`; `<project>` and `<home>` resolve as in `check-recorder-hook.sh`
+  (`--project-dir`, `--home`, else `$CLAUDE_PROJECT_DIR`, the git top level, the current directory, and `$HOME`). A
+  requirement present only in `.agents/settings.json` or the repository-root `settings.json` is **inactive**, since Claude
+  Code does not read them in a consumer. Managed settings cannot be read and are reported on stderr as "not readable",
+  never as inactive. A layer that is missing, unreadable or not valid JSON provides nothing and never aborts the run.
+- **What counts as active:** a hook when an entry under the same event has a handler command equal to the fragment's, or
+  one containing the fragment's hook file name (`on_recording_step.sh` for the recorder, as the recorder check does); an
+  allow rule when its rule string is in `permissions.allow`; an env key when it has the declared value.
+- **Output:** one line per requirement, `<fragment-id>: <requirement>: active (<layer file>)` or
+  `<fragment-id>: <requirement>: inactive`. An inactive line is followed by the one-line fix (`npx jenga sync`; for an allow
+  rule it adds that the rule is opt-in) and, for a hook, the note to restart Claude Code, since hooks are read at session
+  start. `--quiet` prints only inactive requirements. `--json` prints one object per requirement (`fragment`, `owner`,
+  `kind`, `requirement`, `status`, `layer`, `fix`, `restart`). `--fragment <id>` and `--skill <j-name>` restrict the check
+  (the owning skill is derived from the fragment path; a hook fragment is owned by its file name).
+- **Exit codes:** `0` every requirement active (or none declared); `1` at least one inactive, or a fragment could not be
+  read; `2` usage error, unknown fragment id or skill, or `jq` missing. `--help` exits 0 and writes nothing.
+
+### Wiring the settings preflight into a skill (`E100_S05_T05`)
+
+A skill that ships a settings fragment (a hook, an allow rule or an env key it needs) can tell the user, once per session, that
+a requirement is inactive. Add one line to the skill's first step; the first skill wired is `j.workflow-recorder` (step 0 of
+`start`):
+
+```bash
+bash "$([ -f scripts/settings-doctor-once.sh ] && echo scripts/settings-doctor-once.sh || echo node_modules/@jenga-ai/agent/scripts/settings-doctor-once.sh)" j-<skill>
+```
+
+- **It prints the notice of that skill's own fragment only** (the doctor's `--skill j-<skill> --quiet`), the requirement and its
+  fix, and is silent when everything is active or the skill declares no fragment.
+- **Once:** after printing it writes a marker in `${TMPDIR:-/tmp}`, keyed by `CLAUDE_SESSION_ID` (else the parent pid), the
+  skill and the requirement, so later calls in the session print nothing. The marker is its only write.
+- **It always exits 0** and never blocks: a missing doctor, a missing `jq` or an unparseable settings file ends silent. A skill
+  that cannot work without its setting keeps its own blocking guard after this line (the recorder's `check-recorder-hook.sh`).
+- `--help` exits 0; it takes optional `--project-dir` and `--home` like the doctor.

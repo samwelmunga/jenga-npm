@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the secret-looking-file skip in skills/j-uncharted/scripts/detect-dependencies.sh,
 # detect-tests.sh and inspect-provenance.sh (E85_S04_T07). The shared name list lives in secret-files.sh

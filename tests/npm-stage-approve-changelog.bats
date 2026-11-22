@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Regression coverage for skills/j-publish/scripts/npm_stage_inspect.sh's
 # cmd_approve changelog wiring (E22_S09_T08).

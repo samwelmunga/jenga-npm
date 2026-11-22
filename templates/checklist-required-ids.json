@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "description": "Checklist item ids that shipped scripts hard-require in the effective registry. Read by scripts/checklist-required-check.sh (jenga doctor) and by the sync-time merge (E99_S04_T05). tests/checklist-required-check.bats fails when this list and the scripts disagree. See project/documentation/preflight-checklists.md, 'Required checklist ids'.",
+  "required": [
+    {
+      "id": "checkin-run-before-dispatch",
+      "required_by": "scripts/foreground-preflight.sh"
+    },
+    {
+      "id": "dispatch-cost-and-cadence",
+      "required_by": "scripts/foreground-preflight.sh"
+    }
+  ]
+}

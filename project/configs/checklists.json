@@ -182,6 +182,17 @@
       "provenance": {
         "source": "authored"
       }
+    },
+    {
+      "id": "no-tester-verifying-merge-target",
+      "text": "No Tester still holds a tester concurrency slot for work about to be merged, so a terminal board status is not mistaken for finished verification. Confirm level on purpose: a wrongly held stale slot must not be able to wedge all merging.",
+      "situations": [
+        "pre-reconcile"
+      ],
+      "kind": "machine",
+      "verify": "bash \"$([ -f scripts/verification-running.sh ] && echo scripts/verification-running.sh || echo node_modules/@jenga-ai/agent/scripts/verification-running.sh)\" --quiet",
+      "enforcement": "confirm",
+      "tick_scope": "run"
     }
   ]
 }

@@ -102,7 +102,9 @@
 # `bats tests/*.bats` takes over an hour, so, deterministically: when every mapped
 # discovery suite landing on an entry has ecosystem `bats` and a command starting
 # `bats `, the entry's command becomes `bats '<f1>' '<f2>' ...` over the union of
-# mapped test files; likewise ecosystem `pytest` / command `pytest ` gives
+# mapped test files (`bats --filter-tags !tier:manual '<f1>' ...` when every one of
+# those suites carries that filter, as discover-tests.sh's bats command does since
+# E95_S02_T04, so a manual test never runs in this gate); likewise ecosystem `pytest` / command `pytest ` gives
 # `pytest '<f1>' ...`. Every other ecosystem (npm, go, cargo, shellcheck, and any
 # mixed group) runs the entry WHOLE, as its own command (an npm script is opaque, so
 # over-selecting is the safe direction): `narrowed` is false and `tests` still lists
@@ -436,7 +438,12 @@ $cat[0] as $c | $map[0] as $m | $disc[0] as $d
            | ([ $gids[] as $i | ($mt[$i] // [])[] ] | unique) as $tests
            | ( if ($tests | length) == 0 then null
                elif ($gids | all(. as $i | ($dsu[$i] // {eco: "", command: ""}) as $s
-                                 | $s.eco == "bats" and ($s.command | startswith("bats ")))) then "bats"
+                                 | $s.eco == "bats" and ($s.command | startswith("bats "))))
+                 # E95_S02_T04: keep the manual-test filter when every mapped bats
+                 # suite carries it, so a scoped gate never runs a tier:manual file.
+                 then (if ($gids | all(. as $i | ($dsu[$i].command // "")
+                                       | test("\\s--filter-tags\\s+!tier:manual(\\s|$)")))
+                       then "bats --filter-tags !tier:manual" else "bats" end)
                elif ($gids | all(. as $i | ($dsu[$i] // {eco: "", command: ""}) as $s
                                  | $s.eco == "pytest" and ($s.command | startswith("pytest ")))) then "pytest"
                else null end ) as $tool

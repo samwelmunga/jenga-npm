@@ -107,6 +107,23 @@
 
 set -o errexit
 
+# --help / -h: print usage on stdout and exit 0 before anything is parsed, read or written (E99_S01_T02).
+case "${1:-}" in
+  --help|-h)
+    cat <<'USAGE'
+collect-liveness.sh - the deterministic half of /j-check-in
+
+Usage: collect-liveness.sh [--no-agents]    (ListAgents output on stdin unless --no-agents)
+       collect-liveness.sh --help | -h
+
+Gathers liveness evidence from on-disk sources plus the piped ListAgents input and prints
+one JSON object with findings. Exits 0 always unless the script itself fails (a deliberate
+divergence from check-worktree-liveness.sh). Read-only evidence collection.
+USAGE
+    exit 0
+    ;;
+esac
+
 # ============================================================================
 # CONFIGURATION & CONSTANTS
 # ============================================================================

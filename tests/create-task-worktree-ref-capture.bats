@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the commit ref capture in scripts/create-task-worktree.sh (E79_S04_T09).
 #

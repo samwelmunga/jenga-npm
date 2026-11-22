@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # Regression coverage for E42_S09_T01: skills/j-continue/SKILL.md's stale
 # project/epics//project/stories/ path references.

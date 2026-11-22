@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # End-to-end proof that dependency audits never run silently (E85_S01_T13, the story's Definition of Done).
 #

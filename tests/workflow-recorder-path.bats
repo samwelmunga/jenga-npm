@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # skills/j-workflow-recorder/scripts/recording-path.sh — slug derivation, the whole-filename limit,
 # collision handling and destination resolution (E89, task E89_S01_T01).

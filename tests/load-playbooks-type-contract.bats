@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Fixture-based coverage for load-playbooks.sh's TWO load-time type-contract checks (E62_S01_T04):
 #

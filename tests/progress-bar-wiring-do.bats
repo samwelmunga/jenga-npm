@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for E92_S02_T05: /j-do shows the progress bar after finished tasks and honours the caller-supplied
 # `progress_owner` sender field.

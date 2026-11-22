@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E79_S04_T04: scripts/read-external-refs.sh prints the validated Jira key of each matching `external_refs` entry of
 # one epic, story or task, one per line in file order, and is strictly read-only. It is the reader that the writer

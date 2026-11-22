@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for the dashboard Security view's data path (E85_S03_T07): the GET /v1/security payload
 # (project/app/api/parsers/security.js behind routes/security.js) as the snapshot capture

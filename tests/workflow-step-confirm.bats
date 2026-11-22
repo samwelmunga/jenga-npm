@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E80_S03_T06: scripts/workflow/step-confirm.sh - the executor for a workflow `confirm` step. `start` renders the
 # question and persists a pending gate in the run state, `reply` consumes the user's answer, `status` reads the gate.

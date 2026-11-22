@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # Fixture-based coverage for run-playbook-step.sh's composed/nested-step handling (E53_S05_T04):
 # the optional 5th <json-origins> `init` argument, and the explicit AC requirement that a failure

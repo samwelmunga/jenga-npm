@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # run-config.sh: the install-and-rerun entry point for `/jenga-config` (E68_S04_T01).
 #

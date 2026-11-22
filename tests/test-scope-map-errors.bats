@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Failure, degradation and stability coverage for skills/j-test/scripts/map-scope.sh (E72_S03_T04).
 #

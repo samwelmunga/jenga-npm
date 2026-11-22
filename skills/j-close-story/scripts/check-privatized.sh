@@ -110,6 +110,10 @@ semantics.
 EOF
 }
 
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+esac
+
 if [ $# -ne 2 ]; then
   usage >&2
   die "expected exactly 2 arguments, got $#"

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Fixture-based coverage for scripts/validate-typed-object.sh (E62_S01_T02) — the deterministic
 # (type, value) -> conforming / normalized / non-conforming validator that E62_S01_T04 calls at

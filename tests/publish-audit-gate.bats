@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E85_S01_T07: the dependency audit is a pre-phase gate of skills/j-publish/scripts/run_gates.sh for npm and
 # npm-ci targets. Every case runs against a throwaway project under BATS_TEST_TMPDIR with a stubbed npm on

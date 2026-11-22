@@ -68,6 +68,12 @@ project/documentation/presentations/
 # --- Unposted draft reply for the maintainer to post by hand on the public issue ---
 project/documentation/credential-access-issue-reply-draft.md
 
+# --- Codebase-alignment manual written from a live client-project session (2026-11-17) ---
+# Names a client project's repos, ticket ids and internal types (NXT-232, nxt-appointment, ...),
+# and links guardrail tooling that does not exist in this repo. Kept private until it is
+# generalised; no test exercises it, so the test-subject invariant above does not apply.
+project/documentation/codebase-alignment.md
+
 # --- Project-local playbooks (E28_S14_T01, user decision 2026-09-17) ---
 # `project/.playbooks/` is per-project by definition — `load-playbooks.sh` scans it as the PROJECT
 # source alongside the framework-owned `skills/jenga/playbooks/` BUILTIN source (E53_S09_T01).
@@ -202,6 +208,16 @@ skills/self-sync/
 skills/j-self-sync/
 .claude/skills/j-self-sync/
 .agents/skills/j-self-sync/
+# E99_S01_T18 (user decision 2026-11-19): j-smoke-test stops shipping. It is a maintainer tool for this monorepo's own skill catalogue
+# and its execution phase runs against the mirror layout; consumers receive Jenga through npm and have no use for it. Three naming
+# forms, like every fully private skill, plus its only asset: templates/CRITICAL_ERROR_TABLE_TEMPLATE.md is read only by
+# skills/j-smoke-test/scripts/render-error-table.sh and tests/smoke-test-error-table.bats. The CLAUDE.md row stays (E99_S01_T15).
+skills/j-smoke-test/
+.claude/skills/j-smoke-test/
+.agents/skills/j-smoke-test/
+templates/CRITICAL_ERROR_TABLE_TEMPLATE.md
+.claude/templates/CRITICAL_ERROR_TABLE_TEMPLATE.md
+.agents/templates/CRITICAL_ERROR_TABLE_TEMPLATE.md
 skills/train/
 .claude/skills/train/
 .agents/skills/train/
@@ -226,6 +242,13 @@ skills/dev-done/
 skills/j-dev-done/
 .claude/skills/j-dev-done/
 .agents/skills/j-dev-done/
+# E99_S01_T11 / E99_S01_T13 (user decision 2026-11-18): j-distribute stops shipping. Consumers receive Jenga through npm and the
+# skill needs monorepo files a consumer does not have (distribute-changes.sh exits 2 without a monorepo-root distribute.config.json,
+# check-version.sh resolves its root to skills/, commit-version-bump.sh would commit the consumer's own package.json). These three
+# lines cover the canonical j- name only; the stale skills/distribute/ lines below guard the old pre-E50 name and stay.
+skills/j-distribute/
+.claude/skills/j-distribute/
+.agents/skills/j-distribute/
 
 # --- Canonical duplicates of j-<name>-twinned skills (E28_S09) ---
 # Every skill below has a functional `skills/j-<name>/` twin (E50_S05). Only the
@@ -437,6 +460,30 @@ project/documentation/nested-suite-run-reachability.md
 # entries directly above. Caught by check_test_subject_invariant (E28_S16) on the 2026-09-28 run,
 # before it ever reached the mirror -- which is precisely what that gate exists to do.
 tests/train-cli-root-climb.bats
+# E99_S01_T13: skills/j-distribute/ is fully private (blocklisted above, all three naming forms), and these tests exercise its scripts,
+# so they follow their private subject rather than outliving it in the mirror.
+# tests/distribute-changes-root-climb.bats: runs skills/j-distribute/scripts/distribute-changes.sh from its real location and from a
+# .claude/ mirror copy; the script is absent in the mirror, so every case fails there. No publicly-meaningful subset.
+tests/distribute-changes-root-climb.bats
+# tests/commit-version-bump-root-climb.bats: same reasoning for skills/j-distribute/scripts/commit-version-bump.sh.
+tests/commit-version-bump-root-climb.bats
+# tests/ensure-dashboard-port-distribute.bats: the j.distribute call-site half of the former tests/ensure-dashboard-port.bats, split
+# out because those cases copy and run skills/j-distribute/scripts/distribute-changes.sh. The j-init and wrapper half stays in
+# tests/ensure-dashboard-port.bats and ships.
+tests/ensure-dashboard-port-distribute.bats
+# E99_S01_T18: skills/j-smoke-test/ is fully private (blocklisted above, all three naming forms), and these tests exercise it, so they
+# follow their private subject rather than outliving it in the mirror.
+# tests/smoke-test-skills.bats: runs skills/j-smoke-test/scripts/smoke-test-skills.sh and reads its SKILL.md, absent in the mirror.
+tests/smoke-test-skills.bats
+# tests/smoke-test-mirror-layout.bats: the mirror-mode execution phase of the same harness.
+tests/smoke-test-mirror-layout.bats
+# tests/smoke-test-sandbox.bats: the sandbox of that execution phase (E99_S01_T07); drives skills/j-smoke-test/scripts/smoke-test-skills.sh.
+tests/smoke-test-sandbox.bats
+# tests/smoke-test-error-table.bats: skills/j-smoke-test/scripts/render-error-table.sh and templates/CRITICAL_ERROR_TABLE_TEMPLATE.md.
+tests/smoke-test-error-table.bats
+# tests/st-test-run-smoke-step.bats: copies skills/j-smoke-test/ into a fake package and runs step 7 of st-test-run.sh against it.
+tests/st-test-run-smoke-step.bats
+# tests/smoke-test-root-climb.bats is NOT listed: it tests skills/index/scripts/smoke_test.sh, a different script that ships.
 # tests/checklist-gating.bats: its wiring checks read skills/j-mirror-public/SKILL.md (the fully-private
 # mirror skill, blocklisted above in both naming forms), and the gated-skill list and the release-skill
 # ordering check both name j-mirror-public. In the mirror that SKILL.md does not exist, so test 8 fails
@@ -503,9 +550,10 @@ tests/load-playbooks-composition.bats
 # (tests/fixtures/task-usage/) are no longer blocklisted, so a consumer can measure per-task token usage.
 # The silent no-op when task-usage.sh is absent (E76 epic decision 6, in the looping skills and the
 # dashboard) stays as a harmless guard; it no longer depends on this blocklist.
-# The cost-weighted follow-up (a separate epic) is PRIVATE scope: its new files must be added to this
-# blocklist when they are created, and its edits to files that ship (task-usage.sh, the dashboard) must be
-# optional, loading a private file only when it is present, so the shipped scripts degrade silently without it.
+# The cost-weighted follow-up (epic E90) was first filed as PRIVATE scope (2026-11-07). Epic decision 6
+# (2026-11-16) made it public: nothing of E90 is blocklisted (no price-ratio config, derived-view module, tests or
+# fixtures), and its edits to files that ship (task-usage.sh, the dashboard) load its files directly, with no
+# optional-load rule.
 
 # --- Scratch worktree used by /mirror-public itself ---
 .mirror-worktrees/
@@ -586,4 +634,6 @@ tests/project-scope-map.bats
 # package tree) and tests/package-root.bats, which ships, uses it for the 5.0.1 regression.
 # Before changing this decision, re-run scripts/check-publicignore-match.sh on both script paths.
 scripts/consumer-smoke-after-sync.sh
+# E100_S06_T02: scripts/consumer-old-client-fixture.sh is the old-client fixture of that smoke test; it follows its caller.
+scripts/consumer-old-client-fixture.sh
 tests/consumer-smoke-after-sync.bats

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # skills/j-workflow-recorder/scripts/close-recording.sh — the sealing layer (E89, E89_S03_T03).
 #

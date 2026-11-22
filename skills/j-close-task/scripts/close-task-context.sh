@@ -31,6 +31,24 @@
 # ---------------------------------------------------------------------------
 set -u
 
+# --help / -h: print usage on stdout and exit 0 before anything is parsed, read or written (E99_S01_T02).
+case "${1:-}" in
+  --help|-h)
+    cat <<'USAGE'
+close-task-context.sh - the deterministic half of /j-close-task
+
+Usage: close-task-context.sh context <task_id> [--session <id>]
+       close-task-context.sh report  <task_id>
+       close-task-context.sh --help | -h
+
+context prints the board files, status class, commits and Tester sender object as JSON;
+report re-reads the board after the Tester and rollup and prints the outcome as JSON.
+Neither mode writes anything. Exit 0 ok, 1 a board file or helper is missing, 2 usage.
+USAGE
+    exit 0
+    ;;
+esac
+
 die() { printf 'close-task-context.sh: %s\n' "$1" >&2; exit "${2:-1}"; }
 
 [ "$#" -ge 2 ] || die "usage: close-task-context.sh context|report <task_id> [--session <id>]" 2

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E80_S03_T01: scripts/workflow/step-state.sh - step-level read and write primitives over the E80_S02 run state
 # file (get, current-step, set-step, set-output, get-output, set-run-status, set-gate, get-gate, clear-gate,

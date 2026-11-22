@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 # tests/pages-permalinks.bats  (E70_S03_T05)
 #
 # Covers scripts/verify-pages-permalinks.sh with a stub curl that returns 200 for

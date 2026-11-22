@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for scripts/generate-convention-checklist.sh and templates/conventions-checklist-map.json (E69_S03_T05).
 #

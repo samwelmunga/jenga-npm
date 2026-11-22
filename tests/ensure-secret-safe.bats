@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for skills/j-connect/scripts/ensure-secret-safe.sh (E65_S01_T03).
 #

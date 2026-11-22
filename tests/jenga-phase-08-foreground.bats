@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for E67_S11_T03: /jenga Phase 0.8 (foreground check-in and cost/cadence prompt), the shared prompt
 # asset, and the threading of the run id as the sender object's checklist_run_id.

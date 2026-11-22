@@ -57,12 +57,65 @@
 #    `relevance` annotation), else its recorded text. Both verbatim.
 # 5. Step ids: the recording's `step-003` becomes `step_003`, which satisfies the schema's underscore rule and is
 #    unique because the recording's ids are.
+# 6. PARAMETERS (E103_S02_T04). An included step's `parameters: confirmed` annotation (record-answer.sh's fifth
+#    kind, written by j.workflow-capture's review) declares run inputs; see PARAMETERS below. A recording without
+#    one - every live recording - takes none of this path, and its definition is byte-identical to before.
 #
 # THE DOCUMENT: id = the recording's file name minus _RECORDING.md (it must match the schema's id_pattern, which is
 # read from templates/workflow-schema.json, not restated); name = the recording's "# Recording:" heading;
 # description = a one-line statement of where the definition came from; source_recording = the recording's file
-# name; steps. Key order is fixed and nothing time-dependent is written, so EMITTING TWICE FROM THE SAME
-# FULLY-ANNOTATED RECORDING PRODUCES BYTE-IDENTICAL JSON.
+# name; provenance = {source, source_ref} from the recording's frontmatter (E103_S01_T01; see below); steps. Key
+# order is fixed and nothing time-dependent is written, so EMITTING TWICE FROM THE SAME FULLY-ANNOTATED RECORDING
+# PRODUCES BYTE-IDENTICAL JSON.
+#
+# PROVENANCE. `provenance.source` is the recording's `source` (live, session-transcript, external-url, pasted; a
+# recording without the key predates it and is `live`), and `provenance.source_ref` its `source_ref`, present only
+# when the recording has one. So the source_recording chain still says where the process itself came from, not just
+# which recording it was emitted from. Like source_recording the key is additive and ignored by the validator. A
+# recording whose `source` is outside the closed set, or whose source_ref could carry a credential (only reachable
+# by hand-editing the frontmatter), is refused with exit 5 rather than copied into a committed definition. The
+# contract is recording-format.sh's PROVENANCE section.
+#
+# ---------------------------------------------------------------------------
+# PARAMETERS - CONFIRMED VALUES BECOME `inputs` (E103_S02_T04)
+# ---------------------------------------------------------------------------
+# The body of a `parameters: confirmed` annotation is one `<name>=<literal>` or bare `<name>` per line
+# (record-answer.sh's contract). Annotations on excluded steps are ignored. For the included steps:
+#   - every name becomes one entry of the definition's `inputs`, in order of first appearance, as
+#     {name, description}. NO `default` is written: a literal is a project-specific value (the point is to run the
+#     definition in another project, and a committed definition carries nothing machine-specific) and a bare name
+#     is a credential, which is never stored. The run asks for every input (run-state.sh start --input k=v).
+#   - `<name>=<literal>`: EVERY occurrence of the literal in every included step's string values except id, type,
+#     skill and playbook (E80's substitutable fields, plus description) becomes `${inputs.<name>}`. Longer literals
+#     win over the literals they contain, in one pass, so a replacement is never rescanned. The type's required
+#     fields are derived from the original text first (HOW A STEP BECOMES... 3), and substituted after.
+#   - bare `<name>`: the k-th bare name of a step replaces the k-th redaction marker (`<redacted>`, `<redacted
+#     private key>`, written by j.workflow-capture's extractor) in that step's text; markers beyond the names stay.
+#     A bare name with no marker left to replace is still declared (a credential the step needs, such as a login
+#     token the text only describes) and substitutes nothing; that is valid, never refused.
+#   - refused, exit 12, nothing emitted: one name for two different literals, a name that is a literal in one step
+#     and bare in another, one literal under two names, a literal holding a control character, or a LITERAL that
+#     replaces nothing (it occurs in no included step's strings, almost always a typo).
+# The emitted definition must still pass validate-workflow.sh, which checks every `${inputs.<name>}` against
+# `inputs`. The literal itself is never written to the definition.
+#
+# ---------------------------------------------------------------------------
+# WRAPPERS - A CONFIRMED WRAPPER SCRIPT BECOMES A CONFIRM STEP PLUS A COMPUTE STEP (E103_S04_T02)
+# ---------------------------------------------------------------------------
+# A captured command such as `npm install x` cannot fill a compute step (HOW A STEP BECOMES... 3). j.workflow-capture's
+# generate-wrapper.sh writes it into a reviewed wrapper script and records the user's confirmation on the step as
+# record-answer.sh's `wrapper: confirmed` annotation (body: path=, sha256=, args=, optional timeout_seconds=). An
+# included step judged compute that carries one is emitted as TWO steps, in this order:
+#   <step_id>_confirm  confirm   prompt = "Run <step_id>, the generated script <path>: <text>", options Yes/No
+#   <step_id>          compute   command = the recorded path; args = ${inputs.<name>} for each recorded arg name,
+#                                in order (omitted when there are none); timeout_seconds when recorded
+# so a confirm step stands directly before every generated compute step. Both take the step's description, and
+# PARAMETERS applies to them like any step, except the compute step's `command`, which is the recorded path verbatim.
+# The wrapper is verified first, and a step that fails is exit 10 naming it (nothing invented, nothing emitted): the
+# path must be <workflows>/scripts/<id>/<step_id>.sh relative to the anchor, an executable regular file (not a
+# symlink) whose sha256 is the recorded one (the content the user confirmed), and it must resolve through
+# scripts/workflow/resolve-compute-command.sh with exit 0. `wrapper: declined`, or a step without the annotation (every
+# live recording), takes none of this path.
 #
 # ---------------------------------------------------------------------------
 # VALIDATION - THE EXISTING VALIDATOR, ONE CANDIDATE, NOTHING LEFT BEHIND
@@ -97,8 +150,9 @@
 #   4   the recording is not closed (frontmatter status is not `closed`). Emission runs against a sealed
 #       recording so the definition cannot disagree with its own source. Nothing written.
 #   5   the recording cannot be emitted from as it stands: ambiguous markers (recording-format.sh's rec_check), no
-#       steps section, a file name that is not <slug>_RECORDING.md, or a slug that does not match the schema's
-#       id_pattern. Nothing written.
+#       steps section, a file name that is not <slug>_RECORDING.md, a slug that does not match the schema's
+#       id_pattern, or a `source` outside the closed set / a `source_ref` that could carry a credential. Nothing
+#       written.
 #   6   the environment is incomplete: jq, a sibling script, the validator, the schema, or the workflows
 #       directory could not be found or resolved. Nothing written.
 #   7   a write was refused or failed: the destination belongs to another definition, or a temp file, mv or the
@@ -109,6 +163,8 @@
 #       same call are already persisted. Nothing is emitted; re-run with --answer for the rest.
 #   10  an included step has a judged type that cannot be filled from its text (see HOW A STEP BECOMES...). stderr
 #       names each step. Nothing is emitted.
+#   12  a confirmed parameter cannot be applied (see PARAMETERS). stderr names each problem. Nothing is emitted.
+#       (11 is deliberately unused: write-capture.sh passes this script's codes through and uses 11 itself.)
 #
 # ENVIRONMENT
 #   JENGA_RECORDER_NOW   is honoured by record-answer.sh (the stamp on a written annotation); this script writes no
@@ -131,6 +187,7 @@ SHARED_DIR="$PACKAGE_ROOT/scripts"
 RESOLVE_ROOT="$SHARED_DIR/resolve-root.sh"
 VALIDATOR="$SHARED_DIR/workflow/validate-workflow.sh"
 WORKFLOW_LIB="$SHARED_DIR/workflow/lib.sh"
+RESOLVE_COMPUTE="$SHARED_DIR/workflow/resolve-compute-command.sh"
 ANSWER_SCRIPT="$SCRIPT_DIR/record-answer.sh"
 FORMAT_LIB="$SCRIPT_DIR/recording-format.sh"
 
@@ -234,6 +291,18 @@ case "$BASE" in
 esac
 printf '%s\n' "$WF_ID" | grep -Eq "$ID_PATTERN" || \
   die 5 "the id \"$WF_ID\" derived from $BASE does not match the schema's id_pattern $ID_PATTERN"
+
+# Provenance (E103_S01_T01): where the recorded process came from, read from the recording's frontmatter. A
+# recording without a `source` key predates the field and reads as `live`. An unknown value, or a source_ref that
+# could carry a credential (a hand edit), is refused here, before any --answer is persisted, rather than copied
+# into a committed definition.
+PROV_SOURCE="$(rec_source "$REC")"
+PROV_REF="$(rec_source_ref "$REC")"
+rec_is_source_value "$PROV_SOURCE" || \
+  die 5 "$BASE declares source \"$PROV_SOURCE\", which is not one of: $REC_SOURCE_VALUES; nothing was written"
+if why="$(rec_source_ref_problem "$PROV_REF")"; then
+  die 5 "$BASE carries a source_ref that must not be copied into a definition because $why; nothing was written"
+fi
 
 DEST_DIR="$(bash "$RESOLVE_ROOT" get workflows 2>/dev/null)" && [ -n "$DEST_DIR" ] || \
   die 6 "could not resolve the workflows directory with resolve-root.sh get workflows; nothing was written"
@@ -363,6 +432,139 @@ if [ -n "$MISSING" ]; then
   exit 9
 fi
 
+# ---- parameters (E103_S02_T04): confirmed values on included steps become inputs -----------------------------------
+PARAMS_JSONL=""
+while IFS= read -r sid; do
+  [ -n "$sid" ] || continue
+  ann_value "$sid" parameters && [ "$ANN" = "confirmed" ] || continue
+  ann_text "$sid" parameters || continue
+  pbody="$ANN"
+  # The machine body ends at the first blank line: record-answer.sh writes a --note after one (record-review.sh
+  # decide params ... --note, scan-secrets.sh clear), and that prose is never a parameter line (E103_S03_T02).
+  while IFS= read -r pl; do
+    [ -n "$pl" ] || break
+    case "$pl" in
+      *=*) pj="$(jq -cn --arg s "$sid" --arg n "${pl%%=*}" --arg l "${pl#*=}" '{sid: $s, name: $n, lit: $l}')" ;;
+      *)   pj="$(jq -cn --arg s "$sid" --arg n "$pl" '{sid: $s, name: $n, lit: null}')" ;;
+    esac
+    PARAMS_JSONL="${PARAMS_JSONL}${pj}
+"
+  done <<EOF
+$pbody
+EOF
+done <<EOF
+$INC_IDS
+EOF
+
+PLAN='{"problems":[],"lits":[],"bares":{},"inputs":[]}'
+if [ -n "$PARAMS_JSONL" ]; then
+  PLAN="$(printf '%s' "$PARAMS_JSONL" | jq -cs '
+    . as $all
+    | ([$all[] | .name] | unique) as $names
+    | {
+        problems: (
+          [ $names[] as $n | [$all[] | select(.name == $n)] as $g
+            | ([$g[] | .lit] | unique) as $ls
+            | if ($ls | index(null)) != null and ($ls | length) > 1 then "the parameter \($n) has no value (a credential) in one step and a value in another"
+              elif ($ls | length) > 1 then "the parameter \($n) stands for different values: \($ls | map(tojson) | join(", "))"
+              else empty end ]
+          + [ [$all[] | select(.lit != null)] | group_by(.lit)[] | ([.[] | .name] | unique) as $ns
+              | select(($ns | length) > 1) | "the value \(.[0].lit | tojson) is confirmed under more than one name: \($ns | join(", "))" ]
+          + [ $all[] | select(.lit != null and (.lit | test("[\u0000-\u0008\u000e-\u001f]"))) | "the parameter \(.name) has a value with a control character" ] ),
+        lits: ([$all[] | select(.lit != null) | {lit, name}] | unique_by(.lit) | sort_by([-(.lit | length), .lit])),
+        bares: (reduce ($all[] | select(.lit == null)) as $p ({}; .[$p.sid] += [$p.name])),
+        inputs: (reduce $all[] as $p ([]; if any(.[]; .name == $p.name) then . else . + [{name: $p.name, bare: ($p.lit == null), sid: $p.sid}] end)
+                 | map({name,
+                        description: (if .bare then "A value that was not recorded: it looked like a credential (or was redacted) and is never stored. Supply it when the workflow is run."
+                                      else "A project-specific value, first seen in \(.sid | gsub("-"; "_")). Supply this project\u0027s value when the workflow is run." end)}))
+      }')" || die 7 "could not read the confirmed parameters with jq; nothing was emitted"
+  pproblems="$(printf '%s' "$PLAN" | jq -r '.problems[]')"
+  if [ -n "$pproblems" ]; then
+    {
+      printf '%s: nothing was emitted; the confirmed parameters cannot be applied:\n' "$SELF"
+      printf '%s\n' "$pproblems" | sed 's/^/  /'
+      printf '%s: correct them with record-answer.sh <path> <step-id> parameters - --replace, then re-run.\n' "$SELF"
+    } >&2
+    exit 12
+  fi
+fi
+
+# sentinel_markers: replaces the k-th redaction marker of the text on stdin with \001R<k x \003>\001 (\001P...
+# for a private-key marker), so a bare-name parameter can replace exactly that marker after the step's fields are
+# derived. Only used for a step that has bare-name parameters.
+sentinel_markers() {
+  awk 'BEGIN { s = "\001"; c = "\003" }
+  { line = $0; out = ""
+    while (match(line, /<redacted( private key)?>/)) {
+      k++; m = substr(line, RSTART, RLENGTH); t = (m == "<redacted>") ? "R" : "P"
+      r = s t; for (i = 0; i < k; i++) r = r c; r = r s
+      out = out substr(line, 1, RSTART - 1) r; line = substr(line, RSTART + RLENGTH)
+    }
+    print out line }'
+}
+
+# apply_params <step-json>: PARAMETERS' substitution on one step object (uses PLAN and STEP_BARES).
+apply_params() {
+  printf '%s\n' "$1" | jq -c --argjson plan "$PLAN" --argjson bares "$STEP_BARES" '
+      $plan.lits as $lits
+      | def subst:
+          reduce range(0; $lits | length) as $i (.; split($lits[$i].lit) | join("\u0002" + ("\u0004" * ($i + 1)) + "\u0002"))
+          | gsub("\u0001(?<k>[RP])(?<c>\u0003+)\u0001"; (.c | length) as $j
+              | if $j <= ($bares | length) then "${inputs." + $bares[$j - 1] + "}"
+                elif .k == "P" then "<redacted private key>" else "<redacted>" end)
+          | gsub("\u0002(?<c>\u0004+)\u0002"; "${inputs." + $lits[(.c | length) - 1].name + "}");
+        with_entries(if (.key | IN("id", "type", "skill", "playbook")) then . else .value |= walk(if type == "string" then subst else . end) end)'
+}
+
+# wrapper_steps <step-id> <wf-step-id> <text> <desc>: WRAPPERS (see the header). Sets obj (the confirm step),
+# WRAP_OBJ (the compute step's id, type and description: the only fields PARAMETERS may touch), WRAP_CMD, WRAP_ARGS
+# and WRAP_TIMEOUT, or appends to UNFILLED.
+WRAP_OBJ=""; WRAP_CMD=""; WRAP_ARGS=""; WRAP_TIMEOUT=""; WRAP_ANCHOR=""; WRAP_REL=""
+wrapper_steps() {
+  local sid="$1" wid="$2" text="$3" desc="$4" body wpath wsha wargs wtimeout expected abs actual rerr
+  if [ -z "$WRAP_ANCHOR" ]; then
+    WRAP_ANCHOR="$(bash "$RESOLVE_ROOT" root 2>/dev/null)" && [ -n "$WRAP_ANCHOR" ] || \
+      die 6 "could not resolve the project anchor with resolve-root.sh root; nothing was written"
+    WRAP_REL="$(bash "$RESOLVE_ROOT" --relative get workflows 2>/dev/null)" && [ -n "$WRAP_REL" ] || \
+      die 6 "could not resolve the workflows directory relative to the anchor; nothing was written"
+    WRAP_REL="${WRAP_REL#./}"
+  fi
+  ann_text "$sid" wrapper; body="$ANN"
+  wpath="$(printf '%s\n' "$body" | sed -n 's/^path=//p')"
+  wsha="$(printf '%s\n' "$body" | sed -n 's/^sha256=//p')"
+  wargs="$(printf '%s\n' "$body" | sed -n 's/^args=//p')"
+  wtimeout="$(printf '%s\n' "$body" | sed -n 's/^timeout_seconds=//p')"
+  expected="$WRAP_REL/scripts/$WF_ID/$wid.sh"
+  abs="$WRAP_ANCHOR/$wpath"
+  if [ "$wpath" != "$expected" ]; then
+    UNFILLED="${UNFILLED}$sid: its confirmed wrapper is $wpath, not $expected; regenerate it with generate-wrapper.sh
+"
+    return 0
+  fi
+  if [ ! -f "$abs" ] || [ -L "$abs" ]; then
+    UNFILLED="${UNFILLED}$sid: its confirmed wrapper $wpath is missing (or not a regular file); regenerate it with generate-wrapper.sh
+"
+    return 0
+  fi
+  if command -v shasum >/dev/null 2>&1; then actual="$(shasum -a 256 "$abs" | awk '{print $1}')"
+  else actual="$(sha256sum "$abs" 2>/dev/null | awk '{print $1}')"; fi
+  if [ "$actual" != "$wsha" ]; then
+    UNFILLED="${UNFILLED}$sid: its wrapper $wpath is not the content the user confirmed (sha256 differs); show and confirm it again
+"
+    return 0
+  fi
+  if ! rerr="$(cd "$WRAP_ANCHOR" && bash "$RESOLVE_COMPUTE" "$wpath" 2>&1 >/dev/null)"; then
+    UNFILLED="${UNFILLED}$sid: its wrapper $wpath does not resolve through resolve-compute-command.sh ($rerr)
+"
+    return 0
+  fi
+  WRAP_CMD="$wpath"
+  obj="$(jq -cn --arg id "${wid}_confirm" --arg prompt "Run $wid, the generated script $wpath: $text" --arg d "$desc" \
+    '{id: $id, type: "confirm", prompt: $prompt, options: ["Yes", "No"], description: $d}')"
+  WRAP_ARGS="$wargs"; WRAP_TIMEOUT="$wtimeout"
+  WRAP_OBJ="$(jq -cn --arg id "$wid" --arg d "$desc" '{id: $id, type: "compute", description: $d}')"
+}
+
 # ---- pass 2: build the steps -------------------------------------------------------------------------------------
 STEPS_JSONL=""
 UNFILLED=""
@@ -373,6 +575,11 @@ while IFS= read -r sid; do
   stype="$(printf '%s' "$INC_TYPES" | sed -n "${n}p")"
 
   text="$(step_text "$sid")"
+  STEP_BARES='[]'
+  if [ -n "$PARAMS_JSONL" ]; then
+    STEP_BARES="$(printf '%s' "$PLAN" | jq -c --arg s "$sid" '.bares[$s] // []')"
+    [ "$STEP_BARES" = "[]" ] || text="$(printf '%s\n' "$text" | sentinel_markers)"
+  fi
   text="${text#"${text%%[![:space:]]*}"}"
   w1=""; rest=""
   if [ -n "$text" ]; then
@@ -418,6 +625,9 @@ while IFS= read -r sid; do
       obj="$(jq -cn --arg id "$wf_step_id" --arg prompt "$text" --arg d "$desc" \
         '{id: $id, type: "confirm", prompt: $prompt, options: ["Yes", "No"], description: $d}')" ;;
     compute)
+      if ann_value "$sid" wrapper && [ "$ANN" = "confirmed" ]; then
+        wrapper_steps "$sid" "$wf_step_id" "$text" "$desc"
+      else
       case "/$w1/" in
         */../*|"//"*) w1="" ;;
       esac
@@ -433,6 +643,7 @@ while IFS= read -r sid; do
       else
         UNFILLED="${UNFILLED}$sid: judged compute, but its text does not start with a relative script path
 "
+      fi
       fi ;;
     render)
       case "/$w1/" in
@@ -450,8 +661,25 @@ while IFS= read -r sid; do
 "
       fi ;;
   esac
+  if [ -n "$obj" ] && [ -n "$PARAMS_JSONL" ]; then
+    obj="$(apply_params "$obj")" || die 7 "could not apply the confirmed parameters to $sid with jq; nothing was emitted"
+    if [ -n "$WRAP_OBJ" ]; then
+      WRAP_OBJ="$(apply_params "$WRAP_OBJ")" || die 7 "could not apply the confirmed parameters to $sid with jq; nothing was emitted"
+    fi
+  fi
+  if [ -n "$WRAP_OBJ" ]; then
+    WRAP_OBJ="$(printf '%s\n' "$WRAP_OBJ" | jq -c --arg c "$WRAP_CMD" --arg args "$WRAP_ARGS" --arg t "$WRAP_TIMEOUT" '
+      {id, type: "compute", command: $c}
+      + (([$args | scan("[a-z][a-z0-9_]*")] | map("${inputs." + . + "}")) as $a | if ($a | length) == 0 then {} else {args: $a} end)
+      + (if $t == "" then {} else {timeout_seconds: ($t | tonumber)} end)
+      + {description}')" || \
+      die 7 "could not assemble the compute step of $sid with jq; nothing was emitted"
+  fi
   [ -z "$obj" ] || STEPS_JSONL="${STEPS_JSONL}${obj}
 "
+  [ -z "$WRAP_OBJ" ] || STEPS_JSONL="${STEPS_JSONL}${WRAP_OBJ}
+"
+  WRAP_OBJ=""
 done <<EOF
 $INC_IDS
 EOF
@@ -465,6 +693,25 @@ if [ -n "$UNFILLED" ]; then
   exit 10
 fi
 
+# Every confirmed LITERAL must replace something (PARAMETERS): one that occurs nowhere is almost always a typo. A bare
+# (credential) name may replace nothing: it declares a credential the step needs even when its text holds no marker.
+INPUTS_JSON='[]'
+if [ -n "$PARAMS_JSONL" ]; then
+  INPUTS_JSON="$(printf '%s' "$PLAN" | jq -c '.inputs')"
+  unref="$(printf '%s' "$STEPS_JSONL" | jq -rs --argjson plan "$PLAN" '
+    ([.[] | .. | strings | scan("\\$\\{inputs\\.([a-z][a-z0-9_]*)\\}")[0]] | unique) as $used
+    | [$plan.lits[] | .name] | unique[] | select(. as $n | $used | index($n) | not)')" || die 7 "could not check the input references with jq; nothing was emitted"
+  if [ -n "$unref" ]; then
+    {
+      printf '%s: nothing was emitted; these confirmed parameters have a value that occurs in no included step:\n' "$SELF"
+      printf '%s\n' "$unref" | sed 's/^/  /'
+      printf '%s: a confirmed literal must occur verbatim in an included step;\n' "$SELF"
+      printf '%s: correct them with record-answer.sh <path> <step-id> parameters - --replace, then re-run.\n' "$SELF"
+    } >&2
+    exit 12
+  fi
+fi
+
 NAME="$(awk -v anchor="$REC_STEPS_ANCHOR" '
   index($0, anchor) == 1 { exit }
   index($0, "# Recording: ") == 1 { print substr($0, 14); exit }
@@ -476,10 +723,24 @@ UNIT="steps"
 [ "$NSTEPS" -eq 1 ] && UNIT="step"
 DESCRIPTION="Replay of the recorded process \"$NAME\" ($NSTEPS $UNIT), emitted from $BASE."
 
-JSON="$(printf '%s' "$STEPS_JSONL" | jq -s . | jq \
-  --arg id "$WF_ID" --arg name "$NAME" --arg desc "$DESCRIPTION" --arg src "$BASE" \
-  '{id: $id, name: $name, description: $desc, source_recording: $src, steps: .}')" || \
-  die 7 "could not assemble the definition with jq; nothing was written"
+if [ "$INPUTS_JSON" = "[]" ]; then
+  JSON="$(printf '%s' "$STEPS_JSONL" | jq -s . | jq \
+    --arg id "$WF_ID" --arg name "$NAME" --arg desc "$DESCRIPTION" --arg src "$BASE" \
+    --arg psrc "$PROV_SOURCE" --arg pref "$PROV_REF" \
+    '{id: $id, name: $name, description: $desc, source_recording: $src,
+      provenance: ({source: $psrc} + (if $pref == "" then {} else {source_ref: $pref} end)),
+      steps: .}')" || \
+    die 7 "could not assemble the definition with jq; nothing was written"
+else
+  JSON="$(printf '%s' "$STEPS_JSONL" | jq -s . | jq \
+    --arg id "$WF_ID" --arg name "$NAME" --arg desc "$DESCRIPTION" --arg src "$BASE" \
+    --arg psrc "$PROV_SOURCE" --arg pref "$PROV_REF" --argjson inputs "$INPUTS_JSON" \
+    '{id: $id, name: $name, description: $desc, source_recording: $src,
+      provenance: ({source: $psrc} + (if $pref == "" then {} else {source_ref: $pref} end)),
+      inputs: $inputs,
+      steps: .}')" || \
+    die 7 "could not assemble the definition with jq; nothing was written"
+fi
 
 # ---- the candidate, the existing validator, and only then the destination ----------------------------------------
 if [ ! -d "$DEST_DIR" ]; then

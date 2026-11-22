@@ -49,6 +49,8 @@ const ACTION_VERB = {
   regenerated: 'regenerate',
   created: 'create',
   migrated: 'migrate',
+  'hooks-registered': 'register hooks in',
+  'settings-updated': 'update settings in',
 };
 
 function readRecordedVersion(consumerRoot) {
@@ -97,7 +99,9 @@ export async function runSync(args = [], opts = {}) {
 
   let result;
   try {
-    result = syncConsumer({ packageRoot, consumerRoot, dryRun, log });
+    // Ask about the opt-in allow rules only with a person at a terminal, never in CI or a pipe (E100_S03_T07).
+    const interactive = !dryRun && Boolean(process.stdin.isTTY && process.stdout.isTTY) && !process.env.CI;
+    result = syncConsumer({ packageRoot, consumerRoot, dryRun, interactive, log });
   } catch (e) {
     log(`\n  ✗ jenga sync failed: ${e.message}`);
     return finish(1);
@@ -130,6 +134,7 @@ export async function runSync(args = [], opts = {}) {
     log('──────────────────────────────────────────────────────\n');
   }
 
+  for (const w of result.warnings || []) log(`  ⚠  ${w}`);
   if (!result.ok) {
     for (const f of result.failures) log(`  ✗ ${f.step}: ${f.message}`);
     log('');

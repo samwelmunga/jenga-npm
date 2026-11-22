@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Packaging and consumer-install verification for `jenga config` (E68_S03_T02).
 #

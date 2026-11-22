@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E79_S03_T02: scripts/commit-template.sh turns a commit-format template into its regex and length budget.
 #

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E76_S02_T04: scripts/task-usage.sh --persist (E76_S02_T03) and the fail-loud exit codes of E76_S02_T01 as they
 # apply to it. Covered: the first write and its exact fields, idempotence (byte-identical second run), persisted values
@@ -36,6 +37,9 @@ DAY2="2026-11-07"
 
 setup() {
   unset JENGA_PROJECTS_DIR JENGA_BOARD_STORIES_DIR TASK_USAGE_TODAY
+  # E90_S02_T04: the price-ratio config is a direct dependency (exit 10 when missing). These fixtures carry no model, so
+  # the shipped-shape fixture config is valid and prices nothing: raw counts only, every task unpriced.
+  export JENGA_PRICE_RATIOS_FILE="$REPO_ROOT/tests/fixtures/task-usage-cost/ratios.json"
   ROOT="$BATS_TEST_TMPDIR/root"
   PROJECTS="$BATS_TEST_TMPDIR/projects"
   SCRATCH="$BATS_TEST_TMPDIR/scratch"
@@ -128,6 +132,10 @@ restore_tester() {
 # ---------------------------------------------------------------------------------------------------------------
 
 @test "venue: the script resolves the temp root, and every board file it reports lives under it" {
+  # listing of the repository's own board before the test touches anything; compared at the end, so a real epic
+  # that happens to share the fixture's id prefix (E99_*) can never make this test fail
+  local repo_tasks_before
+  repo_tasks_before="$(ls "$REPO_ROOT/project/board/tasks" 2>/dev/null | sort)"
   mk_task "$T01"
   # the resolver the script uses names the temp root, never the repository
   run bash -c 'cd "$1" && JENGA_PROJECT_ROOT="$1" bash "$2/scripts/resolve-root.sh" root' _ "$ROOT" "$REPO_ROOT"
@@ -143,7 +151,7 @@ restore_tester() {
   [ "$(printf '%s' "$output" | jq -r '.results[0].file')" = "$(tf "$T01")" ]
   # nothing of this test leaked into the repository's board
   [ ! -e "$REPO_ROOT/project/board/tasks/$(basename "$(tf "$T01")")" ]
-  ! compgen -G "$REPO_ROOT/project/board/tasks/E99_*" >/dev/null
+  [ "$(ls "$REPO_ROOT/project/board/tasks" 2>/dev/null | sort)" = "$repo_tasks_before" ]
 }
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -501,4 +509,150 @@ expect_loud() {
   done
   [ "$(tree_sum)" = "$before" ]
   [ "$(grep -c '^usage_' "$(tf "$T02")")" = 0 ]
+}
+
+# ---------------------------------------------------------------------------------------------------------------
+# E90_S01_T06: the cost-equivalent unit under --persist. Own synthetic transcripts (with a model per line) and an own
+# price-ratio config, so these tests do not depend on the shipped ratios.
+# ---------------------------------------------------------------------------------------------------------------
+
+CPROJ="/fake/work/proj"
+CSLUG="-fake-work-proj"
+CT="E90_S01_T91"
+
+cost_setup() {
+  CPROJECTS="$BATS_TEST_TMPDIR/cprojects"
+  mkdir -p "$CPROJECTS/$CSLUG"
+  cat > "$BATS_TEST_TMPDIR/ratios.json" <<'JSON'
+{"config_version":1,"date":"2026-11-19","models":{
+ "m-a":{"input":1,"cache_write_5m":1.25,"cache_write_1h":2,"cache_read":0.1,"output":5}}}
+JSON
+  COSTCFG="$BATS_TEST_TMPDIR/ratios.json"
+  # E90_S02_T04: a valid config that prices no fixture model (m-a is absent from it); persisting under it reproduces a
+  # task whose raw fields are stored but which has no usage_cost_units. A missing config is exit 10, never this state.
+  cat > "$BATS_TEST_TMPDIR/ratios-no-m-a.json" <<'JSON'
+{"config_version":1,"date":"2026-11-19","models":{
+ "m-other":{"input":1,"cache_write_5m":1.25,"cache_write_1h":2,"cache_read":0.1,"output":5}}}
+JSON
+}
+
+# cmk_sub <session> <agent-id> <task-id> <model> <input> <output> <cw5m> <cw1h> <cache_read>
+cmk_sub() {
+  local d="$CPROJECTS/$CSLUG/$1/subagents"
+  mkdir -p "$d"
+  printf '{"agentType":"developer","name":"%s"}\n' "$3" > "$d/agent-$2.meta.json"
+  { jq -n -c '{type:"user",message:{role:"user",content:"hello"}}'
+    jq -n -c --arg m "$4" --argjson i "$5" --argjson o "$6" --argjson w5 "$7" --argjson w1 "$8" --argjson cr "$9" \
+      '{type:"assistant",requestId:"r1",message:{role:"assistant",model:$m,usage:{input_tokens:$i,output_tokens:$o,
+        cache_creation_input_tokens:($w5+$w1),cache_read_input_tokens:$cr,
+        cache_creation:{ephemeral_5m_input_tokens:$w5,ephemeral_1h_input_tokens:$w1}}}}'
+  } > "$d/agent-$2.jsonl"
+}
+
+# cpersist <extra args...>: --persist against the cost fixtures; COSTCFG selects the price-ratio config
+cpersist() {
+  (cd "$ROOT" && JENGA_PRICE_RATIOS_FILE="$COSTCFG" JENGA_PROJECT_ROOT="$ROOT" TASK_USAGE_TODAY="$TODAY" TMPDIR="$SCRATCH" \
+     bash "$SCRIPT" --persist --projects-dir "$CPROJECTS" --project-dir "$CPROJ" "$@")
+}
+
+# Line A of tests/task-usage-cost.bats: m-a, input 100, output 10, cache write 5m 1000 + 1h 500, cache read 2000 = 2600 units
+cost_line_a() { cmk_sub s1 a1 "$CT" m-a 100 10 1000 500 2000; }
+
+@test "cost persist: a measured, fully priced task gets usage_cost_units beside the raw fields, and the file passes validate-board.sh" {
+  cost_setup; mk_task "$CT"; cost_line_a
+  run --separate-stderr cpersist --task "$CT"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.results[0].status == "persisted"' >/dev/null
+  grep -qx 'usage_cost_units: 2600' "$(tf "$CT")"
+  grep -qx 'usage_input_tokens: 100' "$(tf "$CT")"
+  bash "$VALIDATE" "$(tf "$CT")"
+}
+
+@test "cost persist: identical raw sums and no usage_cost_units is updated, and only usage_cost_units and usage_measured_on change" {
+  cost_setup; mk_task "$CT"; cost_line_a
+  # a task measured before E90: raws persisted while no ratios exist for its model
+  COSTCFG="$BATS_TEST_TMPDIR/ratios-no-m-a.json"
+  run --separate-stderr cpersist --task "$CT"
+  [ "$status" -eq 0 ]
+  ! grep -q usage_cost_units "$(tf "$CT")"
+  cp "$(tf "$CT")" "$BATS_TEST_TMPDIR/before.md"
+  COSTCFG="$BATS_TEST_TMPDIR/ratios.json"; TODAY="$DAY2"
+  run --separate-stderr cpersist --task "$CT"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.results[0].status == "updated"' >/dev/null
+  run diff "$BATS_TEST_TMPDIR/before.md" "$(tf "$CT")"
+  [ "$(echo "$output" | grep -c '^[<>]')" -eq 3 ]
+  echo "$output" | grep -qx '< usage_measured_on: 2026-11-06'
+  echo "$output" | grep -qx '> usage_measured_on: 2026-11-07'
+  echo "$output" | grep -qx '> usage_cost_units: 2600'
+  bash "$VALIDATE" "$(tf "$CT")"
+}
+
+@test "cost persist: a second run with the cost unit stored is unchanged, byte-identical" {
+  cost_setup; mk_task "$CT"; cost_line_a
+  cpersist --task "$CT" >/dev/null 2>&1
+  cp "$(tf "$CT")" "$BATS_TEST_TMPDIR/before.md"; TODAY="$DAY2"
+  run --separate-stderr cpersist --task "$CT"
+  echo "$output" | jq -e '.results[0].status == "unchanged"' >/dev/null
+  cmp "$BATS_TEST_TMPDIR/before.md" "$(tf "$CT")"
+}
+
+@test "cost persist: a stored usage_possibly_incomplete marker survives the derived-field update" {
+  cost_setup; mk_task "$CT"; cost_line_a
+  COSTCFG="$BATS_TEST_TMPDIR/ratios-no-m-a.json"
+  cpersist --task "$CT" >/dev/null 2>&1
+  bash "$(dirname "$SCRIPT")/../skills/j-close-story/scripts/update-task-frontmatter.sh" "$(tf "$CT")" usage_possibly_incomplete true >/dev/null
+  COSTCFG="$BATS_TEST_TMPDIR/ratios.json"
+  run --separate-stderr cpersist --task "$CT"
+  echo "$output" | jq -e '.results[0].status == "updated"' >/dev/null
+  grep -qx 'usage_possibly_incomplete: true' "$(tf "$CT")"
+  grep -qx 'usage_cost_units: 2600' "$(tf "$CT")"
+}
+
+@test "cost persist: a stored unit above the recomputed one is kept (never lowered) and does not set usage_possibly_incomplete" {
+  cost_setup; mk_task "$CT"; cost_line_a
+  cpersist --task "$CT" >/dev/null 2>&1
+  bash "$(dirname "$SCRIPT")/../skills/j-close-story/scripts/update-task-frontmatter.sh" "$(tf "$CT")" usage_cost_units 9999 >/dev/null
+  cp "$(tf "$CT")" "$BATS_TEST_TMPDIR/before.md"; TODAY="$DAY2"
+  run --separate-stderr cpersist --task "$CT"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.results[0].status == "kept-stored"' >/dev/null
+  cmp "$BATS_TEST_TMPDIR/before.md" "$(tf "$CT")"
+  ! grep -q usage_possibly_incomplete "$(tf "$CT")"
+}
+
+@test "cost persist: a task whose transcripts are gone keeps its stored numbers, gains no derived number and is not measured" {
+  cost_setup; mk_task "$CT"; cost_line_a
+  COSTCFG="$BATS_TEST_TMPDIR/ratios-no-m-a.json"
+  cpersist --task "$CT" >/dev/null 2>&1
+  cmk_sub s9 z9 E90_S01_T92 m-a 1 1 1 1 1     # another task, so the layout checks pass
+  rm -rf "$CPROJECTS/$CSLUG/s1"
+  cp "$(tf "$CT")" "$BATS_TEST_TMPDIR/before.md"
+  COSTCFG="$BATS_TEST_TMPDIR/ratios.json"; TODAY="$DAY2"
+  run --separate-stderr cpersist
+  echo "$output" | jq -e --arg id "$CT" '.results[] | select(.id == $id) | .status == "not-measured"' >/dev/null
+  cmp "$BATS_TEST_TMPDIR/before.md" "$(tf "$CT")"
+  ! grep -q usage_cost_units "$(tf "$CT")"
+}
+
+@test "cost persist: a task with an unpriced model gets no usage_cost_units, is reported as unpriced with the model name, and its raw fields persist" {
+  cost_setup; mk_task "$CT"; cmk_sub s1 a1 "$CT" m-unknown 100 10 1000 500 2000
+  run --separate-stderr cpersist --task "$CT"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.results[0].status == "persisted" and (.results[0].message | contains("m-unknown"))' >/dev/null
+  [[ "$stderr" == *"m-unknown"* ]]
+  ! grep -q usage_cost_units "$(tf "$CT")"
+  grep -qx 'usage_input_tokens: 100' "$(tf "$CT")"
+  bash "$VALIDATE" "$(tf "$CT")"
+}
+
+@test "cost persist: with the price-ratio config absent --persist stops with exit 10 naming the config and writes nothing (E90_S02_T04)" {
+  cost_setup; mk_task "$CT"; cost_line_a
+  COSTCFG="$BATS_TEST_TMPDIR/no-such.json"
+  cp "$(tf "$CT")" "$BATS_TEST_TMPDIR/before.md"
+  run --separate-stderr cpersist --task "$CT"
+  [ "$status" -eq 10 ]
+  [ -z "$output" ]
+  [[ "$stderr" == *"price-ratio config missing or unreadable: $BATS_TEST_TMPDIR/no-such.json"* ]]
+  cmp "$BATS_TEST_TMPDIR/before.md" "$(tf "$CT")"
 }

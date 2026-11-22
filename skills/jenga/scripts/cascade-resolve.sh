@@ -97,6 +97,25 @@
 
 set -euo pipefail
 
+# -h / --help: print the usage on stdout and exit 0 before anything is parsed, read or written (E99_S01_T01).
+case "${1:-}" in
+  -h|--help)
+    cat <<'USAGE'
+Usage: cascade-resolve.sh "<comma-separated-ids>"
+       cascade-resolve.sh -h|--help
+
+Expand already-resolved board IDs (E##, E##_S##, E##_S##_T##) into their eligible
+(non-terminal) descendants and print one JSON object on stdout with items,
+resolved_ids, counts, undecomposed and warnings. Read-only.
+Example: cascade-resolve.sh "E01,E02_S03,E04_S05_T06"
+
+Exit codes: 0 resolution completed; 1 no argument, board-scan.sh failed, or
+python3 unavailable.
+USAGE
+    exit 0
+    ;;
+esac
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Package root (scripts/, lib/, templates/): resolved so it also works from a consumer's .claude/skills mirror.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the secret-looking-file skip in skills/j-uncharted/scripts/import-source.sh, path mode (E85_S04_T08).
 # The shared name list lives in secret-files.sh (E85_S04_T05); this suite proves the importer applies it to a local

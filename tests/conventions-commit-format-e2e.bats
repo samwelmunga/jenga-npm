@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # End-to-end proof that the commit-format pieces agree with each other on one opted-in project, and that the
 # default-off path is untouched. It drives the real scripts together, in the order a project meets them:

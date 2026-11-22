@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for E79_S02_T04: the two j-close-story diff-stat scripts now resolve their commits through
 # scripts/commits-for-item.sh instead of their own `git log --grep`.

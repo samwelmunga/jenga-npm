@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E80_S01_T07: guard that no scripts/workflow/*.sh hardcodes a working-file path literal (story E80_S01, AC 7).
 #

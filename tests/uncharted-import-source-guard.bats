@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for the failure-cleanup guard in skills/j-uncharted/scripts/import-source.sh (E85_S02_T04).
 #

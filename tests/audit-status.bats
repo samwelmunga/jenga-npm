@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E85_S01_T11: scripts/audit-status.sh prints the latest audit_result per scanned directory.
 # Every case runs against a throwaway JENGA_PROJECT_ROOT under BATS_TEST_TMPDIR; this repository's

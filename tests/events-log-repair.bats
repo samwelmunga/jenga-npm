@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Repair of a legacy array-shaped project/logs/events.json on install and in `jenga doctor`
 # (E75_S02_T01). Covers lib/events-log-repair.js, its call from scripts/postinstall.js and the

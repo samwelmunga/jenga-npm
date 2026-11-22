@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S06_T25: skills/j-status/scripts/render-status-scope-view.sh - the new `j.status <epic|story>` view: a header block
 # with a milestone track, complete stories hidden behind one line, per-story task rows with a dependency column, then

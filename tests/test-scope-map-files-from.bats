@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for map-scope.sh's additive --files-from <file> change source (E72_S06_T03).
 #

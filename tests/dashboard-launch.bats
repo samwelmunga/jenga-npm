@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Regression coverage for skills/j-dashboard/scripts/launch.sh (E47_S04_T01).
 #

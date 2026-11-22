@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # E34_S07_T06: the strategy brief lives at project/documentation/STRATEGY.md, so it is covered by the
 # single `project/` entry that `project_files_visibility: ignored` adds to .gitignore, and it is a

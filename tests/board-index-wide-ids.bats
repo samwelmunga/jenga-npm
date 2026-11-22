@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S01_T05: board_index.py takes its board-ID patterns from the shared module scripts/lib/board_ids.py,
 # so IDs wider than two digits (E100, E100_S100, E1001_S100_T100) are indexed and linked like any other.

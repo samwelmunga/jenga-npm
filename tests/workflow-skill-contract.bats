@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E80_S05_T04: the script contract that skills/j-workflow/SKILL.md relies on (story E80_S05, covers its AC 9).
 #

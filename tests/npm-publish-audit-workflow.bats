@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Static checks for the dependency-audit gate in .github/workflows/npm-publish.yml (epic E85, story E85_S04,
 # task E85_S04_T01).

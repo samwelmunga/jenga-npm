@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: --ranked-list
 # ---------------------------------------------------------------------------
 # skills/j-todo/scripts/argument-is-ranked-list.sh
 #

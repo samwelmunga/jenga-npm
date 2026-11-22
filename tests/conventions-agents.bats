@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # Structural coverage for E69_S05_T03: the root agent definitions consume the conventions digest and the developer
 # carries the explicit-conventions precedence rule.

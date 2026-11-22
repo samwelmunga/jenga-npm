@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for templates/test-scope-map.json (E72_S01_T05): the shipped default changed-file to test-glob table.
 #

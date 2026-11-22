@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for the real Figma descriptor skills/j-connect/descriptors/figma.json
 # (E65_S06_T02). Pure data checks with jq, the validator and list-services.sh;

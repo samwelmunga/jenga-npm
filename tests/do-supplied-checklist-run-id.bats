@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for E67_S11_T02: /j-do accepts a caller-supplied checklist run id and adopts it only after
 # scripts/foreground-preflight.sh verify exits 0.

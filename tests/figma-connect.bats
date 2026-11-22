@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Figma-specific coverage of the j.connect runner (E65_S06_T04), run against the real
 # skills/j-connect/descriptors/figma.json with a STUBBED `claude` on PATH. Generic runner

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # hooks/on_recording_step.sh — the recorder's UserPromptSubmit capture hook (E89, task E89_S02_T03).
 #
@@ -80,8 +81,91 @@ print(json.dumps({
 }))' "$sid"
 }
 
+# Number of steps in $1 (default $REC). Distinguishes "zero steps" (prints 0) from "the helper failed"
+# (prints a non-numeric token), so every `[ "$(step_count)" -eq N ]` assertion FAILS if recording-file.sh
+# steps breaks, instead of all the `-eq 0` ones going vacuously green together.
 step_count() {
-  bash "$RF" steps "$REC" 2>/dev/null | grep -c . || true
+  local f="${1:-$REC}" out rc
+  out="$(bash "$RF" steps "$f" 2>/dev/null)"; rc=$?
+  if [ "$rc" -ne 0 ]; then
+    printf 'steps-helper-failed-exit-%s' "$rc"
+    return 0
+  fi
+  if [ -z "$out" ]; then echo 0; else printf '%s\n' "$out" | grep -c .; fi
+}
+
+# A second recording at $1 with a pointer under session key $2: for tests where two live recordings
+# must be told apart.
+start_recording_at() {
+  bash "$RF" create "$1" "Other Process" >/dev/null
+  JENGA_RECORDING_SESSION_ID="$2" bash "$AR" set "$1" --title "Other Process" >/dev/null
+}
+
+# A throwaway project root whose registry is a copy of the real one, so the hook and the pointer script
+# resolve the queue through resolve-root.sh with no state-dir seam. Prints the root.
+make_project_root() {
+  mkdir -p "$T/proj/project/configs"
+  cp "$REPO_ROOT/project/configs/workflow.json" "$T/proj/project/configs/workflow.json"
+  printf '%s' "$T/proj"
+}
+
+# A PATH made of counting shims: every executable name found on the real PATH is a symlink to one shim
+# that appends its name to $SHIM_LOG and then execs the real command with the real PATH restored (so only
+# the hook's DIRECT external commands are counted, not what its callees spawn). Prints the shim dir.
+make_counting_path() {
+  local d="$T/shims"
+  mkdir -p "$d"
+  cat > "$d/.shim" <<'SHIM'
+#!/bin/bash
+n="${0##*/}"
+printf '%s\n' "$n" >> "$SHIM_LOG"
+IFS=: read -r -a _dirs <<<"$SHIM_ORIG_PATH"
+for _d in "${_dirs[@]}"; do
+  if [ -x "$_d/$n" ] && [ ! -d "$_d/$n" ]; then
+    export PATH="$SHIM_ORIG_PATH"
+    exec "$_d/$n" "$@"
+  fi
+done
+exit 127
+SHIM
+  chmod +x "$d/.shim"
+  python3 - "$d" "$PATH" <<'PYEOF'
+import os, sys
+d, path = sys.argv[1], sys.argv[2]
+seen = set()
+for p in path.split(":"):
+    if not p or not os.path.isdir(p):
+        continue
+    for n in os.listdir(p):
+        fp = os.path.join(p, n)
+        if n in seen or n.startswith(".") or not os.access(fp, os.X_OK) or os.path.isdir(fp):
+            continue
+        seen.add(n)
+        try:
+            os.symlink(".shim", os.path.join(d, n))
+        except OSError:
+            pass
+PYEOF
+  printf '%s' "$d"
+}
+
+# Minimum wall-clock ms over $1 runs of the remaining command (stdin from $PAYLOAD_FOR_TIMING if set).
+# Minimum rather than mean: the floor of the distribution is what the header's figures are claims about,
+# and it is the statistic least moved by a busy machine.
+min_ms() {
+  local n="$1"; shift
+  python3 - "$n" "$@" <<'PYEOF'
+import subprocess, sys, time, os
+n = int(sys.argv[1]); cmd = sys.argv[2:]
+inp = os.environ.get("PAYLOAD_FOR_TIMING", "").encode()
+best = None
+for _ in range(n):
+    t = time.perf_counter()
+    subprocess.run(cmd, input=inp, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    ms = (time.perf_counter() - t) * 1000
+    best = ms if best is None or ms < best else best
+print("%.1f" % best)
+PYEOF
 }
 
 # -----------------------------------------------------------------------------
@@ -97,7 +181,8 @@ step_count() {
 
 @test "the state path is resolved, not hardcoded: no project/ literal anywhere in the file" {
   run grep -n 'project/' "$HOOK"
-  [ "$status" -ne 0 ]
+  # grep: 1 = no match (what is wanted); 2 = it could not read the file, which must not pass.
+  [ "$status" -eq 1 ]
 }
 
 @test "STATE_SUBDIR has not drifted from active-recording.sh's own value" {
@@ -118,11 +203,50 @@ step_count() {
   assert_contains "$header" "on_preflight_check.sh"
 }
 
-@test "the header records a MEASURED no-op cost against a bare-bash floor, not a claim" {
-  local header
-  header="$(sed -n '1,/^set -u$/p' "$HOOK")"
-  assert_contains "$header" "bare-bash floor"
-  assert_contains "$header" "ms/call"
+@test "the header's MEASURED no-op figures agree with a live measurement, not merely exist" {
+  # The previous version of this test asserted only that the strings `bare-bash floor` and `ms/call`
+  # appeared, which a header full of invented numbers satisfies. This one parses the figures out of the
+  # header's MEASURED RESULT block and holds them against a live run, with tolerances wide enough to
+  # survive a busy machine (minimum over several runs, ratio and order rather than exact ms) and tight
+  # enough to fail a header whose figures are fiction.
+  local block h_floor h_hook h_get
+  block="$(sed -n '1,/^set -u$/p' "$HOOK" | sed -n '/^# MEASURED RESULT/,$p')"
+  h_floor="$(printf '%s\n' "$block" | sed -n 's/^#  *bare-bash floor [. ]*\([0-9.]*\) ms\/call.*/\1/p' | head -n1)"
+  h_hook="$(printf '%s\n' "$block" | sed -n 's/^#  *on_recording_step.sh, no recording [. ]*\([0-9.]*\) ms\/call.*/\1/p' | head -n1)"
+  h_get="$(printf '%s\n' "$block" | sed -n 's/^#  *active-recording.sh get (what it avoids) [. ]*\([0-9.]*\) ms\/call.*/\1/p' | head -n1)"
+  [ -n "$h_floor" ] && [ -n "$h_hook" ] && [ -n "$h_get" ]
+
+  local root l_floor l_hook l_get
+  root="$(make_project_root)"
+  export JENGA_PROJECT_ROOT="$root"
+  unset JENGA_RECORDING_STATE_DIR
+  export PAYLOAD_FOR_TIMING='{"prompt":"x","session_id":"timing-key"}'
+  l_floor="$(min_ms 8 bash -c :)"
+  l_hook="$(min_ms 8 bash "$HOOK")"
+  l_get="$(min_ms 8 bash "$AR" get --session timing-key)"
+
+  python3 - "$h_floor" "$h_hook" "$h_get" "$l_floor" "$l_hook" "$l_get" <<'PYEOF'
+import sys
+hf, hh, hg, lf, lh, lg = map(float, sys.argv[1:])
+def fail(m):
+    sys.stderr.write("header figures disagree with live measurement: %s\n" % m)
+    sys.stderr.write("  header: floor=%s hook=%s get=%s  live(min): floor=%s hook=%s get=%s\n" % (hf, hh, hg, lf, lh, lg))
+    sys.exit(1)
+# The header's own ordering claim: floor < the hook's no-op path < asking `get` every prompt.
+if not (hf < hh < hg):
+    fail("the header's own figures are not ordered floor < hook < get")
+# The live run must show the same ordering, or the 'saves ~86 ms per prompt' claim is false today.
+if not (lf < lh < lg):
+    fail("live ordering is not floor < hook < get")
+# The headline claim is a RATIO (about 3.7x cheaper than asking get); allow a factor of 4 either way.
+hr, lr = hg / hh, lg / lh
+if not (lr / 4 <= hr <= lr * 4):
+    fail("header says get/hook = %.1fx, live says %.1fx" % (hr, lr))
+# And the absolute figures must be the right order of magnitude (factor 6, either way).
+for name, h, l in (("hook", hh, lh), ("get", hg, lg)):
+    if not (l / 6 <= h <= l * 6):
+        fail("%s figure %.1f ms is more than 6x away from live %.1f ms" % (name, h, l))
+PYEOF
 }
 
 @test "--help prints usage on STDERR and nothing on stdout, and exits 0" {
@@ -131,6 +255,9 @@ step_count() {
   [ "$status" -eq 0 ]
   [ -z "$output" ]
   assert_contains "$stderr" "on_recording_step.sh"
+  # The full header, not a prefix of it: the last two sections must print.
+  assert_contains "$stderr" "ENVIRONMENT"
+  assert_contains "$stderr" "EXIT CODES"
 }
 
 # -----------------------------------------------------------------------------
@@ -226,6 +353,169 @@ step_count() {
   [ "$status" -eq 0 ]
   [ -z "$output" ]
   [ "$(step_count)" -eq 0 ]
+}
+
+# -----------------------------------------------------------------------------
+# Session-key candidate ORDER and EXCLUSION, pinned by behaviour (E89_S06_T01)
+#
+# The header states two rules - the environment candidate is tried before the payload one, and
+# JENGA_SESSION_ID is never a candidate - and until these tests the second was asserted only by grepping
+# the header comment. A comment cannot fail when the code stops obeying it. Each test below has two LIVE
+# recordings under different keys, so a wrong resolution lands the step in the wrong file and is visible.
+# -----------------------------------------------------------------------------
+
+@test "ORDER: when the environment key and the payload key both name live recordings, the environment's wins" {
+  start_recording "env-sess"
+  local other="$T/payload-side_RECORDING.md"
+  start_recording_at "$other" "payload-sess"
+
+  run --separate-stderr env CLAUDE_CODE_SESSION_ID="env-sess" \
+    JENGA_RECORDING_STATE_DIR="$JENGA_RECORDING_STATE_DIR" \
+    bash "$HOOK" <<<"$(payload 'goes to the environment recording' 'payload-sess')"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ "$(step_count "$REC")" -eq 1 ]
+  [ "$(step_count "$other")" -eq 0 ]
+  assert_contains "$(cat "$REC")" "goes to the environment recording"
+}
+
+@test "the environment candidate resolves ON ITS OWN: a payload key with no pointer is not needed" {
+  start_recording "env-sess"
+  run --separate-stderr env CLAUDE_CODE_SESSION_ID="env-sess" \
+    JENGA_RECORDING_STATE_DIR="$JENGA_RECORDING_STATE_DIR" \
+    bash "$HOOK" <<<"$(payload 'environment only' 'a-payload-key-with-no-pointer')"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ "$(step_count)" -eq 1 ]
+  assert_contains "$(cat "$REC")" "environment only"
+}
+
+@test "ORDER within the environment: JENGA_RECORDING_SESSION_ID outranks CLAUDE_CODE_SESSION_ID" {
+  start_recording "recording-var-sess"
+  local other="$T/claude-var_RECORDING.md"
+  start_recording_at "$other" "claude-var-sess"
+
+  run env JENGA_RECORDING_SESSION_ID="recording-var-sess" CLAUDE_CODE_SESSION_ID="claude-var-sess" \
+    JENGA_RECORDING_STATE_DIR="$JENGA_RECORDING_STATE_DIR" \
+    bash "$HOOK" <<<"$(payload 'ranked' 'an-unrelated-payload-key')"
+  [ "$status" -eq 0 ]
+  [ "$(step_count "$REC")" -eq 1 ]
+  [ "$(step_count "$other")" -eq 0 ]
+}
+
+@test "JENGA_SESSION_ID is never a candidate: a live pointer under it is not found when the payload names nothing" {
+  # By behaviour, not by grepping the header. Its value is a fresh per-process uuid in a real session
+  # (see the hook's header), so a hook that honoured it would pass this suite only by accident.
+  start_recording "per-process-uuid"
+  run --separate-stderr env JENGA_SESSION_ID="per-process-uuid" \
+    JENGA_RECORDING_STATE_DIR="$JENGA_RECORDING_STATE_DIR" \
+    bash "$HOOK" <<<'{"hook_event_name":"UserPromptSubmit","prompt":"must not be recorded"}'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ "$(step_count)" -eq 0 ]
+}
+
+@test "JENGA_SESSION_ID cannot outrank or displace the payload key" {
+  start_recording "per-process-uuid"
+  local other="$T/payload-wins_RECORDING.md"
+  start_recording_at "$other" "payload-sess"
+
+  run env JENGA_SESSION_ID="per-process-uuid" \
+    JENGA_RECORDING_STATE_DIR="$JENGA_RECORDING_STATE_DIR" \
+    bash "$HOOK" <<<"$(payload 'belongs to the payload session' 'payload-sess')"
+  [ "$status" -eq 0 ]
+  [ "$(step_count "$other")" -eq 1 ]
+  [ "$(step_count "$REC")" -eq 0 ]
+}
+
+@test "step_count reports a helper failure as a non-number, so the -eq 0 assertions cannot go vacuous" {
+  run step_count "$T/no-such-recording.md"
+  [ "$status" -eq 0 ]
+  case "$output" in
+    ''|*[!0-9]*) : ;;
+    *) false ;;
+  esac
+  [[ "$output" == steps-helper-failed-exit-* ]]
+  # And a real, empty recording is a clean 0.
+  bash "$RF" create "$REC" "My Process" >/dev/null
+  [ "$(step_count)" = "0" ]
+}
+
+# -----------------------------------------------------------------------------
+# The REAL-SESSION path: no state-dir seam, the queue resolved through resolve-root.sh (E89_S06_T01)
+#
+# Every other behavioural test sets JENGA_RECORDING_STATE_DIR, which bypasses the hook's own
+# `state_dir="$queue/$STATE_SUBDIR"` join entirely - so that line could be pointed anywhere and the
+# suite would stay green. This is the one test where it executes and its result matters.
+# -----------------------------------------------------------------------------
+
+@test "REAL SESSION: with no state-dir seam, the hook joins the resolved queue root to the pointer directory the pointer script used" {
+  local root
+  root="$(make_project_root)"
+  unset JENGA_RECORDING_STATE_DIR
+  bash "$RF" create "$REC" "My Process" >/dev/null
+  JENGA_PROJECT_ROOT="$root" JENGA_RECORDING_SESSION_ID="real-sess" bash "$AR" set "$REC" >/dev/null
+
+  # The pointer really is where resolve-root.sh says the queue is, under the shared subdirectory.
+  local queue
+  queue="$(JENGA_PROJECT_ROOT="$root" bash "$REPO_ROOT/scripts/resolve-root.sh" get queue)"
+  [ -n "$queue" ]
+  compgen -G "$queue/active-recordings/recording-*.json" >/dev/null
+
+  run --separate-stderr env -u JENGA_RECORDING_STATE_DIR JENGA_PROJECT_ROOT="$root" \
+    bash "$HOOK" <<<"$(payload 'recorded through the real join' 'real-sess')"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ "$(step_count)" -eq 1 ]
+  assert_contains "$(cat "$REC")" "recorded through the real join"
+}
+
+# -----------------------------------------------------------------------------
+# The no-op path's cost, asserted as a COUNT of external commands rather than described (E89_S06_T01)
+#
+# Wall-clock is too noisy to assert in CI, but the property the header claims - "stage 1a forks
+# nothing, stage 1b one subprocess" - is a count. It is measured by running the hook with a PATH made of
+# counting shims (see make_counting_path), so any external command the hook execs by name is logged.
+# -----------------------------------------------------------------------------
+
+@test "the counting PATH really counts: a control command is logged (so a zero below means zero)" {
+  local shims log="$T/shim.log" real_bash
+  shims="$(make_counting_path)"
+  real_bash="$(command -v bash)"
+  run env PATH="$shims" SHIM_LOG="$log" SHIM_ORIG_PATH="$PATH" "$real_bash" -c 'date >/dev/null; dirname /a/b >/dev/null'
+  [ "$status" -eq 0 ]
+  [ "$(sort "$log" | tr '\n' ' ')" = "date dirname " ]
+}
+
+@test "the no-recording path with the state-dir seam (stage 1a) execs NO external command" {
+  local shims log="$T/shim.log" real_bash
+  shims="$(make_counting_path)"
+  real_bash="$(command -v bash)"
+  mkdir -p "$JENGA_RECORDING_STATE_DIR"
+  : > "$log"
+  run --separate-stderr env PATH="$shims" SHIM_LOG="$log" SHIM_ORIG_PATH="$PATH" \
+    "$real_bash" "$HOOK" <<<"$(payload 'hello there')"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ -z "$stderr" ]
+  # Not "few": none. The names are listed in the failure message by the assert below.
+  [ ! -s "$log" ] || { echo "unexpected external commands on the no-op path: $(tr '\n' ' ' < "$log")" >&2; false; }
+}
+
+@test "the no-recording path through the real resolver (stage 1b) execs exactly ONE external command: the resolver" {
+  local shims log="$T/shim.log" real_bash root
+  shims="$(make_counting_path)"
+  real_bash="$(command -v bash)"
+  root="$(make_project_root)"
+  : > "$log"
+  run --separate-stderr env -u JENGA_RECORDING_STATE_DIR PATH="$shims" SHIM_LOG="$log" \
+    SHIM_ORIG_PATH="$PATH" JENGA_PROJECT_ROOT="$root" \
+    "$real_bash" "$HOOK" <<<"$(payload 'hello there')"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ -z "$stderr" ]
+  [ "$(wc -l < "$log" | tr -d ' ')" -eq 1 ] || { echo "expected exactly one, got: $(tr '\n' ' ' < "$log")" >&2; false; }
+  [ "$(cat "$log")" = "bash" ]
 }
 
 # -----------------------------------------------------------------------------
@@ -482,4 +772,26 @@ step_count() {
   [ "$status" -eq 0 ]
   [ -z "$output" ]
   assert_contains "$stderr" "fast reject"
+}
+
+# -----------------------------------------------------------------------------
+# E89_S06_T11: the UserPromptSubmit registration carries a timeout, identically everywhere it can be copied from.
+# Decision and reasoning: project/documentation/workflow-recorder-observation-decision.md, "Hook timeout".
+# -----------------------------------------------------------------------------
+
+@test "registration: the UserPromptSubmit block carries timeout 10 in root settings.json and in the recorder fragment, and no template carries hooks" {
+  root_block="$(jq -c '.hooks.UserPromptSubmit' "$REPO_ROOT/settings.json")"
+  [ "$(jq -r '.[0].hooks[0].timeout' <<<"$root_block")" = "10" ]
+  [ "$(jq -r '.[0].matcher' <<<"$root_block")" = "" ]
+
+  # E100_S04_T05: the fragment is the other source a consumer's registration is built from.
+  frag="$REPO_ROOT/skills/j-workflow-recorder/settings-fragment.json"
+  [ "$(jq -S -c '.hooks.UserPromptSubmit' "$frag")" = "$(jq -S -c . <<<"$root_block")" ] || { echo "UserPromptSubmit block differs in $frag" >&2; return 1; }
+
+  templates=0
+  for f in "$REPO_ROOT"/templates/permission-levels/level-*.json; do
+    templates=$((templates + 1))
+    [ "$(jq 'has("hooks")' "$f")" = "false" ] || { echo "$f carries hooks" >&2; return 1; }
+  done
+  [ "$templates" -eq 5 ]
 }

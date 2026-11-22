@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E17_S10 regression coverage: /j-reconcile must treat the script-set ladder statuses
 # (Merged, Publicized, Privatized, Deployed to Stage, Deployed to Prod) as completed-and-beyond.

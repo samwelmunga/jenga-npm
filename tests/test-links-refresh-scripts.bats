@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 # Coverage for the test-links refresh workflow (E83_S04_T03): the definition project/.workflows/test-links-refresh.json,
 # its report template, and the two helpers it calls, scripts/test-links-refresh-check.sh (the always-exit-0 wrapper
 # around check-test-links.sh, which exits 1 on `stale`) and scripts/test-links-refresh-diff.sh.

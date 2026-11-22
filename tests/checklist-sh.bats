@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for scripts/checklist.sh -- list, check and tick (E67_S02_T04).
 #

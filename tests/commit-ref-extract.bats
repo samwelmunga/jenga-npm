@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E79_S04_T02: scripts/commit-ref.sh extract finds the first ref in a branch name (the perceived branch), safely.
 #

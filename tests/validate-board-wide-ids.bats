@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S01_T02: scripts/validate-board.sh takes its ID shapes from scripts/lib/board_ids.py, so board IDs of any
 # digit width validate, malformed IDs are still rejected, and the lookup works in the consumer layout.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the dependency-audit pre-flight checklist items (E85_S01_T06).
 #

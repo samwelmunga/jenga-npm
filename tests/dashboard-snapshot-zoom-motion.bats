@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # The overlay tree's zoom controls and the dashboard's Animations toggle in the offline snapshot (E92_S06_T21).
 #

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S06_T16: j.status runs render-status-scope.sh only for a specific epic or story id, and SKILL.md holds no logic for it.
 # E92_S06_T26: render-status-scope.sh is now the LEGACY scope renderer (`j.status --legacy <id>`); the default `j.status <id>` runs
@@ -23,7 +24,7 @@ setup() {
 @test "SKILL.md step 6.10 sits after 6.9 and before 7" {
   run grep -n '^6\.[0-9]*\. \|^7\. ' "$SKILL"
   [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | sed 's/^\([0-9]*\):\([0-9.]*\)\..*/\2/' | tr '\n' ' ')" = "6.5 6.7 6.8 6.9 6.10 7 " ]
+  [ "$(printf '%s\n' "$output" | sed 's/^\([0-9]*\):\([0-9.]*\)\..*/\2/' | tr '\n' ' ')" = "6.5 6.7 6.8 6.85 6.9 6.10 7 " ]
 }
 
 @test "SKILL.md states the fallback for the scope block" {

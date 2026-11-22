@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for skills/j-test/scripts/record-timing.sh, the one writer of the test-timing
 # log (E77_S06_T03), written by E77_S06_T08.

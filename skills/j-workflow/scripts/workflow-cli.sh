@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: list-render
 # ---------------------------------------------------------------------------
 # skills/j-workflow/scripts/workflow-cli.sh - the deterministic half of `j.workflow` (epic E80, task E80_S05_T01)
 #

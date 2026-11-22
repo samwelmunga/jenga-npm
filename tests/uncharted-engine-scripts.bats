@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the /uncharted investigative-engine scripts under skills/j-uncharted/scripts/ (E43_S01_T02):
 #
@@ -347,6 +348,23 @@ detector_projection() {
   [ "$status" -eq 1 ]
   run --separate-stderr bash -c 'printf "x" | bash "$1" --type snippet --name a/b.txt --staging-dir "$2" -' _ "$IMPORT" "$BATS_TEST_TMPDIR/s1"
   [ "$status" -eq 1 ]
+}
+
+# E99_S01_T04: an explicit --help / -h is a success (usage on stdout, exit 0); no source keeps exiting 1 with usage on stderr.
+@test "import-source.sh and inspect-provenance.sh: --help and -h print usage on stdout and exit 0; no arguments exit 1 with usage on stderr" {
+  local script flag
+  for script in "$IMPORT" "$PROVENANCE"; do
+    for flag in --help -h; do
+      run --separate-stderr bash "$script" "$flag" </dev/null
+      [ "$status" -eq 0 ]
+      [[ "$output" == *"Usage:"* ]]
+      [ -z "$stderr" ]
+    done
+    run --separate-stderr bash "$script" </dev/null
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+    [[ "$stderr" == *"Usage:"* ]]
+  done
 }
 
 @test "import-source.sh exit 3 when the git clone fails" {

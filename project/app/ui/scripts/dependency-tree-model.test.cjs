@@ -2,6 +2,9 @@
 'use strict'
 // E92_S06_T09 / E92_S06_T19: model test for the dependency tree v2. Plain node, no framework, like
 // progress-model.test.cjs (dependencyTreeModel.js is pure ESM, loaded with a dynamic import).
+// E92_S13_T02: the goal area is no longer one fixed number. The older tests here were written for the star's fixed disc area, so
+// `build` below lays out for it ({ goalArea: 'disc' }, byte-identical to the layout they were written against); the castle area
+// (the default of the real model) is covered at the end: the castle box, fixtures at 16/6, 32/8 and 94/22 and a 26-task story.
 // Run: node project/app/ui/scripts/dependency-tree-model.test.cjs
 const assert = require('assert')
 const fs = require('fs')
@@ -75,9 +78,10 @@ const ids = list => list.map(n => n.id)
 
 async function main() {
   const mod = await import(pathToFileURL(modelPath).href)
-  const { buildDependencyTreeModel: build, fillUnlockedBy, goalFailedText, unfinishedDepText, unfoldGroups, FOLD_THRESHOLD, LAYOUT, GOAL_NODE_ID } = mod
+  const { buildDependencyTreeModel: buildCastle, fillUnlockedBy, goalFailedText, unfinishedDepText, unfoldGroups, FOLD_THRESHOLD, LAYOUT, GOAL_NODE_ID } = mod
   const { buildDependencyStructure } = await import(pathToFileURL(path.join(__dirname, '..', '..', '..', '..', 'lib', 'progress', 'dependency-structure.js')).href)
   const src = fs.readFileSync(modelPath, 'utf8')
+  const build = (g, id, l, o) => buildCastle(g, id, l, { goalArea: 'disc', ...o })
 
   await test('depth columns are epic-wide: story B depending on story A depth-2 task sits in column 3', () => {
     const g = graphOf('E01', [
@@ -823,8 +827,8 @@ async function main() {
     assert.strictEqual(m.layout.height, Math.max(contentH, LAYOUT.minHeight))
     assert.strictEqual(m.layout.columns, 2, 'columns follow the tasks, ghost bands add none')
     assert.strictEqual(m.goal.y, contentH / 2)
-    assert.strictEqual(m.goal.x, LAYOUT.columnX0 + LAYOUT.columnW + LAYOUT.cardW + LAYOUT.goalGap + LAYOUT.goalOffsetX)
-    assert.strictEqual(m.layout.width, LAYOUT.columnX0 + LAYOUT.columnW + LAYOUT.cardW + LAYOUT.goalGap + LAYOUT.goalAreaW)
+    assert.strictEqual(m.goal.x, LAYOUT.columnX0 + LAYOUT.columnW + LAYOUT.cardW + LAYOUT.goalGap + mod.DISC_AREA.offsetX)
+    assert.strictEqual(m.layout.width, LAYOUT.columnX0 + LAYOUT.columnW + LAYOUT.cardW + LAYOUT.goalGap + mod.DISC_AREA.w)
     // nodes stay inside their own bands
     for (const n of m.nodes) { const b = m.bands[n.row]; assert.ok(n.y >= b.y && n.y + n.h <= b.y + b.h, n.id) }
     // a ghost band between two taller bands, and an epic of one task beside ghosts, keep the same rules
@@ -881,7 +885,7 @@ async function main() {
     assert.ok(Object.isFrozen(LAYOUT))
     assert.strictEqual(mod.COL_WIDTH, LAYOUT.columnW)
     const m = build(FULL, 'E01', LABELS_EN)
-    assert.strictEqual(m.layout.width, LAYOUT.columnX0 + (m.layout.columns - 1) * LAYOUT.columnW + LAYOUT.cardW + LAYOUT.goalGap + LAYOUT.goalAreaW)
+    assert.strictEqual(m.layout.width, LAYOUT.columnX0 + (m.layout.columns - 1) * LAYOUT.columnW + LAYOUT.cardW + LAYOUT.goalGap + mod.DISC_AREA.w)
     const last = m.bands[m.bands.length - 1]
     assert.ok(m.layout.height >= last.y + last.h + LAYOUT.pad)
     for (const k of Object.keys(LAYOUT)) assert.strictEqual(m.layout[k], LAYOUT[k])
@@ -897,6 +901,353 @@ async function main() {
     const literals = [...code.matchAll(/'([^'\\]*)'/g)].map(m => m[1])
     for (const l of literals) assert.ok(!/\s/.test(l) && !/^[A-Z]/.test(l), 'user-visible word: ' + l)
     assert.ok(!/\bimport\b[^\n]*\b(react|react-dom)\b/.test(code) && !/\b(document|window)\./.test(code), 'React/DOM free')
+  })
+
+  // ===================== E92_S13_T02: the castle goal area =====================
+  const SIDS = i => `E01_S${String(i).padStart(2, '0')}`
+  // nTasks tasks spread over nStories stories (every story gets at least one task when nTasks >= nStories), stories standing on
+  // `deps(i)` (a list of story numbers). The payload facts a real script states are written as the script would.
+  const castleGraph = (nTasks, nStories, deps, opts = {}) => {
+    const stories = []
+    const tasks = []
+    const per = Array.from({ length: nStories }, (_, i) => (opts.oneStory ? (i === 0 ? nTasks : 0) : Math.floor(nTasks / nStories) + (i < nTasks % nStories ? 1 : 0)))
+    for (let i = 1; i <= nStories; i++) {
+      const sid = SIDS(i)
+      const states = Array.from({ length: per[i - 1] }, (_, k) => ['done', 'in_progress', 'ready'][(i + k) % 3])
+      stories.push({ id: sid, epic_id: 'E01', title: 'Story ' + i, depends_on: (deps(i) || []).map(SIDS), decomposed: per[i - 1] > 0, complete: false })
+      states.forEach((st, k) => tasks.push(T(`${sid}_T${String(k + 1).padStart(2, '0')}`, sid, 'E01', st, [])))
+    }
+    return {
+      schema_version: 1, scope: { type: 'graph' }, labels: LABELS_EN, lang: 'en',
+      epics: [{ id: 'E01', title: 'Goal epic', epic_progress: { stories: nStories, decomposed: stories.filter(x => x.decomposed).length, tasks_done: 0, tasks_denominator: tasks.length, percent: 30, goal_reached: false } }],
+      stories, tasks, external: null, warnings: [],
+    }
+  }
+  const stacked = i => (i <= 2 ? [] : i <= 12 ? [Math.max(1, i - 3)] : [i - 3, i - 2]) // roots, single supports, then bridges
+  const CASTLES = [
+    ['median 16 tasks / 6 stories', castleGraph(16, 6, i => ({ 2: [1], 3: [1], 4: [2], 5: [2, 3] })[i])],
+    ['p75 32 tasks / 8 stories', castleGraph(32, 8, i => ({ 2: [1], 3: [1], 4: [2], 5: [3], 6: [4, 5], 8: [1] })[i])],
+    ['max 94 tasks / 22 stories', castleGraph(94, 22, stacked)],
+    ['max 94 tasks / 22 independent stories', castleGraph(94, 22, () => [])],
+    ['one 26-task story', castleGraph(26, 1, () => [], {})],
+    ['a 26-task story on a 3-task story', (() => { const g = castleGraph(29, 2, i => (i === 2 ? [1] : [])); return g })()],
+  ]
+  const rectOf = t => ({ x0: t.cx - t.w, x1: t.cx + t.w, y0: t.reachY, y1: t.base })
+  const ancestor = (byId, a, b) => { for (let p = byId[b].parent; p; p = byId[p].parent) if (p === a) return true; return false }
+
+  await test('E92_S13_T02: the goal area is not a fixed number any more: LAYOUT has no goalAreaW or goalOffsetX; the disc area is its own constant', () => {
+    assert.ok(!('goalAreaW' in LAYOUT) && !('goalOffsetX' in LAYOUT))
+    assert.deepStrictEqual({ ...mod.DISC_AREA }, { w: 260, offsetX: 70 })
+    const g = castleGraph(16, 6, i => ({ 2: [1] })[i])
+    const disc = build(g, 'E01', LABELS_EN)
+    assert.strictEqual(disc.layout.goalAreaW, 260)
+    assert.strictEqual(disc.layout.goalOffsetX, 70)
+    assert.ok(!('castle' in disc) && !('goalArea' in disc.layout), 'a disc layout is exactly the layout it always was')
+    const castle = buildCastle(g, 'E01', LABELS_EN)
+    assert.ok(castle.castle && castle.castle.box && castle.layout.goalArea === 'castle')
+    assert.strictEqual(castle.layout.goalAreaW, mod.CASTLE_MARGIN.left + castle.castle.box.w + mod.CASTLE_MARGIN.right, 'the area is the castle box and its margins')
+    assert.notStrictEqual(castle.layout.goalAreaW, 260)
+  })
+
+  for (const [name, g] of CASTLES) {
+    await test(`E92_S13_T02: castle box, no overlap and the room it takes (${name})`, () => {
+      const m = buildCastle(g, 'E01', LABELS_EN)
+      const c = m.castle
+      const L = m.layout
+      const { box } = c
+      // the box is the castle's size in the drawing; goal.x is its centre and the area starts at layout.goalX
+      assert.ok(box.w > 0 && box.h > 0 && box.left === -box.right && box.top === -box.bottom)
+      assert.strictEqual(m.goal.x, L.goalX + L.goalOffsetX)
+      assert.strictEqual(L.width, L.goalX + L.goalAreaW)
+      const left = m.goal.x + box.left
+      const right = m.goal.x + box.right
+      const top = m.goal.y + box.top
+      const bottom = m.goal.y + box.bottom
+      // the castle clears the tree: every card, the bands and the last column are left of it
+      for (const n of m.nodes) assert.ok(n.x + n.w < left, `${n.id} is left of the castle`)
+      for (const b of m.bands) assert.ok(L.goalX - L.goalGap / 2 < left && b.start.x + b.start.w < left, 'bands end before the castle')
+      assert.ok(left >= L.goalX && right <= L.width, 'inside the goal area')
+      // it clears the goal text: the text starts under the castle and its block ends inside the drawing
+      assert.ok(c.text.top >= box.bottom && m.goal.y + c.text.top + c.text.blockH <= L.height - LAYOUT.pad + 1e-9, 'the text fits under the castle')
+      assert.ok(top >= LAYOUT.pad - 1e-9 && bottom <= L.height, 'the castle is inside the drawing')
+      // Fit and fullscreen use the box of the drawing (x -10, y -10, width + 20, height + 20): it holds the castle and the text
+      assert.ok(-10 <= left && right <= L.width + 10 && -10 <= top && m.goal.y + c.text.top + c.text.blockH <= L.height + 10)
+      // size limits: the castle is drawn at a uniform scale that keeps it within 440 x 420, never below the minimum scale
+      assert.ok(c.scale >= c.limits.minScale && c.scale <= 1)
+      if (c.scale > c.limits.minScale) assert.ok(box.w <= c.limits.maxWidth + 0.01 && box.h <= c.limits.maxHeight + 0.01, `box ${box.w} x ${box.h}`)
+      // no overlap between towers: two towers that do not stand on one another never share a place
+      const byId = Object.fromEntries(c.towers.map(t => [t.storyId, t]))
+      assert.strictEqual(c.towers.length, g.stories.length, 'one tower per story')
+      for (let i = 0; i < c.towers.length; i++) {
+        for (let j = i + 1; j < c.towers.length; j++) {
+          const a = c.towers[i]
+          const b = c.towers[j]
+          if (ancestor(byId, a.storyId, b.storyId) || ancestor(byId, b.storyId, a.storyId)) continue
+          const ra = rectOf(a)
+          const rb = rectOf(b)
+          const apart = ra.x1 <= rb.x0 || rb.x1 <= ra.x0 || ra.y1 <= rb.y0 || rb.y1 <= ra.y0
+          assert.ok(apart, `${a.storyId} and ${b.storyId} overlap`)
+        }
+      }
+      // roots stand beside each other on the table: their extents are disjoint and inside the table and the wall
+      const roots = c.roots.map(r => byId[r]).sort((a, b) => a.cx - b.cx)
+      for (let i = 1; i < roots.length; i++) assert.ok(roots[i - 1].cx + roots[i - 1].w <= roots[i].cx - roots[i].w, 'roots are side by side')
+      for (const t of c.towers) {
+        assert.ok(Math.abs(t.cx) + t.w <= c.wall.half + 0.02, `${t.storyId} stands inside the wall`)
+        // what stands on a tower is never wider than it, and stands on its top
+        if (t.parent && byId[t.parent]) assert.ok(t.w <= byId[t.parent].w + 0.02 && Math.abs(t.cx - byId[t.parent].cx) + t.w <= byId[t.parent].w + 0.02, `${t.storyId} is inside its parent`)
+        if (t.stacking === 'tower') assert.strictEqual(t.base, byId[t.supports[0]].topY, `${t.storyId} stands on the top of its tower`)
+        if (t.stacking === 'bridge') assert.ok(t.deck && t.deck.x2 > t.deck.x1 && t.base === Math.min(...t.supports.map(id => byId[id].topY)), `${t.storyId} stands on a deck at the highest support`)
+      }
+      // folding groups moves no castle: the box is the same however the groups are folded
+      assert.deepStrictEqual(unfoldGroups(m, new Set(m.foldable)).castle, m.castle)
+    })
+  }
+
+  await test('E92_S13_T02: the 26-task story widens its own tower (k = ceil(26 / 8) = 4 blocks across, 7 layers) and not the castle table; the other fixtures show the size limits', () => {
+    const one = buildCastle(CASTLES[4][1], 'E01', LABELS_EN).castle
+    const t = one.towers[0]
+    assert.deepStrictEqual([t.plan.tasksPerLayer, t.plan.layers, t.layers.length, t.plan.width], [4, 7, 7, 4])
+    assert.ok(t.layers.length <= 8 && t.w >= 20, 'a wider footprint, not a taller tower')
+    const median = buildCastle(CASTLES[0][1], 'E01', LABELS_EN).castle
+    const max = buildCastle(CASTLES[2][1], 'E01', LABELS_EN).castle
+    const wide = buildCastle(CASTLES[3][1], 'E01', LABELS_EN).castle
+    assert.strictEqual(median.scale, 1, 'a median castle is drawn at full size')
+    assert.ok(wide.scale < 1 && wide.box.w <= 440.01, '22 stories side by side are scaled down to the maximum width')
+    assert.ok(max.box.w <= 440.01 && max.box.h <= 420.01 || max.scale === max.limits.minScale)
+    assert.ok(median.box.w >= 100 && median.towers.every(x => x.layerH >= 7 && x.layerH <= 14), 'block size is bounded')
+  })
+
+  await test('E92_S13_T02: edges to the goal end on points along the wall: a castle has as many ends as it is asked for, in order of height, all different', async () => {
+    const { goalAnchors } = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'components', 'progress', 'castleLayout.js')).href)
+    const c = buildCastle(CASTLES[0][1], 'E01', LABELS_EN).castle
+    for (const n of [0, 1, 2, 5, 17]) {
+      const pts = goalAnchors(c, n)
+      assert.strictEqual(pts.length, n)
+      assert.strictEqual(new Set(pts.map(p => `${p.x},${p.y}`)).size, n)
+      for (let i = 1; i < n; i++) assert.ok(pts[i].y > pts[i - 1].y, 'top to bottom')
+      for (const p of pts) assert.ok(p.x <= 0 && p.x >= c.box.left && p.y >= c.box.top && p.y <= c.box.bottom, 'on the castle, left of its centre')
+    }
+    assert.ok(Math.abs(goalAnchors(c, 1)[0].x + c.wall.half * c.scale) < 0.02, 'one edge ends at the left corner of the wall')
+  })
+
+  await test('E92_S13_T02: unfoldGroups keeps the layout the model has and can lay the goal out for another area; the castle model is plain data and the same input gives the same output', () => {
+    const g = CASTLES[0][1]
+    const castle = buildCastle(g, 'E01', LABELS_EN)
+    const same = unfoldGroups(castle, new Set())
+    assert.deepStrictEqual(same, castle, 'the model\'s own area is kept')
+    const star = unfoldGroups(castle, new Set(), { goalArea: 'disc' })
+    assert.strictEqual(star.layout.goalAreaW, 260)
+    assert.ok(!('castle' in star))
+    assert.deepStrictEqual(star, build(g, 'E01', LABELS_EN), 'a castle model laid out for the disc is the disc model')
+    assert.deepStrictEqual(unfoldGroups(star, new Set(), { goalArea: 'castle' }), unfoldGroups(star, new Set(), { goalArea: 'disc' }), 'a disc model has no castle to lay out')
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(castle)), castle)
+    assert.deepStrictEqual(buildCastle(JSON.parse(JSON.stringify(g)), 'E01', LABELS_EN), castle)
+    assert.ok(buildCastle(g, 'E99', LABELS_EN).empty, 'an unknown epic is still empty')
+  })
+
+  await test('E92_S13_T02: castleLayout.js is pure: no import but the castle model, no React, DOM, colour or word', () => {
+    const text = fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'progress', 'castleLayout.js'), 'utf8')
+    const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    assert.deepStrictEqual([...code.matchAll(/^\s*import\b[^\n]*from\s+'([^']+)'/gm)].map(x => x[1]), ['./castleModel.js'])
+    assert.ok(!/#[0-9a-fA-F]{3,8}\b/.test(code) && !/\b(rgb|rgba|hsl|hsla)\(/.test(code) && !/var\(--/.test(code) && !/\b(document|window)\b/.test(code))
+    for (const l of [...code.matchAll(/'([^'\\]*)'/g)].map(x => x[1])) assert.ok(!/\s/.test(l) && !/^[A-Z][a-z]/.test(l), 'word: ' + l)
+  })
+
+  // ===================== E92_S13_T03: the facade goal area =====================
+  const facadeOf = m => unfoldGroups(m, new Set(), { goalArea: 'facade' })
+
+  await test('E92_S13_T03: the facade has its own goal area: the model carries the facade next to the citadel, built from the same castle model, and a facade layout is laid out for its own box', () => {
+    assert.ok(mod.GOAL_AREAS.includes('facade'))
+    const g = CASTLES[0][1]
+    const m = buildCastle(g, 'E01', LABELS_EN)
+    assert.ok(m.castle.facade && m.castle.facade.box && m.castle.source === m.castle.facade.source, 'one castle model object')
+    assert.strictEqual(m.layout.goalArea, 'castle', 'the default area is still the citadel\'s')
+    const fa = facadeOf(m)
+    assert.strictEqual(fa.layout.goalArea, 'facade')
+    assert.strictEqual(fa.layout.goalAreaW, mod.CASTLE_MARGIN.left + m.castle.facade.box.w + mod.CASTLE_MARGIN.right, 'the area is the facade box and its margins')
+    assert.strictEqual(fa.goal.x, fa.layout.goalX + fa.layout.goalOffsetX)
+    assert.notStrictEqual(m.castle.facade.box.w, m.castle.box.w, 'the facade has its own proportions')
+    assert.deepStrictEqual(unfoldGroups(fa, new Set()), fa, 'unfoldGroups keeps the facade area the model has')
+    assert.deepStrictEqual(unfoldGroups(fa, new Set(), { goalArea: 'castle' }), m, 'and can lay the goal out for the citadel again')
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(m)), m, 'plain data')
+    assert.ok(!('castle' in build(g, 'E01', LABELS_EN)), 'a disc model carries no facade')
+  })
+
+  for (const [name, g] of CASTLES) {
+    await test(`E92_S13_T03: facade box, no overlap and the room it takes (${name})`, () => {
+      const m = facadeOf(buildCastle(g, 'E01', LABELS_EN))
+      const c = m.castle.facade
+      const L = m.layout
+      const { box } = c
+      assert.ok(box.w > 0 && box.h > 0 && box.left === -box.right && box.top === -box.bottom)
+      assert.strictEqual(L.width, L.goalX + L.goalAreaW)
+      const left = m.goal.x + box.left
+      const right = m.goal.x + box.right
+      const top = m.goal.y + box.top
+      const bottom = m.goal.y + box.bottom
+      for (const n of m.nodes) assert.ok(n.x + n.w < left, `${n.id} is left of the facade`)
+      assert.ok(left >= L.goalX && right <= L.width, 'inside the goal area')
+      assert.ok(c.text.top >= box.bottom && m.goal.y + c.text.top + c.text.blockH <= L.height - LAYOUT.pad + 1e-9, 'the text fits under the facade')
+      assert.ok(top >= LAYOUT.pad - 1e-9 && bottom <= L.height, 'the facade is inside the drawing')
+      // Fit and fullscreen use the box of the drawing (x -10, y -10, width + 20, height + 20): it holds the facade and the text
+      assert.ok(-10 <= left && right <= L.width + 10 && -10 <= top && m.goal.y + c.text.top + c.text.blockH <= L.height + 10)
+      assert.ok(c.scale >= c.limits.minScale && c.scale <= 1)
+      if (c.scale > c.limits.minScale) assert.ok(box.w <= c.limits.maxWidth + 0.01 && box.h <= c.limits.maxHeight + 0.01, `box ${box.w} x ${box.h}`)
+      // every tower and the whole wall are inside the natural frame, and so inside the box
+      const byId = Object.fromEntries(c.towers.map(t => [t.storyId, t]))
+      assert.strictEqual(c.towers.length, g.stories.length, 'one tower per story')
+      for (const t of c.towers) {
+        assert.ok(t.cx - t.w >= c.natural.left && t.cx + t.w <= c.natural.right && t.reachY >= c.natural.top && t.base <= 0, `${t.storyId} is inside the natural frame`)
+        assert.ok(Math.abs(t.cx) + t.w <= c.wall.rowHalf + 0.02, `${t.storyId} stands within the row the wall grows from`)
+      }
+      for (let i = 0; i < c.towers.length; i++) {
+        for (let j = i + 1; j < c.towers.length; j++) {
+          const a = c.towers[i]
+          const b = c.towers[j]
+          if (ancestor(byId, a.storyId, b.storyId) || ancestor(byId, b.storyId, a.storyId)) continue
+          const ra = rectOf(a)
+          const rb = rectOf(b)
+          assert.ok(ra.x1 <= rb.x0 || rb.x1 <= ra.x0 || ra.y1 <= rb.y0 || rb.y1 <= ra.y0, `${a.storyId} and ${b.storyId} overlap`)
+        }
+      }
+      const roots = c.roots.map(r => byId[r]).sort((a, b) => a.cx - b.cx)
+      for (let i = 1; i < roots.length; i++) assert.ok(roots[i - 1].cx + roots[i - 1].w <= roots[i].cx - roots[i].w, 'roots are side by side')
+      for (const t of c.towers) {
+        if (t.parent && byId[t.parent]) assert.ok(t.w <= byId[t.parent].w + 0.02 && Math.abs(t.cx - byId[t.parent].cx) + t.w <= byId[t.parent].w + 0.02, `${t.storyId} is inside its parent`)
+        if (t.stacking === 'tower') assert.strictEqual(t.base, byId[t.supports[0]].topY, `${t.storyId} stands on the top of its tower`)
+        if (t.stacking === 'bridge') assert.ok(t.deck && t.deck.x2 > t.deck.x1 && t.base === Math.min(...t.supports.map(id => byId[id].topY)), `${t.storyId} stands on a deck at the highest support`)
+      }
+      // the wall lies beside the towers, never over them
+      for (const sg of c.wall.segments) assert.ok(sg.x2 <= -c.wall.rowHalf + 1e-9 || sg.x1 >= c.wall.rowHalf - 1e-9, 'a wall segment is outside the row')
+      // folding groups moves no facade
+      assert.deepStrictEqual(unfoldGroups(buildCastle(g, 'E01', LABELS_EN), new Set(m.foldable), { goalArea: 'facade' }).castle.facade, c)
+    })
+  }
+
+  await test('E92_S13_T03: the 26-task story widens its own tower in the facade too (4 blocks across, 7 layers); the wide and the max fixtures are scaled to the facade limits', () => {
+    const one = facadeOf(buildCastle(CASTLES[4][1], 'E01', LABELS_EN)).castle.facade
+    const t = one.towers[0]
+    assert.deepStrictEqual([t.plan.tasksPerLayer, t.plan.layers, t.layers.length, t.plan.width], [4, 7, 7, 4])
+    assert.ok(t.w >= 18 && t.layers.length <= 8, 'wider, not taller')
+    const median = facadeOf(buildCastle(CASTLES[0][1], 'E01', LABELS_EN)).castle.facade
+    const wide = facadeOf(buildCastle(CASTLES[3][1], 'E01', LABELS_EN)).castle.facade
+    assert.strictEqual(median.scale, 1, 'a median facade is drawn at full size')
+    assert.ok(wide.scale < 1 && wide.box.w <= 480.01, '22 stories side by side are scaled down to the maximum width')
+    assert.ok(median.towers.every(x => x.layerH >= 9 && x.layerH <= 16), 'block size is bounded')
+  })
+
+  await test('E92_S13_T03: edges to the goal end on points down the left of the facade: as many as asked for, in order of height, all different, left of the centre', async () => {
+    const { facadeAnchors } = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'components', 'progress', 'facadeLayout.js')).href)
+    const c = buildCastle(CASTLES[0][1], 'E01', LABELS_EN).castle.facade
+    for (const n of [0, 1, 2, 5, 17]) {
+      const pts = facadeAnchors(c, n)
+      assert.strictEqual(pts.length, n)
+      assert.strictEqual(new Set(pts.map(p => `${p.x},${p.y}`)).size, n)
+      for (let i = 1; i < n; i++) assert.ok(pts[i].y > pts[i - 1].y, 'top to bottom')
+      for (const p of pts) assert.ok(p.x <= 0 && p.x >= c.box.left && p.y >= c.box.top && p.y <= c.box.bottom, 'on the facade, left of its centre')
+    }
+    assert.strictEqual(facadeAnchors(null, 2).length, 2, 'no layout: two points, no throw')
+  })
+
+  await test('E92_S13_T03: facadeLayout.js is pure: no import but the castle model, no React, DOM, colour or word; an empty or odd model gives a facade with a wall and a gate and does not throw', async () => {
+    const text = fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'progress', 'facadeLayout.js'), 'utf8')
+    const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    assert.deepStrictEqual([...code.matchAll(/^\s*import\b[^\n]*from\s+'([^']+)'/gm)].map(x => x[1]), ['./castleModel.js'])
+    assert.ok(!/#[0-9a-fA-F]{3,8}\b/.test(code) && !/\b(rgb|rgba|hsl|hsla)\(/.test(code) && !/var\(--/.test(code) && !/\b(document|window)\b/.test(code))
+    for (const l of [...code.matchAll(/'([^'\\]*)'/g)].map(x => x[1])) assert.ok(!/\s/.test(l) && !/^[A-Z][a-z]/.test(l), 'word: ' + l)
+    const { layoutFacade } = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'components', 'progress', 'facadeLayout.js')).href)
+    for (const odd of [undefined, null, {}, { towers: 5 }]) {
+      const f = layoutFacade(odd)
+      assert.ok(f.empty && f.towers.length === 0 && f.wall.segments.length > 0 && f.box.w > 0 && f.gate.x === 0, 'an empty castle is still a wall and a gate')
+    }
+  })
+
+  // ===================== E92_S13_T07: the seasons tree goal area =====================
+  const treeOf = m => unfoldGroups(m, new Set(), { goalArea: 'tree' })
+  const progressDir = path.join(__dirname, '..', 'src', 'components', 'progress')
+
+  await test('E92_S13_T07: the seasons tree has its own goal area: the model carries a tree box next to the citadel and the facade, built from the same castle model; a tree layout is laid out for its own box', () => {
+    assert.ok(mod.GOAL_AREAS.includes('tree'))
+    const g = CASTLES[0][1]
+    const m = buildCastle(g, 'E01', LABELS_EN)
+    assert.ok(m.castle.tree && m.castle.tree.box && m.castle.source === m.castle.tree.source && m.castle.facade.source === m.castle.tree.source, 'one castle model object for all three designs')
+    assert.strictEqual(m.layout.goalArea, 'castle', 'the default area is still the citadel\'s')
+    const tr = treeOf(m)
+    assert.strictEqual(tr.layout.goalArea, 'tree')
+    assert.strictEqual(tr.layout.goalAreaW, mod.CASTLE_MARGIN.left + m.castle.tree.box.w + mod.CASTLE_MARGIN.right, 'the area is the tree box and its margins')
+    assert.strictEqual(tr.goal.x, tr.layout.goalX + tr.layout.goalOffsetX)
+    assert.ok(m.castle.tree.box.w > 0 && m.castle.tree.box.h > 0, 'a tree box with an overall width and height')
+    assert.deepStrictEqual(unfoldGroups(tr, new Set()), tr, 'unfoldGroups keeps the tree area the model has')
+    assert.deepStrictEqual(unfoldGroups(tr, new Set(), { goalArea: 'castle' }), m, 'and can lay the goal out for the citadel again')
+    assert.deepStrictEqual(unfoldGroups(tr, new Set(), { goalArea: 'facade' }), facadeOf(m))
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(m)), m, 'plain data')
+    assert.ok(!('castle' in build(g, 'E01', LABELS_EN)), 'a disc model carries no tree box: the parity recordings are untouched')
+  })
+
+  for (const [name, g] of CASTLES) {
+    await test(`E92_S13_T07: tree box, no overlap and the room it takes (${name})`, () => {
+      const m = treeOf(buildCastle(g, 'E01', LABELS_EN))
+      const c = m.castle.tree
+      const L = m.layout
+      const { box } = c
+      assert.ok(box.w > 0 && box.h > 0 && box.left === -box.right && box.top === -box.bottom)
+      assert.strictEqual(L.width, L.goalX + L.goalAreaW)
+      const left = m.goal.x + box.left
+      const right = m.goal.x + box.right
+      const top = m.goal.y + box.top
+      const bottom = m.goal.y + box.bottom
+      // beside the progress tree: every card and band is left of the box, the box is inside the goal area and the drawing
+      for (const n of m.nodes) assert.ok(n.x + n.w < left, `${n.id} is left of the tree`)
+      for (const b of m.bands) assert.ok(b.start.x + b.start.w < left, 'bands end before the tree')
+      assert.ok(left >= L.goalX && right <= L.width, 'inside the goal area')
+      assert.ok(c.text.top >= box.bottom && m.goal.y + c.text.top + c.text.blockH <= L.height - LAYOUT.pad + 1e-9, 'the text fits under the tree and is not covered by it')
+      assert.ok(top >= LAYOUT.pad - 1e-9 && bottom <= L.height, 'the tree is inside the drawing')
+      // Fit and fullscreen use the box of the drawing (x -10, y -10, width + 20, height + 20): it holds the tree and the text
+      assert.ok(-10 <= left && right <= L.width + 10 && -10 <= top && m.goal.y + c.text.top + c.text.blockH <= L.height + 10)
+      assert.ok(c.scale >= c.limits.minScale && c.scale <= 1)
+      if (c.scale > c.limits.minScale) assert.ok(box.w <= c.limits.maxWidth + 0.01 && box.h <= c.limits.maxHeight + 0.01, `box ${box.w} x ${box.h}`)
+      assert.strictEqual(c.branches.length, g.stories.length, 'one branch per story')
+      // no overlapping clumps, no overlapping labels, all inside the frame
+      for (let i = 0; i < c.clumps.length; i++) for (let j = i + 1; j < c.clumps.length; j++) assert.ok(Math.hypot(c.clumps[i].x - c.clumps[j].x, c.clumps[i].y - c.clumps[j].y) >= c.clumps[i].r + c.clumps[j].r - 0.02, `clumps ${c.clumps[i].taskId} and ${c.clumps[j].taskId} overlap`)
+      for (let i = 0; i < c.labels.length; i++) for (let j = i + 1; j < c.labels.length; j++) {
+        const a = c.labels[i], b = c.labels[j]
+        assert.ok(Math.abs(a.x - b.x) >= (a.w + b.w) / 2 - 0.02 || Math.abs(a.y - b.y) >= (a.h + b.h) / 2 - 0.02, `labels ${a.storyId} and ${b.storyId} overlap`)
+      }
+      for (const cl of c.clumps) assert.ok(cl.x - cl.r >= c.frame.x && cl.x + cl.r <= c.frame.x + c.frame.w && cl.y - cl.r >= c.frame.y && cl.y + cl.r <= c.frame.y + c.frame.h, 'a clump is inside the frame')
+      // folding groups moves no tree: the box is the same however the groups are folded
+      assert.deepStrictEqual(unfoldGroups(m, new Set(m.foldable), { goalArea: 'tree' }).castle.tree, c)
+    })
+  }
+
+  await test('E92_S13_T07: the 26-task story keeps its 26 clumps without overlap at the stated minimum size; the bigger fixtures are scaled to the box, the median at its natural size', async () => {
+    const one = treeOf(buildCastle(CASTLES[4][1], 'E01', LABELS_EN)).castle.tree
+    assert.strictEqual(one.clumps.length, 26)
+    const T = await import(pathToFileURL(path.join(progressDir, 'treeLayout.js')).href)
+    assert.ok(Math.abs(one.clumps[0].slotR / one.growth.S - T.CLUMP.radius * T.LARGE_STORY.minShrink) < 0.2, 'clumps shrink to the stated minimum (rounded)')
+    const median = treeOf(buildCastle(CASTLES[0][1], 'E01', LABELS_EN)).castle.tree
+    const max = treeOf(buildCastle(CASTLES[2][1], 'E01', LABELS_EN)).castle.tree
+    assert.ok(max.scale < median.scale && max.scale >= max.limits.minScale)
+  })
+
+  await test('E92_S13_T07: edges to the goal end on points down the left rim of the island: as many as asked for, in order of height, all different, left of the centre', async () => {
+    const { treeAnchors } = await import(pathToFileURL(path.join(progressDir, 'treeLayout.js')).href)
+    const c = buildCastle(CASTLES[0][1], 'E01', LABELS_EN).castle.tree
+    for (const n of [0, 1, 2, 5, 17]) {
+      const pts = treeAnchors(c, n)
+      assert.strictEqual(pts.length, n)
+      assert.strictEqual(new Set(pts.map(p => `${p.x},${p.y}`)).size, n)
+      for (let i = 1; i < n; i++) assert.ok(pts[i].y > pts[i - 1].y, 'top to bottom')
+      for (const p of pts) assert.ok(p.x < 0 && p.x >= c.box.left && p.y >= c.box.top && p.y <= c.box.bottom, 'on the tree, left of its centre')
+    }
+    assert.strictEqual(treeAnchors(null, 2).length, 2, 'no layout: two points, no throw')
+  })
+
+  await test('E92_S13_T07: the tree box does not change with the percent, so Fit and the large view stay put while an epic is worked on', () => {
+    const at = pct => { const g = JSON.parse(JSON.stringify(CASTLES[0][1])); g.epics[0].epic_progress.percent = pct; return treeOf(buildCastle(g, 'E01', LABELS_EN)) }
+    const a = at(0)
+    const b = at(100)
+    assert.deepStrictEqual([a.castle.tree.box, a.castle.tree.frame, a.layout.width, a.layout.height], [b.castle.tree.box, b.castle.tree.frame, b.layout.width, b.layout.height])
   })
 
   console.log(`\ndependency-tree-model: ${count} tests passed`)

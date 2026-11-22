@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # E80_S01_T08: `project/.workflows/` is blocklisted in .publicignore (project-local workflow
 # definitions are per-project, never shipped) and documented in the public-mirror parity doc,

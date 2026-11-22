@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Regression coverage for E32_S16 — proving a /jenga-style wave of MORE than
 # max_concurrent_developers independent dispatches still caps concurrent

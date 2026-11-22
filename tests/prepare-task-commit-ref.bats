@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:slow
 #
 # E79_S04_T10: scripts/prepare-task-commit-ref.sh is the single developer entry point that resolves and freezes a task's commit ref
 # by composing commit-settings.sh (opt-in), task-commit-ref.sh (the store) and apply-ref-policy.sh (the chain + on_unresolved=fail).

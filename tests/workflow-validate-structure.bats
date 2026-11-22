@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E80_S01_T03: scripts/workflow/validate-workflow.sh, the structural half of the workflow definition validator.
 # Covers: missing id / steps, an empty or non-array steps, an unknown step type, a duplicate step id, a missing

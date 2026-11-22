@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # `jenga sync [--dry-run]` and its sharing with scripts/postinstall.js (E26_S11).
 #
@@ -257,8 +258,13 @@ setup() {
 
   # same per-step lines (normalising the consumer path; sync's own closing "N file(s) changed" line is not a step)
   local pl sl
-  pl="$(printf '%s\n' "$post_out" | grep -E '^  (✓|ℹ|⚠) ' | sed "s|$A|<C>|g")"
-  sl="$(printf '%s\n' "$sync_out" | grep -E '^  (✓|ℹ|⚠) ' | grep -vE 'file\(s\) changed|Nothing changed' | sed "s|$B|<C>|g")"
+  # Both the path as built and its canonical form are normalised: on macOS $BATS_TEST_TMPDIR is under /var, a symlink to
+  # /private/var, and the per-step lines (e.g. the .github/hooks/jenga.json one) print the canonical /private/var path.
+  local A_real B_real
+  A_real="$(cd "$A" && pwd -P)"
+  B_real="$(cd "$B" && pwd -P)"
+  pl="$(printf '%s\n' "$post_out" | grep -E '^  (✓|ℹ|⚠) ' | sed -e "s|$A_real|<C>|g" -e "s|$A|<C>|g")"
+  sl="$(printf '%s\n' "$sync_out" | grep -E '^  (✓|ℹ|⚠) ' | grep -vE 'file\(s\) changed|Nothing changed' | sed -e "s|$B_real|<C>|g" -e "s|$B|<C>|g")"
   [ -n "$pl" ]
   [ "$pl" = "$sl" ]
 }

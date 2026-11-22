@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for E72_S04_T04: the j.commit test gate is wired into the skills.
 #

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Legacy-path seeding for the first manifest a consumer ever gets (E26_S08_T03).
 #

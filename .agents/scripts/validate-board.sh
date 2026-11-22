@@ -122,6 +122,8 @@ USAGE_KEYS = {
     "usage_input_tokens", "usage_output_tokens", "usage_cache_write_tokens",
     "usage_cache_read_tokens", "usage_total_tokens", "usage_transcripts",
     "usage_measured_on", "usage_possibly_incomplete",
+    # E90_S01_T05 cost-equivalent unit (a labelled derived view, not a currency amount).
+    "usage_cost_units",
 }
 
 # E76_S03_T04 per-story token usage. Runtime-written, never authored by hand. STORY-ONLY: not
@@ -137,6 +139,16 @@ STORY_USAGE_KEYS = {
     "usage_overhead_input_tokens", "usage_overhead_output_tokens", "usage_overhead_cache_write_tokens",
     "usage_overhead_cache_read_tokens", "usage_overhead_total_tokens",
     "usage_total_tokens", "usage_measured_on", "usage_possibly_incomplete",
+    # E90_S01_T05 cost-equivalent unit fields (derived view, not a currency amount). usage_cost_units
+    # is also in USAGE_KEYS, scoped to tasks; here it is the story's own sum.
+    "usage_tasks_cost_units", "usage_overhead_cost_units", "usage_cost_units",
+}
+
+# E90_S01_T05. Value rule for the cost-unit fields, from project/documentation/task-usage.md
+# ("How the number is represented on the board"): a non-negative whole number, digits only.
+# Absent means not measured; an explicit 0 is a measured zero.
+COST_UNIT_KEYS = {
+    "usage_cost_units", "usage_tasks_cost_units", "usage_overhead_cost_units",
 }
 
 # E39 tiered item-level caution/escalation fields. OPTIONAL and story/task-only — epics do not
@@ -490,6 +502,13 @@ def validate_file(source: Path):
     unknown_keys = sorted(set(data.keys()) - allowed_keys)
     if unknown_keys:
         raise ValueError(f"{source}: unknown frontmatter field(s) for {item_type}: {', '.join(unknown_keys)}")
+
+    for key in sorted(COST_UNIT_KEYS & set(data.keys())):
+        if not re.fullmatch(r"\d+", str(data[key]).strip()):
+            raise ValueError(
+                f"{source}: {key} must be a non-negative whole number (digits only), "
+                f"got '{data[key]}'"
+            )
 
     status = data.get("status")
     if status and status not in STATUS_VALUES:

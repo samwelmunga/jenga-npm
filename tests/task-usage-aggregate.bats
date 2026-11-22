@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E76_S01_T04: scripts/task-usage.sh stage 3 - per-task aggregation, overhead and unmapped buckets, filters and the
 # machine-readable output (--report).
@@ -180,7 +181,11 @@ task() { printf '%s' "$output" | jq -r --arg t "$1" ".tasks[\$t] | $2"; }
   [ "$(printf '%s' "$output" | jq '.unmapped | length')" = "1" ]
 }
 
-@test "stdout is valid JSON with the documented keys, schema_version 1, and no price or cost field" {
+# E90_S01_T03 - DELIBERATE REPLACEMENT of the E76 "... and no price or cost field" assertion. Epic E90 allows exactly one
+# labelled derived view, "cost_units" (with its marker "unpriced_models"), a cost-equivalent unit relative to one fresh
+# input token and not a currency amount. Any other price- or cost-like key still fails, and so do usd, dollar, eur,
+# currency and any "$" in the output.
+@test "stdout is valid JSON with the documented keys, schema_version 1, and no currency field (only the labelled cost unit)" {
   mk_sub "$SLUG" s1 a1 '{"agentType":"developer","name":"E72_S01_T01"}' "$(ln_usage r1 1 2 3 4)"
   mk_session s1 "$(ln_usage r2 1 1 1 1)"
   run --separate-stderr report
@@ -189,8 +194,8 @@ task() { printf '%s' "$output" | jq -r --arg t "$1" ".tasks[\$t] | $2"; }
   [ "$(printf '%s' "$output" | jq -c 'keys')" = '["generated_at","overhead","schema_version","tasks","unmapped","warnings"]' ]
   [ "$(printf '%s' "$output" | jq '.schema_version')" = "1" ]
   printf '%s' "$output" | jq -e '.generated_at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")' >/dev/null
-  # no key anywhere in the document is price-like, and no dollar sign appears in the output
-  [ "$(printf '%s' "$output" | jq '[.. | objects | keys[] | select(test("price|cost|usd|dollar|eur|currency"; "i"))] | length')" = "0" ]
+  # no key anywhere in the document is price-like or currency-like, apart from the labelled cost unit; no dollar sign
+  [ "$(printf '%s' "$output" | jq '[.. | objects | keys[] | select(test("price|cost|usd|dollar|eur|currency"; "i")) | select(. != "cost_units" and . != "unpriced_models")] | length')" = "0" ]
   [[ "$output" != *'$'* ]]
 }
 

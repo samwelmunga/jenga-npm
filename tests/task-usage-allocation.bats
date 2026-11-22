@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E76_S03_T03: scripts/task-usage.sh --report overhead allocation and the per-story rollup (--allocate, --stories).
 #
@@ -19,12 +20,20 @@ setup() {
   PROJECTS="$BATS_TEST_TMPDIR/projects"
   BOARD="$BATS_TEST_TMPDIR/board-stories"
   mkdir -p "$PROJECTS/$SLUG"
+  # E90_S02_T04: the price-ratio config is a direct dependency, so every run needs a valid one. The fixtures below carry
+  # model "unit" with ratios input 1, cache_write 1, output 1, cache_read 0: one cost unit per input, output and
+  # cache_write token, so the cost-unit weight equals the old input + output + cache_write weight and the worked-example
+  # numbers stay those of the document.
+  cat > "$BATS_TEST_TMPDIR/unit-ratios.json" <<'JSON'
+{"config_version":1,"date":"2026-11-19","models":{"unit":{"input":1,"cache_write_5m":1,"cache_write_1h":1,"cache_read":0,"output":1}}}
+JSON
+  export JENGA_PRICE_RATIOS_FILE="$BATS_TEST_TMPDIR/unit-ratios.json"
 }
 
 # ln_usage <requestId> <input> <output> <cache_write> <cache_read>: one assistant line with usage
 ln_usage() {
-  jq -n -c --arg r "$1" --argjson i "$2" --argjson o "$3" --argjson cw "$4" --argjson cr "$5" \
-    '{type:"assistant",requestId:$r,message:{role:"assistant",usage:{input_tokens:$i,output_tokens:$o,cache_creation_input_tokens:$cw,cache_read_input_tokens:$cr}}}'
+  jq -n -c --arg r "$1" --arg m "${LN_MODEL-unit}" --argjson i "$2" --argjson o "$3" --argjson cw "$4" --argjson cr "$5" \
+    '{type:"assistant",requestId:$r,message:{role:"assistant",model:$m,usage:{input_tokens:$i,output_tokens:$o,cache_creation_input_tokens:$cw,cache_read_input_tokens:$cr}}}'
 }
 
 # mk_sub <session> <agent-id> <meta name> <input> <output> <cache_write> <cache_read>: a subagent transcript + meta
@@ -299,7 +308,8 @@ alloc() { printf '%s' "$output" | jq -r --arg s "$1" ".stories[\$s].allocated_ov
   mk_sub s1 a1 E9_S02_T01 0 0 5000000003 0
   mk_sub s1 a2 E10_S01_T01 0 0 7000000009 0
   mk_sub s1 a3 E9_S10_T01 0 0 11000000017 0
-  mk_session s1 4000000000007 3000000000001 9007199254740990 8123456789012345
+  # the session's own counters are beyond what the cost-unit arithmetic keeps exact, so it carries no model (unpriced)
+  LN_MODEL="" mk_session s1 4000000000007 3000000000001 9007199254740990 8123456789012345
   run report --allocate
   [ "$status" -eq 0 ]
   # expected values computed with exact big-integer arithmetic (largest remainder, numeric-ID tie-break)
@@ -410,4 +420,223 @@ alloc() { printf '%s' "$output" | jq -r --arg s "$1" ".stories[\$s].allocated_ov
   [ "$(printf '%s' "$output" | jq '.stories.E9_S02.weight')" = "40" ]
   [ "$(alloc E9_S02 cache_read)" = "80" ]
   [ "$(alloc E9_S10 cache_read)" = "20" ]
+}
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# E90_S01_T04: the cost-weighted story weight. Fixtures carry a model and a price-ratio config of their own.
+# Ratios (one model, "m-a"), so in hundredths: input 100, 5-minute write 125, 1-hour write 200, cache read 10,
+# output 500. Cost in hundredths = 100 x input + 125 x write_5m + 200 x write_1h + 10 x read + 500 x output; one cost
+# unit is the hundredths rounded half up. These are the numbers of the worked example in task-usage.md.
+# ---------------------------------------------------------------------------------------------------------------
+
+use_ratios() {
+  cat > "$BATS_TEST_TMPDIR/ratios.json" <<'JSON'
+{"config_version":1,"date":"2026-11-19","models":{
+ "m-a":{"input":1,"cache_write_5m":1.25,"cache_write_1h":2,"cache_read":0.1,"output":5}}}
+JSON
+  export JENGA_PRICE_RATIOS_FILE="$BATS_TEST_TMPDIR/ratios.json"
+}
+
+# lnm <requestId> <model> <input> <output> <cw5m> <cw1h> <cache_read>
+lnm() {
+  jq -n -c --arg r "$1" --arg m "$2" --argjson i "$3" --argjson o "$4" --argjson w5 "$5" --argjson w1 "$6" --argjson cr "$7" \
+    '{type:"assistant",requestId:$r,message:{role:"assistant",model:$m,usage:{input_tokens:$i,output_tokens:$o,
+      cache_creation_input_tokens:($w5+$w1),cache_read_input_tokens:$cr,
+      cache_creation:{ephemeral_5m_input_tokens:$w5,ephemeral_1h_input_tokens:$w1}}}}'
+}
+
+# msub <session> <agent-id> <meta name> <agentType> <model> <input> <output> <cw5m> <cw1h> <cache_read>
+msub() {
+  local d="$PROJECTS/$SLUG/$1/subagents"
+  mkdir -p "$d"
+  jq -n -c --arg n "$3" --arg t "$4" '{agentType:$t,name:$n}' > "$d/agent-$2.meta.json"
+  { jq -n -c '{type:"user",isSidechain:true,message:{role:"user",content:"hello"}}'
+    lnm "r-$2" "$5" "$6" "$7" "$8" "$9" "${10}"; } > "$d/agent-$2.jsonl"
+}
+
+# msession <session> <model> <input> <output> <cw5m> <cw1h> <cache_read>: a main-session transcript
+msession() {
+  { jq -n -c '{type:"user",message:{role:"user",content:"hello"}}'
+    lnm "s-$1" "$2" "$3" "$4" "$5" "$6" "$7"; } > "$PROJECTS/$SLUG/$1.jsonl"
+}
+
+# The worked example: E9_S02_T01 = 5000 -> 50, E9_S02_T02 = 2250 -> 23 (22.50 half up), E10_S01_T01 = 2000 -> 20.
+cost_example() {
+  msub s1 a1 E9_S02_T01 developer m-a 10 4 8 0 100
+  msub s1 a2 E9_S02_T02 developer m-a 3 1 4 2 55
+  msub s1 a3 E10_S01_T01 developer m-a 7 2 0 0 30
+}
+
+# cu <story> <path>: a cost-unit number of one story in $output
+cu() { printf '%s' "$output" | jq -r --arg s "$1" ".stories[\$s].$2"; }
+
+@test "cost weights: the story weight is the sum of its tasks' cost units (73 and 20), not input + output + cache_write" {
+  use_ratios
+  cost_example
+  msession s1 m-a 6 10 4 0 90
+  run --separate-stderr report --allocate
+  [ "$status" -eq 0 ]
+  [ "$(cu E9_S02 weight)" = "73" ]; [ "$(cu E10_S01 weight)" = "20" ]
+  # the task part prints its cost units next to the raw counts (22 + 10 = 32 raw weight would have been the old one)
+  [ "$(cu E9_S02 tasks.cost_units)" = "73" ]; [ "$(cu E10_S01 tasks.cost_units)" = "20" ]
+  [ "$(cu E9_S02 tasks.input)" = "13" ]; [ "$(cu E9_S02 tasks.cache_read)" = "155" ]
+  [ "$(cu E9_S02 cost_units_partial)" = "null" ]
+}
+
+@test "cost weights: one weight splits all four overhead fields and the cost units (W = 93, hand-computed shares)" {
+  use_ratios
+  cost_example
+  msession s1 m-a 6 10 4 0 90   # 600 + 5000 + 500 + 0 + 900 = 7000 hundredths -> 70 units
+  run --separate-stderr report --allocate
+  [ "$status" -eq 0 ]
+  # input 6: 438/93 -> 4 r66, 120/93 -> 1 r27, L=1 -> E9_S02 5, E10_S01 1.   output 10: 7 r79, 2 r14, L=1 -> 8 / 2.
+  # cache_write 4: 3 r13, 0 r80, L=1 -> E10_S01 gets it: 3 / 1.   cache_read 90: 70 r60, 19 r33, L=1 -> 71 / 19.
+  # cost units 70: 54 r88, 15 r5, L=1 -> 55 / 15.
+  [ "$(alloc E9_S02 input)" = "5" ];  [ "$(alloc E10_S01 input)" = "1" ]
+  [ "$(alloc E9_S02 output)" = "8" ]; [ "$(alloc E10_S01 output)" = "2" ]
+  [ "$(alloc E9_S02 cache_write)" = "3" ]; [ "$(alloc E10_S01 cache_write)" = "1" ]
+  [ "$(alloc E9_S02 cache_read)" = "71" ]; [ "$(alloc E10_S01 cache_read)" = "19" ]
+  [ "$(alloc E9_S02 cost_units)" = "55" ]; [ "$(alloc E10_S01 cost_units)" = "15" ]
+  # story totals: tasks plus overhead, kept as separate numbers
+  [ "$(cu E9_S02 total.cost_units)" = "128" ]; [ "$(cu E10_S01 total.cost_units)" = "35" ]
+  [ "$(cu E9_S02 total.input)" = "18" ]
+  [ "$(printf '%s' "$output" | jq '.unallocated_overhead | length')" = "0" ]
+}
+
+@test "cost weights: the headline total and the weight are the same computed number" {
+  use_ratios
+  cost_example
+  msession s1 m-a 6 10 4 0 90
+  run --separate-stderr report --allocate
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '[.stories[] | .weight == .tasks.cost_units] | all' >/dev/null
+  # the task rows print 50 + 23 = 73 for E9_S02, and that is the weight
+  echo "$output" | jq -e '(.tasks.E9_S02_T01.cost_units + .tasks.E9_S02_T02.cost_units) == 73' >/dev/null
+  echo "$output" | jq -e '.tasks.E9_S02_T02.cost_units == 23' >/dev/null
+}
+
+@test "cost weights: an epic-level entry is shared across the session's stories in proportion to cost weight" {
+  use_ratios
+  cost_example
+  # input 4, nothing else: 400 hundredths -> 4 units. 4 x 73 = 292 -> 3 r13; 4 x 20 = 80 -> 0 r80; L = 1 -> E10_S01.
+  msub s1 a9 E9 scrum-master m-a 4 0 0 0 0
+  run --separate-stderr report --allocate
+  [ "$status" -eq 0 ]
+  [ "$(alloc E9_S02 input)" = "3" ]; [ "$(alloc E10_S01 input)" = "1" ]
+  [ "$(alloc E9_S02 cost_units)" = "3" ]; [ "$(alloc E10_S01 cost_units)" = "1" ]
+}
+
+@test "cost weights: an entry named for one story is charged in full, also to a story with no measured cost" {
+  use_ratios
+  cost_example
+  # input 2, output 3, cache_read 40: 200 + 1500 + 400 = 2100 hundredths -> 21 units, for E10_S01
+  msub s1 a8 E10_S01 scrum-master m-a 2 3 0 0 40
+  # the same shape for E11_S01, which has no task at all
+  msub s1 a7 E11_S01 scrum-master m-a 2 3 0 0 40
+  run --separate-stderr report --allocate
+  [ "$status" -eq 0 ]
+  [ "$(alloc E10_S01 cost_units)" = "21" ]; [ "$(alloc E10_S01 input)" = "2" ]; [ "$(alloc E10_S01 cache_read)" = "40" ]
+  [ "$(alloc E9_S02 input)" = "0" ]
+  [ "$(cu E11_S01 measured)" = "false" ]; [ "$(cu E11_S01 weight)" = "null" ]
+  [ "$(alloc E11_S01 cost_units)" = "21" ]; [ "$(alloc E11_S01 output)" = "3" ]
+}
+
+@test "partial stories: a story with an unpriced task keeps the priced-only weight and is marked cost_units_partial" {
+  use_ratios
+  cost_example
+  # E9_S02_T03 runs on a model with no ratios: its raw counts are reported, its cost_units is null
+  msub s1 a4 E9_S02_T03 developer m-x 1 1 1 0 1
+  msession s1 m-a 6 10 4 0 90
+  run --separate-stderr report --allocate
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.tasks.E9_S02_T03.cost_units == null and .tasks.E9_S02_T03.unpriced_models == ["m-x"]' >/dev/null
+  # the weight is the priced-only sum 73 (nothing guessed for the third task); the split is the one of the 73/20 case
+  [ "$(cu E9_S02 weight)" = "73" ]; [ "$(cu E9_S02 tasks.cost_units)" = "73" ]
+  [ "$(cu E9_S02 cost_units_partial)" = "true" ]
+  [ "$(cu E9_S02 unpriced_models)" != "null" ]
+  echo "$output" | jq -e '.stories.E9_S02.unpriced_models == ["m-x"]' >/dev/null
+  [ "$(cu E10_S01 cost_units_partial)" = "null" ]
+  # the raw counts of the unpriced task are in the story's task part as always (13 + 1 = 14 input)
+  [ "$(cu E9_S02 tasks.input)" = "14" ]
+  # the overhead is split by the same weights: the shares are those of the fully priced case
+  [ "$(alloc E9_S02 cost_units)" = "55" ]; [ "$(alloc E10_S01 cost_units)" = "15" ]
+  # a lower bound, flagged: 73 + 55
+  [ "$(cu E9_S02 total.cost_units)" = "128" ]
+}
+
+@test "partial stories: an overhead entry with an unpriced line splits its raw fields and marks every story that got a share" {
+  use_ratios
+  cost_example
+  msession s1 m-x 6 10 4 0 90   # unpriced model: cost_units null, raw counts as always
+  run --separate-stderr report --allocate
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.overhead[0].cost_units == null' >/dev/null
+  # raw split unchanged: the same 5 / 1 and 71 / 19 as the priced entry
+  [ "$(alloc E9_S02 input)" = "5" ]; [ "$(alloc E10_S01 cache_read)" = "19" ]
+  # but it adds nothing to the cost-unit overhead, and both stories are partial
+  [ "$(alloc E9_S02 cost_units)" = "0" ]; [ "$(alloc E10_S01 cost_units)" = "0" ]
+  [ "$(cu E9_S02 cost_units_partial)" = "true" ]; [ "$(cu E10_S01 cost_units_partial)" = "true" ]
+  echo "$output" | jq -e '.stories.E10_S01.unpriced_models == ["m-x"]' >/dev/null
+  [ "$(cu E9_S02 total.cost_units)" = "73" ]
+}
+
+@test "zero cost weight: a session whose stories are all unpriced reports the entry unallocated with reason zero-weight" {
+  use_ratios
+  msub s1 a1 E9_S02_T01 developer m-x 1 1 1 0 1
+  msub s1 a2 E10_S01_T01 developer m-x 2 2 2 0 2
+  msession s1 m-a 6 30 4 0 500   # 600 + 15000 + 500 + 5000 = 21100 hundredths -> 211 units
+  run --separate-stderr report --allocate
+  [ "$status" -eq 0 ]
+  [ "$(cu E9_S02 weight)" = "0" ]; [ "$(cu E10_S01 weight)" = "0" ]
+  echo "$output" | jq -e '.unallocated_overhead | length == 1' >/dev/null
+  echo "$output" | jq -e '.unallocated_overhead[0] | .reason == "zero-weight" and .input == 6 and .output == 30
+                         and .cache_write == 4 and .cache_read == 500 and .cost_units == 211' >/dev/null
+  [ "$(alloc E9_S02 cost_units)" = "0" ]; [ "$(cu E9_S02 cost_units_partial)" = "true" ]
+}
+
+@test "zero cost weight: a story named by an entry is still charged in full when its session stories weigh nothing" {
+  use_ratios
+  msub s1 a1 E9_S02_T01 developer m-x 1 1 1 0 1
+  msub s1 a8 E9_S02 scrum-master m-a 2 3 0 0 40   # 2100 hundredths -> 21
+  run --separate-stderr report --allocate
+  [ "$status" -eq 0 ]
+  [ "$(alloc E9_S02 cost_units)" = "21" ]; [ "$(alloc E9_S02 cache_read)" = "40" ]
+  [ "$(printf '%s' "$output" | jq '.unallocated_overhead | length')" = "0" ]
+}
+
+@test "cost weights: leftover units and the unallocated rule behave as before (cost units split with largest remainder)" {
+  use_ratios
+  # three stories, weights 3, 1 and 6 cost units: input 3 -> 300 hundredths = 3 units; input 1 -> 1; input 6 -> 6
+  msub s1 a1 E9_S02_T01 developer m-a 3 0 0 0 0
+  msub s1 a2 E10_S01_T01 developer m-a 1 0 0 0 0
+  msub s1 a3 E9_S10_T01 developer m-a 6 0 0 0 0
+  # session entry: input 14 -> 14 units. 14 x 3 = 42 -> 4 r2; 14 x 1 -> 1 r4; 14 x 6 = 84 -> 8 r4; L = 1.
+  # tie between E10_S01 and E9_S10 on 4: numeric ID order gives it to E9_S10 (epic 9 before epic 10).
+  msession s1 m-a 14 0 0 0 0
+  run --separate-stderr report --allocate
+  [ "$status" -eq 0 ]
+  [ "$(alloc E9_S02 input)" = "4" ]; [ "$(alloc E10_S01 input)" = "1" ]; [ "$(alloc E9_S10 input)" = "9" ]
+  [ "$(alloc E9_S02 cost_units)" = "4" ]; [ "$(alloc E10_S01 cost_units)" = "1" ]; [ "$(alloc E9_S10 cost_units)" = "9" ]
+}
+
+@test "config absent: --report --allocate stops with exit 10 naming the config and prints no allocation (E90_S02_T04: no pre-E90 raw-only fallback)" {
+  mk_sub s1 a1 E9_S02_T01 10 4 8 100
+  mk_session s1 6 10 4 90
+  export JENGA_PRICE_RATIOS_FILE="$BATS_TEST_TMPDIR/no-such-price-ratios.json"
+  run --separate-stderr report --allocate
+  [ "$status" -eq 10 ]
+  [ -z "$output" ]
+  [[ "$stderr" == *"price-ratio config missing or unreadable: $BATS_TEST_TMPDIR/no-such-price-ratios.json"* ]]
+}
+
+@test "config malformed: --report --allocate stops with exit 10 naming the config and prints no allocation" {
+  printf 'not json' > "$BATS_TEST_TMPDIR/bad.json"
+  export JENGA_PRICE_RATIOS_FILE="$BATS_TEST_TMPDIR/bad.json"
+  mk_sub s1 a1 E9_S02_T01 10 4 8 100
+  mk_session s1 6 10 4 90
+  run --separate-stderr report --allocate
+  [ "$status" -eq 10 ]
+  [ -z "$output" ]
+  [[ "$stderr" == *"price-ratio config malformed: $BATS_TEST_TMPDIR/bad.json"* ]]
 }

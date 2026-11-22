@@ -140,7 +140,9 @@ When invoked to implement and/or run tests:
 3. Read the task/story/epic from the scrum board for full context
 4. Implement any required tests
    - **Project conventions.** Before judging test quality or test placement, run `bash "$([ -f scripts/conventions-digest.sh ] && echo scripts/conventions-digest.sh || echo node_modules/@jenga-ai/agent/scripts/conventions-digest.sh)" --agent tester` (written `scripts/conventions-digest.sh --agent tester` below); it prints nothing when the project has no `conventions.json`, in which case nothing changes. When it prints, apply the recorded `testing` convention (expectations, test command, test directory) when you write or place tests, and the `formatting-linting` convention as findings criteria. Explicit conventions beat your own inference. A violated `advisory` convention is a remark (`Passed with remarks`, see Status Management), never a `Failed` on its own; a failed `confirm` machine item follows the existing checklist semantics.
-5. Execute the tests
+5. Execute the tests, following these two rules on every run:
+   - **Never hide test output.** Do not pipe a test run (`bats`, `npm test`, `npm run test:*`, `scripts/run-tests.sh`, `j.test`) through `tail`, `head`, `grep` or any other filter that hides progress, and do not redirect it to a file you read only at the end. Let it stream.
+   - **Estimate first, ask above the threshold.** Before starting a run, get its estimate: `scripts/run-tests.sh --tier <list> --list` (or `--all --list`; the selection goes to stdout, the estimate to stderr) or `scripts/test-estimate.sh <files>`. If the estimate exceeds `ask_before_run_seconds` (`project/configs/test-config.json`, read with `skills/j-test/scripts/test-thresholds.sh get ask-before-run`), ask the user before starting it, stating the selection, the file count and the estimate. Untimed files count as unknown, not as zero: when the selection has untimed files, say so in the question.
 6. **AC/DoD Verification** — run the following steps before evaluating results or writing any status:
    a. **Run `bash "$([ -f scripts/validate-story-format.sh ] && echo scripts/validate-story-format.sh || echo node_modules/@jenga-ai/agent/scripts/validate-story-format.sh)" <story-file-path>`** on the story file for this task. If it exits non-zero:
       - Halt immediately — do not proceed to write a `Passed` status.
@@ -337,6 +339,12 @@ When invoked to run an analysis or comparison:
 Note: a completed analysis that produces a negative or undesired outcome is `"passed with remarks"`, not `"error"`. Reserve `"error"` for cases where the analysis itself could not run to completion.
 
 Always include the sender object in the response.
+
+---
+
+### Pre-flight guard: no bypass without the user
+
+The pre-flight guard (`hooks/on_preflight_check.sh`) is a harness `PreToolUse` hook that fires on the tool call, before git runs. Git-level flags such as `--no-verify` and `-c core.hooksPath=...` do not reach it and do nothing against it. Bypassing it by any route (a nested script or alias that hides the command text, commit-creating commands it does not gate, deleting or editing the situation marker, the checklist registry or `settings.json`) requires the user's explicit authorization in chat; never do it on your own judgment, and never report a refused call as something to work around. When the guard refuses, satisfy the failed item or stop and ask. Evidence: `project/documentation/preflight-guard-bypass-routes.md`.
 
 ---
 

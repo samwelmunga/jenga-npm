@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # j.tidy's report-by-default rendering and its config thresholds (E56_S06_T02).
 #
@@ -151,6 +152,7 @@ write_records() {
 }
 
 @test "j.smoke-test reports no critical finding for j-tidy" {
+  [ -f "$REPO_ROOT/skills/j-smoke-test/scripts/smoke-test-skills.sh" ] || skip "j-smoke-test is not shipped"
   run bash "$REPO_ROOT/skills/j-smoke-test/scripts/smoke-test-skills.sh" --no-exec --root "$REPO_ROOT"
   assert_output_contains "Result: PASS"
   run bash -c "bash '$REPO_ROOT/skills/j-smoke-test/scripts/smoke-test-skills.sh' --no-exec --root '$REPO_ROOT' | grep '\"skill\":\"j-tidy\"' | grep '\"severity\":\"critical\"'"

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E76_S01_T06: scripts/task-usage.sh attributes transcript token usage to board tasks.
 # Public interface only (--report, --usage, --list-transcripts, --task, --story, --projects-dir, --project-dir),
@@ -205,12 +206,24 @@ task_is() {
   echo "$output" | jq -e '.tasks.E99_S01_T01 | .story_id == "E99_S01" and .epic_id == "E99"' >/dev/null
 }
 
-@test "tokens only: no key at any depth matches cost, price or usd" {
+# E90_S01_T03 - DELIBERATE REPLACEMENT of the E76 "tokens only: no key at any depth matches cost, price or usd" test.
+# That test forbade every cost-like key. Epic E90 adds one labelled derived view, the cost-equivalent unit, so exactly
+# two keys may now exist (the marker name contains "price" as part of "unpriced"): "cost_units" and its marker "unpriced_models". The unit is relative to the price of one fresh
+# input token and is NOT a currency amount, so the E76 decision against currency stands: no usd, price, dollar, eur or
+# currency key at any depth and no "$" anywhere in the output. Nothing else is loosened: any other key that matches
+# cost or price still fails this test.
+@test "tokens plus the labelled cost unit only: no currency key at any depth, no dollar sign" {
   report
   [ "$status" -eq 0 ]
-  echo "$output" | jq -e '[paths | map(strings) | .[] | select(test("cost|price|usd"; "i"))] | length == 0' >/dev/null
-  run jq -e '[paths | map(strings) | .[] | select(test("cost|price|usd"; "i"))] | length == 0' <<<"$(bash "$SCRIPT" --usage "$FIX/projects/-fixture-proj/sess-0001.jsonl")"
-  [ "$status" -eq 0 ]
+  local usage; usage="$(bash "$SCRIPT" --usage "$FIX/projects/-fixture-proj/sess-0001.jsonl")"
+  local doc
+  for doc in "$output" "$usage"; do
+    # every key at any depth that matches cost or price is one of the two labelled derived keys
+    printf '%s' "$doc" | jq -e '[paths | map(strings) | .[] | select(test("cost|price"; "i")) | select(. != "cost_units" and . != "unpriced_models")] | length == 0' >/dev/null
+    # and no currency key and no currency symbol
+    printf '%s' "$doc" | jq -e '[paths | map(strings) | .[] | select(test("usd|price|dollar|eur|currency"; "i")) | select(. != "unpriced_models")] | length == 0' >/dev/null
+    [[ "$doc" != *'$'* ]]
+  done
 }
 
 @test "the projects directory can come from JENGA_PROJECTS_DIR, and the option wins over it" {

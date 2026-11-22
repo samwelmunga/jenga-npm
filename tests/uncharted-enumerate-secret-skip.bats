@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for the secret-looking-file skip in skills/j-uncharted/scripts/enumerate-target.sh (E85_S04_T06).
 # The shared name list lives in secret-files.sh (E85_S04_T05); this suite proves the enumerator applies it:

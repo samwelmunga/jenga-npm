@@ -53,6 +53,10 @@
  */
 
 import { buildDependencyStructure, foldStructure, fillUnlockedBy, goalFailedText, unfinishedDepText, FOLD_THRESHOLD, GOAL_NODE_ID } from '../../../../../../lib/progress/dependency-structure.js'
+import { buildCastleModel } from './castleModel.js'
+import { layoutCastle } from './castleLayout.js'
+import { layoutFacade } from './facadeLayout.js'
+import { layoutSeasonsTree } from './treeLayout.js'
 
 export { fillUnlockedBy, goalFailedText, unfinishedDepText, FOLD_THRESHOLD, GOAL_NODE_ID }
 
@@ -71,21 +75,37 @@ export const LAYOUT = Object.freeze({
   bandPad: 20,
   bandGap: 14,
   goalGap: 100,
-  goalAreaW: 260,
-  goalOffsetX: 70,
   gateR: 10, // gate badge radius, the badge sits on the left edge of a card
   minHeight: 300,
 })
 export const COL_WIDTH = LAYOUT.columnW
 
 /**
+ * The room the goal takes right of the last column (E92_S13_T02). It is no longer one fixed number: it depends on what the
+ * goal is drawn as (`goalArea`), and for the citadel on the castle box the model carries.
+ *   'disc'    the star (and any design drawn inside a disc): a fixed area, DISC_AREA, as it always was: 260 wide, the goal
+ *             centre 70 right of the area's left edge, the goal centred on the content's height.
+ *   'castle'  the citadel: the area is as wide as the castle box (model.castle.box) plus CASTLE_MARGIN either side, the goal
+ *             centre is the box centre, and the goal sits at the height that keeps the whole castle and the goal text inside
+ *             the drawing (the drawing grows when the castle is taller than the tree).
+ *   'facade'  the flat facade (E92_S13_T03): the same, with the facade's own box and text position (model.castle.facade); the
+ *             facade is wide and low where the citadel is square, so it has its own room.
+ *   'tree'    the seasons tree (E92_S13_T07): the same, with the tree's own box and text position (model.castle.tree, treeLayout.js).
+ *             The tree box is sized for the fully grown tree, so it does not change while the epic is worked on; Fit and the large
+ *             view (E92_S07) read the layout's width and height, which therefore include it.
+ */
+export const DISC_AREA = Object.freeze({ w: 260, offsetX: 70 })
+export const CASTLE_MARGIN = Object.freeze({ left: 10, right: 20 })
+export const GOAL_AREAS = Object.freeze(['castle', 'facade', 'tree', 'disc'])
+
+/**
  * Pure pixel layout of a structure (see lib/progress/dependency-structure.js): positions every band, node, collapse header,
  * the start nodes and the goal, and adds the `layout` totals. Nothing structural is decided here.
  */
-export function layoutTree(s) {
+export function layoutTree(s, options) {
   const { columns, ...rest } = s
   const L = LAYOUT
-  if (s.empty) return { ...rest, goal: { ...s.goal, x: 0, y: 0 }, layout: { ...L, width: 0, height: 0, columns: 0 } }
+  if (s.empty) return { ...rest, goal: { ...s.goal, x: 0, y: 0 }, layout: { ...L, goalAreaW: DISC_AREA.w, goalOffsetX: DISC_AREA.offsetX, width: 0, height: 0, columns: 0 } }
 
   const nodes = []
   const headers = []
@@ -135,32 +155,84 @@ export function layoutTree(s) {
 
   const contentH = y - L.bandGap + L.pad
   const goalX = L.columnX0 + (columns - 1) * L.columnW + L.cardW + L.goalGap
+  const castle = s.castle && s.castle.box ? s.castle : null
+  const mode = options && options.goalArea === 'disc' ? 'disc' : options && options.goalArea === 'facade' ? 'facade' : options && options.goalArea === 'tree' ? 'tree' : 'castle'
+  // the geometry the goal area is made for: the citadel's, the facade's or the seasons tree's (kept inside it, built from the same castle model)
+  const inner = key => (castle && castle[key] && castle[key].box ? castle[key] : null)
+  const geo = mode === 'facade' ? inner('facade') : mode === 'tree' ? inner('tree') : castle
+  let goalAreaW
+  let goalOffsetX
+  let height = Math.max(contentH, L.minHeight)
+  let goalY = contentH / 2
+  const useCastle = mode !== 'disc' && !!geo
+  if (useCastle) {
+    // the castle box is centred on the goal: the box, then the goal text under it, must lie inside the drawing
+    goalOffsetX = CASTLE_MARGIN.left + geo.box.w / 2
+    goalAreaW = CASTLE_MARGIN.left + geo.box.w + CASTLE_MARGIN.right
+    const up = -geo.box.top
+    const down = geo.text.top + geo.text.blockH
+    height = Math.max(height, up + down + 2 * L.pad)
+    goalY = Math.min(Math.max(height / 2 - (down - up) / 2, L.pad + up), height - L.pad - down)
+  } else {
+    goalAreaW = DISC_AREA.w
+    goalOffsetX = DISC_AREA.offsetX
+  }
+  // The disc layout has exactly the keys it always had (the parity recordings are byte-identical); only the castle layout adds
+  // `goalX` (the left edge of the goal area) and `goalArea: 'castle'`, which is also how unfoldGroups knows which layout it has.
   const layout = {
     ...L,
-    width: goalX + L.goalAreaW,
-    height: Math.max(contentH, L.minHeight),
+    goalAreaW,
+    goalOffsetX,
+    ...(useCastle ? { goalX, goalArea: mode } : {}),
+    width: goalX + goalAreaW,
+    height,
     columns,
   }
-  const goal = { ...s.goal, x: goalX + L.goalOffsetX, y: contentH / 2 }
+  const goal = { ...s.goal, x: goalX + goalOffsetX, y: goalY }
+  // the castle geometry travels with a castle layout only (a disc layout has no use for it)
+  const { castle: _castle, ...restNoCastle } = rest
 
-  return { ...rest, goal, nodes, headers, bands, layout }
+  return useCastle ? { ...rest, goal, nodes, headers, bands, layout } : { ...restNoCastle, goal, nodes, headers, bands, layout }
 }
 
 /**
  * The dashboard model of one epic. The dashboard shows undecomposed stories as ghost bands (E92_S12_T02), so
  * `includeUndecomposed` is on by default; the fourth argument can override it, e.g. `{ includeUndecomposed: false }`.
  * A payload without the per-story `decomposed` flag (an older script) gives the model it always gave.
+ *
+ * E92_S13_T02: the model also carries `castle` (the geometry of the citadel, castleLayout.js, built from the castle model of
+ * castleModel.js: towers, bridges, wall, `box`, `text`, `scale`) and lays the goal out for `options.goalArea` ('castle', the
+ * default, or 'disc', the star's fixed area; see DISC_AREA). A castle layout carries `castle` and `layout.goalArea: 'castle'`;
+ * a disc layout has neither and is exactly the layout the model had before the goal designs.
  */
 export function buildDependencyTreeModel(graph, epicId, labels, options) {
-  return layoutTree(buildDependencyStructure(graph, epicId, labels, { includeUndecomposed: true, ...(options || {}) }))
+  const { goalArea, ...structureOptions } = options || {}
+  const structure = buildDependencyStructure(graph, epicId, labels, { includeUndecomposed: true, ...structureOptions })
+  if (structure.empty) return layoutTree(structure)
+  // ONE castle model, three geometries: the citadel's, the facade's and the seasons tree's are all made from this same object
+  // (`castle.source`, `castle.facade.source`, `castle.tree.source`), so the designs can never disagree about a state, a stacking
+  // or the wall share
+  const source = buildCastleModel(graph, epicId)
+  const facts = factsOf(structure.stories)
+  const castle = { ...layoutCastle(source, facts), facade: layoutFacade(source, facts), tree: layoutSeasonsTree(source, facts) }
+  return layoutTree({ ...structure, castle }, { goalArea })
+}
+
+/** { storyId: { done, total, failed } } as the structure states them (`done` and `total` are the payload's, `failed` its bucket). */
+function factsOf(stories) {
+  const out = {}
+  for (const st of stories || []) out[st.storyId] = { done: st.done, total: st.total, failed: st.buckets && Number.isFinite(st.buckets.failed) ? st.buckets.failed : 0 }
+  return out
 }
 
 /**
  * Pure helper for the renderer's expansion state: the model with the groups whose ids are in `expandedIds` (a Set or
  * an array) unfolded. Returns the new nodes, collapse headers, bands, edges (de-duplicated), goal position and layout;
- * an unknown id is ignored. With no ids it returns the folded model again.
+ * an unknown id is ignored. With no ids it returns the folded model again. `options.goalArea` ('castle' or 'disc') lays the
+ * goal out for another goal design (E92_S13_T02); the default is the area the model was built with.
  */
-export function unfoldGroups(model, expandedIds) {
+export function unfoldGroups(model, expandedIds, options) {
   if (!model || model.empty) return model
-  return layoutTree(foldStructure(model, expandedIds ? [...expandedIds] : []))
+  const goalArea = (options && options.goalArea) || (model.layout && model.layout.goalArea) || 'disc'
+  return layoutTree({ ...foldStructure(model, expandedIds ? [...expandedIds] : []), ...(model.castle ? { castle: model.castle } : {}) }, { goalArea })
 }

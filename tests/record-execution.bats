@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for skills/j-break/scripts/record-execution.sh (E44_S09_T01).
 # Each test uses a temp project root via JENGA_PROJECT_ROOT; the real queue is never written.

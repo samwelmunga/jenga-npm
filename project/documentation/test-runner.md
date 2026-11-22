@@ -157,43 +157,112 @@ redundancy is small (30 files) and is the price of never hiding the full suite b
 runnable` and `Notes` blocks are omitted when empty. `name (type)` labels every entry, except that a name already ending
 in ` (<type>)` is printed as is, so a config-only suite reads `semgrep (sast)` and not `semgrep (sast) (sast)`.
 
-### `npm test`, `npm run test:ci` and `scripts/run-tests.sh` (E95_S01_T02)
+### `npm test`, `npm run test:ci` and `scripts/run-tests.sh` (E95_S01_T02, E95_S02_T03, E95_S02_T08)
 
-`npm test` never runs the whole suite. A full run is still possible, but only deliberately.
+`npm test` never runs the whole suite. Larger runs are possible, but only deliberately. The runner selects files by
+their tier tag (see "Test tiers" below).
 
 | Command | Runs |
 |---|---|
-| `npm test` = `scripts/run-tests.sh` | the **fast set**: the files listed in `tests/fast-set.txt` (30 files, summed recorded duration about 89 s), under a hard timeout |
-| `npm run test:ci` = `scripts/run-tests.sh --all` | every top-level `tests/*.bats`; accepted only when `CI=true` (GitHub Actions sets it) |
-| `scripts/run-tests.sh --all --confirm-full` | the same full run, deliberately, on a developer machine |
-| `scripts/run-tests.sh [--all] --list` | prints the files that mode would run, one per line, and runs nothing (no bats needed) |
+| `npm test` = `scripts/run-tests.sh` | `tier:fast` only (30 files, estimate about 90 s), under a `max(180, 2 x estimate)` s timeout |
+| `scripts/run-tests.sh --tier <a>[,<b>...]` | the files tagged with those tiers: `fast`, `unit`, `integration`, `slow`, `manual` |
+| `npm run test:ci` = `scripts/run-tests.sh --all` | every tier except `tier:manual` (an untagged file is included) |
+| `... --confirm-full` | accepts a selection above the file-count threshold below; not needed when `CI=true` |
+| `... --jobs <n>` | runs up to `<n>` files at once; `--jobs 1` runs one file at a time (the `E95_S02_T03` loop) |
+| `... --list` | prints the selection (stdout) and its estimate (stderr); runs nothing, needs no bats and no confirmation |
 
-- **`--all` is refused** without `CI=true` or `--confirm-full`: it runs nothing, exits 2 and names `--confirm-full` and
-  `npm run test:ci`. `--confirm-full` on its own (without `--all`) is a usage error.
-- **`RUN_TESTS_TIMEOUT`** (positive integer seconds, default 180) bounds the fast run. On timeout the bats process group
-  and every descendant are stopped (TERM, then KILL after 2 s), `run-tests: timed out after <n> s` is printed and the
-  exit status is 124: a timed-out run is never a pass. No GNU `timeout` is needed. An invalid value is ignored with a
-  warning. `--all` has no timeout of its own; CI jobs carry theirs.
-- **The fast set** lives in `tests/fast-set.txt` (shipped to the public mirror with the rest of `tests/`). Its header holds
-  the selection rule and the summed duration: latest record per file in `project/logs/test-timings.jsonl`, ascending
-  duration, last status `passed`, shipped, not in `SERIAL_FILES`, no nested suite run, stop before 90 000 ms. An entry
-  that is absent, not a top-level `tests/*.bats` or in `SERIAL_FILES` is skipped with a note; an empty set exits 2.
-  `E95_S02` replaces the list with a `tier:fast` tag.
-- **The public staging gate** (`.github/workflows/mirror-staging-gate.yml`, job `test`) runs `npm run test:ci`, so the
-  public gate still runs every shipped bats file.
+- **Selection.** `scripts/test-tiers.sh list` pre-selects by the written tag (bats' `--filter-tags` is not used).
+  `tier:manual` runs only when named in `--tier`. Shared-state files (`SERIAL_FILES`) run last. An unknown tier,
+  `--tier` together with `--all`, or an empty selection exits 2: a run of nothing is never a pass.
+- **Deliberate large runs.** A selection of more than `full_run_confirm_file_count` files (default 60, read through
+  `skills/j-test/scripts/test-thresholds.sh get confirm-file-count`) is refused with exit 2 unless `--confirm-full`
+  is given or `CI=true`. The refusal names the selection's file count and estimate and the cheapest tier that covers
+  the request (the lowest of fast < unit < integration < slow among the requested tiers that selects anything; for
+  `--all` all four are requested), with that tier's count and estimate, as the next step.
+- **Nesting refusal.** A run started from inside a bats run exits 3 and runs nothing: `E77_S01`'s flag
+  `JENGA_NESTED_SUITE_RUN=1` (read through `tests/helpers/nested-suite.bash`), or a surrounding bats process
+  (`BATS_TEST_FILENAME` or `BATS_RUN_TMPDIR` set). `--list` is never refused. The one override,
+  `RUN_TESTS_ALLOW_NESTED=1`, is test-only: `tests/run-tests.bats` sets it for its stub-based cases, nothing else does.
+- **Parallel files (E95_S02_T08).** Up to J files run at once, each as its own `bats` invocation in its own process
+  group, through the shared scheduler `scripts/parallel-files.sh` (bash 3.2, no GNU `parallel` needed; the private
+  mirror tool's pre-push gate uses the same one). J, first match: `--jobs <n>`; `RUN_TESTS_JOBS`; the key
+  `test_parallel_jobs` in `project/configs/test-config.json`; else the CPU count capped at 8. The non-shared-state files
+  run as one batch; the shared-state files (`PF_SERIAL_FILES` in `scripts/parallel-files.sh`) then run alone, one after
+  the other. With J > 1 every file runs as plain `bats <file>` and its output goes to its own file, which is printed
+  (between `--- output of <file> ---` and `--- end of output of <file> ---`) only when that file fails. With J = 1 the
+  run is the `E95_S02_T03` loop: output streams unfiltered, and `bats --jobs N` runs inside each file when GNU
+  `parallel` or `rush` is available. Parallelism is across files or within a file, never both. Files that run at the
+  same time share the machine: a test that silently depended on running alone (a fixed temp path, shared repository
+  state) shows up here first; run it with `--jobs 1` and add it to `PF_SERIAL_FILES` with the reason.
+- **Estimate and progress.** Before running, `scripts/test-estimate.sh`'s output for the selection is printed (untimed
+  files counted and named). When each file finishes (completion order), `run-tests: [i/N] <file> ok|FAILED (exit s)
+  <d> s (elapsed <e> s)` is printed, `<d>` being that file's own wall time; `on_file_done` (the hook point for
+  `E95_S07`) is called once per file with the same status and `<d>`. A closing line gives the total and names failed
+  files.
+- **Timeout in every mode.** `RUN_TESTS_TIMEOUT` (positive integer seconds) overrides; otherwise, when the request is
+  exactly `--tier fast` (`npm test`), `max(180, 2 x estimate_seconds)` (user decision of 2026-11-18, after a fixed
+  180 s failed `npm test` on a loaded machine; untimed files add nothing), else `max(600, 2 x estimate_seconds + 120 x
+  untimed_files)` (an unavailable estimate counts every file as untimed). One deadline covers the batch and the
+  shared-state files. On timeout every running file's process group is stopped (TERM, then KILL after 2 s),
+  `run-tests: timed out after <n> s` is printed with the files that finished (and their result) and those that did
+  not (each one stopped, and the ones never started), and the exit status is 124, never a pass. No GNU `timeout` is
+  needed.
+- **CI.** The public staging gate (`.github/workflows/mirror-staging-gate.yml`, job `test`) runs `npm run test:ci` with
+  `CI=true`, so it runs every non-manual shipped file without confirmation. The mirror ships no timing log, so every
+  file is untimed there and the timeout is 120 s per file (about 13 h for 400 files), above the job's own limit: it
+  cannot stop a healthy CI run.
+- **Exit status.** 0 all passed; the first failing bats status (in completion order); 2 usage error (including a
+  `--jobs` that is not a positive whole number), empty selection or refused large run;
+  3 nested run refused; 124 timeout; 127 bats not on `PATH`.
 
-### How the full run (`--all`) runs the bats suite (two-pass split)
+### Test tiers (E95_S02_T01)
 
-`package.json`'s `test:ci` script is `bash scripts/run-tests.sh --all` (E43_S02_T01, E95_S01_T02). When GNU `parallel` (or `rush`) is on `PATH`
-and `bats` supports `--jobs`, the script runs two passes: a parallel bulk pass (`bats --jobs N`) over every top-level
-`tests/*.bats` file except the shared-state ones, then a plain serial pass over those files (the two that mutate the real
-`.claude/settings.json`, `.agents/settings.json`, `.jenga-permission-level.json` and the shared `.mirror-worktrees/public`
-clone; `bats --jobs` has no per-file exclusion, hence two invocations). The serial pass always runs, and the exit status is
-the first non-zero one. Without a parallel binary, or with `RUN_TESTS_JOBS=1`, it is one plain `bats tests/*.bats`, the
-previous behaviour. The catalog treats `bash scripts/run-tests.sh --all` as the aggregate of `bats tests/*.bats` (see
-rule 2 below), so `npm run test:ci` folds onto the bats suite; the bare `bash scripts/run-tests.sh` (`npm test`, the fast
-set) is not normalised and stays its own entry. The fast run uses the same parallel detection as a single pass. The wall-clock speedup has not been measured yet: it needs a machine with `parallel` or
-`rush` installed (`scripts/run-tests.sh --all --confirm-full` against the same with `RUN_TESTS_JOBS=1`).
+Every top-level `tests/*.bats` file carries exactly one tier, written as a bats file tag on line 2 (after the
+shebang): `# bats file_tags=tier:<name>`, with `<name>` one of `fast`, `unit`, `integration`, `slow`, `manual`.
+bats 1.14 selects by it with `--filter-tags tier:<name>`. How the runner uses tiers is described in the section
+above.
+
+`scripts/test-tiers.sh` assigns and checks the tags; it never runs bats:
+
+| Subcommand | Does |
+|---|---|
+| `propose [--root <dir>]` | dry run: one `<path>\ttier:<name>\t<reason>` line per file; writes nothing |
+| `apply [--root <dir>]` | inserts the proposed tag line; never changes a file that already has a `tier:` tag (reports it); prints a count per tier; idempotent |
+| `check [--root <dir>]` | `<path>\t<problem>` per file with no tier, more than one, an unknown one, or the legacy `# jenga:manual-only:` marker without `tier:manual`; exit 1 when any, else 0 |
+| `list --tier <a>[,<b>] \| --exclude-tier <a>[,<b>] [--root <dir>]` | the files whose written tag matches (or does not; an untagged file is never excluded), byte order |
+
+**The tier rule** (first match wins; the constants are in the script header, not config keys):
+
+1. `tier:manual` - the file is manual-only as defined by `skills/j-test/scripts/manual-only.sh`: it already carries a
+   written `tier:manual` tag (the primary form since `E95_S02_T04`), or the legacy `# jenga:manual-only: <reason>`
+   marker. Duration never makes a file manual on its own; a file is moved to `tier:manual` by a user decision (for
+   example the two `tests/workflow-*` files above 600 s, decided on 2026-11-16).
+2. `tier:fast` - the file already carries a written `tier:fast` tag (the tag is the only source of truth since
+   `E95_S02_T03` retired the list it was seeded from), except `tests/pages-workflow.bats` (needs PyYAML).
+3. By the latest `scope: file` record in `project/logs/test-timings.jsonl` (latest by `date`, keyed by path):
+   `tier:unit` up to 30 s, `tier:integration` up to 300 s, `tier:slow` above. A file above
+   `manual_only_threshold_seconds` (600) stays `tier:slow` with `candidate-manual` in the reason, for a person to decide.
+4. No record: `tier:integration`, reason `untimed` (never fast, since its cost is unproven; never slow, which is reserved
+   for measured cost).
+
+`apply` only tags untagged files, so changing a file's tier later is a hand edit of its one tag line. Adding the tag
+changes the file's git blob, so `E77_S06_T04`'s incremental re-time sees every tagged file as changed once.
+
+### How the runner invokes bats (one invocation per file)
+
+`package.json`'s `test:ci` script is `bash scripts/run-tests.sh --all` (E43_S02_T01, E95_S01_T02, E95_S02_T03). Since
+`E95_S02_T03` every selection runs one `bats` invocation per file, so progress, per-file status and the timeout report
+are exact. Since `E95_S02_T08` up to J of those invocations run at once (see "Parallel files" above), each a plain
+`bats <file>` with its output kept in its own file; this restores the cross-file parallelism the single
+`bats --jobs N tests/*.bats` call had before `E95_S02_T03`, without needing GNU `parallel` (CI has none). With
+`--jobs 1`, when GNU `parallel` (or `rush`) is on `PATH`, at least 2 jobs are available and `bats` supports `--jobs`,
+each non-shared-state file runs as `bats --jobs N <file>` (parallel within the file); otherwise each runs as plain
+`bats <file>`. The shared-state files (the two that mutate the real `.claude/settings.json`, `.agents/settings.json`,
+`.jenga-permission-level.json` and the shared `.mirror-worktrees/public` clone) always run last, alone and plain. Every
+file runs even after a failure, and the exit status is the first non-zero one in completion order. The
+catalog treats `bash scripts/run-tests.sh --all` as the aggregate of `bats tests/*.bats` (see rule 2 below), so
+`npm run test:ci` folds onto the bats suite; the bare `bash scripts/run-tests.sh` (`npm test`, `tier:fast`) is not
+normalised and stays its own entry.
 
 ### The dedupe rule and `also covers`
 
@@ -1735,6 +1804,43 @@ decide. Stated limits, not hidden ones:
   is a strict subset *before* exclusion but the whole catalog *after* it passes that resolver; this check is what refuses
   it, and the message names `test_default_suite_set`.
 
+### The known-red baseline, and slowness versus failure (E89_S06_T10)
+
+**The problem.** A story that touches a `.sh` file could not close while any bats case anywhere was red, however
+unrelated: its scope gate exited 1 on a case that pre-dated the work (found on `E89_S02_T04`: `tests/perceived-branch.bats`
+case 24, `git log 2e977bc85..main` empty for the files involved). The Tester rightly refused to record a `Failed` the
+evidence did not support, which made the gate itself the defect.
+
+**The mechanism (decided by code, never by an agent's judgment at gate time).** `project/configs/test-known-red.json`
+(override: `scope-test-gate.sh --known-red <file>`) lists known-red cases:
+
+```json
+{"version":1,"cases":[{"file":"tests/x.bats","case":"<exact test name>","reason":"...","recorded":"YYYY-MM-DD","follow_up":"..."}]}
+```
+
+When a run fails, the gate pairs every `not ok N <name>` with the `# (in test file <file>, line N)` line after it and
+attributes it to its suite. The result is downgraded to exit 0, worded `scope test gate: satisfied with known-red` and
+listing every known-red case (it is **not** a pass), only when every failed suite is fully accounted for by baselined
+`(file, case)` pairs. Everything else still exits 1: a failing case that is not in the baseline (a genuine regression,
+alone or next to a baselined one), a failed suite with no parseable case, a malformed baseline, no baseline. Matching is
+on the exact file and the exact case name, so a renamed case drops out of the baseline. `--json` appends
+`known_red_failures`, `new_failures` and `slow_machine`.
+
+**An entry is an owned defect, not a hiding place.** Each carries a `reason` and a `follow_up`; delete it when the case is
+fixed. Recorded today: `tests/perceived-branch.bats` cases 20 and 24 (same cause: `hooks/on_session_end.sh` finds
+`scripts/events-append.sh` only under the fixture project, so the events log the cases assert on is never written; a real
+defect with its own follow-up).
+
+**The `**/*.sh` mapping.** The shipped `templates/test-scope-map.json` keeps `**/*.sh` to `tests/**/*.bats` on purpose: it is
+the generic starting point for a consumer with a small bats suite, where that rule is the right default, and a project
+narrows it by pointing `commit_scope_map_file` at its own map (see "A project scope map"). This repository already did
+(`project/configs/test-scope-map.json` dropped the rule, E72_S07_T03), so the baseline is the second line of defence for a
+catalog that still red-fails on something unrelated, not a substitute for narrowing.
+
+**Slowness is not a failure.** The slowness note `run-suites.sh` prints (wall far above CPU, see "The slowness preflight")
+is timing, never a test result. The gate now says so on its own `environment:` line after the verdict and carries
+`slow_machine` in `--json`; it changes neither the verdict nor the exit code.
+
 ### Interplay with the `j.commit` gate
 
 The two are independent. The commit gate runs at commit time and is steered by `commit_prompt_default`; the scope test
@@ -1794,9 +1900,36 @@ A test file that runs extra long is classified **manual-only**: it is excluded f
 file can stall a whole run. The classification, and the one script that reads it, are defined here; later changes to
 `j.test`, the `j.commit` gate and `npm test` only ask that script.
 
-### The marker
+### `tier:manual` is the primary form (E95_S02_T04)
 
-A manual-only file carries a comment line within its **first 40 lines**:
+A `.bats` file is manual-only when its `# bats file_tags=` line holds **`tier:manual`** (the tier tags of "Test
+tiers" above), **or** it carries the legacy marker below. `tier:manual` is the primary form; the legacy marker is kept
+as a **documented alias**, not removed. Why it is kept: `manual-only.sh` is called by `E77_S06`'s in-flight scripts
+(`long-running-report.sh`, `time-shipping-tests.sh`, `test-subject-paths.sh` under `skills/j-mirror-public/scripts/`),
+and the disposition of `E77_S02`-`E77_S08` belongs to `E95_S06`; removing the marker would break or pre-empt that
+work. The marker is also the one place a manual file can say **why** it is manual, since a tag carries no reason. A
+file with the marker but another tier tag is an inconsistency that `scripts/test-tiers.sh check` reports
+(`legacy-marker-without-tier-manual`).
+
+Since 2026-11-16 (user decision) this repository has two manual files, the two above 600 s:
+`tests/workflow-artifacts-e2e.bats` (723 s) and `tests/workflow-render-artifact.bats` (854 s).
+
+**Manual tests run only when named.** `j.test`'s discovered bats suite is
+`bats --filter-tags !tier:manual tests/*.bats`, so they never run in `j.test`'s "all", and the scoped narrowing
+(`narrow-suites.sh`, the `j.commit` gate's `test-gate-scoped.sh`) keeps that filter on the narrowed file list, so
+no gate runs one either, even when the scope map names it. Run one deliberately, for example
+`scripts/run-tests.sh --tier manual --confirm-full`, or `bats tests/<file>.bats`. The `!` is unquoted on purpose:
+suite commands run under non-interactive `bash -c`, where `!` is literal, and `narrow-suites.sh` only rebuilds a
+command that holds no quote character; quote it (`'!tier:manual'`) when typing it into an interactive shell.
+The catalog still folds the bats suite with `npm run test:ci` (`run-tests.sh --all`): `build-catalog.sh` keys the
+fold with exactly the pair `--filter-tags !tier:manual` removed (its DEDUPLICATION rule 2b), and no other
+filter, `--tier` or argument is removed, so an unrelated command never folds. One consequence: an npm script whose
+body is the unfiltered `bats tests/*.bats` still folds with the bats suite and survives the fold, so in a project
+that has such a script **and** `tier:manual` files, `j.test` "all" would run them through `npm test`.
+
+### The legacy marker (alias)
+
+A manual-only file may carry a comment line within its **first 40 lines**:
 
     # jenga:manual-only: <reason>
 
@@ -1805,9 +1938,10 @@ a file cannot be excluded without saying why. A tag on line 41 or later is ignor
 same comment form would extend to other ecosystems that use `#` comments.
 
 `skills/j-test/scripts/manual-only.sh` is the **only** place that decides which files are manual-only (its `--help`
-header is the contract): `list [--root <dir>]` prints `<path><TAB><reason>` for each tagged `tests/**/*.bats` file in
-byte order, `check <file>` exits `0` if the file is manual-only and `1` if not, and `reason <file>` prints the reason.
-It reads files only and executes no project code.
+header is the contract): `list [--root <dir>]` prints `<path><TAB><reason>` for each manual-only `tests/**/*.bats`
+file in byte order, `check <file>` exits `0` if the file is manual-only and `1` if not, and `reason <file>` prints the
+legacy marker's reason, or `tier:manual` for a file that is only tagged. It reads files only and executes no project
+code. Its subcommands, output format and exit codes did not change when `tier:manual` became primary.
 
 ### Why a header tag and not a `test-config.json` list
 
@@ -1827,7 +1961,7 @@ The number lives in `project/configs/test-config.json` and is read only through
 `skills/j-test/scripts/test-thresholds.sh get manual-only`; change it with
 `jenga config set test-config.manual_only_threshold_seconds <n>`. It is advisory: no mechanism enforces it and nothing
 tags a file for you (the timing log below records measured run times, it does not classify). The
-`# jenga:manual-only: <reason>` marker, not this number, is what defines which files are manual-only. It is a different
+`tier:manual` tag (or its legacy marker alias), not this number, is what defines which files are manual-only. It is a different
 threshold from `mirror_gate_threshold_seconds` (default 50 seconds), which decides whether a shipping test file is too slow
 for the pre-push test gate while still running locally; the reader warns when the manual-only value is set below the gate
 value.
@@ -1878,6 +2012,11 @@ one place their defaults are stated; everything else names the key.
 |---|---|---|---|
 | `confirm-file-count` | `full_run_confirm_file_count` | 60 files | A runner selection of more test files than this is refused without `--confirm-full`. Twice the fast set of 2026-11-16 (30 files). |
 | `ask-before-run` | `ask_before_run_seconds` | 300 s | An agent asks the user before starting a run whose estimate exceeds this ("a few minutes"). |
+
+A third key sets how a run uses the machine rather than how long it may be: `test_parallel_jobs` (`E95_S02_T08`), the
+number of test files `scripts/run-tests.sh` and the mirror tool's pre-push gate run at once. It is read by
+`scripts/parallel-files.sh`, not `test-thresholds.sh`, because its default is not a fixed number: absent, it is the CPU
+count capped at 8. `--jobs <n>` and `RUN_TESTS_JOBS` win over it.
 
 An absent key reads as the default; a value that is not a positive whole number warns on stderr and reads as the default,
 the same rule as the per-file thresholds.

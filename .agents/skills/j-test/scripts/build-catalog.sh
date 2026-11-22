@@ -83,6 +83,16 @@
 #      that runner refuses `--all` outside CI (exit 2) unless `--confirm-full` is
 #      given; the plain `bats tests/*.bats` entry survives and the npm script is
 #      listed under `also`.
+#   2b. Manual-test filter (E95_S02_T04). discover-tests.sh's bats command is
+#      `bats --filter-tags !tier:manual <dir>/*.bats`: it leaves tier:manual files
+#      out. Rules 1-2 key every suite on its command (or npm body) with that exact
+#      option pair, `--filter-tags !tier:manual`, removed, so the bats suite, a
+#      config suite that inherits its command, an npm body of `bats tests/*.bats`
+#      and the `run-tests.sh --all` aggregate (which excludes tier:manual since
+#      E95_S02_T03) still fold together. Only that exact pair is removed: any
+#      other filter (`--filter-tags tier:fast`), `run-tests.sh --tier <x>` or the
+#      bare runner keeps its own key and does not fold. The survivor keeps its own
+#      literal command, so a surviving bats entry still excludes manual tests.
 #   4. Empty-command suites never join a group; they go straight to not_runnable.
 #   5. SECOND PASS, on the final `command` (E72_S07_T02 fix round). The surviving
 #      entries of rules 1-3 are grouped once more by their literal `command` and
@@ -201,6 +211,8 @@ def pick: (map(select(.ecosystem == "npm" and ((.id | ltrimstr("npm:")) as $k | 
            // map(select(.ecosystem != "config" and (.ecosystem != "npm" or ((.id | ltrimstr("npm:")) as $k | ($gated | index($k)) == null))))[0]
            // map(select(.ecosystem != "config"))[0]
            // .[0]);
+# Rule 2b: the fold key ignores the manual-test filter, and only that exact pair.
+def unfilter: gsub("\\s+--filter-tags\\s+!tier:manual(?=\\s|$)"; "");
 (.suites | map(norm) | sort_by(.id)) as $all
 | ($all | map(select(.command == ""))) as $nr
 | ($all | map(select(.command != "")
@@ -208,7 +220,7 @@ def pick: (map(select(.ecosystem == "npm" and ((.id | ltrimstr("npm:")) as $k | 
         if .ecosystem == "npm" and (.id | startswith("npm:"))
         then (($scripts[.id | ltrimstr("npm:")] // "") as $b
               | if ($b | type) == "string" and $b != "" then $b else .command end)
-        else .command end)})) as $run
+        else .command end | unfilter)})) as $run
 # Pass 1: the documented key (command, or an npm suite's package.json script body).
 | ($run | group_by(.key) | map(
     pick as $sv

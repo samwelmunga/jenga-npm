@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Fixture-based coverage for E53_S06 ("`resolve` Transform, Failure Handling, and Direct
 # Invocation"): the `resolve` load-time shape/pass-through behavior, the pre-existing

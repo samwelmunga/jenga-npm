@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the `jenga config` descriptor layer (E68_S01_T05): the descriptor schema, the loader/validator
 # (lib/config/descriptors.js via scripts/validate-config-descriptors.sh) and the ranked_list renderer

@@ -92,6 +92,7 @@ test run must pass before a board scope is closed (the scope test policy, see th
 | `manual_only_threshold_seconds` | `600` | whole number of seconds, 1 or more |
 | `full_run_confirm_file_count` | see below | whole number of files, 1 or more |
 | `ask_before_run_seconds` | see below | whole number of seconds, 1 or more |
+| `test_parallel_jobs` | absent (the CPU count, capped at 8) | whole number of test files run at once, 1 or more |
 
 `mirror_gate_threshold_seconds` and `manual_only_threshold_seconds` are the long-running test thresholds (`E77_S06_T02`), two different notions kept apart on purpose:
 `mirror_gate_threshold_seconds` is how long a shipping test file may run, alone, before it is too slow for the pre-push
@@ -110,6 +111,11 @@ runner refuses it without `--confirm-full`, and `ask_before_run_seconds` is the 
 stated once, in the "Run budget" section of `project/documentation/test-runner.md`; both are read only through
 `skills/j-test/scripts/test-thresholds.sh` (`get confirm-file-count`, `get ask-before-run`, `list`). An absent key reads
 as its default and an invalid one warns and falls back, exactly as for the two thresholds above.
+
+`test_parallel_jobs` (`E95_S02_T08`) is how many test files `scripts/run-tests.sh` (`npm test`, `npm run test:ci`) and the
+private mirror tool's pre-push test gate run at once. It is read by `scripts/parallel-files.sh`; `--jobs <n>` and
+`RUN_TESTS_JOBS` win over it, and `1` runs one file at a time. Absent, it is the CPU count capped at 8; invalid, it warns
+and is ignored. See "`npm test`, `npm run test:ci` and `scripts/run-tests.sh`" in `project/documentation/test-runner.md`.
 
 An absent key reads as its default, and a present-but-invalid value reads as the default with a warning on stderr. The
 defaults are `none`, `scoped`, `none` (`E72_S08_T01`), so no automatic gate runs the full suite; `full` stays an accepted,

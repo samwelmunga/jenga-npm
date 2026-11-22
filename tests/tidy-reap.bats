@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # j.tidy's gated reaping path and its /reconcile wiring (E56_S06_T03).
 #

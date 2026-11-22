@@ -29,6 +29,23 @@
       "tick_scope": "run"
     },
     {
+      "id": "checkin-run-before-dispatch",
+      "text": "A pre-dispatch check-in has been run in this session and its findings surfaced, so no in-flight agent is wedged or orphaned before more work is dispatched. This item must never be set to block enforcement: satisfying it requires running a check-in, which is itself a tool call, so block would refuse the very dispatch that would satisfy it.",
+      "situations": ["pre-task"],
+      "kind": "machine",
+      "verify": "for G in skills/j-check-in/scripts/checkin-gate.sh node_modules/@jenga-ai/agent/skills/j-check-in/scripts/checkin-gate.sh .claude/skills/j-check-in/scripts/checkin-gate.sh; do [ -f \"$G\" ] && exec bash \"$G\"; done; echo \"checkin-gate.sh not found: looked for skills/j-check-in/scripts/checkin-gate.sh, node_modules/@jenga-ai/agent/skills/j-check-in/scripts/checkin-gate.sh and .claude/skills/j-check-in/scripts/checkin-gate.sh under $PWD\" >&2; exit 127",
+      "enforcement": "confirm",
+      "tick_scope": "run"
+    },
+    {
+      "id": "dispatch-cost-and-cadence",
+      "text": "Before dispatching a developer, tester or other long-running subagent, the expected time and token cost was stated to the user and they agreed; the dispatch runs in the background with a time cap of about 30 minutes and a mid-run report at the cap; and no further rework round starts without asking the user again.",
+      "situations": ["pre-task"],
+      "kind": "judgment",
+      "enforcement": "confirm",
+      "tick_scope": "run"
+    },
+    {
       "id": "working-tree-clean-before-release",
       "text": "The working tree is clean, so what is released is exactly what is committed.",
       "situations": ["pre-release"],

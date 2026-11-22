@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for E92_S02_T06 (revised by E92_S06_T22): /jenga passes progress_owner "caller" in every dispatched /do sender
 # object and prints the story-scope progress line (`RP --scope story --task <finished task ids>`) per finished wave and per

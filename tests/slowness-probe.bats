@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for scripts/slowness-probe.sh and for its preflight call in skills/j-test/scripts/run-suites.sh.
 #

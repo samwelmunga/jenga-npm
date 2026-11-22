@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S02_T06: scripts/render-ranked-list.sh lists board files in NUMERIC board-ID order, not filename text order.
 #

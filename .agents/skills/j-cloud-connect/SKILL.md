@@ -76,7 +76,18 @@ sequences those two scripts and relays their output.
      selection, `rclone config create` failure, a declined confirmation, or a `FAIL:` verification
      line from `rclone about`) — relay it unchanged rather than guessing at the cause.
 
-3. **Do not run step 2 if step 1 failed.** The wizard is a strict sequence: `configure-backend.sh`
+3. **Check existing remotes for rclone's retiring shared Google Drive client_id.** Run
+   `bash skills/j-cloud-connect/scripts/check-shared-client-id.sh` (add `--survey` to also list every
+   configured remote's type and whether it sets its own `client_id`). Relay its output unchanged.
+   Exit 3 means a Google Drive remote still uses rclone's shared `client_id`, which rclone is retiring
+   during 2026; tell the user to create their own per
+   `https://rclone.org/drive/#making-your-own-client-id` and enter it into `rclone config` themselves.
+   The script reports only remote name, type and a yes/no for "has its own client_id"; the
+   `client_secret` is never read, echoed, logged or stored by any Jenga script, and you must never
+   ask the user to paste it into chat. Run this check on its own whenever the user asks, and after step
+   2 when the configured backend was `drive`.
+
+4. **Do not run step 2 if step 1 failed.** The wizard is a strict sequence: `configure-backend.sh`
    itself assumes `rclone` is already on `PATH` and will `die` immediately with a pointer back to
    `install-rclone.sh` if it isn't, so there is nothing to gain by invoking it after a failed
    install — surface the step 1 failure and stop.
@@ -90,6 +101,9 @@ sequences those two scripts and relays their output.
   post-confirmation `rclone about` verification — that is entirely `scripts/configure-backend.sh`'s
   scope (`E60_S01_T02`). Do not duplicate, hardcode a backend list, or reimplement any part of it
   here.
-- Per-backend bespoke guidance (e.g. special-casing Google Drive's auth flow beyond what rclone's own
-  `config create` already prints) — the story's acceptance criteria require the identical flow for
-  every backend; any such special-casing belongs to neither script nor this `SKILL.md`.
+- Per-backend bespoke guidance beyond the single Google Drive retirement notice (`E89_S06_T08`):
+  `configure-backend.sh` prints that notice for `drive` and `check-shared-client-id.sh` detects the
+  shared id, but the auth flow itself is still rclone's own `config create`, identical for every
+  backend. No other backend is special-cased: rclone has announced the retirement only for Google
+  Drive, and `check-shared-client-id.sh --survey` lets a user check whether any other configured
+  remote falls back to a shared id (it prints type and a yes/no only).

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for skills/j-uncharted/scripts/secret-files.sh (E85_S04_T05): the one shared list of file names that
 # j-uncharted treats as secret-looking, and the helpers that apply it.

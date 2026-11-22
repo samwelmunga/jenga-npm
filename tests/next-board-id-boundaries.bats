@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S04_T05: allocator-to-validator boundary tests for the E99 to E100 step. scripts/next-board-id.sh allocates the
 # next ID on a throwaway board, a minimal valid board file named for that ID is written, and scripts/validate-board.sh

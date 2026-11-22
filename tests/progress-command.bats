@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the `jenga progress` command (E92_S08_T10): lib/commands/progress.js and its registration in
 # bin/jenga.js. The command is a thin forwarder to lib/progress/cli.js (E92_S08_T03) that adds `--color always` unless

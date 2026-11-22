@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for skills/j-conventions/scripts/conventions-entry.sh (E69_S04_T03), the deterministic backend of the
 # j.conventions wizard.

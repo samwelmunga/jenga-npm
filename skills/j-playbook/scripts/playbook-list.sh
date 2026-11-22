@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: render
 # ---------------------------------------------------------------------------
 # skills/j-playbook/scripts/playbook-list.sh
 #

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for scripts/events-append.sh (E75_S01_T03).
 # Every case targets a scratch file under BATS_TEST_TMPDIR via --file; the real project/logs/events.json is never touched.

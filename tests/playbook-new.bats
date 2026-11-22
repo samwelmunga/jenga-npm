@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Fixture-based coverage for skills/j-playbook-new/scripts/playbook-new.sh (E53_S09_T02) -- the
 # deterministic helper behind the j.playbook-new guided wizard. Covers all three subcommands:

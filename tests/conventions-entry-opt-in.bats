@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Opt-in category support in skills/j-conventions/scripts/conventions-entry.sh (the write path of conventions.json).
 #

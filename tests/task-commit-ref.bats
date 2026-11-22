@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E79_S04_T05: scripts/task-commit-ref.sh is the per-task commit ref store (capture the branch candidate, freeze the
 # resolved ref write-once, read it back re-validated).

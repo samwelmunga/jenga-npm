@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: none sourced library with no entry point; running it directly does nothing
 
 if [[ -n "${PUBLISH_COMMON_SH_LOADED:-}" ]]; then
   return 0

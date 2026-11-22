@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: none needs project/board/ (resolve-id.sh -> board-scan.sh exits 1 without it, so no read-only invocation exits 0 in a bare consumer); its argument is the user's verbatim /jenga text, so --help is deliberately not special-cased
 # ---------------------------------------------------------------------------
 # skills/jenga/scripts/detect-nl-intent.sh
 #

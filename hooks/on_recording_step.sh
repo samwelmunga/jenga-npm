@@ -276,7 +276,8 @@ case "${1:-}" in
   --probe) PROBE=1 ;;
   -h|--help|help)
     # Usage on stderr, never stdout (rule 1). sed, not cat, so the shebang and the rule line are skipped.
-    sed -n '3,230p' "$0" >&2 2>/dev/null || true
+    # The bound is computed (the header is the leading comment block), never a hardcoded line number.
+    sed -n '3,${/^#/!q;p;}' "$0" >&2 2>/dev/null || true
     exit 0
     ;;
 esac

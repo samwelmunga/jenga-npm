@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-17T10:54:00.296Z",
-  "skill_count": 58,
+  "generated_at": "2026-11-22T14:31:08.678Z",
+  "skill_count": 57,
   "skills": [
     "brainstorm",
     "break",
@@ -21,7 +21,6 @@
     "dashboard",
     "dashboard-share",
     "deep-dive",
-    "distribute",
     "do",
     "doc",
     "doc-sync",
@@ -48,7 +47,6 @@
     "reconcile-origin",
     "redo",
     "skillify",
-    "smoke-test",
     "spinoff",
     "status",
     "test",
@@ -58,6 +56,7 @@
     "uncharted",
     "verify",
     "workflow",
+    "workflow-capture",
     "workflow-recorder",
     "wtf"
   ]

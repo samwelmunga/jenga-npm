@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Consumer postinstall delete reconciliation (E26_S08_T01).
 #

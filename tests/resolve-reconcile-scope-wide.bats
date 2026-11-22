@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for skills/j-reconcile/scripts/resolve-reconcile-scope.sh with the revised fuzzy-ID grammar
 # (E86_S03_T04): story ranges on a board whose epics and stories have three or more digits, plus the

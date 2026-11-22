@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E80_S02_T08: cross-command integration suite for scripts/workflow/run-state.sh (story E80_S02).
 #

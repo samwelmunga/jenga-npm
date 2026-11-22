@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # The large / fullscreen view of the epic progress map in the offline snapshot (E92_S07_T09).
 #

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Wrapper that puts the Node tests of the overview and scope views (lib/progress/overview.js, scope.js and tree-text.js, E92_S08_T05) under `j.test` discovery.
 #

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E80_S03_T05: scripts/workflow/step-playbook.sh resolves a playbook id through load-playbooks.sh lookup and
 # prints the action object for a `playbook` workflow step; --resume marks it as re-initialised (playbook run

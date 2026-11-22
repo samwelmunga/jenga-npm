@@ -9,6 +9,7 @@
 #
 # Usage:
 #   validate_npm_stage_env.sh <target> <path-to-publish.json>
+# smoke-invoke: none needs project/configs/publish.json, which the consumer fixture does not create
 #
 # Exit codes:
 #   0  all four preflight checks passed

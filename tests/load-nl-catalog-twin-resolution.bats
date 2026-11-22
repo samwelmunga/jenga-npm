@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # Regression coverage for skills/jenga/scripts/load-nl-catalog.js's twin-directory
 # resolution (E50_S12_T03).

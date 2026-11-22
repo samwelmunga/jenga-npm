@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E34_S01_T04: scripts/resolve-root.sh is the shared working-file root and per-key path resolver.
 # Every case builds its own throwaway trees under $BATS_TEST_TMPDIR (a conventional ./project/ tree

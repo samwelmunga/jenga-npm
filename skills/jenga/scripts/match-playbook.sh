@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: brainstorm
 # ---------------------------------------------------------------------------
 # skills/jenga/scripts/match-playbook.sh
 #

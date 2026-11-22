@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # No project-specific convention may leak into a file shipped through /j-mirror-public (E69_S06_T05).
 #

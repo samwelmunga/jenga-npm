@@ -30,6 +30,23 @@
 
 set -u
 
+# --help / -h: print usage on stdout and exit 0 before anything is parsed, read or written (E99_S01_T02).
+case "${1:-}" in
+  --help|-h)
+    cat <<'USAGE'
+commit-subject-check.sh - classify a commit subject and check it against the project's commit-format convention
+
+Usage: commit-subject-check.sh [--conventions <file>] <subject>
+       commit-subject-check.sh --help | -h
+
+Prints kind=board; ... or kind=non-board; <verdict> on stdout. Exit 0 for a board commit,
+a conforming subject or no applicable convention; 1 when a non-board subject violates the
+recorded convention; 2 usage. Read-only; writes nothing.
+USAGE
+    exit 0
+    ;;
+esac
+
 SELF="$(basename "$0")"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null

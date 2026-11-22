@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S02_T07: pin the trailing-underscore prefix invariant (epic E86, Decisions item 4 and the "related
 # invariants" paragraph of project/documentation/board-ids.md).

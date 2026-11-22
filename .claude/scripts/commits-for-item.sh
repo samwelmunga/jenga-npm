@@ -27,10 +27,14 @@
 # ---------------------------------------------------------------------------
 # WHAT COUNTS AS "A COMMIT FOR <id>"  (three forms, always, whatever the project's configuration says)
 # ---------------------------------------------------------------------------
-#   1. EST form and anything else that names the id. The id appears anywhere in the commit message (subject or
-#      body): `task(E51_S02_T01): ...`, `chore(E51_S02_T01): add rapport ...`, `story(E51_S02): ...`,
-#      `merge: E51_S02_T01-slug into ...`. This is exactly the call the four anchored consumers make today,
-#      so EST-only history resolves identically (E79_S02_T02 is the differential proof).
+#   1. EST form and anything else that names the id in the SUBJECT line: `task(E51_S02_T01): ...`,
+#      `chore(E51_S02_T01): add rapport ...`, `story(E51_S02): ...`, `merge: E51_S02_T01-slug into ...`, and a
+#      genuine bundle `task(E89_S06_T06, E89_S06_T07): ...` (resolves to both). A mention in the BODY is a
+#      cross-reference, not an attribution, and does not resolve (E89_S06_T06): "belongs to recording-file.sh
+#      (E89_S01_T02)" in another task's body must not credit that commit to E89_S01_T02. A body that really
+#      attributes work says so with a `Jenga-Task:` trailer (form 2), which is position-independent. One body
+#      shape also counts: a body LINE that is itself an EST subject (`* task(E51_S02_T01): add retry`), which is
+#      how a squash-merge restates the subjects it folded in; that is a restated attribution, not prose.
 #   2. A `Jenga-Task: <id>` trailer. Read with git's own trailer parser (`%(trailers:key=Jenga-Task,...)`), so
 #      several trailers in one block, the key in any letter case, and a value listing several ids separated by
 #      spaces, commas or semicolons are all handled. A commit is attributed when one value equals <id> exactly.
@@ -175,10 +179,20 @@ TMP="$(mktemp -d "${TMPDIR:-/tmp}/commits-for-item.XXXXXX")" || {
 trap 'rm -rf "$TMP"' EXIT
 trap 'exit 4' HUP INT TERM
 
-# Pass A: the id anywhere in the message (EST form, and the text of a trailer too).
-if ! git -C "$REPO" log --all --no-merges --extended-regexp \
-      --grep="${ID}([^0-9_]|\$)" --pretty=format:'%H' >"$TMP/a" 2>"$TMP/a.err"; then
+# Pass A: the id in the commit SUBJECT (EST form). A mention in the body is a cross-reference, not an attribution
+# (E89_S06_T06); only the subject line and a Jenga-Task trailer attribute a commit. Subjects are listed with their
+# sha and filtered below, with the same `<id>([^0-9_]|$)` anchor as before.
+if ! git -C "$REPO" log --all --no-merges --pretty=format:'%H%x09%s' >"$TMP/a" 2>"$TMP/a.err"; then
   printf '%s: git log failed while resolving %s: %s\n' "$PROG" "$ID" "$(tr '\n' ' ' <"$TMP/a.err")" >&2
+  exit 4
+fi
+
+# Pass A2: a body line that is itself an EST-form subject, as a squash-merge writes them (`* task(<id>): ...`, with
+# or without the bullet). That is a restatement of an attribution, not a prose mention, so it still resolves.
+if ! git -C "$REPO" log --all --no-merges --extended-regexp \
+      --grep="^[-* ]*[a-z]+\\(([^)]*[^A-Za-z0-9_])?${ID}([^0-9_)][^)]*)?\\):" --pretty=format:'%H' \
+      >"$TMP/a2" 2>"$TMP/a2.err"; then
+  printf '%s: git log failed while resolving %s: %s\n' "$PROG" "$ID" "$(tr '\n' ' ' <"$TMP/a2.err")" >&2
   exit 4
 fi
 
@@ -193,8 +207,14 @@ fi
 
 # Union in walk order: a commit is kept when pass A found it, or when one of its trailer values names <id> exactly.
 # FILENAME (not NR==FNR) selects the first file, because pass A's file is empty for a trailer-only history.
-awk -F'\t' -v id="$ID" -v afile="$TMP/a" '
-  FILENAME == afile { if ($1 != "") hit[$1] = 1; next }
+awk -F'\t' -v id="$ID" -v afile="$TMP/a" -v a2file="$TMP/a2" '
+  FILENAME == a2file { if ($1 != "") hit[$1] = 1; next }
+  FILENAME == afile {
+    if ($1 == "") next
+    subj = substr($0, length($1) + 2)
+    if (subj ~ (id "([^0-9_]|$)")) hit[$1] = 1
+    next
+  }
   $1 == "" { next }
   {
     if ($1 in hit) { print $1; next }
@@ -205,7 +225,7 @@ awk -F'\t' -v id="$ID" -v afile="$TMP/a" '
       }
     }
   }
-' "$TMP/a" "$TMP/walk" >"$TMP/out" || {
+' "$TMP/a2" "$TMP/a" "$TMP/walk" >"$TMP/out" || {
   printf '%s: internal error while filtering commits for %s\n' "$PROG" "$ID" >&2
   exit 4
 }

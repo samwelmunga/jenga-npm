@@ -93,6 +93,23 @@
 
 set -euo pipefail
 
+# -h / --help: print the usage on stdout and exit 0 before anything is parsed, read or written (E99_S01_T01).
+case "${1:-}" in
+  -h|--help)
+    cat <<'USAGE'
+Usage: board-scan.sh [-h|--help]
+
+Print a JSON array describing every epic, story and task under project/board/
+(stdout), one object per item: id, type, epic_id, story_id, title, status,
+summary, file. Takes no arguments; read-only.
+
+Exit codes: 0 scan completed; 1 project/board/ missing, python3 unavailable,
+or scripts/lib/board_ids.py not found.
+USAGE
+    exit 0
+    ;;
+esac
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Package root (scripts/, lib/, templates/): resolved so it also works from a consumer's .claude/skills mirror.

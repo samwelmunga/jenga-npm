@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for skills/j-test/scripts/narrow-suites.sh (E72_S07_T02) — the piece
 # that finally makes a `scoped` gate narrow, and that excludes suites which

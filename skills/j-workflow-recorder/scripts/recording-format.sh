@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: none sourced parse contract (recording-file.sh and record-answer.sh source it), defines functions and runs nothing
 # ---------------------------------------------------------------------------
 # skills/j-workflow-recorder/scripts/recording-format.sh - THE RECORDING PARSE CONTRACT
 # (epic E89, task E89_S06_T15)
@@ -61,7 +62,7 @@
 #   - A step's id is unique in the document, so for an annotation the pair (id, kind) is unique too,
 #     and that is the annotation's key.
 #   - value is a NORMALISED TOKEN from the kind's fixed vocabulary (see record-answer.sh's header,
-#     which owns the four kinds). Consumers switch on this and never parse prose to decide anything.
+#     which owns the five kinds). Consumers switch on this and never parse prose to decide anything.
 #   - The CLOSE markers exist so the end of a block is unambiguous without counting, and so an
 #     annotator has an unambiguous insertion point INSIDE a step.
 #
@@ -152,6 +153,36 @@
 # A clean legacy document therefore keeps working exactly as it did before this change.
 #
 # ---------------------------------------------------------------------------
+# PROVENANCE: WHERE A RECORDING CAME FROM (E103_S01_T01)
+# ---------------------------------------------------------------------------
+# Two frontmatter keys say where the process in a recording was observed:
+#
+#   source      one of a CLOSED set, written unquoted:
+#                 live                 recorded as the session happened (j.workflow-recorder, the hook route)
+#                 session-transcript   reconstructed afterwards from a session transcript
+#                 external-url         reconstructed from third-party instructions fetched from a URL
+#                 pasted               reconstructed from text the user pasted or a file they named
+#               Consumers switch on this token; nothing else may appear. A value outside the set is refused
+#               by `recording-file.sh create` (exit 2) and never written.
+#   source_ref  OPTIONAL. A double-quoted YAML scalar (the same escaping as `title`) naming the source: a
+#               session id or a transcript path, or for an external source the URL plus the fetch time and a
+#               content hash. Present only when a reference was given; a recording without one simply has no
+#               `source_ref` line. It NEVER holds a credential: a reference carrying a newline, URL userinfo
+#               (`scheme://user:secret@host`) or a credential-named query parameter (token, key, secret,
+#               password, signature, auth and similar) is refused (rec_source_ref_problem). Strip the secret and
+#               pass what remains.
+#
+# The keys are ADDITIVE and need no format-version bump: `recording_format_version` governs only how bodies
+# are represented, and a reader that does not know these keys ignores them. A recording WITHOUT a `source`
+# key - every recording written before this change, and any hand-made one - reads as `live` through
+# rec_source, which is true of all of them: before this change nothing but the live recorder wrote recordings.
+# Reversing the change is therefore just removing the lines; no migration is needed in either direction.
+#
+# `recording-file.sh create` writes `source:` (and `source_ref:` when given) as the LAST frontmatter keys,
+# after `date_ended:`. Without the new arguments it writes `source: live` and nothing else new, so such a
+# document differs from one created before this change by that one line only.
+#
+# ---------------------------------------------------------------------------
 # EXIT CODES THIS CONTRACT ADDS (both scripts, every mode)
 # ---------------------------------------------------------------------------
 #   8   the recording's markers are AMBIGUOUS, so it cannot be parsed safely. Nothing was written. The
@@ -170,6 +201,11 @@
 #   rec_body_marker_lines      <text>            prints the 1-based line numbers of those lines
 #   rec_prepare_body           <path> <text>     the body as it must be written there; 9 when it cannot be
 #   rec_frontmatter_value      <path> <key>      the key's value from the leading --- block only
+#   rec_frontmatter_string     <path> <key>      the same, with a double-quoted scalar unquoted and unescaped
+#   rec_is_source_value        <value>           0 when <value> is in the closed `source` set
+#   rec_source_ref_problem     <ref>             0 and prints why, when <ref> must not be written; else 1
+#   rec_source                 <path>            the recording's source, `live` when the key is absent
+#   rec_source_ref             <path>            the recording's source_ref, unquoted, or nothing
 #   rec_format_version         <path>            the declared version as an integer, 0 when absent
 #   rec_is_escaped_format      <path>            0 when the document is version >= 2
 #   rec_has_steps_section      <path>            0 when the anchor or a '## Steps' heading is present
@@ -199,6 +235,10 @@ REC_ANSWER_END_PREFIX='<!-- jenga-recorder:answer-end '
 # The version `create` writes, and the first version whose bodies are escaped per rule 1.
 REC_FORMAT_VERSION=2
 REC_ESCAPED_FROM_VERSION=2
+
+# Provenance (E103_S01_T01): the closed `source` set, and the value a recording without the key reads as.
+REC_SOURCE_VALUES='live session-transcript external-url pasted'
+REC_SOURCE_DEFAULT='live'
 
 # ---------------------------------------------------------------------------
 # Rule 1: the body escape
@@ -309,6 +349,81 @@ rec_is_escaped_format() {
   local v
   v="$(rec_format_version "$1")"
   [ "$v" -ge "$REC_ESCAPED_FROM_VERSION" ]
+}
+
+# Prints <key>'s frontmatter value as a string: a double-quoted scalar has its quotes removed and its
+# escapes (\" and \\, the two that recording-file.sh's yaml_escape writes) reversed; an unquoted value is
+# printed as is. Prints nothing when the key is absent.
+rec_frontmatter_string() {
+  local raw
+  raw="$(rec_frontmatter_value "$1" "$2")"
+  [ -n "$raw" ] || return 0
+  case "$raw" in
+    \"*\")
+      printf '%s' "$raw" | awk '
+        { s = substr($0, 2, length($0) - 2); out = ""
+          for (i = 1; i <= length(s); i++) {
+            c = substr(s, i, 1)
+            if (c == "\\" && i < length(s)) { i++; c = substr(s, i, 1) }
+            out = out c
+          }
+          printf "%s", out }
+      '
+      ;;
+    *) printf '%s' "$raw" ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# Provenance - see "PROVENANCE" in the contract above
+# ---------------------------------------------------------------------------
+
+# 0 when <value> is one of the closed `source` set.
+rec_is_source_value() {
+  local v
+  for v in $REC_SOURCE_VALUES; do
+    [ "$v" = "${1:-}" ] && return 0
+  done
+  return 1
+}
+
+# Returns 0 and prints a one-line reason when <ref> must NOT be written as a source_ref; returns 1, printing
+# nothing, when it is acceptable. Deliberately conservative: a refused reference is a prompt to strip a
+# secret, while an accepted one is persisted into a document that may be committed and shared.
+rec_source_ref_problem() {
+  local ref="${1:-}" nl cr
+  nl='
+'
+  cr="$(printf '\r')"
+  case "$ref" in
+    *"$nl"*|*"$cr"*) printf 'it spans more than one line; a source_ref is a single line'; return 0 ;;
+  esac
+  if printf '%s\n' "$ref" | grep -Eq '[A-Za-z][A-Za-z0-9+.-]*://[^/?#@[:space:]]*@'; then
+    printf 'it carries URL user information (scheme://user...@host), which can hold a credential; remove it'
+    return 0
+  fi
+  if printf '%s\n' "$ref" | grep -Eiq '[?&;]([A-Za-z0-9_.-]*[_.-])?(access_?token|token|api_?key|apikey|key|secret|password|passwd|pwd|auth|authorization|signature|sig|credential|code)='; then
+    printf 'it carries a credential-named query parameter (token, key, secret, password, signature, auth or similar); remove it'
+    return 0
+  fi
+  if printf '%s\n' "$ref" | grep -Eiq '(^|[^A-Za-z])bearer[[:space:]]'; then
+    printf 'it carries a bearer token; remove it'
+    return 0
+  fi
+  return 1
+}
+
+# Prints the recording's source; `live` when the frontmatter has no `source` key (every recording written
+# before E103_S01_T01 was a live one). A present but unknown value is printed as is, for the caller to refuse.
+rec_source() {
+  local v
+  v="$(rec_frontmatter_value "$1" source)"
+  printf '%s' "${v:-$REC_SOURCE_DEFAULT}"
+}
+
+# Prints the recording's source_ref, unquoted, or nothing when it has none.
+rec_source_ref() {
+  rec_frontmatter_string "$1" source_ref
 }
 
 # ---------------------------------------------------------------------------

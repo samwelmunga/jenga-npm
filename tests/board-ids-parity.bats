@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S01_T01: the Python and shell board-ID shapes must agree on every case in tests/fixtures/board-id-cases.txt,
 # and both must be reachable from the monorepo layout and from node_modules/@jenga-ai/agent/. Line format of the

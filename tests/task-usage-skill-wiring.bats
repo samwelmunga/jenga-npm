@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E76_S02_T05: grep-level checks that the three task-looping skills call `task-usage.sh --persist`, that the call is
 # guarded by an explicit existence test (public-mirror guard, E76 epic decision 6: the script is blocklisted from the

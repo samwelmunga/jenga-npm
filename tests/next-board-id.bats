@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S04_T01: scripts/next-board-id.sh prints the next epic / story / task ID as the numeric maximum plus one, with
 # a minimum of two digits and no maximum, and the width rule lives only in board_id_format_number

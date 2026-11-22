@@ -231,8 +231,11 @@ every script and template the shipped example uses classify PUBLIC. The reasonin
     interactive `jenga init` did this, so a postinstall-only upgrade left the skills list in the
     block on the old version.
 11. **Repair a legacy array-shaped `project/logs/events.json`** (`lib/events-log-repair.js`).
-12. **Write `.jenga-version`** with the installed version.
-13. **Print the closing hint** `If anything looks stale, or this hook did not run, run: npx jenga sync`
+12. **Merge the shipped settings fragments into `.claude/settings.json` and `.agents/settings.json`**
+    (`scripts/merge-settings.sh`, `E100_S03`; before it, `E89_S06_T20` registered hooks only). See "Settings
+    merge" below.
+13. **Write `.jenga-version`** with the installed version.
+14. **Print the closing hint** `If anything looks stale, or this hook did not run, run: npx jenga sync`
     — also on the "Nothing to do" path.
 
 Steps 4–12 are not in `scripts/postinstall.js` itself: they are `syncConsumer` in `lib/sync.js`,
@@ -241,6 +244,51 @@ shared with `jenga sync` (§7). `postinstall.js` keeps only steps 1–3 and 13.
 Steps 5–12 are all best-effort: a failure there logs a warning but never fails the install.
 
 ---
+
+### Settings merge (`E100_S03`, replacing the hook-only `E89_S06_T20` merge)
+
+Nothing used to write into a consumer's Claude Code settings: the mirror copies `skills/` and `agents/` only,
+`lib/inject-settings.js` is retired (`E89_S06_T13`, do not revive it), and the shipped `settings.json` and
+`templates/permission-levels/level-*.json` never reach an already-initialised project. A consumer upgraded from a
+release that predates a feature therefore never had its hook; the visible symptom was `j.workflow-recorder`
+capturing 0 steps because its `UserPromptSubmit` hook (`hooks/on_recording_step.sh`) was absent.
+
+`scripts/merge-settings.sh`, called as step 12 of `syncConsumer` (so by `postinstall` and `jenga sync` alike), reads
+the **settings fragments** the package ships (`skills/*/settings-fragment.json` and `hooks/*.fragment.json`,
+validated by `validate-settings-fragment.sh`) and adds what a consumer's `.claude/settings.json` and
+`.agents/settings.json` lack. It handles three key classes:
+
+| Key class | Rule |
+|---|---|
+| `hooks` | A declared entry is added when no entry equals it after JSON normalisation; a similar but different consumer entry stays and Jenga's is added next to it. `WorktreeCreate` and `WorktreeRemove` replace Claude Code's default, so when one already holds a different entry Jenga adds none and reports `conflict hooks.<Event>`. |
+| `env` | Merged **per key**: a declared key that is absent is added, every other key is left, the object is never replaced. A key present with another value is a conflict: the client's value stays and one line names the file, the key and both values. `env` is included in the merge, not only hooks. |
+| `permissions.allow` | **Opt-in.** Rules declared with `optIn: true` are listed exactly (one per line per file) and written only after an explicit yes typed on the terminal in that run (`--interactive`, stdin a terminal, answer read from `/dev/tty`). No flag, environment variable or config value supplies the yes; postinstall, CI and `--dry-run` never ask and report `inactive allow <rule>` with the command that asks. |
+
+- **Non-clobbering.** User-written entries, other keys and key order are left exactly as they are.
+- **Idempotent.** A file is rewritten (atomically) only when something was added; a second run is byte-identical.
+- **Manifest.** Beside each settings file, `jenga-settings-manifest.json` records every entry the merge wrote (key class,
+  path, id, fragment, version, entry). It is written only after the settings write was re-read and parsed. On a later run
+  a record that is no longer declared is removed only when the file's entry still equals the recorded one; a
+  client-edited entry is kept (`kept, client-modified`), and an allow rule is removed only after the exact diff and a yes.
+  A missing manifest removes nothing; a corrupt one removes nothing and is never overwritten.
+- **Exit codes.** 0 ok or skipped, 2 usage, 3 source unusable (jq missing, no or invalid fragment), 4 an existing settings
+  file is not a JSON object (left untouched), 5 write failed, **6 completed with conflicts or inactive allow rules**.
+  Exit 6 is a warning in the sync summary, not a failure; any other non-zero exit fails the step.
+- **Consumer only.** It prints `skipped` when the consumer root is the package itself, and under `--dry-run` writes nothing.
+- **Restart needed.** Claude Code reads hooks at session start, so a hook registered by a sync takes effect in the next session.
+
+The fragments declare the same hooks the root `settings.json` carries (the six-file invariant of `E89_S06_T12` still keeps
+them byte-identical there). Design and behaviour map: `project/documentation/e100-s03-merge-design.md`. Tests:
+`tests/merge-settings.bats` and `tests/consumer-hook-merge.bats` (the pre-skill upgrade case).
+
+#### The permission-level switch is deliberately not a merge (decision, `E89_S06_T20`)
+
+`scripts/jenga-permission-level-switch.sh` keeps its whole-file overwrite of `.claude/settings.json` and
+`.agents/settings.json`. A switch already resets `permissions`, `env` and `defaultMode` and drops `autoMode`, so a
+hooks-only merge would make it half merge, half overwrite; and the file after a switch is fully determined by the
+chosen level, which keeps the levels auditable. A switch never un-registers a Jenga hook, since every template
+carries them all. The cost is that **a user-written hook in `.claude/settings.json` is lost on a switch**. Put hooks
+that must survive in `.claude/settings.local.json`, which neither the switch nor the sync merge touches.
 
 ## 3. Upgrade cleanup — manifest-based delete reconciliation
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E85_S04_T04: /publish setup and the per-type env validation for npm and npm-ci targets end by showing the
 # one-time dependency-audit opt-in notice from scripts/audit-notice.sh (through audit_notice_hook.sh). Whether it

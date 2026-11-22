@@ -7,7 +7,7 @@
 const assert = require('assert')
 const { renderBudgetView, load } = require('./budget-view-render.cjs')
 
-const { hasUsageData, buildBudgetRows, formatTokens, measured, NOT_MEASURED } = load()
+const { hasUsageData, buildBudgetRows, formatTokens, measured, NOT_MEASURED, NOT_PRICED } = load()
 const count = (html, needle) => html.split(needle).length - 1
 
 const task = (id, extra = {}) => ({ id, story_id: 'E01_S01', epic_id: 'E01', title: `Task ${id}`, status: 'Passed', ...extra })
@@ -120,7 +120,85 @@ assert.strictEqual(measured(0), 0)
     usage_tasks_total_tokens: 10, usage_overhead_total_tokens: 0, usage_total_tokens: 10,
   })]))
   assert.ok(html.length > 0)
-  assert.ok(!/\$|USD|EUR|\bprice|\bcost|dollar/i.test(html))
+  // The derived cost-equivalent unit (E90) is a relative unit, so its own wording is allowed; nothing else may price.
+  const stripped = html.replace(/<[^>]*>/g, '').replace(/cost-equivalent units?|not priced|a currency amount|not a currency amount/gi, '')
+  assert.ok(!/\$|USD|EUR|\bprice|\bcost|dollar/i.test(stripped))
+}
+
+// 5. E90_S01_T09: the derived cost-equivalent unit beside the raw counts.
+{
+  const epics = board([
+    story('E01_S01', [
+      measuredTask('E01_S01_T01', 1200, 3400, 56000, 780000, { usage_cost_units: 4321 }),
+      measuredTask('E01_S01_T02', 10, 20, 30, 40),
+      task('E01_S01_T03'),
+      measuredTask('E01_S01_T04', 1, 1, 1, 1, { usage_cost_units: 0 }),
+    ], {
+      usage_tasks_input_tokens: 1210, usage_tasks_output_tokens: 3420, usage_tasks_cache_write_tokens: 56030,
+      usage_tasks_cache_read_tokens: 780040, usage_tasks_total_tokens: 840700, usage_tasks_cost_units: 4321,
+      usage_overhead_input_tokens: 5, usage_overhead_output_tokens: 6, usage_overhead_cache_write_tokens: 7,
+      usage_overhead_cache_read_tokens: 8, usage_overhead_total_tokens: 26, usage_overhead_cost_units: 79,
+      usage_total_tokens: 840726, usage_cost_units: 4400,
+    }),
+  ])
+  const html = renderBudgetView(epics)
+  const row = id => html.match(new RegExp(`<tr data-row="task" data-id="${id}"[\\s\\S]*?</tr>`))[0]
+  const part = name => html.match(new RegExp(`<tr data-row="${name}"[\\s\\S]*?</tr>`))[0]
+  const cell = tr => tr.match(/<td[^>]*data-field="costUnits"[^>]*>([^<]*)<\/td>/)
+  // the column is labelled as a derived cost-equivalent unit, and the view says it is not a currency
+  assert.ok(html.includes('Derived: cost-equivalent units'))
+  assert.ok(html.includes('not a currency amount'))
+  // task with a number: the number sits next to the four raw counts, which are all still there
+  const t1 = row('E01_S01_T01')
+  for (const s of ['>1,200<', '>3,400<', '>56,000<', '>780,000<', '>840,600<']) assert.ok(t1.includes(s), 'raw count lost ' + s)
+  assert.strictEqual(cell(t1)[1], '4,321')
+  // raw counts but no derived field: "not priced", never 0
+  const t2 = row('E01_S01_T02')
+  assert.strictEqual(cell(t2)[1], NOT_PRICED)
+  assert.ok(!/>0</.test(t2))
+  // nothing measured at all: the whole row says "not measured", not "not priced"
+  const t3 = row('E01_S01_T03')
+  assert.ok(t3.includes('budget-not-measured') && !t3.includes(NOT_PRICED))
+  // an explicit derived 0 is a measured 0
+  assert.strictEqual(cell(row('E01_S01_T04'))[1], '0')
+  // story task part, overhead part and total each carry their own derived number
+  assert.strictEqual(cell(part('story-tasks-part'))[1], '4,321')
+  assert.strictEqual(cell(part('story-overhead-part'))[1], '79')
+  assert.strictEqual(cell(part('story-total'))[1], '4,400')
+  // every row of the table spans the same number of columns (the extra column is accounted for everywhere)
+  const span = tr => (tr.match(/<t[dh][^>]*>/g) || []).reduce((n, t) => n + Number((t.match(/colSpan="(\d+)"/) || [0, 1])[1]), 0)
+  for (const tr of html.match(/<tr[\s\S]*?<\/tr>/g)) assert.strictEqual(span(tr), 7, tr.slice(0, 60))
+  assert.ok(!/undefined|NaN|null/.test(html))
+}
+
+// 5b. A story whose parts are unmeasured or unpriced says so in the derived column.
+{
+  const epics = board([
+    story('E01_S01', [measuredTask('E01_S01_T01', 1, 2, 3, 4, { usage_cost_units: 9 })], {
+      usage_tasks_total_tokens: 10, usage_overhead_total_tokens: 3, usage_total_tokens: 13, usage_tasks_cost_units: 9,
+    }),
+  ])
+  const html = renderBudgetView(epics)
+  const part = name => html.match(new RegExp(`<tr data-row="${name}"[\\s\\S]*?</tr>`))[0]
+  assert.ok(part('story-tasks-part').includes('>9<'))
+  assert.ok(part('story-overhead-part').includes(NOT_PRICED))
+  assert.ok(part('story-total').includes(NOT_PRICED))
+}
+
+// 5c. The derived column is part of the contract: with raw counts and no derived number anywhere, every item reads
+// "not priced" (never 0), and a wrong-typed derived value is not a number either.
+{
+  const epics = board([story('E01_S01', [measuredTask('E01_S01_T01', 1, 2, 3, 4)])])
+  const html = renderBudgetView(epics)
+  assert.ok(html.includes('data-field="costUnits"') && html.includes('Derived: cost-equivalent units'))
+  assert.ok(html.includes(NOT_PRICED))
+  for (const bad of [null, undefined, '12', NaN, -1, '3']) {
+    const h = renderBudgetView(board([story('E01_S01', [measuredTask('E01_S01_T01', 1, 2, 3, 4, { usage_cost_units: bad })])]))
+    const m = h.match(/<tr data-row="task"[\s\S]*?<\/tr>/)[0].match(/<td[^>]*data-field="costUnits"[^>]*>([^<]*)<\/td>/)
+    assert.strictEqual(m[1], NOT_PRICED)
+  }
+  // a derived field alone does not offer the tab: the guard stays about measured token counts
+  assert.strictEqual(hasUsageData(board([story('E01_S01', [task('E01_S01_T01', { usage_cost_units: 5 })])])), false)
 }
 
 console.log('budget-view.test.cjs: ok')

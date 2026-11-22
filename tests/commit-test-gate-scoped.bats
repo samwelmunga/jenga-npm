@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for skills/j-commit/scripts/test-gate-scoped.sh (E72_S04_T02).
 #

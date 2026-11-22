@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for merging finished task work into the session's perceived branch (E78_S02_T07).
 #

@@ -338,6 +338,81 @@ test('GET /board and GET /board/:epicId return 200 with the usage fields include
   assertNoUsage(wire.stories[0].tasks[0]);
 });
 
+// ---------------------------------------------------------------------------------------------
+// E90_S01_T08: derived cost-unit fields (usage_cost_units on tasks; usage_tasks_cost_units,
+// usage_overhead_cost_units, usage_cost_units on stories). Same rules as the raw fields.
+// ---------------------------------------------------------------------------------------------
+const COST_TASK_KEYS = ['usage_cost_units'];
+const COST_STORY_KEYS = ['usage_tasks_cost_units', 'usage_overhead_cost_units', 'usage_cost_units'];
+
+function writeCostBoard(root) {
+  const put = (rel, text) => {
+    const full = path.join(root, 'project', 'board', rel);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, text);
+  };
+  put('epics/E01_cost.md', item('E01', null, null, null));
+  put('stories/E01_S01_present.md', item('E01_S01', 'epic_id', 'E01',
+    ['usage_tasks_cost_units: 900', 'usage_overhead_cost_units: 100', 'usage_cost_units: 1000']));
+  put('tasks/E01_S01_T01_present.md', item('E01_S01_T01', 'story_id', 'E01_S01', ['usage_cost_units: 900']));
+  put('tasks/E01_S01_T02_absent.md', item('E01_S01_T02', 'story_id', 'E01_S01', ['usage_total_tokens: 5']));
+  put('stories/E01_S02_zero.md', item('E01_S02', 'epic_id', 'E01',
+    ['usage_tasks_cost_units: 0', 'usage_overhead_cost_units: 0', 'usage_cost_units: 0']));
+  put('tasks/E01_S02_T01_zero.md', item('E01_S02_T01', 'story_id', 'E01_S02', ['usage_cost_units: 0']));
+  put('stories/E01_S03_absent.md', item('E01_S03', 'epic_id', 'E01', null));
+  put('stories/E01_S04_wrong.md', item('E01_S04', 'epic_id', 'E01',
+    ['usage_tasks_total_tokens: "abc"', 'usage_tasks_cost_units: "abc"', 'usage_cost_units: -5']));
+  put('tasks/E01_S04_T01_wrong.md', item('E01_S04_T01', 'story_id', 'E01_S04',
+    ['usage_total_tokens: "abc"', 'usage_cost_units: "12.5x"']));
+}
+
+const rootCost = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'board-usage-cost-')));
+writeCostBoard(rootCost);
+let costBoard;
+
+test('cost-unit fields: present values reach tasks and stories as numbers; epics carry none', () => {
+  costBoard = runBoard(rootCost).board;
+  assert.strictEqual(byId(costBoard, 'E01_S01_T01').usage_cost_units, 900);
+  const story = byId(costBoard, 'E01_S01');
+  assert.strictEqual(story.usage_tasks_cost_units, 900);
+  assert.strictEqual(story.usage_overhead_cost_units, 100);
+  assert.strictEqual(story.usage_cost_units, 1000);
+  for (const e of costBoard) {
+    for (const k of [...COST_TASK_KEYS, ...COST_STORY_KEYS]) assert.ok(!(k in e), `epic ${e.id} gained ${k}`);
+  }
+});
+
+test('cost-unit fields: a missing field is absent, never 0 or null', () => {
+  assert.ok(!('usage_cost_units' in byId(costBoard, 'E01_S01_T02')), 'usage_cost_units filled in on a task without it');
+  const story = byId(costBoard, 'E01_S03');
+  for (const k of COST_STORY_KEYS) assert.ok(!(k in story), `${k} filled in on a story without it`);
+});
+
+test('cost-unit fields: an explicit 0 stays 0', () => {
+  assert.strictEqual(byId(costBoard, 'E01_S02_T01').usage_cost_units, 0);
+  const story = byId(costBoard, 'E01_S02');
+  for (const k of COST_STORY_KEYS) assert.strictEqual(story[k], 0, `${k} lost its explicit zero`);
+});
+
+test('cost-unit fields: wrong-typed values are handled exactly as raw usage fields (passed through verbatim, never coerced)', () => {
+  const story = byId(costBoard, 'E01_S04');
+  const task = byId(costBoard, 'E01_S04_T01');
+  // A raw token field with a wrong type is passed through unchanged (validate-board.sh flags it)...
+  assert.strictEqual(story.usage_tasks_total_tokens, 'abc');
+  assert.strictEqual(task.usage_total_tokens, 'abc');
+  // ...and the cost-unit fields behave identically: not coerced to 0 or null, not dropped.
+  assert.strictEqual(story.usage_tasks_cost_units, 'abc');
+  assert.strictEqual(story.usage_cost_units, -5);
+  assert.strictEqual(task.usage_cost_units, '12.5x');
+  assert.ok(!('usage_overhead_cost_units' in story), 'an absent sibling must stay absent');
+});
+
+test('cost-unit fields: no other output changes (sibling keys and order preserved)', () => {
+  const keys = Object.keys(byId(costBoard, 'E01_S01_T01'));
+  assert.deepStrictEqual(keys.slice(0, 6), ['id', 'story_id', 'title', 'status', 'date_created', 'usage_cost_units']);
+  assert.ok(keys.indexOf('docs') > keys.indexOf('usage_cost_units'));
+});
+
 (async () => {
   let failures = 0;
   for (const { name, fn } of tests) {
@@ -352,6 +427,7 @@ test('GET /board and GET /board/:epicId return 200 with the usage fields include
   }
   fs.rmSync(rootWith, { recursive: true, force: true });
   fs.rmSync(rootStripped, { recursive: true, force: true });
+  fs.rmSync(rootCost, { recursive: true, force: true });
   console.log(`\n${tests.length - failures}/${tests.length} passed`);
   if (failures > 0) process.exitCode = 1;
 })();

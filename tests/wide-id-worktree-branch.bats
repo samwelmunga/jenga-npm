@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Group 2 of the E86_S05 audit (E86_S05_T02): task branches and worktrees named with three- and four-digit board IDs.
 #

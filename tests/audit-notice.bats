@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E85_S04_T02: scripts/audit-notice.sh prints a one-time opt-in notice for dependency audits.
 # Every case runs against a throwaway JENGA_PROJECT_ROOT under BATS_TEST_TMPDIR; this repository's

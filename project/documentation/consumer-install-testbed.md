@@ -32,7 +32,7 @@ such defects were found by consumers in `E46`, and `scripts/mark-deployed.sh` in
   from each shape: exits 0, and with `--diff-file` promotes `Publicized` tasks to `Deployed to Prod`.
 - The `j-close-story` `check-privatized.sh` command does the same and writes `Privatized`.
 - The staged-release consumer verification steps (formerly a README section, removed from the public README because it describes internal process; the procedure now lives only in `project/.workflows/scripts/st-test-run.sh`) that can run offline: the skill
-  smoke test against the package root, and the package's `populate-knowledge-graph.*.test.js` files.
+  smoke test against the package root (only where the private `j.smoke-test` is present in the package under test; it is not in the published package, and `st-test-run.sh` itself runs the checkout's copy, or reports `SKIP`, see `consumer-smoke-test.md`, "The smoke test is private"), and the package's `populate-knowledge-graph.*.test.js` files.
 - Every `node_modules/@jenga-ai/agent/<path>` that a skill or agent names exists in the package.
 - **Static sweep** (`testbed_sweep_package_root_paths`): no shipped `.sh`/`.js` builds a path into
   `scripts/ skills/ templates/ lib/ agents/ hooks/ mcp/` from `$REPO_ROOT`/`$ROOT`-style variables, unless the
@@ -61,7 +61,7 @@ maintainer-only tooling or presence probes, and say why.
 ## ST-Test mock board
 
 Separate from this offline testbed: after the staged tarball has been installed in the ST-Test consumer project
-and checked (`project/.workflows/scripts/st-test-run.sh`), the `deploy-stage` workflow regenerates a mock board
+and checked (`project/.workflows/scripts/st-test-run.sh`, whose smoke-test step runs the checkout's private copy against the installed package, or reports `SKIP` where the checkout has none), the `deploy-stage` workflow regenerates a mock board
 there and shows it with `j.dashboard-share`, `j.status` and `j.status E01`.
 
 The instructions for that live in the ST-Test project, not in this repository: the **"Mock board data"** section

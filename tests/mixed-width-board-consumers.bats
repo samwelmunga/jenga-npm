@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S06_T03: the board index, close-story, bundle-resume, proposed-items and commit-name scripts, run against the
 # mixed-width synthetic board (E01 E10 E11 E99 E100 E101 E1001 with S10, S100 and T100 items) from

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 # tests/site-dir-migration.bats  (E70_S02_T07)
 #
 # Locks in the docs/ -> site/ migration of the Jenga GitHub Pages source:

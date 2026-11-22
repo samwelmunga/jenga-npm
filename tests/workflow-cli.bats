@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for skills/j-workflow/scripts/workflow-cli.sh (E80_S05_T02): the list/run/status renderers and the
 # number-to-id resolution behind `j.workflow`.

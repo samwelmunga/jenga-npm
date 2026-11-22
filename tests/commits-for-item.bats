@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Unit-level coverage for scripts/commits-for-item.sh (E79_S02_T01), the shared commit resolver.
 #
@@ -83,13 +84,43 @@ resolve() { run --separate-stderr bash "$SCRIPT" "$@" --repo "$FIX"; }
   [ "$output" = "$want" ]
 }
 
-@test "EST form: an id in the body (not the subject) also resolves" {
+@test "EST form: an id mentioned only in the body does NOT resolve (cross-reference, not attribution)" {
   commit "chore: bookkeeping" "Relates to E10_S01_T01 and nothing else."
-  local want; want="$(head_sha)"
-  commit "chore: unrelated"
   resolve E10_S01_T01
   [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "EST form: a genuine multi-id subject resolves to every id it names" {
+  commit "task(E10_S01_T01, E10_S01_T02): shared change"
+  local want; want="$(head_sha)"
+  resolve E10_S01_T01
   [ "$output" = "$want" ]
+  resolve E10_S01_T02
+  [ "$output" = "$want" ]
+}
+
+@test "EST form: a Jenga-Task trailer still attributes when the body also holds prose" {
+  commit "chore: bookkeeping" "Prose mention of E10_S01_T02.
+
+Jenga-Task: E10_S01_T01"
+  local want; want="$(head_sha)"
+  resolve E10_S01_T01
+  [ "$output" = "$want" ]
+  resolve E10_S01_T02
+  [ -z "$output" ]
+}
+
+@test "regression E89_S01_T01 / E89_S01_T02: a body cross-reference does not credit the second task (real message)" {
+  commit "task(E89_S01_T01): recording-file.sh path builder" "Builds the path only. The refusal to overwrite belongs to recording-file.sh (\`E89_S01_T02\`), which refuses to clobber an existing file."
+  local first; first="$(head_sha)"
+  commit "task(E89_S01_T02): recording-file.sh create"
+  local second; second="$(head_sha)"
+  resolve E89_S01_T02
+  [ "$status" -eq 0 ]
+  [ "$output" = "$second" ]
+  resolve E89_S01_T01
+  [ "$output" = "$first" ]
 }
 
 @test "EST form: story and epic ids resolve to the commits that name them" {

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Schema-shape coverage for the commit-format template fields and the opt-in commit-trace category
 # (epic E79, story E79_S03, task E79_S03_T04). E79_S03_T05 extends this file with the enforcement cases.

@@ -70,6 +70,15 @@
 # byte-equal to the pre-rewrite command of a bats suite in the same discovery,
 # that npm suite's command is rewritten to the SAME narrowed string.
 #
+# THE MANUAL-TEST FILTER (E95_S02_T04). discover-tests.sh's bats command is
+# `bats --filter-tags !tier:manual <dir>/*.bats`. The twin lookup compares
+# commands and npm bodies with that exact option pair removed, the same key
+# build-catalog.sh folds on (its rule 2b), so the filtered bats suite and an
+# npm body of `bats tests/*.bats` or `run-tests.sh --all` are still twins. A
+# narrowed command keeps the pair when the original carried it
+# (`bats --filter-tags !tier:manual 'tests/a.bats' ...`), so a scoped or
+# excluding gate never runs a tier:manual file even when the scope map names one.
+#
 # That rewrite alone does NOT keep them folded: build-catalog.sh keys the npm
 # suite on the package.json body, which this script never rewrites, so the keys
 # diverge the moment the bats command moves. build-catalog.sh therefore folds a
@@ -334,7 +343,9 @@ if [ -f "$ROOT/package.json" ]; then
            # `bash scripts/run-tests.sh --all` runs the files of `bats tests/*.bats`,
            # so it is the same twin key. The bare runner (the fast set) is not.
            value: (.value | if test("^\\s*(?:(?:bash|sh)\\s+)?(?:\\./)?scripts/run-tests\\.sh(?:\\s+--confirm-full)*\\s+--all(?:\\s+--confirm-full)*\\s*$")
-                            then "bats tests/*.bats" else . end)} ] | from_entries
+                            then "bats tests/*.bats" else . end
+                            # the twin key ignores the manual-test filter pair
+                            | gsub("\\s+--filter-tags\\s+!tier:manual(?=\\s|$)"; ""))} ] | from_entries
   ' > "$NPM_BODIES_FILE" 2>/dev/null || printf '{}\n' > "$NPM_BODIES_FILE"
 fi
 
@@ -366,6 +377,14 @@ def bats_cmd:
   and (type == "string")
   and test("\\A[[:space:]]*bats[[:space:]]")
   and ((test("[|&;<>()$`\\\\\"'"'"'\\n]")) | not);
+
+# The twin key: a command with the manual-test filter pair removed (the same
+# rule as unfilter in build-catalog.sh, its DEDUPLICATION rule 2b).
+def unfilter: gsub("\\s+--filter-tags\\s+!tier:manual(?=\\s|$)"; "");
+
+# The option prefix a narrowed command keeps: the manual-test filter, when the
+# original command carried it.
+def keep_prefix: if (. != unfilter) then "--filter-tags !tier:manual " else "" end;
 
 # Candidate test files of one suite: its mapped_tests entry in scoped mode, else
 # the working-tree files its own `paths` globs match, via the SHARED dialect.
@@ -415,8 +434,9 @@ def candidates_of($s):
       | select(.rewritable)
       | {key: .suite.id,
          value: (if (.kept | length) == 0 then ""
-                 else "bats " + (.kept | sort | map(@sh) | join(" ")) end),
-         orig: .suite.command}
+                 else "bats " + (.suite.command | keep_prefix)
+                      + (.kept | sort | map(@sh) | join(" ")) end),
+         orig: (.suite.command | unfilter)}
     ] ) as $rewrites
 | ( $rewrites | map({key: .key, value: .value}) | from_entries ) as $byId
 | ( $rewrites | map({key: .orig, value: .value}) | from_entries ) as $byOrigCommand

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E79_S04_T07: scripts/resolve-commit-ref.sh detects disagreeing ref sources and applies a documented policy.
 #

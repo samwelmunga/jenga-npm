@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for the commit-template variant and the commit-trace item of the convention checklist generator
 # (the opt_in_categories and opt_in_alternatives sections of templates/conventions-checklist-map.json, and the

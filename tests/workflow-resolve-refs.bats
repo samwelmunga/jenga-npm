@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E80_S03_T03: scripts/workflow/resolve-refs.sh - substitutes ${inputs.<name>} and
 # ${steps.<id>.outputs.<name>} references in one step of a workflow run and prints the step as JSON.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S08_T08: the two problems that started story E92_S08, kept as regression tests.
 #

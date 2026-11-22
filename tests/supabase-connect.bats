@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Supabase-specific coverage of the j.connect runner (E65_S04_T03), run against
 # the real skills/j-connect/descriptors/supabase.json with a STUBBED `supabase`

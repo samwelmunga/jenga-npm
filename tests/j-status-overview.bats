@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S06_T24: skills/j-status/scripts/render-status-overview.sh - the default `j.status` overview: a total line, only the
 # unfinished epics in four groups, complete epics collapsed to one line, and a footer hint - taken from

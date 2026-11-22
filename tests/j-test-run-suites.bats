@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for skills/j-test/scripts/run-suites.sh (E72_S02_T04).
 #

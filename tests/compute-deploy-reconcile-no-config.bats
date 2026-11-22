@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # A consumer install has no skills/j-mirror-public/assets/config.json, because that skill never ships. The missing-config
 # case must therefore be a clean skip (warning on stderr, exit 0, empty stdout) so that mark-deployed.sh reads it as

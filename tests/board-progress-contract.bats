@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S01_T05: the contract drift guard of scripts/board-progress.sh. Four things must not drift apart silently:
 #   1. the statuses the board may carry (templates/SCRUM_BOARD_SCHEMA.md "Status Values" and project/configs/

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Regression coverage for skills/j-gitignore/scripts/*.
 #

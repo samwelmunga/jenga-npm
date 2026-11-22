@@ -1,7 +1,7 @@
 {
   "suites": [
     {
-      "command": "bats integration/deep/*.bats",
+      "command": "bats --filter-tags !tier:manual integration/deep/*.bats",
       "ecosystem": "bats",
       "id": "bats:integration/deep",
       "name": "bats integration/deep",
@@ -11,7 +11,7 @@
       "type": "unit"
     },
     {
-      "command": "bats unit/*.bats",
+      "command": "bats --filter-tags !tier:manual unit/*.bats",
       "ecosystem": "bats",
       "id": "bats:unit",
       "name": "bats unit",
@@ -21,7 +21,7 @@
       "type": "unit"
     },
     {
-      "command": "bats integration/deep/*.bats",
+      "command": "bats --filter-tags !tier:manual integration/deep/*.bats",
       "ecosystem": "config",
       "id": "config:bats:integration",
       "name": "bats (integration)",

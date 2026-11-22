@@ -14,7 +14,7 @@
 # ---------------------------------------------------------------------------
 # USAGE
 # ---------------------------------------------------------------------------
-#   merge-task-into-perceived-branch.sh <task-branch> [--session <key>]
+#   merge-task-into-perceived-branch.sh <task-branch> [--session <key>] [--allow-verifying]
 #   merge-task-into-perceived-branch.sh --cleanup [--branch <name> | --all] [--session <key>]
 #   merge-task-into-perceived-branch.sh -h | --help | help        print this usage on stdout, exit 0
 #
@@ -31,6 +31,10 @@
 #
 # --session <key> (also --session=<key>)
 #   Passed to scripts/perceived-branch.sh to override the resolved session key (the test seam).
+#
+# --allow-verifying
+#   Merge even though a Tester still holds a fresh tester concurrency slot for the task (see exit 8). This is
+#   the "confirm" override: use it only after the person has seen the refusal and chosen to merge anyway.
 #
 # What it will NOT do: no checkout or switch of any tree, no push, no change to the main tree's HEAD, index or
 # working files, no merge into HEAD when the perceived branch is missing.
@@ -56,6 +60,11 @@
 #   7  worktree or git problem   the dedicated worktree could not be created or is not usable (path taken by
 #                   something else, dirty, mid-merge, or on another branch), the merge failed for a reason
 #                   other than a conflict, or (--cleanup) a removal was refused. The reason is on stderr.
+#   8  verification still running   a Tester holds a fresh tester concurrency slot for the task named by
+#                   <task-branch> (scripts/verification-running.sh, E89_S06_T16). A terminal board status is
+#                   not merge authorisation: the Tester keeps working after writing one. Nothing was merged.
+#                   The slot is released when the Tester's session ends, so retrying after it finishes
+#                   needs no extra step; --allow-verifying overrides a slot that is known to be stale.
 #   (5 is unused; it is reserved to keep the numbering aligned with scripts/perceived-branch.sh.)
 #
 # ---------------------------------------------------------------------------
@@ -136,6 +145,7 @@ SESSION=""
 CLEANUP=0
 CLEAN_BRANCH=""
 CLEAN_ALL=0
+ALLOW_VERIFYING=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -151,6 +161,10 @@ while [ "$#" -gt 0 ]; do
     --session=*)
       SESSION="${1#--session=}"
       [ -n "$SESSION" ] || die 1 "--session needs a key"
+      shift
+      ;;
+    --allow-verifying)
+      ALLOW_VERIFYING=1
       shift
       ;;
     --cleanup)
@@ -327,6 +341,17 @@ fi
 # ---------------------------------------------------------------------------
 # Merge
 # ---------------------------------------------------------------------------
+
+# A terminal board status does not mean the Tester is finished (E89_S06_T16). Checked before anything else so it
+# also covers the "not applicable" path, where the caller then merges by the existing procedure.
+if [ "$ALLOW_VERIFYING" -eq 0 ] && [ -f "$SCRIPT_DIR/verification-running.sh" ]; then
+  VR_OUT="$(bash "$SCRIPT_DIR/verification-running.sh" "$TASK_BRANCH" 2>&1)"
+  if [ $? -eq 1 ]; then
+    err "refusing to merge $TASK_BRANCH: a Tester is still verifying it (a board status is not merge authorisation). Retry once the Tester has finished, or pass --allow-verifying to override."
+    printf '%s\n' "$VR_OUT" >&2
+    exit 8
+  fi
+fi
 
 resolve_perceived
 case "$PERCEIVED_STATE" in

@@ -5,6 +5,7 @@ set -euo pipefail
 #
 # Invocation:
 #   run_gates.sh <phase> <target> <publish_json_path> [--non-interactive] [--ci]
+# smoke-invoke: none evals the gate commands configured in publish.json, so any invocation runs arbitrary configured commands; covered by bats
 #
 # Arguments:
 #   <phase>              pre | post

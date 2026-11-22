@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for the `jenga config` command (E68_S02_T04): its registration in bin/jenga.js, the non-interactive
 # get/set path and its exit codes, the interactive flow, and the store behind both (lib/config/store.js).

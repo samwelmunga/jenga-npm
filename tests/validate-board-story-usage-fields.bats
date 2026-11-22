@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E76_S03_T04: the per-story usage frontmatter fields (usage_tasks_*, usage_overhead_*, and the
 # story-level usage_total_tokens / usage_measured_on / usage_possibly_incomplete) are allow-listed
@@ -146,4 +147,51 @@ usage_total_tokens: 500'
 
   run bash "$VALIDATE" "$FIXTURE_DIR/epic-none.md"
   [ "$status" -eq 0 ]
+}
+
+# E90_S01_T05: the cost-equivalent unit fields on a story (a derived view, not a currency amount).
+
+@test "accepts a story carrying the three cost-unit fields" {
+  write_story "cu.md" 'usage_tasks_cost_units: 900
+usage_overhead_cost_units: 100
+usage_cost_units: 1000'
+
+  run bash "$VALIDATE" "$FIXTURE_DIR/cu.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "rejects a misspelled story cost-unit key" {
+  write_story "cu-typo.md" 'usage_cost_unit: 5'
+  run bash "$VALIDATE" "$FIXTURE_DIR/cu-typo.md"
+  [ "$status" -ne 0 ]
+  assert_output_contains "usage_cost_unit"
+
+  write_story "cu-typo2.md" 'usage_task_cost_units: 5'
+  run bash "$VALIDATE" "$FIXTURE_DIR/cu-typo2.md"
+  [ "$status" -ne 0 ]
+  assert_output_contains "usage_task_cost_units"
+}
+
+@test "rejects a negative or non-numeric story cost-unit value" {
+  write_story "cu-neg.md" 'usage_overhead_cost_units: -1'
+  run bash "$VALIDATE" "$FIXTURE_DIR/cu-neg.md"
+  [ "$status" -ne 0 ]
+  assert_output_contains "usage_overhead_cost_units"
+
+  write_story "cu-str.md" 'usage_cost_units: n/a'
+  run bash "$VALIDATE" "$FIXTURE_DIR/cu-str.md"
+  [ "$status" -ne 0 ]
+  assert_output_contains "usage_cost_units"
+}
+
+@test "rejects an epic carrying a cost-unit field" {
+  write_epic "epic-cu.md" 'usage_cost_units: 5'
+  run bash "$VALIDATE" "$FIXTURE_DIR/epic-cu.md"
+  [ "$status" -ne 0 ]
+  assert_output_contains "usage_cost_units"
+
+  write_epic "epic-cu2.md" 'usage_tasks_cost_units: 5'
+  run bash "$VALIDATE" "$FIXTURE_DIR/epic-cu2.md"
+  [ "$status" -ne 0 ]
+  assert_output_contains "usage_tasks_cost_units"
 }

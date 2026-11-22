@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E85_S01_T10: /j-init scaffolds project/configs/audit-config.json in its safe
 # default (mode: ask), copied from skills/j-init/assets/audit-config_template.json.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S08_T08: the Node-14 guard for everything story E92_S08 added in JavaScript.
 #

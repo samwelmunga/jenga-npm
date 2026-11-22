@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # GitHub-specific coverage for `github` as a shared j.connect prerequisite
 # (E65_S03_T02), run against the real skills/j-connect/descriptors/github.json.

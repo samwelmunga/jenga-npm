@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S01_T03: cascade-resolve.sh takes its ID shapes from scripts/lib/board_ids.py, so wide IDs
 # (E100, E100_S100_T100) cascade correctly, a shorter epic never pulls in a longer one's children,

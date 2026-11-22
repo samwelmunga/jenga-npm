@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # End-to-end check of the read-only test coverage overlay on the Architecture tab (E83_S03_T05).
 #

@@ -15,6 +15,23 @@
 
 set -euo pipefail
 
+# --help / -h: print usage on stdout and exit 0 before anything is parsed, read or written (E99_S01_T02).
+case "${1:-}" in
+  --help|-h)
+    cat <<'USAGE'
+check-story-closeable.sh - last-task detection guard for /j-close-story
+
+Usage: check-story-closeable.sh <story-id>
+       check-story-closeable.sh --help | -h
+
+Prints CLOSEABLE and exits 0 when every task of the story is complete; otherwise a
+message on stderr and exit 1. Read-only: re-reads the task files, writes nothing.
+  Example: check-story-closeable.sh E17_S06
+USAGE
+    exit 0
+    ;;
+esac
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

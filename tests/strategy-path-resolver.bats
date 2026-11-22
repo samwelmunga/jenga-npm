@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E34_S06_T03: scripts/strategy_path_resolver.sh is the single source /init and /strategy both
 # use for where STRATEGY.md lives. Every test runs in a throwaway $BATS_TEST_TMPDIR project.

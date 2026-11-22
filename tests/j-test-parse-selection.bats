@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for skills/j-test/scripts/parse-selection.sh (E72_S02_T03).
 #

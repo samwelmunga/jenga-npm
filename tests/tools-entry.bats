@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for skills/j-tools/scripts/tools-entry.sh (E66_S03_T03).
 #

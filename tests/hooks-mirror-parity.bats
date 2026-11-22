@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Root-to-mirror parity invariant for hooks/ (E89_S06_T04).
 #

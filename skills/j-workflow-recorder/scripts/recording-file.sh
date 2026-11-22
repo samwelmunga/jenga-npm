@@ -15,7 +15,7 @@
 # ---------------------------------------------------------------------------
 # USAGE
 # ---------------------------------------------------------------------------
-#   recording-file.sh create <path> <title...>
+#   recording-file.sh create [--source <kind>] [--source-ref <ref>] <path> <title...>
 #   recording-file.sh append <path> <step-text...>
 #   recording-file.sh append <path> -                 read the step text from stdin (multi-line)
 #   recording-file.sh steps  <path>                   print the step ids in file order, one per line
@@ -23,6 +23,14 @@
 #   recording-file.sh -h | --help | help              print this usage on stdout, exit 0
 #
 #   <title...> / <step-text...>  one or more arguments, joined with single spaces, so an unquoted phrase works.
+#
+#   --source <kind>      (also --source=<kind>) where the recording came from: live (the default), session-transcript,
+#                        external-url or pasted. Any other value is exit 2 and nothing is written. (E103_S01_T01)
+#   --source-ref <ref>   (also --source-ref=<ref>) a session id, a transcript path, or for an external source the URL
+#                        plus fetch time and content hash. Optional. A reference that could carry a credential is
+#                        refused with exit 2. Both options are recognised ONLY before <path>, so a word of an unquoted
+#                        title is never mistaken for one; `--` ends them. Without either, create writes `source: live`
+#                        and no `source_ref` line. The provenance contract is in recording-format.sh's header.
 #
 # ---------------------------------------------------------------------------
 # THE STEP ENTRY FORMAT
@@ -108,8 +116,9 @@
 # EXIT CODES
 # ---------------------------------------------------------------------------
 #   0   success.
-#   2   usage error: no sub-command, an unknown sub-command, a missing path, a missing title or step text, or a
-#       bad JENGA_RECORDER_NOW.
+#   2   usage error: no sub-command, an unknown sub-command, a missing path, a missing title or step text, a
+#       bad JENGA_RECORDER_NOW, or (create) an unknown option, a --source outside the closed set or a refused
+#       --source-ref.
 #   3   append/steps: the file does not exist, or is not readable.
 #   4   create: the path already exists. Nothing was written, and the existing file was not touched.
 #   5   append: the file has no steps section, so there is no defensible place to write. Deliberately an error
@@ -166,7 +175,8 @@ die() {
 usage() {
   cat <<'USAGE'
 usage:
-  recording-file.sh create <path> <title...>
+  recording-file.sh create [--source <kind>] [--source-ref <ref>] <path> <title...>
+                           <kind>: live (default), session-transcript, external-url, pasted
   recording-file.sh append <path> <step-text...>
   recording-file.sh append <path> -            read the step text from stdin
   recording-file.sh steps  <path>
@@ -235,7 +245,30 @@ step_id_for() {
 }
 
 cmd_create() {
-  local path="" title="" stamp dir base tmp rc
+  local path="" title="" stamp dir base tmp rc source="$REC_SOURCE_DEFAULT" source_ref="" why=""
+
+  # Provenance options (E103_S01_T01), recognised ONLY before the path, so a word of an unquoted title is
+  # never taken for one. Validated here, before anything touches the disk.
+  while [ "$#" -ge 1 ]; do
+    case "$1" in
+      --source)
+        [ "$#" -ge 2 ] || { usage >&2; die 2 "--source needs a value (one of: $REC_SOURCE_VALUES)"; }
+        source="$2"; shift 2 ;;
+      --source=*) source="${1#--source=}"; shift ;;
+      --source-ref)
+        [ "$#" -ge 2 ] || { usage >&2; die 2 "--source-ref needs a value"; }
+        source_ref="$2"; shift 2 ;;
+      --source-ref=*) source_ref="${1#--source-ref=}"; shift ;;
+      --) shift; break ;;
+      -?*) usage >&2; die 2 "create: unknown option \"$1\"" ;;
+      *) break ;;
+    esac
+  done
+  rec_is_source_value "$source" || \
+    die 2 "create: --source \"$source\" is not one of: $REC_SOURCE_VALUES. Nothing was written."
+  if why="$(rec_source_ref_problem "$source_ref")"; then
+    die 2 "create: refusing the --source-ref value because $why. A source_ref never holds a credential. Nothing was written."
+  fi
 
   [ "$#" -ge 1 ] || { usage >&2; die 2 "create needs a path"; }
   path="$1"; shift
@@ -266,13 +299,23 @@ cmd_create() {
     printf 'status: in_progress\n'
     printf 'date_started: %s\n' "$stamp"
     printf 'date_ended:\n'
+    printf 'source: %s\n' "$source"
+    if [ -n "$source_ref" ]; then
+      printf 'source_ref: "%s"\n' "$(yaml_escape "$source_ref")"
+    fi
     printf -- '---\n'
     printf '\n'
     printf '# Recording: %s\n' "$title"
     printf '\n'
-    printf 'Recorded by `j.workflow-recorder` as the session happened. Each step below was appended at the\n'
-    printf 'time it occurred, so an interrupted session still leaves a complete record of everything up to\n'
-    printf 'the interruption.\n'
+    if [ "$source" = "live" ]; then
+      printf 'Recorded by `j.workflow-recorder` as the session happened. Each step below was appended at the\n'
+      printf 'time it occurred, so an interrupted session still leaves a complete record of everything up to\n'
+      printf 'the interruption.\n'
+    else
+      printf 'Reconstructed after the process was performed, from the source named by `source` and\n'
+      printf '`source_ref` in the frontmatter, rather than recorded as it happened. Each step below was\n'
+      printf 'appended when it was reconstructed, not when it originally occurred.\n'
+    fi
     printf '\n'
     printf '## Steps\n'
     printf '\n'

@@ -31,7 +31,7 @@ source "$(git rev-parse --show-toplevel)/lib/resolve-project-dir.sh"
 PROJECT_DIR="$JENGA_PROJECT_DIR"
 RAPPORT_DIR="$PROJECT_DIR/project/rapports/problems"
 # NOTE: this manifest lives under project/ (not .claude/) because .claude/
-# and .agents/ are generated build outputs, clobbered on every /distribute
+# and .agents/ are generated build outputs, clobbered on every distribution
 # or /self-sync run — see CLAUDE.md. Canonical, committed state must not
 # live inside a distribution target. Seed generated via, and kept in sync
 # by, scripts/generate-rapport-manifest.sh (see section 2 below).

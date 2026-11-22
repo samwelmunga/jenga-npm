@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # check-story-closeable.sh must treat every terminal task status as closeable.
 # Regression: "Passed with remarks" (documented as terminal in

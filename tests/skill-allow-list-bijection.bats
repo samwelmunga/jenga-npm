@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # Regression coverage for lib/generate-skill-allow-list.js's three-way mapping (E50_S12_T01).
 #

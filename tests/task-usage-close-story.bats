@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E76_S03_T01: j.close-story persists per-task token usage next to the diff stats, through
 # skills/j-close-story/scripts/persist-task-usage.sh, which calls scripts/task-usage.sh --persist --story <id>.
@@ -22,6 +23,9 @@ VALIDATE="$REPO_ROOT/scripts/validate-board.sh"
 
 setup() {
   unset JENGA_PROJECT_ROOT JENGA_PROJECTS_DIR
+  # E90_S02_T04: the price-ratio config is a direct dependency (exit 10 when missing) and the temporary project roots
+  # below carry none, so every test starts from the fixture config; the tests that need other ratios override it.
+  export JENGA_PRICE_RATIOS_FILE="$REPO_ROOT/tests/fixtures/task-usage-cost/ratios.json"
   export TASK_USAGE_TODAY=2026-11-06
   export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 }
@@ -255,4 +259,73 @@ usage_measured_on: 2026-10-30'
   grep -q 'extract-task-diff-stats.sh' "$SKILL_MD"
   grep -q 'compute-scope-divergence.sh' "$SKILL_MD"
   grep -q 'scope_divergence_flag' "$SKILL_MD"
+}
+
+# ---------------------------------------------------------------------------------------------------------------
+# E90_S01_T07: the task's derived cost-equivalent unit is printed next to the raw counts
+# ---------------------------------------------------------------------------------------------------------------
+
+# mk_cost_transcript <task-id> <model>: input 1, output 10, 5m cache write 100, cache read 1000 on <model>
+mk_cost_transcript() {
+  local d="$PROJECTS/$SLUG/sess-1/subagents"
+  mkdir -p "$d"
+  printf '{"agentType":"developer","name":"%s","description":"fixture"}\n' "$1" >"$d/agent-$1.meta.json"
+  {
+    printf '{"type":"user","isSidechain":true,"message":{"role":"user","content":"hello"}}\n'
+    printf '{"type":"assistant","requestId":"r1","message":{"role":"assistant","model":"%s","usage":{"input_tokens":1,"output_tokens":10,"cache_creation_input_tokens":100,"cache_read_input_tokens":1000,"cache_creation":{"ephemeral_5m_input_tokens":100,"ephemeral_1h_input_tokens":0}}}}\n' "$2"
+  } >"$d/agent-$1.jsonl"
+}
+
+use_cost_ratios() {
+  cat >"$BATS_TEST_TMPDIR/ratios.json" <<'JSON'
+{"config_version":1,"date":"2026-11-19","models":{
+ "m-a":{"input":1,"cache_write_5m":1.25,"cache_write_1h":2,"cache_read":0.1,"output":5}}}
+JSON
+  export JENGA_PRICE_RATIOS_FILE="$BATS_TEST_TMPDIR/ratios.json"
+}
+
+@test "cost units: a priced task prints cost_units next to the raw counts, labelled as a derived cost-equivalent unit" {
+  use_cost_ratios
+  mk_root "$BATS_TEST_TMPDIR/proj" linked
+  mk_cost_transcript E99_S01_T01 m-a
+  cd "$ROOT"
+
+  run --separate-stderr bash "$HELPER" E99_S01
+  [ "$status" -eq 0 ]
+  # 1 + 10*5 + 100*1.25 + 1000*0.1 = 276
+  [ "$(fm E99_S01_T01 usage_cost_units)" = 276 ]
+  [[ "$output" == *"E99_S01_T01: total=1111 tokens (input=1, output=10, cache_write=100, cache_read=1000), transcripts=1, cost_units=276 (derived cost-equivalent unit)"* ]]
+  run bash "$VALIDATE" "$ROOT/project/board/tasks/E99_S01_T01_fixture.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "cost units: an unpriced task prints the raw counts only, exactly as before" {
+  use_cost_ratios
+  mk_root "$BATS_TEST_TMPDIR/proj" linked
+  mk_cost_transcript E99_S01_T01 m-unknown
+  cd "$ROOT"
+
+  run --separate-stderr bash "$HELPER" E99_S01
+  [ "$status" -eq 0 ]
+  [ -z "$(fm E99_S01_T01 usage_cost_units)" ]
+  [[ "$output" == *"E99_S01_T01: total=1111 tokens (input=1, output=10, cache_write=100, cache_read=1000), transcripts=1"* ]]
+  [[ "$output" != *"cost_units"* ]]
+}
+
+@test "price-ratio config absent: the helper prints one price-ratio WARNING and no per-task raw lines (E90_S02_T04: no raw-only fallback)" {
+  export JENGA_PRICE_RATIOS_FILE="$BATS_TEST_TMPDIR/no-such-price-ratios.json"
+  mk_root "$BATS_TEST_TMPDIR/proj" linked
+  mk_cost_transcript E99_S01_T01 m-a
+  cd "$ROOT"
+
+  run --separate-stderr bash "$HELPER" E99_S01
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"WARNING: price-ratio dependency missing"* ]]
+  [[ "$output" != *"total=1111 tokens"* ]]
+  [ -z "$(fm E99_S01_T01 usage_total_tokens)" ]
+}
+
+@test "cost units: SKILL.md Step 5 shows the per-task derived cost-equivalent unit" {
+  step5="$(sed -n '/^### Step 5/,/^## Scripts Reference/p' "$SKILL_MD")"
+  [[ "$step5" == *'cost_units=<N> (derived cost-equivalent unit)'* ]]
 }

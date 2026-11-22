@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Regression coverage for E46_S02_T02: resolve_last_update.py's `--root`
 # argparse default used to be a fixed-depth climb

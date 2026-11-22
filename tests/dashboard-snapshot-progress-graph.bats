@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # /v1/progress-cards and /v1/progress-graph in the offline dashboard snapshot (E92_S06_T06).
 #
@@ -361,4 +362,202 @@ render_epic() {
   ' "$output"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   assert_output_contains "all-undecomposed epic keeps the empty state"
+}
+
+# ---- E92_S13_T06: the castle and the seasons tree end to end through the offline snapshot -----------------------------------------
+#
+# Same mechanism as the ghost bands above: the capture is the real one, the render is the real EpicTreeBody over the captured payload, and
+# `--design` hands the component the stored choice a browser would (a stub localStorage; `none` = storage that throws, as in a file://
+# page with storage blocked). Nothing here recomputes a count: the wall share and the growth stage are compared with the percent the
+# captured payload itself states in epic_progress. E02 (ghost fixture): three stories, two undecomposed, 2 tasks, 1 done. E04 (below):
+# a complete epic of three stories where the third depends on the first two.
+
+write_dep_story() {
+  # $1 = id, $2 = epic, $3 = status, $4 = depends_on list ("[]" or "[E04_S01, E04_S02]")
+  {
+    echo "---"; echo "id: $1"; echo "epic_id: $2"; echo "depends_on: $4"
+    echo "title: \"Title of $1\""; echo "status: $3"; echo 'date_created: "2026-11-17"'; echo "---"; echo; echo "Body of $1."
+  } > "$PROJ/project/board/stories/${1}_item.md"
+}
+
+write_complete_fixture() {
+  write_item epics E04 "" "" "In Progress"
+  write_dep_story E04_S01 E04 Passed "[]"
+  write_dep_story E04_S02 E04 Passed "[E04_S01]"
+  write_dep_story E04_S03 E04 Passed "[E04_S01, E04_S02]"
+  write_item tasks E04_S01_T01 story_id E04_S01 Passed
+  write_item tasks E04_S01_T02 story_id E04_S01 Passed
+  write_item tasks E04_S02_T01 story_id E04_S02 Passed
+  write_item tasks E04_S03_T01 story_id E04_S03 Passed
+}
+
+# The stage the captured percent must give, by the thresholds of story decision 9 (stated here independently of treeLayout.js)
+stage_check_js='
+  const growth = (p, reached) => reached ? "majestic" : p >= 70 ? "mature" : p >= 45 ? "young" : p >= 25 ? "sapling" : p >= 10 ? "seedling" : "sprout";
+'
+
+@test "goal designs: with no stored choice the epic overlay draws the citadel, one tower per story, two dashed, the wall at the epic percent" {
+  render_requires
+  write_ghost_fixture
+  capture_fixture
+  render_epic "$CAP_OUT" E02
+  printf '%s' "$output" > "$BATS_TEST_TMPDIR/facts.json"
+  run node -e '
+    const f = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    const g = JSON.parse(require("fs").readFileSync(process.argv[2], "utf8")).routes.progressGraph.data;
+    const pct = g.epics.find(e => e.id === "E02").epic_progress.percent;
+    const fail = m => { console.error(m); process.exit(1); };
+    if (f.goalDesign !== "citadel" || !f.castle || f.castle.kind !== "citadel") fail("the default is the citadel: " + JSON.stringify(f.castle));
+    if (f.tree) fail("no seasons tree while the citadel is drawn");
+    if (JSON.stringify(f.castle.towers.slice().sort()) !== JSON.stringify(["E02_S01", "E02_S02", "E02_S03"])) fail("towers " + JSON.stringify(f.castle.towers));
+    if (JSON.stringify(f.castle.dashed.slice().sort()) !== JSON.stringify(["E02_S02", "E02_S03"])) fail("dashed foundations " + JSON.stringify(f.castle.dashed));
+    if (f.castle.wallShare !== (pct / 100).toFixed(2)) fail("the curtain wall share " + f.castle.wallShare + " is not the captured epic percent " + pct);
+    if (!/%$/.test(f.goalText) || f.goalText.indexOf(pct + " %") < 0) fail("the text under the node " + JSON.stringify(f.goalText));
+    console.log("citadel default rendered ok");
+  ' "$BATS_TEST_TMPDIR/facts.json" "$CAP_OUT"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  assert_output_contains "citadel default rendered ok"
+}
+
+@test "goal designs: the facade draws the same towers and the same wall share as the citadel" {
+  render_requires
+  write_ghost_fixture
+  capture_fixture
+  run node "$RENDER_SRC" --data "$CAP_OUT" --epic E02 --design citadel
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  printf '%s' "$output" > "$BATS_TEST_TMPDIR/citadel.json"
+  run node "$RENDER_SRC" --data "$CAP_OUT" --epic E02 --design facade
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  printf '%s' "$output" > "$BATS_TEST_TMPDIR/facade.json"
+  run node -e '
+    const read = f => JSON.parse(require("fs").readFileSync(f, "utf8"));
+    const a = read(process.argv[1]), b = read(process.argv[2]);
+    const fail = m => { console.error(m); process.exit(1); };
+    if (b.goalDesign !== "facade" || !b.castle || b.castle.kind !== "facade") fail("the facade was not drawn: " + JSON.stringify(b.castle));
+    if (JSON.stringify(a.castle.towers) !== JSON.stringify(b.castle.towers)) fail("one castle model, two drawings: the towers differ");
+    if (JSON.stringify(a.castle.dashed) !== JSON.stringify(b.castle.dashed) || a.castle.wallShare !== b.castle.wallShare) fail("dashed foundations or wall share differ");
+    console.log("facade equals citadel in content");
+  ' "$BATS_TEST_TMPDIR/citadel.json" "$BATS_TEST_TMPDIR/facade.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  assert_output_contains "facade equals citadel in content"
+}
+
+@test "goal designs: the seasons tree draws one branch per story, a dashed stub for each undecomposed story and the stage the percent gives" {
+  render_requires
+  write_ghost_fixture
+  capture_fixture
+  run node "$RENDER_SRC" --data "$CAP_OUT" --epic E02 --design tree
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  printf '%s' "$output" > "$BATS_TEST_TMPDIR/facts.json"
+  run node -e '
+    const f = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    const g = JSON.parse(require("fs").readFileSync(process.argv[2], "utf8")).routes.progressGraph.data;
+    const ep = g.epics.find(e => e.id === "E02").epic_progress;
+    '"$stage_check_js"'
+    const fail = m => { console.error(m); process.exit(1); };
+    if (f.goalDesign !== "tree" || !f.tree) fail("the seasons tree was not drawn");
+    if (f.castle) fail("no castle while the tree is drawn");
+    if (JSON.stringify(f.tree.branches.slice().sort()) !== JSON.stringify(["E02_S01", "E02_S02", "E02_S03"])) fail("branches " + JSON.stringify(f.tree.branches));
+    if (JSON.stringify(f.tree.stubs.slice().sort()) !== JSON.stringify(["E02_S02", "E02_S03"])) fail("stubs " + JSON.stringify(f.tree.stubs));
+    if (f.tree.stage !== growth(ep.percent, ep.goal_reached)) fail("stage " + f.tree.stage + " for " + ep.percent + " percent");
+    if (f.tree.pills < f.tree.branches.length) fail("a label pill per branch: " + f.tree.pills);
+    console.log("seasons tree rendered ok");
+  ' "$BATS_TEST_TMPDIR/facts.json" "$CAP_OUT"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  assert_output_contains "seasons tree rendered ok"
+}
+
+@test "goal designs: storage that throws, no storage value that names a design and an unknown value all give the citadel; the star is still chosen when stored" {
+  render_requires
+  write_ghost_fixture
+  capture_fixture
+  local d
+  for d in none bogus-design ""; do
+    if [ -n "$d" ]; then run node "$RENDER_SRC" --data "$CAP_OUT" --epic E02 --design "$d"; else run node "$RENDER_SRC" --data "$CAP_OUT" --epic E02; fi
+    [ "$status" -eq 0 ] || { echo "$output"; false; }
+    run node -e 'const f = JSON.parse(process.argv[1]); if (f.goalDesign !== "citadel" || !f.castle || f.castle.kind !== "citadel") { console.error(JSON.stringify(f.goalDesign)); process.exit(1) } console.log("citadel")' "$output"
+    [ "$status" -eq 0 ] || { echo "stored value [$d]: $output"; false; }
+  done
+  run node "$RENDER_SRC" --data "$CAP_OUT" --epic E02 --design star
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run node -e 'const f = JSON.parse(process.argv[1]); if (f.goalDesign !== "star" || f.castle || f.tree) { console.error(JSON.stringify(f.goalDesign)); process.exit(1) } console.log("star chosen")' "$output"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  assert_output_contains "star chosen"
+}
+
+@test "goal designs: a complete epic draws the goal-reached effects in all three designs and Majestic tree only for the tree" {
+  render_requires
+  write_complete_fixture
+  capture_fixture
+  run node -e '
+    const g = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).routes.progressGraph.data;
+    const ep = g.epics.find(e => e.id === "E04").epic_progress;
+    if (ep.percent !== 100 || ep.goal_reached !== true) { console.error(JSON.stringify(ep)); process.exit(1) }
+    const deps = g.stories.filter(s => s.epic_id === "E04").map(s => s.id + ":" + s.depends_on.join("+"));
+    if (JSON.stringify(deps) !== JSON.stringify(["E04_S01:", "E04_S02:E04_S01", "E04_S03:E04_S01+E04_S02"])) { console.error(JSON.stringify(deps)); process.exit(1) }
+    console.log("complete epic captured with story dependencies");
+  ' "$CAP_OUT"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local d
+  for d in citadel facade tree; do
+    run node "$RENDER_SRC" --data "$CAP_OUT" --epic E04 --design "$d"
+    [ "$status" -eq 0 ] || { echo "$output"; false; }
+    printf '%s' "$output" > "$BATS_TEST_TMPDIR/complete-$d.json"
+  done
+  run node -e '
+    const read = d => JSON.parse(require("fs").readFileSync(process.argv[1] + "/complete-" + d + ".json", "utf8"));
+    const fail = m => { console.error(m); process.exit(1); };
+    for (const d of ["citadel", "facade"]) {
+      const f = read(d);
+      if (f.castle.wallShare !== "1.00" || f.castle.towers.length !== 3) fail(d + " wall/towers " + JSON.stringify(f.castle));
+      if (!f.castle.effects.includes("birds") || !f.castle.effects.includes("stars")) fail(d + " lacks birds or stars at goal reached: " + JSON.stringify(f.castle.effects));
+      if (f.goalText !== "4 / 4 done · 100 %") fail(d + " text " + f.goalText);
+    }
+    const t = read("tree");
+    if (t.tree.stage !== "majestic") fail("stage " + t.tree.stage);
+    for (const e of ["swing", "spirit", "petals", "birds", "stars"]) if (!t.tree.effects.includes(e)) fail("seasons tree lacks the " + e + " effect: " + JSON.stringify(t.tree.effects));
+    if (t.tree.stubs.length !== 0) fail("no stub in a complete epic");
+    console.log("goal reached effects rendered in all three designs");
+  ' "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  assert_output_contains "goal reached effects rendered in all three designs"
+}
+
+@test "snapshot HTML: the single-file export carries the castle, the facade, the seasons tree, the selector and the stored-choice key" {
+  local ui="$REPO_ROOT/project/app/ui"
+  [ -d "$ui/dist" ] || skip "project/app/ui/dist is not built"
+  write_ghost_fixture
+  capture_fixture
+  local html="$BATS_TEST_TMPDIR/snapshot.html"
+  run node "$ui/scripts/build-snapshot-html.cjs" --dist "$ui/dist" --data "$CAP_OUT" --out "$html"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # the drawing code of each design (class names are the markup the SVG gets), the shared day and night scene, the selector and the key
+  grep -qF 'data-castle' "$html"
+  grep -qF 'cc-tower' "$html"
+  grep -qF 'cf-tower' "$html"
+  grep -qF 'tr-pill' "$html"
+  grep -qF 'tr-stub' "$html"
+  grep -qF 'dn-scene' "$html"
+  grep -qF 'dt-gd-btn' "$html"
+  grep -qF 'jenga-dashboard-goal-design' "$html"
+  # the words of the selector and the stage track come from the captured labels, so the payload must carry them, en
+  run node -e '
+    const html = require("fs").readFileSync(process.argv[1], "utf8");
+    const art = JSON.parse(html.match(/<script id="jenga-dashboard-data" type="application\/json">([\s\S]*?)<\/script>/)[1]);
+    const l = art.routes.progressGraph.data.labels;
+    const need = ["goal_design_group", "goal_design_star", "goal_design_citadel", "goal_design_facade", "goal_design_tree", "tree_stage_sprout", "tree_stage_seedling", "tree_stage_sapling", "tree_stage_young", "tree_stage_mature", "tree_stage_majestic", "tree_stage_track"];
+    const missing = need.filter(k => typeof l[k] !== "string" || !l[k]);
+    if (missing.length) { console.error("labels missing from the export: " + missing.join(",")); process.exit(1); }
+    console.log("export carries the goal design and stage labels");
+  ' "$html"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  assert_output_contains "export carries the goal design and stage labels"
+  # and the page picks the design the way the browser does, with the citadel when storage is missing: the render above over the same
+  # embedded payload (render_epic reads the html itself, no server) draws the citadel
+  render_requires
+  run node "$RENDER_SRC" --data "$html" --epic E02 --design none
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run node -e 'const f = JSON.parse(process.argv[1]); if (f.goalDesign !== "citadel" || !f.castle || f.castle.towers.length !== 3) { console.error(JSON.stringify(f.castle)); process.exit(1) } console.log("export without storage draws the citadel")' "$output"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  assert_output_contains "export without storage draws the citadel"
 }

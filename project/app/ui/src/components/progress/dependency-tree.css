@@ -238,3 +238,211 @@ html[data-dt-fullscreen] { overflow: hidden; }
   :root:not([data-motion="off"]) .dep-tree .dt-fs-btn { transition: background-color 0.12s ease, border-color 0.12s ease; }
 }
 /* end E92_S07_T06 */
+
+/* E92_S13_T05: the goal design selector, a labelled group of buttons under the zoom controls (top-right corner). The buttons
+   wrap onto further lines at a narrow overlay and never overflow it (flex-wrap, max-width). The chosen one is told apart
+   without colour: a check mark in front of its name (aria-hidden, in the markup) and a heavier border; aria-pressed carries
+   the state for assistive technology. The keyboard ring is the one the zoom buttons use. Tokens only, no animation. */
+.dep-tree .dt-gd {
+  position: absolute; top: 56px; right: 8px; z-index: 6; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px;
+  max-width: calc(100% - 16px); padding: 4px; box-sizing: border-box;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px;
+}
+.dep-tree .dt-gd-btn {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 3px 9px; font: inherit; font-size: 12px; line-height: 1.2;
+  cursor: pointer; color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-border-strong); border-radius: 6px;
+}
+.dep-tree .dt-gd-btn:hover { background: var(--color-surface-alt); border-color: var(--color-accent); }
+.dep-tree .dt-gd-btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.dep-tree .dt-gd-btn[aria-pressed="true"] { border-color: var(--color-accent); box-shadow: inset 0 0 0 1px var(--color-accent); font-weight: 700; }
+.dep-tree .dt-gd-check { font-weight: 700; }
+/* end E92_S13_T05 */
+
+/* goal: the citadel (E92_S13_T02), an isometric Jenga castle in pure SVG. Every colour is a token of tokens.css (light is its
+   day, dark its night; E92_S13_T04 added the sky, the sun and the lit windows in the day and night section at the end of this
+   file). The ONE palette hook is the block below: the --cc-* custom properties of .dt-castle, each mapped to a --color-castle-*
+   token. The castle itself has no animation; the only movement of the goal is the birds and the stars of that last section. Each state is told apart by
+   shape or pattern as well as colour: done = grain, in progress = hatch and a pulled-out block, pending = dashed wireframe,
+   failed = crack and a leaning tower, undecomposed = dashed foundation with a "?", rejected = a loose block. */
+.dep-tree .dt-castle {
+  --cc-wood-l: var(--color-castle-wood-l);
+  --cc-wood-r: var(--color-castle-wood-r);
+  --cc-end-l: var(--color-castle-end-l);
+  --cc-end-r: var(--color-castle-end-r);
+  --cc-top: var(--color-castle-top);
+  --cc-ink: var(--color-castle-ink);
+  --cc-grain: var(--color-castle-grain);
+  --cc-wire: var(--color-castle-wire);
+  --cc-wip-ink: var(--color-castle-wip-ink);
+  --cc-wip-top: var(--color-castle-wip-top);
+  --cc-hatch-bg: var(--color-castle-hatch-bg);
+  --cc-hatch-fg: var(--color-castle-hatch-fg);
+  --cc-fail-l: var(--color-castle-fail-l);
+  --cc-fail-r: var(--color-castle-fail-r);
+  --cc-roof-l: var(--color-castle-roof-l);
+  --cc-roof-r: var(--color-castle-roof-r);
+  --cc-roof-line: var(--color-castle-roof-line);
+  --cc-table-l: var(--color-castle-table-l);
+  --cc-table-r: var(--color-castle-table-r);
+  --cc-table-t: var(--color-castle-table-t);
+  --cc-seam: var(--color-castle-seam);
+  --cc-wall-l: var(--color-castle-wall-l);
+  --cc-wall-r: var(--color-castle-wall-r);
+  --cc-wall-b: var(--color-castle-wall-b);
+  --cc-gate: var(--color-castle-gate);
+  --cc-flag: var(--color-castle-flag);
+  --cc-pole: var(--color-castle-pole);
+  --cc-win-l: var(--color-castle-win-l);
+  --cc-win-r: var(--color-castle-win-r);
+}
+.dep-tree .dt-castle .cc-p { stroke: var(--cc-ink); stroke-width: 0.6; stroke-linejoin: round; }
+/* layers by state: the long face and the block ends of each side, then the top of the tower */
+.dep-tree .dt-castle .cc-done.cc-fl { fill: var(--cc-wood-l); }
+.dep-tree .dt-castle .cc-done.cc-fr { fill: var(--cc-wood-r); }
+.dep-tree .dt-castle .cc-done.cc-end.cc-fl { fill: var(--cc-end-l); }
+.dep-tree .dt-castle .cc-done.cc-end.cc-fr { fill: var(--cc-end-r); }
+.dep-tree .dt-castle .cc-done.cc-top { fill: var(--cc-top); }
+.dep-tree .dt-castle .cc-wip { stroke: var(--cc-wip-ink); }
+.dep-tree .dt-castle .cc-pend { fill: none; stroke: var(--cc-wire); stroke-width: 0.7; stroke-dasharray: 2.4 1.8; }
+.dep-tree .dt-castle .cc-fail { stroke: var(--color-progress-failed); }
+.dep-tree .dt-castle .cc-fail.cc-fl { fill: var(--cc-fail-l); }
+.dep-tree .dt-castle .cc-fail.cc-fr { fill: var(--cc-fail-r); }
+.dep-tree .dt-castle .cc-fail.cc-top { fill: var(--cc-fail-l); }
+.dep-tree .dt-castle .cc-crack { fill: none; stroke: var(--color-progress-failed); stroke-width: 1.1; stroke-linejoin: round; }
+.dep-tree .dt-castle .cc-grain { stroke: var(--cc-grain); stroke-width: 0.45; stroke-dasharray: 9 3 15 4; }
+.dep-tree .dt-castle .cc-seam-line { stroke: var(--cc-ink); stroke-width: 0.45; }
+.dep-tree .dt-castle .cc-pull-side, .dep-tree .dt-castle .cc-pull-end { stroke: var(--cc-wip-ink); stroke-width: 0.7; }
+.dep-tree .dt-castle .cc-pull-top { fill: var(--cc-wip-top); stroke: var(--cc-wip-ink); stroke-width: 0.7; }
+/* the hatch pattern sits inside the castle group, so the palette hook colours it too */
+.dep-tree .dt-castle .cc-hatch-bg { fill: var(--cc-hatch-bg); }
+.dep-tree .dt-castle .cc-hatch-fg { fill: var(--cc-hatch-fg); }
+/* the status base under each tower: the E92 colours, shaded by face */
+.dep-tree .dt-castle .cc-base-l, .dep-tree .dt-castle .cc-base-r, .dep-tree .dt-castle .cc-base-t { stroke: var(--cc-ink); stroke-width: 0.5; }
+.dep-tree .dt-castle .cc-base-r { fill-opacity: 0.78; }
+.dep-tree .dt-castle .cc-base-t { fill-opacity: 0.55; }
+.dep-tree .dt-castle .cc-st-done .cc-p { fill: var(--color-progress-done); }
+.dep-tree .dt-castle .cc-st-in_progress .cc-p { fill: var(--color-progress-in-progress); }
+.dep-tree .dt-castle .cc-st-failed .cc-p { fill: var(--color-progress-failed); }
+.dep-tree .dt-castle .cc-st-pending .cc-p { fill: var(--color-progress-pending); }
+/* an undecomposed story: a dashed foundation (11 4: its own dash, longer than the ghost outline's 9 4, E92_S12_T03, which the dash-uniqueness test requires), and a "?" */
+.dep-tree .dt-castle .cc-found-p { fill: none; stroke: var(--cc-wire); stroke-width: 1; stroke-dasharray: 11 4; }
+.dep-tree .dt-castle .cc-q { fill: var(--cc-wire); font-size: 9px; font-weight: 700; }
+/* rejected tasks lie beside the tower */
+.dep-tree .dt-castle .cc-loose-l { fill: var(--cc-wood-l); }
+.dep-tree .dt-castle .cc-loose-r { fill: var(--cc-wood-r); }
+.dep-tree .dt-castle .cc-loose-t { fill: var(--cc-top); }
+/* tops: roof of leaning planks with a flag, battlements of upright blocks */
+.dep-tree .dt-castle .cc-roof-l { fill: var(--cc-roof-l); stroke-width: 0.7; }
+.dep-tree .dt-castle .cc-roof-r { fill: var(--cc-roof-r); stroke-width: 0.7; }
+.dep-tree .dt-castle .cc-plank { stroke: var(--cc-roof-line); stroke-width: 0.5; }
+.dep-tree .dt-castle .cc-eave { fill: none; stroke: var(--cc-roof-line); stroke-width: 1.4; stroke-linejoin: round; }
+.dep-tree .dt-castle .cc-pole { stroke: var(--cc-pole); stroke-width: 1.1; }
+.dep-tree .dt-castle .cc-pennant { fill: var(--cc-flag); stroke: var(--cc-ink); stroke-width: 0.8; stroke-linejoin: round; }
+.dep-tree .dt-castle .cc-flag-reached .cc-pennant { fill: var(--color-progress-done); }
+.dep-tree .dt-castle .cc-wood-l { fill: var(--cc-wood-l); stroke-width: 0.4; }
+.dep-tree .dt-castle .cc-wood-r { fill: var(--cc-wood-r); stroke-width: 0.4; }
+.dep-tree .dt-castle .cc-wood-t { fill: var(--cc-top); stroke-width: 0.4; }
+/* a bridge: a deck of planks on piers */
+.dep-tree .dt-castle .cc-deck-front { fill: var(--cc-wood-r); }
+.dep-tree .dt-castle .cc-deck-top { fill: var(--cc-top); }
+.dep-tree .dt-castle .cc-pier-p { fill: var(--cc-end-r); }
+.dep-tree .dt-castle .cc-bridge .cc-plank { stroke: var(--cc-ink); stroke-width: 0.4; }
+/* the table, the curtain wall of lying blocks (built blocks solid, the rest wireframe), the gate */
+.dep-tree .dt-castle .cc-table-l { fill: var(--cc-table-l); stroke-width: 0.6; }
+.dep-tree .dt-castle .cc-table-r { fill: var(--cc-table-r); stroke-width: 0.6; }
+.dep-tree .dt-castle .cc-table-t { fill: var(--cc-table-t); stroke-width: 0.6; }
+.dep-tree .dt-castle .cc-seam { stroke: var(--cc-seam); stroke-width: 0.6; }
+.dep-tree .dt-castle .cc-wall { stroke-width: 0.5; }
+.dep-tree .dt-castle .cc-wall-l { fill: var(--cc-wall-l); }
+.dep-tree .dt-castle .cc-wall-r { fill: var(--cc-wall-r); }
+.dep-tree .dt-castle .cc-wall-b { fill: var(--cc-wall-b); }
+.dep-tree .dt-castle .cc-wall-wire { fill: none; stroke: var(--cc-wire); stroke-width: 0.7; stroke-dasharray: 2.4 1.8; }
+.dep-tree .dt-castle .cc-wall-seam { stroke: var(--cc-ink); stroke-width: 0.4; }
+.dep-tree .dt-castle .cc-gate-door { fill: var(--cc-gate); stroke-width: 0.5; }
+
+/* goal: the facade (E92_S13_T03), the flat elevation of the same Jenga castle. It is drawn inside the same .dt-castle group, so it
+   uses the SAME palette hook (the --cc-* custom properties above) and no token of its own; the rules below only paint its flat
+   shapes (rects) and are as specific as the citadel's state rules, so each state keeps its own stroke. Shape, not colour, tells
+   the states apart: done = grain, in progress = hatch with a dashed slot behind a pulled-out block, pending = dashed wireframe,
+   failed = crack and a leaning tower, undecomposed = a sparsely dashed foundation with a "?". No animation. */
+.dep-tree .dt-castle .cf-blk { stroke-width: 0.6; stroke-linejoin: round; }
+.dep-tree .dt-castle .cf-blk.cc-done { fill: var(--cc-end-l); stroke: var(--cc-ink); }
+.dep-tree .dt-castle .cf-blk.cf-long.cc-done { fill: var(--cc-wood-l); }
+.dep-tree .dt-castle .cf-blk.cc-wip { stroke: var(--cc-wip-ink); stroke-width: 0.8; }
+.dep-tree .dt-castle .cf-blk.cc-pend { fill: none; stroke: var(--cc-wire); stroke-width: 0.7; stroke-dasharray: 2.4 1.8; }
+.dep-tree .dt-castle .cf-blk.cc-fail { fill: var(--cc-fail-l); stroke: var(--color-progress-failed); stroke-width: 0.8; }
+.dep-tree .dt-castle .cf-pull { stroke: var(--cc-wip-ink); stroke-width: 1.3; }
+.dep-tree .dt-castle .cf-pull .cf-blk { stroke-width: 1.3; }
+.dep-tree .dt-castle .cf-slot { fill: none; stroke: var(--cc-wip-ink); stroke-width: 0.6; stroke-dasharray: 2 2; }
+.dep-tree .dt-castle .cf-grain { fill: none; stroke: var(--cc-grain); stroke-width: 0.5; }
+.dep-tree .dt-castle .cf-slab { stroke-width: 0.5; }
+.dep-tree .dt-castle .cf-found { fill: none; stroke: var(--cc-wire); stroke-width: 1; stroke-dasharray: 1.5 3.5; }
+.dep-tree .dt-castle .cf-merlon { stroke-width: 0.5; }
+.dep-tree .dt-castle .cf-eave { stroke-width: 0.6; }
+.dep-tree .dt-castle .cf-wall { fill: var(--cc-wall-l); stroke: var(--cc-ink); stroke-width: 0.5; }
+.dep-tree .dt-castle .cf-gate-door { fill: var(--cc-gate); stroke: var(--cc-ink); stroke-width: 0.6; }
+.dep-tree .dt-castle .cf-board { stroke: none; }
+.dep-tree .dt-castle .cf-dot { fill: var(--cc-wire); fill-opacity: 0.55; }
+.dep-tree .dt-castle .cf-ground-hatch { stroke: var(--cc-wire); stroke-width: 0.8; }
+.dep-tree .dt-castle .cf-ground-line { stroke: var(--cc-ink); stroke-width: 1.2; }
+/* end E92_S13_T03 */
+
+/* day and night (E92_S13_T04), shared by every goal design that has a sky: the citadel, the facade and, in E92_S13_T07, the seasons
+   tree. DayNightScene.jsx draws both halves of a scene always; this section shows the right one and paints it. Nothing here reads
+   a script, a class on the root or a control of its own: day is the light theme and night the dark one, because the two display
+   tokens below are defined with the other colour tokens in tokens.css (prefers-color-scheme, data-theme), which is also why it
+   works in the file:// snapshot. A third design reuses this section by drawing the same classes inside an element that has
+   .dn-scene; it adds its own tokens for its own colours and nothing here is copied.
+     .dn-day / .dn-night   show a half of the scene by theme          .dn-scene   carries the --dn-* palette hook
+   Every colour is a token. Every movement is declared only in the one no-preference block at the end, for a root without
+   data-motion="off", so reduce and the Animations toggle both show the same drawing, still: the birds with their wings up, the
+   stars lit. The keyframes are dn-flap and dn-drift, and the stars reuse dt-twinkle above (no second twinkle). */
+.dep-tree .dn-scene {
+  --dn-sky-top: var(--color-sky-top);
+  --dn-sky-bottom: var(--color-sky-bottom);
+  --dn-sun: var(--color-sky-sun);
+  --dn-sun-ray: var(--color-sky-sun-ray);
+  --dn-moon: var(--color-sky-moon);
+  --dn-star: var(--color-sky-star);
+  --dn-twinkle: var(--color-sky-twinkle);
+  --dn-bird: var(--color-sky-bird);
+}
+.dep-tree .dn-day { display: var(--theme-day-display); }
+.dep-tree .dn-night { display: var(--theme-night-display); }
+.dep-tree .dn-sky-top { stop-color: var(--dn-sky-top); }
+.dep-tree .dn-sky-bottom { stop-color: var(--dn-sky-bottom); }
+.dep-tree .dn-backdrop { stroke: none; }
+.dep-tree .dn-ray { stroke: var(--dn-sun-ray); stroke-width: 2.2; stroke-linecap: round; }
+.dep-tree .dn-sun-halo { fill: var(--dn-sun); fill-opacity: 0.2; }
+.dep-tree .dn-sun-core { fill: var(--dn-sun); }
+.dep-tree .dn-moon { fill: var(--dn-moon); }
+.dep-tree .dn-line .dn-ray { stroke-width: 1.2; }
+.dep-tree .dn-line .dn-sun-halo { display: none; }
+.dep-tree .dn-line .dn-sun-core { fill: none; stroke: var(--dn-sun); stroke-width: 1.5; }
+.dep-tree .dn-line .dn-moon { fill: none; stroke: var(--dn-moon); stroke-width: 1.3; }
+.dep-tree .dn-dim-star { fill: var(--dn-star); fill-opacity: 0.85; }
+.dep-tree .dn-dim-star.dn-dim { fill-opacity: 0.5; }
+.dep-tree .dn-bird { fill: none; stroke: var(--dn-bird); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; transform-box: fill-box; transform-origin: center; }
+.dep-tree .dn-star { fill: var(--dn-twinkle); fill-opacity: 0.9; transform-box: fill-box; transform-origin: center; }
+/* the castle's lit windows (finished layers) are drawn always and shown by night only (their markup carries .dn-night) */
+.dep-tree .dt-castle .cc-win { stroke: var(--cc-ink); stroke-width: 0.35; }
+.dep-tree .dt-castle .cc-win-l { fill: var(--cc-win-l); }
+.dep-tree .dt-castle .cc-win-r { fill: var(--cc-win-r); }
+.dep-tree .dt-castle .cf-win { fill: var(--cc-win-l); stroke: none; }
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion="off"]) .dep-tree .dn-bird { animation: dn-flap 0.9s ease-in-out infinite; }
+  :root:not([data-motion="off"]) .dep-tree .dn-flock { animation: dn-drift 7s ease-in-out infinite alternate; }
+  :root:not([data-motion="off"]) .dep-tree .dn-flock:nth-child(2) { animation-delay: -2.3s; }
+  :root:not([data-motion="off"]) .dep-tree .dn-flock:nth-child(3) { animation-delay: -4.6s; }
+  :root:not([data-motion="off"]) .dep-tree .dn-bird-at:nth-child(2) .dn-bird { animation-delay: -0.27s; }
+  :root:not([data-motion="off"]) .dep-tree .dn-bird-at:nth-child(3) .dn-bird { animation-delay: -0.54s; }
+  :root:not([data-motion="off"]) .dep-tree .dn-star { animation: dt-twinkle 2.6s ease-in-out infinite; }
+  :root:not([data-motion="off"]) .dep-tree .dn-stars > g:nth-child(2) .dn-star { animation-delay: 0.7s; }
+  :root:not([data-motion="off"]) .dep-tree .dn-stars > g:nth-child(3) .dn-star { animation-delay: 1.4s; }
+  :root:not([data-motion="off"]) .dep-tree .dn-stars > g:nth-child(4) .dn-star { animation-delay: 2s; }
+  :root:not([data-motion="off"]) .dep-tree .dn-stars > g:nth-child(5) .dn-star { animation-delay: 1.1s; }
+  :root:not([data-motion="off"]) .dep-tree .dn-stars > g:nth-child(6) .dn-star { animation-delay: 0.4s; }
+}
+@keyframes dn-flap { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(-0.45); } }
+@keyframes dn-drift { 0% { transform: translate(0, 0); } 100% { transform: translate(28px, -9px); } }
+/* end E92_S13_T04 */

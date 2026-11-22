@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the per-file timing script (E77_S06_T04), written by E77_S06_T08.
 #

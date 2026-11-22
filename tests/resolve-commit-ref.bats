@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E79_S04_T06: scripts/resolve-commit-ref.sh walks the commit ref resolution chain (the task's, its story's and its epic's
 # external_refs Jira key, then the branch candidate captured at worktree creation) and reports what it found.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E80_S04_T02: scripts/workflow/resolve-compute-command.sh confines a compute step's `command` to the
 # allow-listed script roots. It prints the absolute real path of the script, never runs it, creates no file.

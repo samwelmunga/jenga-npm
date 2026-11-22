@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for the j.test skill as a whole (E72_S02_T05): its registration and the seams between its three scripts.
 #

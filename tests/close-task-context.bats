@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # skills/j-close-task/scripts/close-task-context.sh: context and report modes against a throwaway project.
 # Everything happens in $BATS_TEST_TMPDIR; the real repository is only read through symlinks.

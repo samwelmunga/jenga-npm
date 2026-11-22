@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Regression coverage for skills/j-cloud-connect/scripts/configure-backend.sh
 # (E60_S01_T02).

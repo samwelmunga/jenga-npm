@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S02_T03: board-scan.sh and board_index.py list board items in numeric order of their IDs, taken from the
 # shared sort key in scripts/lib/board_ids.py (board_id_sort_key), so E10 < E11 < E100 < E1001 and

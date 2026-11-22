@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Regression coverage for scripts/todo_manager.sh `remove` and board IDs of mixed width (E86_S05_T01, audit group 1:
 # substring and prefix matches).

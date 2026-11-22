@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S06_T01: the --graph mode of scripts/board-progress.sh (batch call: counts plus depends_on edges per epic, story, task).
 # Fixture only, built under $BATS_TEST_TMPDIR; the live project/board/ is never read.

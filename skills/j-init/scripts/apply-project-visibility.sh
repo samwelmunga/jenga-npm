@@ -5,6 +5,7 @@
 # Usage:
 #   apply-project-visibility.sh <mode> [project_root]
 #   apply-project-visibility.sh --check-only <mode>
+# smoke-invoke: --check-only ignored
 #
 # Modes:
 #   visible   Working files stay where they are. No-op on disk beyond the config write.
@@ -125,7 +126,7 @@ write_visibility_config() {
   local tmp="${config}.tmp"
   local existing='{}'
 
-  # /init normally runs before any /distribute, so the file usually does not
+  # /init normally runs before any install or sync, so the file usually does not
   # exist yet. Merge rather than overwrite so other fields survive.
   if [ -f "$config" ]; then
     if ! jq empty "$config" 2>/dev/null; then

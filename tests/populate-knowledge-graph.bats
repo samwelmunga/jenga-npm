@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 # arch-node: E20_S09 type=unit
 #
 # Test coverage for scripts/populate-knowledge-graph.js (E20_S09_T03), the mechanical

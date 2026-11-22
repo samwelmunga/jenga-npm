@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # Regression coverage for E46_S02_T02: add_trivial_task.sh's REPO_ROOT used
 # to be a fixed "three levels up" BASH_SOURCE climb
@@ -125,4 +126,26 @@ install_script_at() {
   assert_output_contains "E99_S01_T01"
   [ -f "$FIXTURE_REPO/project/board/tasks/E99_S01_T01_agents-mirror-trivial-task.md" ]
   [ ! -d "$FIXTURE_REPO/.agents/project" ]
+}
+
+# E99_S01_T04: an explicit --help / -h is a success (usage on stdout, exit 0); a missing or unknown
+# argument keeps exiting non-zero with the usage on stderr.
+@test "--help and -h print usage on stdout and exit 0; no arguments and an unknown flag exit 1 with usage on stderr" {
+  install_script_at "$FIXTURE_REPO/skills/j-todo/scripts"
+  local s="$FIXTURE_REPO/skills/j-todo/scripts/add_trivial_task.sh"
+  local flag
+  for flag in --help -h; do
+    run --separate-stderr bash "$s" "$flag"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Usage:"* ]]
+    [ -z "$stderr" ]
+  done
+  run --separate-stderr bash "$s"
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+  [[ "$stderr" == *"Usage:"* ]]
+  run --separate-stderr bash "$s" --no-such-flag
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+  [[ "$stderr" == *"Usage:"* ]]
 }

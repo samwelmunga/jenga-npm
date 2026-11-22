@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E80_S03_T07: scripts/workflow/next-step.sh - the dispatcher that answers "what do I do now" for a workflow run.
 # It composes step-state.sh, resolve-refs.sh, step-skill.sh, step-playbook.sh and step-confirm.sh and prints one JSON

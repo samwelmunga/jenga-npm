@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E80_S06_T08: scripts/workflow/check-doc-refs.sh verifies that every relative markdown link and every
 # repo-path backtick token in a documentation page points at an existing file or script.

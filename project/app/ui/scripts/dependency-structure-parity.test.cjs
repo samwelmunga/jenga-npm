@@ -69,6 +69,21 @@
 // changed and none was re-recorded: dependency-tree-parity.json is byte-identical, and no case graph carries a story
 // `decomposed` flag, so every case stays deep-equal under the dashboard model, which now passes includeUndecomposed. The one
 // new case lives in its own recording, tests/fixtures/progress/dependency-tree-ghost-bands.json ('ghost bands: ...').
+//
+// E92_S13_T02 (the citadel replaces the fixed goal area): NO recorded case changed and none was re-recorded; both recordings
+// are byte-identical. The goal area is no longer one fixed number: the model lays the goal out for a goal area, 'castle' (the
+// default, the citadel's box) or 'disc' (the star's fixed 260 x 70 area). The recordings are the disc layout, so this test
+// builds them with { goalArea: 'disc' } and the layout of that area has exactly the keys and numbers it always had. The castle
+// area changes only `layout` (width, height, goalAreaW, goalOffsetX, goalX, goalArea) and `goal` (x, y) and adds `castle`; the
+// test 'the castle goal area changes only the layout, the goal position and the castle key' pins that for every recorded case,
+// and dependency-tree-model.test.cjs covers the castle box itself.
+// E92_S13_T06 (the castle and the seasons tree read the same payload): NO recorded case changed and none was re-recorded; the
+// fixture gained one key, `castleTree`, whose 14 cases are real `board-progress.sh --graph --within` payloads (stacking on one story and a
+// bridge on two; an out-of-epic, an uncounted, a self and a cyclic dependency; undecomposed stories and a rejected task; a failed story; a
+// 26-task story; 94 tasks in 22 stories stacked and independent; the growth stages at 24 / 25 / 45 / 65 / 85 / 99 / 100 percent; a complete
+// epic) with the structure the castle and the tree draw from each, recorded by project/app/ui/scripts/record-castle-tree-parity.mjs
+// through castle-tree-summary.mjs (which this test uses too). No `--graph` key was added by E92_S13 (castle-model.test.cjs proves
+// every key the model reads is printed), so there is no new payload key to cover. The terminal structure never imports either model.
 // Run: node project/app/ui/scripts/dependency-structure-parity.test.cjs
 const assert = require('assert')
 const fs = require('fs')
@@ -80,6 +95,7 @@ const modelPath = path.join(root, 'project', 'app', 'ui', 'src', 'components', '
 const structurePath = path.join(root, 'lib', 'progress', 'dependency-structure.js')
 const recordedPath = path.join(root, 'tests', 'fixtures', 'progress', 'dependency-tree-parity.json')
 const ghostRecordedPath = path.join(root, 'tests', 'fixtures', 'progress', 'dependency-tree-ghost-bands.json')
+const summaryPath = path.join(__dirname, 'castle-tree-summary.mjs')
 
 const PIXEL_KEYS = ['x', 'y', 'w', 'h', 'inX', 'outX', 'midY']
 let count = 0
@@ -99,7 +115,7 @@ async function main() {
   const labelsOf = c => (c.labelsMode === 'en' ? recorded.labels.en : c.labelsMode === 'sv' ? recorded.labels.sv : undefined)
   const build = c => {
     const l = labelsOf(c)
-    return l ? M.buildDependencyTreeModel(c.graph, c.epicId, l) : M.buildDependencyTreeModel(c.graph, c.epicId)
+    return M.buildDependencyTreeModel(c.graph, c.epicId, l, { goalArea: 'disc' })
   }
   // a recorded variant is either the full output or "=<name>": the same as that other variant of the same case
   const expectedOf = (c, name) => {
@@ -223,6 +239,106 @@ async function main() {
       assert.deepStrictEqual(S.buildDependencyStructure(c.graph, c.epicId, undefined, { includeUndecomposed: true }), S.foldStructure(S.buildDependencyStructure(c.graph, c.epicId, undefined, { includeUndecomposed: true }), []))
     })
   }
+
+  await test('E92_S13_T02: the castle goal area changes only the layout, the goal position and the castle key; the disc area is the recording', () => {
+    for (const c of [...recorded.cases, ...JSON.parse(fs.readFileSync(ghostRecordedPath, 'utf8')).cases]) {
+      const l = labelsOf(c)
+      const disc = build(c)
+      const castle = M.buildDependencyTreeModel(c.graph, c.epicId, l)
+      if (disc.empty) { assert.deepStrictEqual(castle, disc, c.name); continue }
+      const { layout: dl, goal: dg, ...dRest } = disc
+      const { layout: cl, goal: cg, castle: castleData, ...cRest } = castle
+      assert.deepStrictEqual(cRest, dRest, c.name + ': nodes, bands, edges and the rest are the same')
+      assert.ok(castleData && castleData.box && castleData.box.w > 0 && cl.goalArea === 'castle' && !('goalArea' in dl) && !('castle' in disc), c.name)
+      assert.strictEqual(dl.goalAreaW, 260, c.name)
+      assert.strictEqual(dl.goalOffsetX, 70, c.name)
+      assert.notStrictEqual(cl.goalAreaW, undefined)
+      assert.deepStrictEqual({ ...cg, x: 0, y: 0 }, { ...dg, x: 0, y: 0 }, c.name + ': the goal facts are the same')
+      assert.strictEqual(cl.width, cl.goalX + cl.goalAreaW, c.name)
+      assert.strictEqual(cl.columns, dl.columns, c.name)
+    }
+  })
+
+  // ---- E92_S13_T06: the castle and the seasons tree over the same payloads -------------------------------------------------
+  const { summariseCastleAndTree } = await import(pathToFileURL(summaryPath).href)
+  const castleTree = recorded.castleTree
+
+  await test('E92_S13_T06: the castleTree recording is new, re-records no case and names every input it covers', () => {
+    assert.ok(castleTree && Array.isArray(castleTree.cases) && castleTree.cases.length === 14)
+    assert.ok(/none/.test(castleTree.rerecorded) && /new/.test(castleTree.rerecorded), 'the fixture says nothing was re-recorded')
+    const names = castleTree.cases.map(c => c.name)
+    assert.strictEqual(new Set(names).size, names.length, 'unique names')
+    for (const needle of ['bridge on two', 'out-of-epic', 'undecomposed', 'failed story', '26-task', '94 tasks in 22 stories, stacked', '22 independent', '24 percent', '25 percent', '45 percent', '65 percent', '85 percent', '99 percent', 'complete epic']) {
+      assert.ok(names.some(n => n.includes(needle)), 'no case for: ' + needle)
+    }
+    // the older recordings are untouched: still the cases the earlier tasks recorded
+    assert.ok(recorded.cases.length >= 30)
+  })
+
+  for (const c of castleTree.cases) {
+    await test(`castle and tree (E92_S13_T06): ${c.name}`, () => {
+      assert.deepStrictEqual(summariseCastleAndTree(c.graph, c.epicId), c.expected)
+    })
+  }
+
+  await test('E92_S13_T06: the recorded castle and tree facts agree with the payload, stated independently of the recording', () => {
+    const STAGE_AT = [[100, 5], [70, 4], [45, 3], [25, 2], [10, 1], [0, 0]]
+    const STONES_AT = [25, 45, 65, 85]
+    for (const c of castleTree.cases) {
+      const e = c.expected
+      const epic = c.graph.epics.find(x => x.id === c.epicId)
+      const percent = epic.epic_progress.percent
+      // nothing is recomputed: the wall and the growth are the script's own epic percent
+      assert.strictEqual(e.castle.wall.percent, percent, c.name)
+      assert.strictEqual(e.tree.growth.percent, percent, c.name)
+      assert.strictEqual(e.castle.wall.reached, epic.epic_progress.goal_reached, c.name)
+      // one tower and one branch per counted story (a story the payload does not count, decomposed null, is drawn by neither)
+      const counted = c.graph.stories.filter(s => s.epic_id === c.epicId && s.decomposed !== null)
+      assert.strictEqual(e.castle.towers.length, counted.length, c.name)
+      assert.strictEqual(e.tree.branches.length, counted.length, c.name)
+      assert.deepStrictEqual(e.castle.towers.filter(t => t.undecomposed).map(t => t.id), counted.filter(s => s.decomposed === false).map(s => s.id), c.name + ': dashed foundations')
+      assert.deepStrictEqual(e.tree.stubs, counted.filter(s => s.decomposed === false).map(s => s.id), c.name + ': dashed stubs')
+      // one layer and one clump per counted task, rejected tasks drawn by neither
+      const tasks = c.graph.tasks.filter(t => t.epic_id === c.epicId && t.state !== 'rejected')
+      for (const t of e.castle.towers) assert.strictEqual(t.layers.length, t.plan.layers, c.name + ': ' + t.id + ' layers follow the plan')
+      assert.strictEqual(Object.values(e.tree.clumps).reduce((a, b) => a + b, 0), tasks.length, c.name + ': a clump per counted task')
+      // the six growth stages by the percent, Majestic tree only at goal reached
+      const stage = e.castle.wall.reached ? 5 : STAGE_AT.find(([at]) => percent >= at && at < 100)[1]
+      assert.strictEqual(e.tree.growth.stage, stage, c.name)
+      assert.ok(e.tree.growth.stage < 5 || e.castle.wall.reached, c.name + ': Majestic only at goal reached')
+      assert.strictEqual(e.tree.growth.effects, e.castle.wall.reached, c.name + ': goal-reached effects')
+      assert.deepStrictEqual(e.tree.stages, ['sprout:0', 'seedling:10', 'sapling:25', 'young:45', 'mature:70', 'majestic:100'].map(x => x), c.name)
+      // the stones lift out of the pool at 25, 45, 65 and 85 percent
+      assert.deepStrictEqual(e.tree.stonesLifted, STONES_AT.filter(at => percent >= at), c.name)
+      assert.strictEqual(e.tree.mushrooms, percent >= 55, c.name + ': mushrooms')
+      // stacking: a story on one story stands on it, on two or more on a bridge, otherwise on the ground
+      for (const t of e.castle.towers) assert.ok(['ground', 'tower', 'bridge'].includes(t.stacking.kind), c.name)
+      assert.strictEqual(e.castle.bridges.length, e.castle.towers.filter(t => t.stacking.kind === 'bridge').length, c.name)
+      // the tree parent is the dependency a story stands on (one dependency), and the trunk has none
+      assert.strictEqual(e.tree.stories.find(s => s.id === e.tree.trunkStory).tree.isTrunk, true, c.name)
+    }
+  })
+
+  await test('E92_S13_T06: the stated percent of every older recorded case is the percent the castle wall and the tree growth read', () => {
+    for (const c of [...recorded.cases, ...ghostRecorded.cases]) {
+      const folded = expectedOf(c, 'folded')
+      if (folded.empty) continue
+      const sum = summariseCastleAndTree(c.graph, c.epicId)
+      assert.ok(!sum.empty, c.name)
+      assert.strictEqual(sum.castle.wall.percent, folded.goal.percent, c.name)
+      assert.strictEqual(sum.tree.growth.percent, folded.goal.percent, c.name)
+      assert.strictEqual(sum.castle.wall.reached, folded.goal.reached, c.name)
+    }
+  })
+
+  await test('E92_S13_T06: the terminal structure never imports the castle model, the tree layout or the goal designs', () => {
+    const dir = path.join(root, 'lib', 'progress')
+    for (const f of fs.readdirSync(dir)) {
+      if (!/\.(js|cjs|mjs)$/.test(f)) continue
+      const code = fs.readFileSync(path.join(dir, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+      assert.ok(!/castleModel|castleLayout|facadeLayout|treeLayout|goalDesign|seasons-tree/.test(code), f + ' reaches into a goal design')
+    }
+  })
 
   await test('every public name of the model before the split is still exported', () => {
     for (const name of ['buildDependencyTreeModel', 'unfoldGroups', 'fillUnlockedBy', 'FOLD_THRESHOLD', 'GOAL_NODE_ID', 'LAYOUT', 'COL_WIDTH', 'layoutTree']) {

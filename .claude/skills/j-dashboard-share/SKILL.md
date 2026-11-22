@@ -96,3 +96,15 @@ their own, never something this skill chains automatically.
 - `rclone` installation, backend configuration, or OAuth authentication — that is entirely
   `j.cloud-connect`'s scope (`E60_S01`). This skill only points the user at it when no remote is
   configured; it does not run any part of that flow itself.
+
+## Known Failure Mode: Retired Google Drive Shared client_id
+
+rclone is retiring its shared Google Drive `client_id` during 2026 (its notice: "This remote uses
+rclone's shared Google Drive client_id, which is being retired and will stop working during 2026").
+Once that happens, an upload to a `drive` remote that never set its own `client_id` fails with an
+authorization error from Google (for example `invalid_client` or `Failed to configure token`). That is
+an expired upstream credential, not a Jenga defect, and re-running the upload will not help. If an
+upload to a `drive` remote fails with an auth error, or the notice above appears in its output, run
+`bash skills/j-cloud-connect/scripts/check-shared-client-id.sh` and follow its guidance (create your own
+client_id: `https://rclone.org/drive/#making-your-own-client-id`). Jenga never reads or stores the
+client_secret.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S06_T02: task states (ready, locked, ...), blocked_by, unlocked_by, ready, ready_count, external and --within of the
 # --graph mode of scripts/board-progress.sh. Fixture only, built under $BATS_TEST_TMPDIR; the live board is never read.

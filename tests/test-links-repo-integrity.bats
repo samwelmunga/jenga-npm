@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 # Repo integrity guard for the committed test-to-architecture links (E83_S02_T05).
 #
 # Unlike tests/extract-test-links.bats and tests/validate-test-links.bats, which build synthetic fixture trees, this file

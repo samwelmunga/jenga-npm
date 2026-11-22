@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for skills/j-test/scripts/slowness-check.sh: the seam the j.test skill uses to run the slowness probe, read and
 # save this machine's "slow" threshold, and re-judge the last probe against a new threshold without measuring again.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Focused coverage for the commit-discovery path of the consumers that E79_S02_T07 moved onto the shared resolver
 # scripts/commits-for-item.sh:

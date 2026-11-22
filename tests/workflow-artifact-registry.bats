@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E80_S04_T04: scripts/workflow/artifacts.sh register records a workflow output in the per-run registry.
 # E80_S04_T05: its read side (list, get, latest) with run-status filtering, at the end of this file.

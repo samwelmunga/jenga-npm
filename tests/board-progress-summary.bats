@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S05_T01: the --summary mode of scripts/board-progress.sh (contract: project/documentation/progress-visualisation.md).
 # Fixture only (tests/helpers/progress-fixture.bash); the live project/board/ is never read.

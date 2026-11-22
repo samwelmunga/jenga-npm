@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # skills/j-verify/scripts/verify-context.sh — expand and context modes against a throwaway project.
 # (epic E87, story E87_S07, task E87_S07_T03)

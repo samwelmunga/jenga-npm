@@ -29,6 +29,16 @@
  *                                                      red (Failed and Blocked), grey, and muted blue-grey for
  *                                                      Rejected (never green/yellow/red/grey). Pairwise distinct
  *                                                      and >= 3:1 on --color-surface, enforced by the guard.
+ *   --color-castle-*                                   the citadel goal design (E92_S13_T02): wood faces, ink, wireframe,
+ *                                                      hatch, roof, table, wall, gate, flag; light is its day, dark its night
+ *   --color-castle-win-{l,r}                           lit windows of finished layers (E92_S13_T04), shown by night
+ *   --color-sky-*                                      the sky, sun, moon, stars and birds shared by every goal design that has a
+ *                                                      sky (E92_S13_T04; the seasons tree reuses them, E92_S13_T07)
+ *   --color-tree-*                                     the seasons tree goal design (E92_S13_T07): sky, forest, pool, island, bark, snow,
+ *                                                      the seven season tones (green, gold, rust, rose, teal, ember, lime), blossom,
+ *                                                      withered, flowers, labels; light is its day, dark its night
+ *   --theme-{day,night}-display                        not colours: `inline` / `none`, swapped with the theme, so CSS shows the
+ *                                                      day half or the night half of a scene (the one place the theme is read)
  * A token missing from this list is appended here (light AND dark values),
  * not invented as a local colour. Contrast is checked by
  * `node scripts/check-theme-contrast.cjs`.
@@ -98,6 +108,125 @@
   --color-progress-failed: #b91c1c;
   --color-progress-pending: #6b7280;
   --color-progress-rejected: #5b8fc7;
+  /* E92_S13_T02: the citadel's palette (prototype A, day). Wood faces, ink, wireframe, hatch, roof, table, wall, gate, flag.
+     The dark values below are its night. DependencyTree's .dt-castle maps these to its --cc-* palette hook. */
+  --color-castle-wood-l: #efcb90;
+  --color-castle-wood-r: #d8ab68;
+  --color-castle-end-l: #ddb06f;
+  --color-castle-end-r: #c49150;
+  --color-castle-top: #f5dcac;
+  --color-castle-ink: #6b4a2b;
+  --color-castle-grain: #bb8d53;
+  --color-castle-wire: #8d8a84;
+  --color-castle-wip-ink: #9a6a00;
+  --color-castle-wip-top: #f7da8a;
+  --color-castle-hatch-bg: #efcd92;
+  --color-castle-hatch-fg: #dc9a12;
+  --color-castle-fail-l: #ecb1a8;
+  --color-castle-fail-r: #d68b80;
+  --color-castle-roof-l: #d15c44;
+  --color-castle-roof-r: #ae4732;
+  --color-castle-roof-line: #80301f;
+  --color-castle-table-l: #b98b58;
+  --color-castle-table-r: #9d7347;
+  --color-castle-table-t: #d4a975;
+  --color-castle-seam: #a57a49;
+  --color-castle-wall-l: #e8c283;
+  --color-castle-wall-r: #d2a462;
+  --color-castle-wall-b: #c49757;
+  --color-castle-gate: #3d2b1c;
+  --color-castle-flag: #f2c94c;
+  --color-castle-pole: #5a4632;
+  /* E92_S13_T04: the day and night details of the goal designs: window light, sky, sun, moon, stars, birds. Day is the light theme,
+     night the dark one. The --theme-*-display tokens say which half of a scene is shown (dependency-tree.css .dn-day, .dn-night). */
+  --color-castle-win-l: #f6d58a;
+  --color-castle-win-r: #e6bd6a;
+  --color-sky-top: #d6e6f2;
+  --color-sky-bottom: #f6f0e2;
+  --color-sky-sun: #f0a41a;
+  --color-sky-sun-ray: #e8960f;
+  --color-sky-moon: #e9e4cf;
+  --color-sky-star: #cfd6e6;
+  --color-sky-twinkle: #ffd27a;
+  --color-sky-bird: #39414e;
+  --theme-day-display: inline;
+  --theme-night-display: none;
+  /* E92_S13_T07: the seasons tree's palette, light = its day, dark = its night (the sky, sun, moon, stars and birds are the --color-sky-*
+     tokens above). Read by seasons-tree.css only; the status ribbons use the E92 --color-progress-* tokens. Keep the three blocks in step. */
+  --color-tree-sky-top: #e6f5ee;
+  --color-tree-sky-bottom: #a9dccb;
+  --color-tree-ray: #fffbe0;
+  --color-tree-far-a: #9fcfbf;
+  --color-tree-far-b: #b7ddd0;
+  --color-tree-fog: #f2fbf7;
+  --color-tree-water-top: #8fded0;
+  --color-tree-water-bottom: #5fc2b4;
+  --color-tree-ripple: #e8fffb;
+  --color-tree-rock-a: #7d8790;
+  --color-tree-rock-b: #626c76;
+  --color-tree-rock-c: #a4adb5;
+  --color-tree-moss-a: #a6c95a;
+  --color-tree-moss-b: #7fa83f;
+  --color-tree-moss-c: #c9e07a;
+  --color-tree-bark: #5e3f2c;
+  --color-tree-bark-dark: #3e281b;
+  --color-tree-bark-hi: #8a6248;
+  --color-tree-ink: #2a1d14;
+  --color-tree-snow: #ffffff;
+  --color-tree-snow-shade: #d6e6f0;
+  --color-tree-green-a: #2f6b3a;
+  --color-tree-green-b: #4f9a45;
+  --color-tree-green-c: #8cc85a;
+  --color-tree-gold-a: #c98a1a;
+  --color-tree-gold-b: #f2b632;
+  --color-tree-gold-c: #ffe07a;
+  --color-tree-rust-a: #c0482a;
+  --color-tree-rust-b: #e8743a;
+  --color-tree-rust-c: #ffb066;
+  --color-tree-rose-a: #d9567a;
+  --color-tree-rose-b: #f49ab4;
+  --color-tree-rose-c: #ffd6e2;
+  --color-tree-teal-a: #2f6b5a;
+  --color-tree-teal-b: #4f9a86;
+  --color-tree-teal-c: #8fd0b8;
+  --color-tree-ember-a: #a3361f;
+  --color-tree-ember-b: #d4542c;
+  --color-tree-ember-c: #f39060;
+  --color-tree-lime-a: #7a9a2a;
+  --color-tree-lime-b: #a8c840;
+  --color-tree-lime-c: #dcef8a;
+  --color-tree-bloom-a: #f7b6c8;
+  --color-tree-bloom-b: #fbd3de;
+  --color-tree-bloom-c: #ffffff;
+  --color-tree-bloom-core: #e8607e;
+  --color-tree-dead-a: #7a5a3a;
+  --color-tree-dead-b: #9a7448;
+  --color-tree-dead-c: #b8946a;
+  --color-tree-plant-a: #2f5a46;
+  --color-tree-plant-b: #467a5c;
+  --color-tree-canopy-a: #24533a;
+  --color-tree-canopy-b: #356f4a;
+  --color-tree-canopy-c: #5d9a62;
+  --color-tree-crown-a: #2a4a2e;
+  --color-tree-crown-b: #3e6a3c;
+  --color-tree-crown-c: #7aa860;
+  --color-tree-flower-a: #f2c94c;
+  --color-tree-flower-b: #f49ab4;
+  --color-tree-flower-c: #ffffff;
+  --color-tree-flower-d: #9b6bd6;
+  --color-tree-flower-core: #e8a020;
+  --color-tree-mote: #ffe58a;
+  --color-tree-lantern: #ffcf5a;
+  --color-tree-vine: #3f6a3a;
+  --color-tree-text: #22302c;
+  --color-tree-pill: #ffffff;
+  --color-tree-pill-line: #6f8f84;
+  --color-tree-ok: #2f8f5b;
+  --color-tree-wip: #a87400;
+  --color-tree-cap: #d64545;
+  --color-tree-stem: #fff2e6;
+  --color-tree-spirit-a: #8fae5a;
+  --color-tree-spirit-b: #e8c97a;
 }
 
 /* Dark values. The media-query block and the [data-theme="dark"] block below
@@ -158,6 +287,124 @@
     --color-progress-failed: #f87171;
     --color-progress-pending: #9ca3af;
     --color-progress-rejected: #7ba3d6;
+    /* E92_S13_T02: the citadel's palette, night (prototype A). */
+    --color-castle-wood-l: #646b80;
+    --color-castle-wood-r: #4b5165;
+    --color-castle-end-l: #575d72;
+    --color-castle-end-r: #41475a;
+    --color-castle-top: #737a90;
+    --color-castle-ink: #121620;
+    --color-castle-grain: #7a8199;
+    --color-castle-wire: #6f7da0;
+    --color-castle-wip-ink: #ffcf5a;
+    --color-castle-wip-top: #8a7a46;
+    --color-castle-hatch-bg: #4f4a3a;
+    --color-castle-hatch-fg: #ffcf5a;
+    --color-castle-fail-l: #7d4a4a;
+    --color-castle-fail-r: #623838;
+    --color-castle-roof-l: #8f4d47;
+    --color-castle-roof-r: #6e3a35;
+    --color-castle-roof-line: #3d1f1c;
+    --color-castle-table-l: #3d3631;
+    --color-castle-table-r: #2f2a26;
+    --color-castle-table-t: #4c443d;
+    --color-castle-seam: #2a2420;
+    --color-castle-wall-l: #646b80;
+    --color-castle-wall-r: #4f5569;
+    --color-castle-wall-b: #43495c;
+    --color-castle-gate: #ffcc66;
+    --color-castle-flag: #ffd27a;
+    --color-castle-pole: #9aa6bf;
+    /* E92_S13_T04: the day and night details of the goal designs: window light, sky, sun, moon, stars, birds. Day is the light theme,
+       night the dark one. The --theme-*-display tokens say which half of a scene is shown (dependency-tree.css .dn-day, .dn-night). */
+    --color-castle-win-l: #ffd27a;
+    --color-castle-win-r: #efb25a;
+    --color-sky-top: #0e1424;
+    --color-sky-bottom: #1c2338;
+    --color-sky-sun: #f0a41a;
+    --color-sky-sun-ray: #e8960f;
+    --color-sky-moon: #e9e4cf;
+    --color-sky-star: #cfd6e6;
+    --color-sky-twinkle: #ffd27a;
+    --color-sky-bird: #9aa6bf;
+    --theme-day-display: none;
+    --theme-night-display: inline;
+    /* E92_S13_T07: the seasons tree's palette, light = its day, dark = its night (the sky, sun, moon, stars and birds are the --color-sky-*
+       tokens above). Read by seasons-tree.css only; the status ribbons use the E92 --color-progress-* tokens. Keep the three blocks in step. */
+    --color-tree-sky-top: #0c1d26;
+    --color-tree-sky-bottom: #163a40;
+    --color-tree-ray: #bfe8ff;
+    --color-tree-far-a: #123038;
+    --color-tree-far-b: #18393f;
+    --color-tree-fog: #6f9aa4;
+    --color-tree-water-top: #16454c;
+    --color-tree-water-bottom: #0f3238;
+    --color-tree-ripple: #7fc8d0;
+    --color-tree-rock-a: #36404c;
+    --color-tree-rock-b: #28303a;
+    --color-tree-rock-c: #4c5866;
+    --color-tree-moss-a: #2f5a3c;
+    --color-tree-moss-b: #24472f;
+    --color-tree-moss-c: #3f7650;
+    --color-tree-bark: #3a2c2a;
+    --color-tree-bark-dark: #241a19;
+    --color-tree-bark-hi: #524040;
+    --color-tree-ink: #100c0c;
+    --color-tree-snow: #dcecff;
+    --color-tree-snow-shade: #9fb8d6;
+    --color-tree-green-a: #173d34;
+    --color-tree-green-b: #24594a;
+    --color-tree-green-c: #3f8a6c;
+    --color-tree-gold-a: #6a4a14;
+    --color-tree-gold-b: #a87a1e;
+    --color-tree-gold-c: #f2c050;
+    --color-tree-rust-a: #6a2a1c;
+    --color-tree-rust-b: #a8442a;
+    --color-tree-rust-c: #f07a4a;
+    --color-tree-rose-a: #7a3450;
+    --color-tree-rose-b: #b45a7e;
+    --color-tree-rose-c: #f0a0c0;
+    --color-tree-teal-a: #16403c;
+    --color-tree-teal-b: #25665c;
+    --color-tree-teal-c: #58b0a0;
+    --color-tree-ember-a: #5e2418;
+    --color-tree-ember-b: #8e3a24;
+    --color-tree-ember-c: #d86a44;
+    --color-tree-lime-a: #3c4a18;
+    --color-tree-lime-b: #62782a;
+    --color-tree-lime-c: #a8c45a;
+    --color-tree-bloom-a: #b46a8a;
+    --color-tree-bloom-b: #d48aa8;
+    --color-tree-bloom-c: #f3d0e0;
+    --color-tree-bloom-core: #ff7fb0;
+    --color-tree-dead-a: #4a3a2c;
+    --color-tree-dead-b: #5e4a38;
+    --color-tree-dead-c: #7a6248;
+    --color-tree-plant-a: #0f2a26;
+    --color-tree-plant-b: #173a33;
+    --color-tree-canopy-a: #0f2a24;
+    --color-tree-canopy-b: #1a4136;
+    --color-tree-canopy-c: #2f6a56;
+    --color-tree-crown-a: #14271f;
+    --color-tree-crown-b: #22402f;
+    --color-tree-crown-c: #3f6e4c;
+    --color-tree-flower-a: #ffe08a;
+    --color-tree-flower-b: #ff9ad5;
+    --color-tree-flower-c: #cfe8ff;
+    --color-tree-flower-d: #c39bff;
+    --color-tree-flower-core: #e8a020;
+    --color-tree-mote: #d8ff8a;
+    --color-tree-lantern: #ffcf5a;
+    --color-tree-vine: #2a4a30;
+    --color-tree-text: #e6f2ee;
+    --color-tree-pill: #0c1d26;
+    --color-tree-pill-line: #5f8a8a;
+    --color-tree-ok: #5fd38d;
+    --color-tree-wip: #ffcf5a;
+    --color-tree-cap: #7fe8ff;
+    --color-tree-stem: #fff2e6;
+    --color-tree-spirit-a: #5f8a4a;
+    --color-tree-spirit-b: #c8a85a;
   }
 }
 
@@ -215,4 +462,122 @@
   --color-progress-failed: #f87171;
   --color-progress-pending: #9ca3af;
   --color-progress-rejected: #7ba3d6;
+  /* E92_S13_T02: the citadel's palette, night (prototype A). */
+  --color-castle-wood-l: #646b80;
+  --color-castle-wood-r: #4b5165;
+  --color-castle-end-l: #575d72;
+  --color-castle-end-r: #41475a;
+  --color-castle-top: #737a90;
+  --color-castle-ink: #121620;
+  --color-castle-grain: #7a8199;
+  --color-castle-wire: #6f7da0;
+  --color-castle-wip-ink: #ffcf5a;
+  --color-castle-wip-top: #8a7a46;
+  --color-castle-hatch-bg: #4f4a3a;
+  --color-castle-hatch-fg: #ffcf5a;
+  --color-castle-fail-l: #7d4a4a;
+  --color-castle-fail-r: #623838;
+  --color-castle-roof-l: #8f4d47;
+  --color-castle-roof-r: #6e3a35;
+  --color-castle-roof-line: #3d1f1c;
+  --color-castle-table-l: #3d3631;
+  --color-castle-table-r: #2f2a26;
+  --color-castle-table-t: #4c443d;
+  --color-castle-seam: #2a2420;
+  --color-castle-wall-l: #646b80;
+  --color-castle-wall-r: #4f5569;
+  --color-castle-wall-b: #43495c;
+  --color-castle-gate: #ffcc66;
+  --color-castle-flag: #ffd27a;
+  --color-castle-pole: #9aa6bf;
+  /* E92_S13_T04: the day and night details of the goal designs: window light, sky, sun, moon, stars, birds. Day is the light theme,
+     night the dark one. The --theme-*-display tokens say which half of a scene is shown (dependency-tree.css .dn-day, .dn-night). */
+  --color-castle-win-l: #ffd27a;
+  --color-castle-win-r: #efb25a;
+  --color-sky-top: #0e1424;
+  --color-sky-bottom: #1c2338;
+  --color-sky-sun: #f0a41a;
+  --color-sky-sun-ray: #e8960f;
+  --color-sky-moon: #e9e4cf;
+  --color-sky-star: #cfd6e6;
+  --color-sky-twinkle: #ffd27a;
+  --color-sky-bird: #9aa6bf;
+  --theme-day-display: none;
+  --theme-night-display: inline;
+  /* E92_S13_T07: the seasons tree's palette, light = its day, dark = its night (the sky, sun, moon, stars and birds are the --color-sky-*
+     tokens above). Read by seasons-tree.css only; the status ribbons use the E92 --color-progress-* tokens. Keep the three blocks in step. */
+  --color-tree-sky-top: #0c1d26;
+  --color-tree-sky-bottom: #163a40;
+  --color-tree-ray: #bfe8ff;
+  --color-tree-far-a: #123038;
+  --color-tree-far-b: #18393f;
+  --color-tree-fog: #6f9aa4;
+  --color-tree-water-top: #16454c;
+  --color-tree-water-bottom: #0f3238;
+  --color-tree-ripple: #7fc8d0;
+  --color-tree-rock-a: #36404c;
+  --color-tree-rock-b: #28303a;
+  --color-tree-rock-c: #4c5866;
+  --color-tree-moss-a: #2f5a3c;
+  --color-tree-moss-b: #24472f;
+  --color-tree-moss-c: #3f7650;
+  --color-tree-bark: #3a2c2a;
+  --color-tree-bark-dark: #241a19;
+  --color-tree-bark-hi: #524040;
+  --color-tree-ink: #100c0c;
+  --color-tree-snow: #dcecff;
+  --color-tree-snow-shade: #9fb8d6;
+  --color-tree-green-a: #173d34;
+  --color-tree-green-b: #24594a;
+  --color-tree-green-c: #3f8a6c;
+  --color-tree-gold-a: #6a4a14;
+  --color-tree-gold-b: #a87a1e;
+  --color-tree-gold-c: #f2c050;
+  --color-tree-rust-a: #6a2a1c;
+  --color-tree-rust-b: #a8442a;
+  --color-tree-rust-c: #f07a4a;
+  --color-tree-rose-a: #7a3450;
+  --color-tree-rose-b: #b45a7e;
+  --color-tree-rose-c: #f0a0c0;
+  --color-tree-teal-a: #16403c;
+  --color-tree-teal-b: #25665c;
+  --color-tree-teal-c: #58b0a0;
+  --color-tree-ember-a: #5e2418;
+  --color-tree-ember-b: #8e3a24;
+  --color-tree-ember-c: #d86a44;
+  --color-tree-lime-a: #3c4a18;
+  --color-tree-lime-b: #62782a;
+  --color-tree-lime-c: #a8c45a;
+  --color-tree-bloom-a: #b46a8a;
+  --color-tree-bloom-b: #d48aa8;
+  --color-tree-bloom-c: #f3d0e0;
+  --color-tree-bloom-core: #ff7fb0;
+  --color-tree-dead-a: #4a3a2c;
+  --color-tree-dead-b: #5e4a38;
+  --color-tree-dead-c: #7a6248;
+  --color-tree-plant-a: #0f2a26;
+  --color-tree-plant-b: #173a33;
+  --color-tree-canopy-a: #0f2a24;
+  --color-tree-canopy-b: #1a4136;
+  --color-tree-canopy-c: #2f6a56;
+  --color-tree-crown-a: #14271f;
+  --color-tree-crown-b: #22402f;
+  --color-tree-crown-c: #3f6e4c;
+  --color-tree-flower-a: #ffe08a;
+  --color-tree-flower-b: #ff9ad5;
+  --color-tree-flower-c: #cfe8ff;
+  --color-tree-flower-d: #c39bff;
+  --color-tree-flower-core: #e8a020;
+  --color-tree-mote: #d8ff8a;
+  --color-tree-lantern: #ffcf5a;
+  --color-tree-vine: #2a4a30;
+  --color-tree-text: #e6f2ee;
+  --color-tree-pill: #0c1d26;
+  --color-tree-pill-line: #5f8a8a;
+  --color-tree-ok: #5fd38d;
+  --color-tree-wip: #ffcf5a;
+  --color-tree-cap: #7fe8ff;
+  --color-tree-stem: #fff2e6;
+  --color-tree-spirit-a: #5f8a4a;
+  --color-tree-spirit-b: #c8a85a;
 }

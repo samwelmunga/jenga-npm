@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E80_S02_T07: scripts/workflow/run-state.sh resume (next-step rule, legal starting states, interrupted and failed
 # step recovery, the definition-change guard and the new-process case).

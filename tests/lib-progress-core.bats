@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Wrapper that puts the Node tests of the render core (lib/progress/, E92_S08_T03) under `j.test` discovery.
 #

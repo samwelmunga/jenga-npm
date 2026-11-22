@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the situation marker and the enforcing pre-flight hook (E67_S04_T03).
 #
@@ -850,12 +851,18 @@ stub_checker() {
   enter pre-commit run-5 >/dev/null
 
   make_sandbox
+  # E100_S04_T01: the switch merges only the level policy, so the sandbox starts from the registered root settings
+  # (what `npx jenga sync` leaves behind) and the switch must keep the registration.
+  mkdir -p "$SANDBOX/.claude" "$SANDBOX/.agents"
+  cp "$REPO_ROOT/settings.json" "$SANDBOX/.claude/settings.json"
+  cp "$REPO_ROOT/settings.json" "$SANDBOX/.agents/settings.json"
   switch_level 5
 
-  # The switch really did put the unrestricted template in force in the sandbox, and recorded level 5.
+  # The switch really did put the unrestricted policy in force in the sandbox, and recorded level 5.
   [ "$(jq -r '.session_level' "$SANDBOX/.jenga-permission-level.json")" = "5" ]
-  cmp "$SANDBOX/.claude/settings.json" "$TEMPLATE_DIR/level-5-unrestricted.json"
-  cmp "$SANDBOX/.agents/settings.json" "$TEMPLATE_DIR/level-5-unrestricted.json"
+  for f in "$SANDBOX/.claude/settings.json" "$SANDBOX/.agents/settings.json"; do
+    [ "$(jq -S '[.defaultMode, .permissions.deny, .autoMode]' "$f")" = "$(jq -S '[.defaultMode, .permissions.deny, .autoMode]' "$TEMPLATE_DIR/level-5-unrestricted.json")" ]
+  done
 
   # The hook command the sandbox's level-5 settings register, run the way the harness runs it.
   cmd="$(registered_hook_command "$SANDBOX/.claude/settings.json")"
@@ -882,18 +889,20 @@ stub_checker() {
 # The registration: identical everywhere the level switch could copy it from, and surviving a switch
 # -----------------------------------------------------------------------------
 
-@test "registration: the PreToolUse entry is byte-identical across root, all five templates and both mirrors" {
+@test "registration: the PreToolUse entry is identical across root, the fragment and both mirrors, and no template carries hooks" {
   [ -x "$HOOK" ]
   root_entry="$(registered_hook_entry "$REPO_ROOT/settings.json")"
   [ "$(jq 'length' <<<"$root_entry")" -ge 1 ]
   [ "$(jq -r '.[0].matcher' <<<"$root_entry")" = "Bash|Task|Agent" ]
 
+  # E100_S04_T05: the fragment replaces the templates as the second source of the registration.
+  [ "$(registered_hook_entry "$REPO_ROOT/hooks/on_preflight_check.fragment.json" | jq -S -c .)" = "$(jq -S -c . <<<"$root_entry")" ] \
+    || { echo "registration differs in the fragment" >&2; return 1; }
+
   templates=0
   for f in "$TEMPLATE_DIR"/level-*.json; do
     templates=$((templates + 1))
-    [ "$(registered_hook_entry "$f")" = "$root_entry" ] || { echo "registration differs in $f" >&2; return 1; }
-    [ "$(registered_hook_command "$f")" = "$(registered_hook_command "$REPO_ROOT/settings.json")" ] \
-      || { echo "registered command differs in $f" >&2; return 1; }
+    [ "$(jq 'has("hooks")' "$f")" = "false" ] || { echo "$f carries hooks" >&2; return 1; }
   done
   [ "$templates" -eq 5 ]
 
@@ -904,6 +913,9 @@ stub_checker() {
 
 @test "registration: survives a level switch from level 1 up to level 5" {
   make_sandbox
+  mkdir -p "$SANDBOX/.claude" "$SANDBOX/.agents"
+  cp "$REPO_ROOT/settings.json" "$SANDBOX/.claude/settings.json"
+  cp "$REPO_ROOT/settings.json" "$SANDBOX/.agents/settings.json"
   root_entry="$(registered_hook_entry "$REPO_ROOT/settings.json")"
   [ "$(jq 'length' <<<"$root_entry")" -ge 1 ]
 

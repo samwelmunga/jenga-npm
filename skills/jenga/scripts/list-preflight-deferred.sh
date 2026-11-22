@@ -61,6 +61,25 @@
 
 set -u
 
+# -h / --help: print the usage on stdout and exit 0 before anything is parsed, read or written (E99_S01_T01).
+case "${1:-}" in
+  -h|--help)
+    cat <<'USAGE'
+Usage: list-preflight-deferred.sh <orchestrator_session_id>
+       list-preflight-deferred.sh -h|--help
+
+Print, one per line and de-duplicated, the item_id of every preflight_deferred
+event logged for that session, read from the project's events log (or from
+JENGA_PREFLIGHT_EVENTS_FILE). Read-only.
+
+Exit codes: 0 success (also when there are no events or no events file);
+1 events file malformed; 2 usage error; 3 logs path unresolved; 4 python3
+missing; 5 events file unreadable.
+USAGE
+    exit 0
+    ;;
+esac
+
 SELF="list-preflight-deferred.sh"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Package root (scripts/, lib/, templates/): resolved so it also works from a consumer's .claude/skills mirror.

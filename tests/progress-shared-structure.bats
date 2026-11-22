@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S08_T02: the shared graph-structure module lib/progress/dependency-structure.js and the Node-14 rule for lib/progress/.
 #

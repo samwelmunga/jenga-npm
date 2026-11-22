@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for skills/j-connect/scripts/register-mcp.sh (E65_S01_T04).
 # The target is project-root .mcp.json, per project/documentation/mcp-registration-decision.md.

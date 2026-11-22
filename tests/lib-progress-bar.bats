@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Wrapper that puts the Node tests of the run bar and the after-task and after-story lines (lib/progress/bar.js and lines.js, E92_S08_T04) under `j.test` discovery.
 #

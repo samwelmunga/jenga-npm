@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E76_S02_T01: scripts/task-usage.sh drift protection - --report and --check-layout fail loudly, each failure
 # mode with its own exit code (4 transcript root/slug, 5 no subagent transcripts, 6 sidecar meta, 7 usage fields,

@@ -48,7 +48,6 @@ skills/                    ← Canonical skill source — invoke as j.<name> or 
 ├── j-dashboard-share/
 ├── j-deep-dive/
 ├── j-dev-done/
-├── j-distribute/
 ├── j-do/
 ├── j-doc/
 ├── j-doc-sync/
@@ -74,7 +73,6 @@ skills/                    ← Canonical skill source — invoke as j.<name> or 
 ├── j-redo/
 ├── j-self-sync/
 ├── j-skillify/
-├── j-smoke-test/
 ├── j-spinoff/
 ├── j-status/
 ├── j-strategy/

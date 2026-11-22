@@ -137,6 +137,24 @@
 
 set -euo pipefail
 
+# -h / --help: print the usage on stdout and exit 0 before anything is parsed, read or written (E99_S01_T01).
+case "${1:-}" in
+  -h|--help)
+    cat <<'USAGE'
+Usage: render-playbook-confirmation.sh "<playbook_id>" "<name>" "<comma-separated ordered step names>" ["<json-conditionals>" ["<json-origins>"]]   # start
+       render-playbook-confirmation.sh <state_file> "<raw_reply>"                                                                                          # continue
+       render-playbook-confirmation.sh -h|--help
+
+Render the editable, numbered playbook chain /jenga proposes and interpret the
+user's reply. Start mode creates a state file under TMPDIR and prints its path
+on stderr.
+
+Exit codes: 0 rendered; 2 usage error or setup failure.
+USAGE
+    exit 0
+    ;;
+esac
+
 if ! command -v python3 >/dev/null 2>&1; then
   echo "Error: python3 is required by render-playbook-confirmation.sh" >&2
   exit 2

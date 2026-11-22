@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: none writes a ledger entry and a git tag; it has no read-only invocation
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

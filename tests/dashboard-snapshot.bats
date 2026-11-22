@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Regression coverage for skills/j-dashboard/scripts/snapshot.sh (E47_S04_T03)
 # and its bundling step, project/app/ui/scripts/build-snapshot-html.cjs.

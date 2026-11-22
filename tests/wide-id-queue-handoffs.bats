@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Group 3 of the E86_S05 audit (E86_S05_T04): queue triggers, handoffs, context digests and bundle manifests with
 # three- and four-digit board IDs.

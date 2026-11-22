@@ -39,8 +39,16 @@ function apiPort() {
 // in the first place: src/api/client.js reads an embedded
 // <script id="jenga-dashboard-data"> tag whenever one is present, so the
 // ordinary build below is already snapshot-capable.
+// E92_S13_T09 - the seasons tree is left out of the public build while it is refined. goalDesigns.js imports it only
+// through ./seasonsTreeEntry; unless JENGA_UI_SEASONS_TREE=1 that specifier resolves to a stub, so the renderer and
+// seasons-tree.css are not bundled and the selector does not offer it. To work on it:
+//   JENGA_UI_SEASONS_TREE=1 npm run ui:dev      (or ui:build, for the dashboard and --snapshot)
+const seasonsTreeIn = process.env.JENGA_UI_SEASONS_TREE === '1'
+const seasonsTreeOff = path.resolve(here, 'src/components/progress/seasonsTreeEntry.off.js')
+
 export default defineConfig(async ({ command }) => ({
   plugins: [react()],
+  resolve: { alias: seasonsTreeIn ? [] : [{ find: /^\.\/seasonsTreeEntry$/, replacement: seasonsTreeOff }] },
   // E47_S09_T02 - the header logo (~15 kB PNG) must be inlined as a data: URI so the single-file snapshot export
   // (build-snapshot-html.cjs, which only inlines the JS/CSS bundles) never references a separate image file.
   build: { assetsInlineLimit: 32 * 1024 },

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S02_T01: scripts/lib/progress-labels.sh - the sv/en label table, progress_label and progress_lang.
 # Default language is en (confirmed by the user 2026-11-12); sv is selected with JENGA_PROGRESS_LANG=sv.
@@ -449,7 +450,7 @@ assert d["dep_unfinished_more"]=="Klar trots att beroendet %s och %d till inte �
 # without them draws the dashed outline and omits the text.
 S12_T03_KEYS="story_undecomposed story_undecomposed_aria"
 
-@test "E92_S12_T03: story_undecomposed and story_undecomposed_aria are listed once each, last, in both languages" {
+@test "E92_S12_T03: story_undecomposed and story_undecomposed_aria are listed once each, adjacent and in this order, in both languages" {
   run_lib '
     for k in '"$S12_T03_KEYS"'; do
       c=0; for x in $PROGRESS_LABEL_KEYS; do [ "$x" = "$k" ] && c=$((c+1)); done
@@ -459,9 +460,10 @@ S12_T03_KEYS="story_undecomposed story_undecomposed_aria"
         [ -n "$out" ] || { echo "empty $l:$k"; exit 1; }
       done
     done
-    set -- $PROGRESS_LABEL_KEYS
-    eval "a=\${$(($# - 1))} b=\${$#}"
-    [ "$a $b" = "story_undecomposed story_undecomposed_aria" ] || { echo "order: $a $b"; exit 1; }'
+    case " $PROGRESS_LABEL_KEYS " in
+      *" story_undecomposed story_undecomposed_aria "*) ;;
+      *) echo "order: not adjacent and in this order"; exit 1 ;;
+    esac'
   [ "$status" -eq 0 ]
 }
 
@@ -472,7 +474,8 @@ S12_T03_KEYS="story_undecomposed story_undecomposed_aria"
 import json,sys
 d=json.load(sys.stdin)["labels"]
 keys=list(d.keys())
-assert keys[-2:]==["story_undecomposed","story_undecomposed_aria"], keys[-3:]
+i=keys.index("story_undecomposed")
+assert keys[i:i+2]==["story_undecomposed","story_undecomposed_aria"], keys[i:i+3]
 assert d["story_undecomposed"]=="Not broken down yet", d["story_undecomposed"]
 assert d["story_undecomposed_aria"]=="%s - not broken down into tasks yet", d["story_undecomposed_aria"]'
   JENGA_PROGRESS_LANG=sv run bash "$REPO/scripts/progress-labels-json.sh"
@@ -495,4 +498,224 @@ assert d["story_undecomposed_aria"]=="%s - ännu inte nedbruten i uppgifter", d[
   run bash -c '. "$1" --source-only; json_escape "$(progress_label story_undecomposed_aria en)"; printf "|"; json_escape "a\"b\\c"' _ "$REPO/scripts/progress-labels-json.sh"
   [ "$status" -eq 0 ]
   [ "$output" = '%s - not broken down into tasks yet|a\"b\\c' ]
+}
+
+# E92_S13_T05: the goal design selector of the epic view, English and Swedish: the group name and one name per design
+# (star, citadel, facade, seasons tree). The list order of the designs lives in goalDesignModel.js (GOAL_DESIGNS); the
+# fallback words in DependencyTree.jsx must be the English ones.
+S13_T05_KEYS="goal_design_group goal_design_star goal_design_citadel goal_design_facade goal_design_tree"
+
+@test "E92_S13_T05: the goal design keys are listed once each, adjacent and in this order, in both languages" {
+  run_lib '
+    for k in '"$S13_T05_KEYS"'; do
+      c=0; for x in $PROGRESS_LABEL_KEYS; do [ "$x" = "$k" ] && c=$((c+1)); done
+      [ "$c" -eq 1 ] || { echo "$k listed $c times"; exit 1; }
+      for l in en sv; do
+        out="$(progress_label "$k" "$l")" || { echo "missing $l:$k"; exit 1; }
+        [ -n "$out" ] || { echo "empty $l:$k"; exit 1; }
+        case "$out" in *%*) echo "placeholder in $l:$k"; exit 1 ;; esac
+      done
+    done
+    case " $PROGRESS_LABEL_KEYS " in
+      *" '"$S13_T05_KEYS"' "*) ;;
+      *) echo "order: not adjacent and in this order"; exit 1 ;;
+    esac'
+  [ "$status" -eq 0 ]
+}
+
+@test "E92_S13_T05: the goal design words are exact in English and Swedish" {
+  run_lib '
+    [ "$(progress_label goal_design_group en)" = "Goal design" ]
+    [ "$(progress_label goal_design_star en)" = "Star" ]
+    [ "$(progress_label goal_design_citadel en)" = "Citadel" ]
+    [ "$(progress_label goal_design_facade en)" = "Facade" ]
+    [ "$(progress_label goal_design_tree en)" = "Seasons tree" ]
+    [ "$(progress_label goal_design_group sv)" = "Måldesign" ]
+    [ "$(progress_label goal_design_star sv)" = "Stjärna" ]
+    [ "$(progress_label goal_design_citadel sv)" = "Citadell" ]
+    [ "$(progress_label goal_design_facade sv)" = "Fasad" ]
+    [ "$(progress_label goal_design_tree sv)" = "Årstidsträd" ]'
+  [ "$status" -eq 0 ]
+}
+
+@test "E92_S13_T05: the five keys reach the exporter once each, in English and in Swedish" {
+  run bash "$REPO/scripts/progress-labels-json.sh"
+  [ "$status" -eq 0 ]
+  echo "$output" | python3 -c '
+import json,re,sys
+raw=sys.stdin.read()
+keys=re.findall(r"\"([a-z_]+)\":\"", raw.split("\"labels\":",1)[1])
+assert len(keys)==len(set(keys)), "a key is printed twice"
+d=json.loads(raw)["labels"]
+for k in sys.argv[1].split():
+    assert k in d and d[k], k
+assert d["goal_design_group"]=="Goal design" and d["goal_design_star"]=="Star" and d["goal_design_citadel"]=="Citadel"
+assert d["goal_design_facade"]=="Facade" and d["goal_design_tree"]=="Seasons tree"' "$S13_T05_KEYS"
+  JENGA_PROGRESS_LANG=sv run bash "$REPO/scripts/progress-labels-json.sh"
+  [ "$status" -eq 0 ]
+  echo "$output" | python3 -c '
+import json,sys
+d=json.load(sys.stdin)["labels"]
+assert d["goal_design_group"]=="Måldesign" and d["goal_design_star"]=="Stjärna" and d["goal_design_citadel"]=="Citadell"
+assert d["goal_design_facade"]=="Fasad" and d["goal_design_tree"]=="Årstidsträd"'
+}
+
+@test "E92_S13_T05: the JSX fallback words of the goal design selector match the English labels" {
+  JSX="$REPO/project/app/ui/src/components/progress/DependencyTree.jsx"
+  [ -f "$JSX" ] || skip "the dashboard sources are not part of a consumer install"
+  for k in $S13_T05_KEYS; do
+    run_lib "progress_label $k en"
+    grep -qF "  $k: '$output'," "$JSX" || { echo "fallback of $k does not match: $output"; false; }
+  done
+}
+
+@test "E92_S13_T05: every design of the ordered list has its label key in the table (and the list order is star, citadel, facade, tree)" {
+  MODEL="$REPO/project/app/ui/src/components/progress/goalDesignModel.js"
+  [ -f "$MODEL" ] || skip "the dashboard sources are not part of a consumer install"
+  keys="$(grep -o "labelKey: '[a-z_]*'" "$MODEL" | sed "s/labelKey: '//; s/'$//" | tr '\n' ' ')"
+  [ "$keys" = "goal_design_star goal_design_citadel goal_design_facade goal_design_tree " ] || { echo "list order: $keys"; false; }
+  for k in $keys; do
+    for l in en sv; do
+      run_lib "progress_label $k $l"
+      [ "$status" -eq 0 ] && [ -n "$output" ] || { echo "no label $l:$k"; false; }
+    done
+  done
+}
+
+# E92_S13_T02: the citadel's tower labels, English and Swedish: the aria label and tooltip of one tower ("E92_S06: 20 of 26 done,
+# 1 failed"). %s is the story id, %d the done and total counts the payload states, then the failed count; an undecomposed story
+# says so. The fallback words in DependencyTree.jsx must be the English ones.
+S13_T02_KEYS="castle_tower castle_tower_failed castle_tower_undecomposed"
+
+@test "E92_S13_T02: the castle tower keys are listed once each, adjacent and in this order, in both languages, with their placeholders in the same order" {
+  run_lib '
+    for k in '"$S13_T02_KEYS"'; do
+      c=0; for x in $PROGRESS_LABEL_KEYS; do [ "$x" = "$k" ] && c=$((c+1)); done
+      [ "$c" -eq 1 ] || { echo "$k listed $c times"; exit 1; }
+      for l in en sv; do
+        out="$(progress_label "$k" "$l")" || { echo "missing $l:$k"; exit 1; }
+        [ -n "$out" ] || { echo "empty $l:$k"; exit 1; }
+      done
+      [ "$(progress_label "$k" en | grep -o "%[sd]" | tr -d "\n")" = "$(progress_label "$k" sv | grep -o "%[sd]" | tr -d "\n")" ] || { echo "placeholders differ: $k"; exit 1; }
+    done
+    case " $PROGRESS_LABEL_KEYS " in
+      *" '"$S13_T02_KEYS"' "*) ;;
+      *) echo "order: not adjacent and in this order"; exit 1 ;;
+    esac'
+  [ "$status" -eq 0 ]
+}
+
+@test "E92_S13_T02: the castle tower words are exact in English and Swedish" {
+  run_lib '
+    [ "$(progress_label castle_tower en)" = "%s: %d of %d done" ]
+    [ "$(progress_label castle_tower_failed en)" = "%s: %d of %d done, %d failed" ]
+    [ "$(progress_label castle_tower_undecomposed en)" = "%s: not broken down yet" ]
+    [ "$(progress_label castle_tower sv)" = "%s: %d av %d klara" ]
+    [ "$(progress_label castle_tower_failed sv)" = "%s: %d av %d klara, misslyckade: %d" ]
+    [ "$(progress_label castle_tower_undecomposed sv)" = "%s: inte nedbruten ännu" ]'
+  [ "$status" -eq 0 ]
+}
+
+@test "E92_S13_T02: the three keys reach the exporter once each, in English and in Swedish" {
+  run bash "$REPO/scripts/progress-labels-json.sh"
+  [ "$status" -eq 0 ]
+  echo "$output" | python3 -c '
+import json,re,sys
+raw=sys.stdin.read()
+keys=re.findall(r"\"([a-z_]+)\":\"", raw.split("\"labels\":",1)[1])
+assert len(keys)==len(set(keys)), "a key is printed twice"
+d=json.loads(raw)["labels"]
+for k in sys.argv[1].split():
+    assert k in d and d[k], k
+assert d["castle_tower"]=="%s: %d of %d done" and d["castle_tower_failed"]=="%s: %d of %d done, %d failed" and d["castle_tower_undecomposed"]=="%s: not broken down yet"' "$S13_T02_KEYS"
+  JENGA_PROGRESS_LANG=sv run bash "$REPO/scripts/progress-labels-json.sh"
+  [ "$status" -eq 0 ]
+  echo "$output" | python3 -c '
+import json,sys
+d=json.load(sys.stdin)["labels"]
+assert d["castle_tower"]=="%s: %d av %d klara" and d["castle_tower_failed"]=="%s: %d av %d klara, misslyckade: %d" and d["castle_tower_undecomposed"]=="%s: inte nedbruten ännu"'
+}
+
+@test "E92_S13_T02: the JSX fallback words of the castle tower labels match the English labels" {
+  JSX="$REPO/project/app/ui/src/components/progress/DependencyTree.jsx"
+  [ -f "$JSX" ] || skip "the dashboard sources are not part of a consumer install"
+  for k in $S13_T02_KEYS; do
+    run_lib "progress_label $k en"
+    grep -qF "  $k: '$output'," "$JSX" || { echo "fallback of $k does not match: $output"; false; }
+  done
+}
+
+# E92_S13_T07: the seasons tree's growth stage names and the aria label of its stage track, English and Swedish. The six stage
+# names are the labels of the stage table in treeLayout.js (GROWTH_STAGES); %s of the track label is the current stage's name. The
+# fallback words in DependencyTree.jsx must be the English ones. A branch's own aria label and tooltip reuse the castle_tower keys.
+S13_T07_KEYS="tree_stage_sprout tree_stage_seedling tree_stage_sapling tree_stage_young tree_stage_mature tree_stage_majestic tree_stage_track"
+
+@test "E92_S13_T07: the seasons tree stage keys are listed once each, adjacent and in this order, in both languages, with their placeholders in the same order" {
+  run_lib '
+    for k in '"$S13_T07_KEYS"'; do
+      c=0; for x in $PROGRESS_LABEL_KEYS; do [ "$x" = "$k" ] && c=$((c+1)); done
+      [ "$c" -eq 1 ] || { echo "$k listed $c times"; exit 1; }
+      for l in en sv; do
+        out="$(progress_label "$k" "$l")" || { echo "missing $l:$k"; exit 1; }
+        [ -n "$out" ] || { echo "empty $l:$k"; exit 1; }
+      done
+      [ "$(progress_label "$k" en | grep -o "%[sd]" | tr -d "\n")" = "$(progress_label "$k" sv | grep -o "%[sd]" | tr -d "\n")" ] || { echo "placeholders differ: $k"; exit 1; }
+    done
+    case " $PROGRESS_LABEL_KEYS " in
+      *" '"$S13_T07_KEYS"' "*) ;;
+      *) echo "order: not adjacent and in this order"; exit 1 ;;
+    esac'
+  [ "$status" -eq 0 ]
+}
+
+@test "E92_S13_T07: the six stage names and the track label are exact in English and Swedish" {
+  run_lib '
+    [ "$(progress_label tree_stage_sprout en)" = "Sprout" ]
+    [ "$(progress_label tree_stage_seedling en)" = "Seedling" ]
+    [ "$(progress_label tree_stage_sapling en)" = "Sapling" ]
+    [ "$(progress_label tree_stage_young en)" = "Young tree" ]
+    [ "$(progress_label tree_stage_mature en)" = "Mature tree" ]
+    [ "$(progress_label tree_stage_majestic en)" = "Majestic tree" ]
+    [ "$(progress_label tree_stage_track en)" = "Growth stage: %s" ]
+    [ "$(progress_label tree_stage_sprout sv)" = "Grodd" ]
+    [ "$(progress_label tree_stage_seedling sv)" = "Småplanta" ]
+    [ "$(progress_label tree_stage_sapling sv)" = "Ungplanta" ]
+    [ "$(progress_label tree_stage_young sv)" = "Ungt träd" ]
+    [ "$(progress_label tree_stage_mature sv)" = "Moget träd" ]
+    [ "$(progress_label tree_stage_majestic sv)" = "Majestätiskt träd" ]
+    [ "$(progress_label tree_stage_track sv)" = "Växtsteg: %s" ]'
+  [ "$status" -eq 0 ]
+}
+
+@test "E92_S13_T07: the seven keys reach the exporter once each, in English and in Swedish" {
+  run bash "$REPO/scripts/progress-labels-json.sh"
+  [ "$status" -eq 0 ]
+  echo "$output" | python3 -c '
+import json,re,sys
+raw=sys.stdin.read()
+keys=re.findall(r"\"([a-z_]+)\":\"", raw.split("\"labels\":",1)[1])
+assert len(keys)==len(set(keys)), "a key is printed twice"
+d=json.loads(raw)["labels"]
+for k in sys.argv[1].split():
+    assert k in d and d[k], k
+assert d["tree_stage_young"]=="Young tree" and d["tree_stage_majestic"]=="Majestic tree" and d["tree_stage_track"]=="Growth stage: %s"' "$S13_T07_KEYS"
+  JENGA_PROGRESS_LANG=sv run bash "$REPO/scripts/progress-labels-json.sh"
+  [ "$status" -eq 0 ]
+  echo "$output" | python3 -c '
+import json,sys
+d=json.load(sys.stdin)["labels"]
+assert d["tree_stage_young"]=="Ungt träd" and d["tree_stage_majestic"]=="Majestätiskt träd" and d["tree_stage_track"]=="Växtsteg: %s"'
+}
+
+@test "E92_S13_T07: the JSX fallback words of the stage labels match the English labels, and the stage table names the same keys" {
+  JSX="$REPO/project/app/ui/src/components/progress/DependencyTree.jsx"
+  LAYOUT="$REPO/project/app/ui/src/components/progress/treeLayout.js"
+  [ -f "$JSX" ] || skip "the dashboard sources are not part of a consumer install"
+  for k in $S13_T07_KEYS; do
+    run_lib "progress_label $k en"
+    grep -qF "  $k: '$output'," "$JSX" || { echo "fallback of $k does not match: $output"; false; }
+  done
+  for k in tree_stage_sprout tree_stage_seedling tree_stage_sapling tree_stage_young tree_stage_mature tree_stage_majestic; do
+    grep -qF "labelKey: '$k'" "$LAYOUT" || { echo "the stage table does not name $k"; false; }
+  done
 }

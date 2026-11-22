@@ -16,6 +16,24 @@
 
 set -euo pipefail
 
+# --help / -h: print usage on stdout and exit 0 before anything is parsed, read or written (E99_S01_T02).
+case "${1:-}" in
+  --help|-h)
+    cat <<'USAGE'
+update-task-frontmatter.sh - write or update one YAML key in task or story frontmatter
+
+Usage: update-task-frontmatter.sh <file-path> <key> <value>
+       update-task-frontmatter.sh --help | -h
+
+Replaces the key's value in place, or appends the key before the closing --- delimiter.
+Exit 0 on success, 1 on an argument error or a missing file. --help only prints this
+text and writes nothing.
+  Example: update-task-frontmatter.sh project/board/tasks/E32_S06_T01_my-task.md actual_files_changed 5
+USAGE
+    exit 0
+    ;;
+esac
+
 # ---------------------------------------------------------------------------
 # Argument validation
 # ---------------------------------------------------------------------------

@@ -24,6 +24,23 @@
 
 set -euo pipefail
 
+# --help / -h: print usage on stdout and exit 0 before anything is parsed, read or written (E99_S01_T02).
+case "${1:-}" in
+  --help|-h)
+    cat <<'USAGE'
+compute-scope-divergence.sh - compute scope_divergence_flag for a task
+
+Usage: compute-scope-divergence.sh <execution_scope> <actual_files_changed> <actual_lines_delta>
+       compute-scope-divergence.sh --help | -h
+
+Prints true or false on stdout and exits 0 (exit 1 on a wrong argument count).
+Read-only: reads project/configs/scope-thresholds.json, writes nothing.
+  Example: compute-scope-divergence.sh inline 2 35
+USAGE
+    exit 0
+    ;;
+esac
+
 # ---------------------------------------------------------------------------
 # Argument validation
 # ---------------------------------------------------------------------------

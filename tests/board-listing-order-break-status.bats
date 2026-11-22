@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S02_T06: skills/j-break/scripts/render-execution-status.sh orders the epic, story and task lines of its rapport by
 # NUMERIC board ID, not by ID text.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for the real Expo descriptor skills/j-connect/descriptors/expo.json
 # (E65_S06_T03). Pure data checks with jq, the validator and list-services.sh;

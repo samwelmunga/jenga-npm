@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Wrapper that puts the cross-renderer parity test of the bash (--legacy) and Node progress renderers (E92_S08_T08) under
 # `j.test` discovery.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # End-to-end get/set coverage for `jenga config` across all seven project/configs files (E68_S03_T01).
 #

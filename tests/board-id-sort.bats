@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S02_T01: the numeric board-ID ordering. scripts/lib/board_ids.py (board_id_sort_key) and
 # scripts/lib/board-ids.sh (board_id_sort) must both reproduce every "expected" list in

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for skills/j-breaking-change/scripts/write-record.sh (E91_S01_T01).
 #

@@ -1,11 +1,34 @@
 #!/usr/bin/env bash
 ################################################################################
 # manual-only.sh — the one definition of "which test files are manual-only"
-# (E77_S02_T01)
+# (E77_S02_T01; tier:manual primary since E95_S02_T04)
 #
 # A manual-only test file is excluded from every automated run (j.test, the
 # j.commit test gate, npm test) because it runs too long to be part of one. Every
 # runner asks THIS script; none keeps a copy of the list.
+#
+# ---------------------------------------------------------------------------
+# PRIMARY FORM: THE bats FILE TAG tier:manual (E95_S02_T04)
+#
+#   A `.bats` file is manual-only when EITHER
+#     1. it carries `tier:manual` in a `# bats file_tags=` comment line (the tier
+#        tags of E95_S02_T01, read as bats reads them: any such line in the file,
+#        comma-separated, whitespace around a tag trimmed), or
+#     2. it carries the legacy marker below (an ALIAS).
+#
+#   DECISION (story E95_S02): `tier:manual` is the primary form and the legacy
+#   marker is kept as a documented alias, not removed. Reasons: this script is
+#   called by E77_S06's in-flight scripts (long-running-report.sh,
+#   time-shipping-tests.sh, test-subject-paths.sh under skills/j-mirror-public/),
+#   whose disposition belongs to E95_S06; removing the marker would break or
+#   pre-empt that work. The marker also remains the one place a manual file can
+#   state WHY it is manual, since a tag carries no reason.
+#
+#   `reason` prints the legacy marker's reason when the file has one, otherwise
+#   the literal `tier:manual`. A file with the legacy marker but a different
+#   tier tag is an inconsistency; `scripts/test-tiers.sh check` reports it as
+#   `legacy-marker-without-tier-manual`. This script still treats such a file as
+#   manual-only (the safe direction: it is never run by accident).
 #
 # Usage:
 #   manual-only.sh list [--root <dir>]
@@ -14,7 +37,7 @@
 #   manual-only.sh --help
 #
 # ---------------------------------------------------------------------------
-# THE MARKER (normative)
+# THE LEGACY MARKER (normative; an alias of tier:manual)
 #
 #   A comment line within the FIRST 40 LINES of the file:
 #
@@ -44,20 +67,23 @@
 #
 #   list [--root <dir>]
 #       One `<root-relative path><TAB><reason>` line per manual-only `*.bats`
-#       file found under <root>/tests/ (recursively), in byte (LC_ALL=C) order.
+#       file (tagged `tier:manual` or carrying the legacy marker; <reason> as
+#       for `reason`) found under <root>/tests/ (recursively), in byte
+#       (LC_ALL=C) order.
 #       Empty output and exit 0 when there are none. <root> is --root, else the
 #       root resolved through scripts/resolve-root.sh. Dot-directories,
 #       node_modules, and directories named `fixtures` or `__fixtures__` are
 #       skipped, like discover-tests.sh (inert test data is not a suite). Symlinks
 #       are not followed. A path holding a tab is skipped with a warning on
 #       stderr, since it cannot be written as a TSV line. If any file carries an
-#       invalid tag, nothing is printed on stdout and the exit is 2.
+#       invalid legacy marker, nothing is printed on stdout and the exit is 2.
 #   check <file>
 #       Exit 0 if <file> is manual-only, 1 if it is not (including any file that
 #       is not `*.bats`). No output.
 #   reason <file>
-#       Print the reason and exit 0 if <file> is manual-only; exit 1 with no
-#       output if it is not.
+#       Print the reason and exit 0 if <file> is manual-only: the legacy
+#       marker's reason when present, else `tier:manual`. Exit 1 with no output
+#       if it is not.
 #
 # EXIT CODES
 #   0  ok / manual-only
@@ -66,7 +92,7 @@
 #      tag
 #
 # READS FILES ONLY. It executes no project code, no test runner and no package
-# manager: head, find, sort and the shell's own pattern matching.
+# manager: head, grep, find, sort and the shell's own pattern matching.
 ################################################################################
 
 set -u
@@ -102,9 +128,29 @@ resolve_helper() {
   return 1
 }
 
-# parse_tag <file>: sets TAG_REASON; returns 0 tagged, 1 untagged, 2 invalid tag.
+# A `# bats file_tags=` comment line holding the tag tier:manual, matched the way
+# bats (and scripts/test-tiers.sh) read file tags: comma-separated, trimmed.
+TIER_MANUAL_RE='^[[:space:]]*#[[:space:]]*bats[[:space:]]+file_tags=(.*,)?[[:space:]]*tier:manual[[:space:]]*(,.*)?$'
+
+# parse_tag <file>: sets TAG_REASON; returns 0 manual-only, 1 not, 2 invalid
+# legacy marker. The legacy marker is read first, because it carries the reason;
+# without one, a tier:manual tag makes the file manual-only with reason
+# `tier:manual`.
 TAG_REASON=""
 parse_tag() {
+  local rc
+  parse_marker "$1"; rc=$?
+  [ "$rc" -eq 1 ] || return "$rc"
+  if grep -Eq -- "$TIER_MANUAL_RE" "$1" 2>/dev/null; then
+    TAG_REASON="tier:manual"
+    return 0
+  fi
+  return 1
+}
+
+# parse_marker <file>: the legacy marker only. Sets TAG_REASON; returns 0
+# tagged, 1 untagged, 2 invalid (empty-reason) marker.
+parse_marker() {
   local line n=0 rest
   TAG_REASON=""
   while IFS= read -r line || [ -n "$line" ]; do

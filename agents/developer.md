@@ -249,9 +249,22 @@ This list is fixed and verbatim across both this file and `agents/tester.md` —
 
 ---
 
+### Pre-flight guard: no bypass without the user
+
+The pre-flight guard (`hooks/on_preflight_check.sh`) is a harness `PreToolUse` hook that fires on the tool call, before git runs. Git-level flags such as `--no-verify` and `-c core.hooksPath=...` do not reach it and do nothing against it. Bypassing it by any route (a nested script or alias that hides the command text, commit-creating commands it does not gate, deleting or editing the situation marker, the checklist registry or `settings.json`) requires the user's explicit authorization in chat; never do it on your own judgment, and never report a refused call as something to work around. When the guard refuses, satisfy the failed item or stop and ask. Evidence: `project/documentation/preflight-guard-bypass-routes.md`.
+
+---
+
 ## Tester Collaboration
 
 You do not run tests. Before calling the tester agent, **write an execution summary** to `project/documentation/summaries/<E##_S##_T##>-summary.md` using `$([ -f templates/EXECUTION_SUMMARY_TEMPLATE.md ] && echo templates/EXECUTION_SUMMARY_TEMPLATE.md || echo node_modules/@jenga-ai/agent/templates/EXECUTION_SUMMARY_TEMPLATE.md)`. Fill in all sections — what was implemented, files changed, commit SHAs, acceptance criteria coverage, and any concerns for the tester. This step is mandatory before every tester invocation.
+
+### Test runs: visible output, estimate first
+
+This holds whenever you run any test command at all (for example a targeted file a brief explicitly allows):
+
+1. **Never hide test output.** Do not pipe a test run (`bats`, `npm test`, `npm run test:*`, `scripts/run-tests.sh`, `j.test`) through `tail`, `head`, `grep` or any other filter that hides progress, and do not redirect it to a file you read only at the end. Let it stream.
+2. **Estimate first, ask above the threshold.** Before starting a run, get its estimate: `scripts/run-tests.sh --tier <list> --list` (or `--all --list`; the selection goes to stdout, the estimate to stderr) or `scripts/test-estimate.sh <files>`. If the estimate exceeds `ask_before_run_seconds` (`project/configs/test-config.json`, read with `skills/j-test/scripts/test-thresholds.sh get ask-before-run`), ask the user before starting it, stating the selection, the file count and the estimate. Untimed files count as unknown, not as zero: when the selection has untimed files, say so in the question.
 
 ### Tester Concurrency Cap (acquire before invoking, release on every exit)
 

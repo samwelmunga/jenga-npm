@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: none maintainer self-test of this repo board graph via board-index with fixed count thresholds, fails in a consumer by design
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

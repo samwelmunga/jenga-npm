@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the checklist management surface (E67_S10_T05): skills/j-checklist/scripts/checklist-entry.sh
 # (add, edit, remove, copy, move), checklist-print.sh (the renderer) and, as extra scope, checklist-instance.sh

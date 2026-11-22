@@ -1,0 +1,22 @@
+{
+  "config_version": 1,
+  "date": "2026-11-19",
+  "unit": "cost-equivalent unit: the cost of one fresh input token; ratios are relative to it, not currency amounts",
+  "models": {
+    "claude-opus-5":     {"input": 1, "cache_write_5m": 1.25, "cache_write_1h": 2, "cache_read": 0.1, "output": 5},
+    "claude-opus-5-5":   {"input": 1, "cache_write_5m": 1.25, "cache_write_1h": 2, "cache_read": 0.1, "output": 5},
+    "claude-sonnet-5-5": {"input": 1, "cache_write_5m": 1.25, "cache_write_1h": 2, "cache_read": 0.1, "output": 5},
+    "claude-haiku-5-5":  {"input": 1, "cache_write_5m": 1.25, "cache_write_1h": 2, "cache_read": 0.1, "output": 5}
+  },
+  "notes": {
+    "_about": "Per-model price ratios for the cost-equivalent unit (E90_S01). DATA, never code: read only by scripts/token-price-ratios.sh. A model with no entry here is unpriced and is never given a default, a family or a nearby model's ratios. Each ratio has at most two decimal places. Edit by hand; bump config_version and date on every change.",
+    "initial_values": "input 1, cache_write_5m 1.25, cache_read 0.1 and output 5 are the initial values decided in story E90_S01 (2026-11-07). The same set is entered for each listed model because the story states one set; add a per-model difference here when one is verified.",
+    "cache_write_1h": {
+      "ratio": 2,
+      "source": "Anthropic prompt caching pricing documentation (1-hour cache write priced at 2x the base input token price)",
+      "retrieved": "2026-11-19",
+      "verification": "No URL was verified by the developer for this entry; the source is named by document title only. Re-check against the current Anthropic pricing page before relying on it."
+    },
+    "model_id_matching": "Exact id first; then, if the id ends in a hyphen plus 8 digits (a date suffix such as -20261119), that suffix is removed and the rest is looked up exactly. No other prefix, family or fuzzy rule exists."
+  }
+}

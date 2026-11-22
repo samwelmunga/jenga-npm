@@ -110,7 +110,7 @@ run can never silently relocate directories or edit `.gitignore`.
 > `.agents/`/`.claude/` convention), was built and then withdrawn before release —
 > testing found it left board resolution and session-end hooks writing to two
 > different trees. It is not offered here. See
-> `skills/j-distribute/CONFIG_SCHEMA.md` for the root-cause note and the tracked
+> `skills/j-init/CONFIG_SCHEMA.md` for the root-cause note and the tracked
 > follow-up to reintroduce it once fixed.
 
 Carry the chosen value into step 4. Do not apply it yourself — the script owns all
@@ -122,10 +122,10 @@ This is a **distinct** question from step 2 — `project_files_visibility` (step
 covers only the `project/` working tree (the scrum board, `todo.md`, `queue/`,
 `rapports/`, `logs/`). It has no effect on `.claude/`/`.agents/`, the distributed
 framework scaffold (skill and agent definitions), which is a separate tree with a
-separate lifecycle — it gets overwritten wholesale by every `/distribute` run or npm
-upgrade, unlike `project/`. Kept as its own flag (`scaffold_visibility`) rather than
+separate lifecycle — it gets overwritten wholesale by every npm postinstall or `npx jenga sync`,
+unlike `project/`. Kept as its own flag (`scaffold_visibility`) rather than
 folded into `project_files_visibility`'s enum; see
-`skills/j-distribute/CONFIG_SCHEMA.md`'s "Scaffold visibility" section for the full
+`skills/j-init/CONFIG_SCHEMA.md`'s "Scaffold visibility" section for the full
 rationale.
 
 Ask the user this question, verbatim, before running any script:
@@ -203,13 +203,13 @@ Both visibility modes are validated before any scaffolding happens, so an invali
 value fails fast and leaves nothing behind. Both are applied before the commit, so
 any resulting `.gitignore` entries are captured in the initial commit — this is what
 lets `scaffold_visibility: ignored` keep `.claude/`/`.agents/` out of the commit even
-though they may already exist on disk (from npm postinstall or a prior `/distribute`
+though they may already exist on disk (from npm postinstall or a prior `npx jenga sync`
 run) by the time `/init` runs `git add -A`.
 
 If the script fails, check that you are in the project root and that git and `jq`
 are available.
 
-See `skills/j-distribute/CONFIG_SCHEMA.md` for the full `project_files_visibility` and
+See `skills/j-init/CONFIG_SCHEMA.md` for the full `project_files_visibility` and
 `scaffold_visibility` field reference.
 
 ### 5. Prompt next step

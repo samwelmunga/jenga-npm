@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # Regression coverage for mcp/help's directory-scan logic against a twin-only skills
 # tree (E50_S12_T06).

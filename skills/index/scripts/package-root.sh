@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: none sourced package-root resolver, defines jenga_package_root and runs nothing when executed
 # skills/index/scripts/package-root.sh
 #
 # Shared package-root resolver for skill scripts. Source it, then call:

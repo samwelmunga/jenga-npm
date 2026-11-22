@@ -247,11 +247,14 @@ final summary gets `test gate     : BYPASSED — <reason>`, so a skipped gate is
 affected: the public repo's CI gate still runs the real `npm test` on the staged checkout regardless of either
 flag.
 
-**Which skills are never public.** Five are blocklisted in *both* their bare and `j-` form, so they
-ship in neither and no naming change can make them available: `convert`, `mirror-public`,
-`self-sync`, `strategy`, `train`. Plus `mcp/router/`. A test touching any of these must take option 1
-or 2. The other 34 blocklisted skills ship under their `j-<name>` twin and are publicly available —
-referencing *those* by twin name is fine.
+**Which skills are never public.** Seven are blocklisted in *both* their bare and `j-` form, so they
+ship in neither and no naming change can make them available: `convert`, `dev-done`, `distribute`,
+`mirror-public`, `self-sync`, `strategy`, `train`. Plus `mcp/router/`. A test touching any of these must
+take option 1 or 2. The other 32 blocklisted skills ship under their `j-<name>` twin and are publicly
+available — referencing *those* by twin name is fine. (Updated 2026-11-21, `E99_S01_T13`: `j-distribute` joined
+the set under the user's `E99_S01_T11` decision; `dev-done` was already in the set, as the "six names"
+sentence below records, but this list had not been brought up to date. The set is read from `.publicignore`,
+so `scripts/never-public-refs.sh` needed no edit.)
 
 **Audit command.** For each `tests/*.bats` and `tests/helpers/*` that
 `scripts/check-publicignore-match.sh` classifies `PUBLIC`, grep for references to the five

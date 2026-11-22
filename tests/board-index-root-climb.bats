@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Regression coverage for E46_S02_T02: board_index.py's ROOT_DIR used to be
 # a fixed-depth climb (Path(__file__).resolve().parents[3]), computed

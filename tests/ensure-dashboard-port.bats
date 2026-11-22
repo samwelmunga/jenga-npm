@@ -1,8 +1,11 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
-# E47_S11_T02: j.init and j.distribute call scripts/dashboard-port.sh ensure (through
-# scripts/ensure-dashboard-port.sh); `jenga config` gets/sets dashboard-config.dashboard_port.
+# E47_S11_T02: j.init calls scripts/dashboard-port.sh ensure (through scripts/ensure-dashboard-port.sh);
+# `jenga config` gets/sets dashboard-config.dashboard_port.
 # Cases: missing, valid, invalid stored value; consumer-install layout; set accept/reject.
+# E99_S01_T13: the call-site cases of the maintainer-only distribute skill moved to a private sibling test file
+# (blocklisted in .publicignore with its subject); this file ships.
 #
 # Isolation: every case works in $BATS_TEST_TMPDIR; this repository's own project/ is never written.
 
@@ -12,7 +15,6 @@ load helpers/assertions
 REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd -P)"
 WRAPPER="$REPO_ROOT/scripts/ensure-dashboard-port.sh"
 INIT="$REPO_ROOT/skills/j-init/scripts/init.sh"
-DIST="$REPO_ROOT/skills/j-distribute/scripts/distribute-changes.sh"
 JENGA="$REPO_ROOT/bin/jenga.js"
 
 setup() {
@@ -23,18 +25,6 @@ setup() {
   mkdir -p "$T/project/configs"
   cp "$REPO_ROOT/project/configs/workflow.json" "$T/project/configs/"
   FILE="$T/project/configs/dashboard-config.json"
-}
-
-# fixture monorepo for distribute: a git repo with package.json, a minimal include list and the scripts it needs
-make_monorepo() {
-  M="$BATS_TEST_TMPDIR/mono"
-  mkdir -p "$M/scripts" "$M/skills/j-distribute/scripts" "$M/project/configs"
-  git -C "$M" init -q
-  echo '{"version":"1.2.3"}' > "$M/package.json"
-  echo '{"distribute":{"include":["scripts"]}}' > "$M/distribute.config.json"
-  cp "$REPO_ROOT"/scripts/{ensure-dashboard-port.sh,dashboard-port.sh,resolve-root.sh,with-lock.sh,find-free-port.cjs} "$M/scripts/"
-  cp "$DIST" "$M/skills/j-distribute/scripts/"
-  echo '{"dashboard_port": 51111}' > "$M/project/configs/dashboard-config.json"
 }
 
 # --- wrapper ----------------------------------------------------------------------------------------------------
@@ -141,59 +131,6 @@ make_monorepo() {
   # init.sh re-scaffolds unconditionally (SKILL.md hard-stops on already-scaffolded), so the keep/repair
   # decision is exercised through the wrapper init.sh calls; here we pin that init.sh calls exactly that wrapper.
   run grep -n 'ensure-dashboard-port.sh' "$INIT"
-  [ "$status" -eq 0 ]
-}
-
-# --- j.distribute call site -------------------------------------------------------------------------------------
-
-@test "distribute: target missing the port gets a generated one, not this repository's value" {
-  make_monorepo
-  run bash "$M/skills/j-distribute/scripts/distribute-changes.sh" "$T"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"dashboard-port: generated "* ]]
-  p="$(jq -r .dashboard_port "$FILE")"
-  [ "$p" -ge 50000 ] && [ "$p" -le 64999 ]
-  [ "$p" != "51111" ] || skip "random port collided with the fixture value"
-}
-
-@test "distribute: a valid target port is never overwritten" {
-  make_monorepo
-  echo '{"dashboard_port": 62222}' > "$FILE"
-  run bash "$M/skills/j-distribute/scripts/distribute-changes.sh" "$T"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"dashboard-port: kept 62222"* ]]
-  [ "$(jq -r .dashboard_port "$FILE")" = "62222" ]
-}
-
-@test "distribute: an invalid target port is repaired" {
-  make_monorepo
-  echo '{"dashboard_port": 22}' > "$FILE"
-  run bash "$M/skills/j-distribute/scripts/distribute-changes.sh" "$T"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"dashboard-port: repaired "* ]]
-  p="$(jq -r .dashboard_port "$FILE")"
-  [ "$p" -ge 50000 ] && [ "$p" -le 64999 ]
-}
-
-@test "distribute: --dry-run writes no port" {
-  make_monorepo
-  run bash "$M/skills/j-distribute/scripts/distribute-changes.sh" "$T" --dry-run
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"dashboard-port: would generate"* ]]
-  [ ! -e "$FILE" ]
-}
-
-@test "distribute: a target that is not a Jenga project is skipped and still succeeds" {
-  make_monorepo
-  mkdir "$BATS_TEST_TMPDIR/plain"
-  run bash "$M/skills/j-distribute/scripts/distribute-changes.sh" "$BATS_TEST_TMPDIR/plain"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"dashboard-port: skipped"* ]]
-  [ ! -e "$BATS_TEST_TMPDIR/plain/project" ]
-}
-
-@test "distribute: project/configs is not in the shipped include list, so no repo value can be copied" {
-  run jq -e '.distribute.include | index("project") == null' "$REPO_ROOT/distribute.config.json"
   [ "$status" -eq 0 ]
 }
 

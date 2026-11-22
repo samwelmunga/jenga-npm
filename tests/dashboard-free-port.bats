@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E47_S08_T03: the dashboard binds a verified-free port, an explicit busy port fails loudly, and
 # `dashboard open` finds the port actually chosen.

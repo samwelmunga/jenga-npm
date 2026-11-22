@@ -409,7 +409,7 @@ All five are advisory and non-blocking — they record evidence for later review
 
 ### Usage fields (per-task token accounting)
 
-Eight further task fields record how many tokens the task consumed. Like the runtime-written fields above they are **never authored by hand**: they are written by `/close-story` and by `scripts/task-usage.sh --persist`, and these eight are task-only (`scripts/validate-board.sh` allow-lists them in a `USAGE_KEYS` group for tasks, not for epics or stories). Stories carry their own, separate set, defined under "Usage fields on stories" below. All token values are non-negative integers written as plain decimal digits, with no separators.
+Nine further task fields record how many tokens the task consumed. Like the runtime-written fields above they are **never authored by hand**: they are written by `/close-story` and by `scripts/task-usage.sh --persist`, and these nine are task-only (`scripts/validate-board.sh` allow-lists them in a `USAGE_KEYS` group for tasks, not for epics or stories). Stories carry their own, separate set, defined under "Usage fields on stories" below. All token values are non-negative integers written as plain decimal digits, with no separators.
 
 | Field | Type | Written by | Meaning |
 |---|---|---|---|
@@ -421,6 +421,7 @@ Eight further task fields record how many tokens the task consumed. Like the run
 | `usage_transcripts` | integer | same | Count of distinct transcripts that were summed (rework transcripts for the same task each count once) |
 | `usage_measured_on` | ISO 8601 date, e.g. `2026-10-25` | same | Date of the latest write of these fields |
 | `usage_possibly_incomplete` | the literal `true` only | `task-usage.sh --persist` | Set when the transcripts that were summed looked partly pruned, so the numbers are a **lower bound**. Absent means no known gap; it is never written as `false` |
+| `usage_cost_units` | non-negative whole number | `task-usage.sh --persist`, `/close-story` | The task's cost-equivalent units: a labelled derived view computed from the four token counts and the dated per-model ratios, rounded once to whole units. Absent for a task with an unpriced transcript |
 
 Rules:
 
@@ -428,13 +429,13 @@ Rules:
 - **Advisory.** The fields record evidence for budgeting and never change a task's Passed/Failed outcome.
 - **Thinking tokens** are counted only to the extent they appear in `output_tokens`. Verified 2026-10-25 against 16,239 real `message.usage` objects from Claude Code subagent transcripts that carried `output_tokens_details.thinking_tokens`: in every one, `thinking_tokens <= output_tokens`, so thinking is a **subset of** `output_tokens` and is already inside `usage_output_tokens`. It is not a separate field and must not be added on top. Thinking tokens are not broken out into a field of their own: many usage lines (more than half in a 400-transcript sample) carry no `output_tokens_details` at all, so no reliable separate thinking figure exists.
 - **1h/5m cache split.** In the same sample, `cache_creation.ephemeral_1h_input_tokens + cache_creation.ephemeral_5m_input_tokens` equalled `cache_creation_input_tokens` on every line (36,711 of 36,711), which is why summing `cache_creation_input_tokens` alone loses nothing.
-- **No cost or price field exists.** The fields are token counts only; no pricing table is kept and no dollar figure is derived or stored.
+- **The cost-equivalent unit is a labelled derived view, not a currency amount.** `usage_cost_units` sits beside the four raw token counts and replaces none of them. No dollar (or other currency) figure is stored; the ratios live in the dated per-model config `project/configs/token-price-ratios.json`. The value is a non-negative whole number, digits only, and `scripts/validate-board.sh` rejects a negative, decimal or non-numeric value. Formula and rounding: `project/documentation/task-usage.md`, "The cost-equivalent unit".
 
 > `task_changed_files` is **not** a frontmatter field despite the similar name. It lives in the bundle manifest at `project/queue/bundle-<E##_S##>.json`, keyed by task ID.
 
 ### Usage fields on stories (per-story token accounting)
 
-Thirteen story fields record the tokens a story consumed, as two separate parts and their sum. Like the task fields above they are **runtime-written and never authored by hand**: they are written by `/close-story` and by `scripts/task-usage.sh --persist`. They are **story-only**: `scripts/validate-board.sh` allow-lists them in a `STORY_USAGE_KEYS` group for stories, and **epics do not carry them** (nor do tasks, which have their own `usage_*` set above). Token values are non-negative integers written as plain decimal digits, with no separators.
+Sixteen story fields record the tokens a story consumed, as two separate parts and their sum. Like the task fields above they are **runtime-written and never authored by hand**: they are written by `/close-story` and by `scripts/task-usage.sh --persist`. They are **story-only**: `scripts/validate-board.sh` allow-lists them in a `STORY_USAGE_KEYS` group for stories, and **epics do not carry them** (nor do tasks, which have their own `usage_*` set above). Token values are non-negative integers written as plain decimal digits, with no separators.
 
 | Field | Type | Written by | Meaning |
 |---|---|---|---|
@@ -451,6 +452,9 @@ Thirteen story fields record the tokens a story consumed, as two separate parts 
 | `usage_total_tokens` | integer | same | `usage_tasks_total_tokens` plus `usage_overhead_total_tokens`, nothing else |
 | `usage_measured_on` | ISO 8601 date, e.g. `2026-10-25` | same | Date of the latest write of these fields |
 | `usage_possibly_incomplete` | the literal `true` only | same | Set on the story when **any of its tasks** carries `usage_possibly_incomplete: true`, so the story's numbers are a **lower bound**. Absent means no known gap; it is never written as `false` |
+| `usage_tasks_cost_units` | non-negative whole number | same | Sum of the story's tasks' cost-equivalent units (the task part). Derived view, not a currency amount |
+| `usage_overhead_cost_units` | non-negative whole number | same | The story's allocated share of overhead, in cost-equivalent units |
+| `usage_cost_units` | non-negative whole number | same | `usage_tasks_cost_units` plus `usage_overhead_cost_units`, nothing else |
 
 Rules:
 
@@ -458,7 +462,7 @@ Rules:
 - **The two parts are separate.** The task part (`usage_tasks_*`) and the allocated overhead part (`usage_overhead_*`) are kept as distinct numbers, so neither is hidden inside the other; `usage_total_tokens` is only their sum.
 - **The allocation rule is not defined here.** How overhead is split across stories is owned by `project/documentation/task-usage.md`; this schema records only the resulting numbers.
 - **Advisory.** The fields record evidence for budgeting and never change a story's status or a task's Passed/Failed outcome.
-- **No cost or price field exists**, as for tasks: token counts only.
+- **The cost-equivalent fields are a labelled derived view, not a currency amount**, as for tasks. No dollar figure is stored; the ratios live in the dated per-model config. Like the token fields they follow the absence rule above (absent means not measured, an explicit `0` is a measured zero), a partial story (one with an unpriced task) carries none of the three, and the validator rejects a negative, decimal or non-numeric value.
 
 ---
 

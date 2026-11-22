@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # Documentation-listing coverage for the j.workflow skill (E80_S05_T06).
 #

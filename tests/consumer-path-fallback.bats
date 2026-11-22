@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Regression coverage for the scripts/ and templates/ node_modules-fallback
 # idiom (E46_S05).

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # /v1/progress and /v1/pipeline in the offline dashboard snapshot (E92_S03_T02, extended by E92_S04_T03).
 #

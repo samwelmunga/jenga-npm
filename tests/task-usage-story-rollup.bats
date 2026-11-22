@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E76_S03_T05: j.close-story rolls a story's task totals plus its allocated overhead up into the story record,
 # through skills/j-close-story/scripts/write-story-usage.sh, which takes the numbers from
@@ -28,6 +29,13 @@ VALIDATE_STORY="$REPO_ROOT/scripts/validate-story-format.sh"
 
 setup() {
   unset JENGA_PROJECT_ROOT JENGA_PROJECTS_DIR JENGA_BOARD_STORIES_DIR
+  # E90_S02_T04: the price-ratio config is a direct dependency (exit 10 when missing). The raw-count fixtures carry model
+  # "unit", priced input 1, cache write 1, output 1, cache read 0: one cost unit per input, output and cache-write token,
+  # so the weights are the old input + output + cache_write ones and the raw numbers asserted below are unchanged.
+  cat > "$BATS_TEST_TMPDIR/unit-ratios.json" <<'JSON'
+{"config_version":1,"date":"2026-11-19","models":{"unit":{"input":1,"cache_write_5m":1,"cache_write_1h":1,"cache_read":0,"output":1}}}
+JSON
+  export JENGA_PRICE_RATIOS_FILE="$BATS_TEST_TMPDIR/unit-ratios.json"
   export TASK_USAGE_TODAY=2026-11-06
   export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
   mkdir -p "$BATS_TEST_TMPDIR/tmp"
@@ -88,7 +96,7 @@ mk_transcript() {
   printf '{"agentType":"developer","name":"%s","description":"fixture"}\n' "$1" >"$d/agent-$1.meta.json"
   {
     printf '{"type":"user","isSidechain":true,"message":{"role":"user","content":"hello"}}\n'
-    printf '{"type":"assistant","requestId":"r-%s","message":{"role":"assistant","usage":{"input_tokens":%s,"output_tokens":%s,"cache_creation_input_tokens":%s,"cache_read_input_tokens":%s}}}\n' \
+    printf '{"type":"assistant","requestId":"r-%s","message":{"role":"assistant","model":"unit","usage":{"input_tokens":%s,"output_tokens":%s,"cache_creation_input_tokens":%s,"cache_read_input_tokens":%s}}}\n' \
       "$1" "$2" "$3" "$4" "$5"
   } >"$d/agent-$1.jsonl"
 }
@@ -97,7 +105,7 @@ mk_transcript() {
 mk_session() {
   {
     printf '{"type":"user","message":{"role":"user","content":"hello"}}\n'
-    printf '{"type":"assistant","requestId":"s-%s","message":{"role":"assistant","usage":{"input_tokens":%s,"output_tokens":%s,"cache_creation_input_tokens":%s,"cache_read_input_tokens":%s}}}\n' \
+    printf '{"type":"assistant","requestId":"s-%s","message":{"role":"assistant","model":"unit","usage":{"input_tokens":%s,"output_tokens":%s,"cache_creation_input_tokens":%s,"cache_read_input_tokens":%s}}}\n' \
       "$1" "$2" "$3" "$4" "$5"
   } >"$PROJECTS/$SLUG/$1.jsonl"
 }
@@ -143,7 +151,8 @@ usage_lines() { grep -c '^usage_' "$ROOT/project/board/stories/E99_S01_fixture.m
   [ "$(sfm usage_tasks_total_tokens)" = 3333 ]
   [ "$(sfm usage_overhead_total_tokens)" = 530 ]
   [ "$(sfm usage_total_tokens)" = 3863 ]
-  [ "$(usage_lines)" -eq 12 ]
+  # 12 raw lines + the 3 derived cost-unit lines the report always carries now (E90_S02_T04)
+  [ "$(usage_lines)" -eq 15 ]
 }
 
 @test "the story total equals the task part plus the overhead part" {
@@ -487,4 +496,153 @@ EOF
   grep -q 'persist-task-usage.sh' "$SKILL_MD"
   grep -q 'extract-task-diff-stats.sh' "$SKILL_MD"
   grep -q 'compute-scope-divergence.sh' "$SKILL_MD"
+}
+
+# ---------------------------------------------------------------------------------------------------------------
+# E90_S01_T07: the derived cost-equivalent unit of the story (usage_tasks_cost_units, usage_overhead_cost_units,
+# usage_cost_units), with its own price-ratio config so the numbers do not depend on the shipped ratios
+# ---------------------------------------------------------------------------------------------------------------
+
+# cost_ratios: m-a priced (input 1, 5m cache write 1.25, 1h 2, cache read 0.1, output 5); any other model is unpriced
+cost_ratios() {
+  cat >"$BATS_TEST_TMPDIR/ratios.json" <<'JSON'
+{"config_version":1,"date":"2026-11-19","models":{
+ "m-a":{"input":1,"cache_write_5m":1.25,"cache_write_1h":2,"cache_read":0.1,"output":5}}}
+JSON
+  export JENGA_PRICE_RATIOS_FILE="$BATS_TEST_TMPDIR/ratios.json"
+}
+
+# mk_cost_transcript <task-id> <model> <input> <output> <cache_write(5m)> <cache_read>: a task transcript with a model
+mk_cost_transcript() {
+  local d="$PROJECTS/$SLUG/sess-1/subagents"
+  mkdir -p "$d"
+  printf '{"agentType":"developer","name":"%s","description":"fixture"}\n' "$1" >"$d/agent-$1.meta.json"
+  {
+    printf '{"type":"user","isSidechain":true,"message":{"role":"user","content":"hello"}}\n'
+    printf '{"type":"assistant","requestId":"r-%s","message":{"role":"assistant","model":"%s","usage":{"input_tokens":%s,"output_tokens":%s,"cache_creation_input_tokens":%s,"cache_read_input_tokens":%s,"cache_creation":{"ephemeral_5m_input_tokens":%s,"ephemeral_1h_input_tokens":0}}}}\n' \
+      "$1" "$2" "$3" "$4" "$5" "$6" "$5"
+  } >"$d/agent-$1.jsonl"
+}
+
+# the orchestrator session with a model: 3/7/20/500 on m-a
+mk_cost_session() {
+  {
+    printf '{"type":"user","message":{"role":"user","content":"hello"}}\n'
+    printf '{"type":"assistant","requestId":"s-sess-1","message":{"role":"assistant","model":"m-a","usage":{"input_tokens":3,"output_tokens":7,"cache_creation_input_tokens":20,"cache_read_input_tokens":500,"cache_creation":{"ephemeral_5m_input_tokens":20,"ephemeral_1h_input_tokens":0}}}}\n'
+  } >"$PROJECTS/$SLUG/sess-1.jsonl"
+}
+
+# T01 1/10/100/1000 on m-a = 1 + 50 + 125 + 100 = 276; T02 2/20/200/2000 on m-a = 2 + 100 + 250 + 200 = 552
+# => task part 828; the session 3/7/20/500 on m-a = 3 + 35 + 25 + 50 = 113 is all allocated to the one story => total 941
+mk_priced() {
+  mk_cost_transcript E99_S01_T01 m-a 1 10 100 1000
+  mk_cost_transcript E99_S01_T02 m-a 2 20 200 2000
+  mk_cost_session
+}
+
+@test "cost units: the story file carries the task part, the overhead part and the total of task-usage.sh --stories" {
+  cost_ratios
+  mk_root "$BATS_TEST_TMPDIR/proj" linked
+  mk_priced
+  cd "$ROOT"
+  bash scripts/task-usage.sh --report --stories E99_S01 >"$BATS_TEST_TMPDIR/report.json"
+
+  run --separate-stderr bash "$HELPER" E99_S01
+  [ "$status" -eq 0 ]
+  [ "$(sfm usage_tasks_cost_units)" = "$(jq -r '.stories.E99_S01.tasks.cost_units' "$BATS_TEST_TMPDIR/report.json")" ]
+  [ "$(sfm usage_overhead_cost_units)" = "$(jq -r '.stories.E99_S01.allocated_overhead.cost_units' "$BATS_TEST_TMPDIR/report.json")" ]
+  [ "$(sfm usage_cost_units)" = "$(jq -r '.stories.E99_S01.total.cost_units' "$BATS_TEST_TMPDIR/report.json")" ]
+  [ "$(sfm usage_tasks_cost_units)" = 828 ]
+  [ "$(sfm usage_overhead_cost_units)" = 113 ]
+  [ "$(sfm usage_cost_units)" = 941 ]
+  [ "$(( $(sfm usage_tasks_cost_units) + $(sfm usage_overhead_cost_units) ))" -eq "$(sfm usage_cost_units)" ]
+  # the raw fields are written exactly as before, beside the three new ones
+  [ "$(sfm usage_total_tokens)" = 3863 ]
+  [ "$(usage_lines)" -eq 15 ]
+}
+
+@test "cost units: the report prints the derived number next to the raw counts, labelled as derived" {
+  cost_ratios
+  mk_root "$BATS_TEST_TMPDIR/proj" linked
+  mk_priced
+  cd "$ROOT"
+  run --separate-stderr bash "$HELPER" E99_S01
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"story:    total=3863 tokens (tasks 3333 + overhead 530)"* ]]
+  [[ "$output" == *"cost units (derived cost-equivalent unit, not a currency amount): total=941 (tasks 828 + overhead 113)"* ]]
+}
+
+@test "cost units: the story file with the cost fields passes validate-board.sh and validate-story-format.sh" {
+  cost_ratios
+  mk_root "$BATS_TEST_TMPDIR/proj" linked
+  mk_priced
+  cd "$ROOT"
+  run bash "$HELPER" E99_S01
+  [ "$status" -eq 0 ]
+  [ -n "$(sfm usage_cost_units)" ]
+  run bash "$VALIDATE" "$ROOT/project/board/stories/E99_S01_fixture.md"
+  [ "$status" -eq 0 ]
+  run bash "$VALIDATE_STORY" "$ROOT/project/board/stories/E99_S01_fixture.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "cost units: a story with an unpriced task gets none of the three fields and the report says not priced, with the raw fields written" {
+  cost_ratios
+  mk_root "$BATS_TEST_TMPDIR/proj" linked
+  mk_cost_transcript E99_S01_T01 m-a 1 10 100 1000
+  mk_cost_transcript E99_S01_T02 m-unknown 2 20 200 2000
+  mk_cost_session
+  cd "$ROOT"
+  run --separate-stderr bash "$HELPER" E99_S01
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cost units (derived cost-equivalent unit): not priced: "* ]]
+  [[ "$output" == *"m-unknown"* ]]
+  [ -z "$(sfm usage_tasks_cost_units)" ]
+  [ -z "$(sfm usage_overhead_cost_units)" ]
+  [ -z "$(sfm usage_cost_units)" ]
+  [ "$(sfm usage_tasks_total_tokens)" = 3333 ]
+  [ "$(sfm usage_total_tokens)" = 3863 ]
+  [ "$(usage_lines)" -eq 12 ]
+}
+
+@test "cost units: a report whose cost total is not task part plus overhead part writes nothing" {
+  mk_root "$BATS_TEST_TMPDIR/proj" none
+  mkdir -p "$ROOT/scripts"
+  cat >"$ROOT/scripts/task-usage.sh" <<'EOF'
+#!/usr/bin/env bash
+cat <<'JSON'
+{"schema_version":1,"tasks":{},"overhead":[],"unmapped":[],"warnings":[],"unallocated_overhead":[],
+ "stories":{"E99_S01":{"epic_id":"E99","measured":true,"weight":1,"board_tasks":null,"measured_tasks":[],"unmeasured_tasks":null,
+  "tasks":{"input":1,"output":1,"cache_write":1,"cache_read":1,"total_tokens":4,"cost_units":10},
+  "allocated_overhead":{"input":1,"output":1,"cache_write":1,"cache_read":1,"total_tokens":4,"cost_units":5},
+  "total":{"input":2,"output":2,"cache_write":2,"cache_read":2,"total_tokens":8,"cost_units":16}}}}
+JSON
+EOF
+  cd "$ROOT"
+  run bash "$HELPER" E99_S01
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"not measured: the report's cost-unit total (16) is not the task part (10) plus the overhead part (5); nothing written"* ]]
+  [ "$(usage_lines)" -eq 0 ]
+}
+
+@test "price-ratio config absent: the helper reports not measured, names the dependency and writes nothing (E90_S02_T04)" {
+  export JENGA_PRICE_RATIOS_FILE="$BATS_TEST_TMPDIR/no-such-price-ratios.json"
+  mk_root "$BATS_TEST_TMPDIR/proj" linked
+  mk_standard
+  cd "$ROOT"
+  run --separate-stderr bash "$HELPER" E99_S01
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"not measured: price-ratio dependency missing, nothing written"* ]]
+  [ "$(usage_lines)" -eq 0 ]
+}
+
+@test "cost units: SKILL.md Step 4 and Step 5 describe the three fields and the report line" {
+  step4="$(sed -n '/^### Step 4/,/^### Step 5/p' "$SKILL_MD")"
+  [[ "$step4" == *'usage_tasks_cost_units'* ]]
+  [[ "$step4" == *'usage_overhead_cost_units'* ]]
+  [[ "$step4" == *'usage_cost_units'* ]]
+  [[ "$step4" == *'not priced: <reason>'* ]]
+  step5="$(sed -n '/^### Step 5/,/^## Scripts Reference/p' "$SKILL_MD")"
+  [[ "$step5" == *'derived cost-equivalent unit'* ]]
+  [[ "$step5" == *'not priced: <reason>'* ]]
 }

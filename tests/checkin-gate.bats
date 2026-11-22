@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the automatic check-in gate (E44_S07_T03).
 #
@@ -410,10 +411,15 @@ EOF
 
 @test "this feature registers no hook wiring of its own" {
   # The PreToolUse block registers on_preflight_check.sh generically: it reads the marker and checks
-  # whatever phase it finds. Adding a registry item changes no wiring, and the six files that carry
-  # that block must not mention this feature.
-  local f
-  for f in "$REPO_ROOT/settings.json" "$REPO_ROOT"/templates/permission-levels/level-*.json; do
+  # whatever phase it finds. Adding a registry item changes no wiring, and the root settings.json that
+  # carries that block must not mention this feature. (E100_S04_T05: the templates no longer carry hooks.)
+  local f="$REPO_ROOT/settings.json"
+  [ -f "$f" ] || skip "settings.json is not in this tree"
+  if grep -q "checkin" "$f"; then
+    echo "$f mentions checkin; this feature must add no hook wiring" >&2
+    return 1
+  fi
+  for f in "$REPO_ROOT"/hooks/*.fragment.json; do
     [ -f "$f" ] || continue
     if grep -q "checkin" "$f"; then
       echo "$f mentions checkin; this feature must add no hook wiring" >&2

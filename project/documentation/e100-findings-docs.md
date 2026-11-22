@@ -1,0 +1,25 @@
+# E100 findings verified against official Claude Code docs
+
+Task: E100_S01_T01. Retrieved 2026-11-19 with Claude Code 2.1.236 installed locally. Pages were fetched directly
+(not taken from the epic notes). The fetch tool summarises and truncates long pages, so "silent" means silent in the
+text actually read; the reference pages read were truncated (settings-reference read 0-100000 of 458580 characters,
+hooks 0-100000 of 294413, env-vars 0-100000 of 193509).
+
+Sources: S = https://code.claude.com/docs/en/settings, H = https://code.claude.com/docs/en/hooks,
+PR = https://code.claude.com/docs/en/plugins-reference, PC = https://code.claude.com/docs/en/plugins/components,
+SR = https://code.claude.com/docs/en/settings-reference, EV = https://code.claude.com/docs/en/env-vars
+
+| # | Finding | Verdict | Source | Evidence |
+|---|---|---|---|---|
+| 1 | `hooks` and `permissions.allow`/`deny` merge across scopes; all matching hooks run | confirmed (allow, hooks); deny follows the general list rule | H, S (section "Lists merge instead of overriding") | H: hook entries "merge across settings levels rather than replacing each other", matching handlers run in parallel, identical handlers in several settings files run once. S: list keys such as `permissions.allow` are combined, not overridden; only `fallbackModel`, `modelPicker`, `availableModels`, `modelSettings` are exceptions. `deny` is not named separately; it is covered by the general rule (S: "`deny` and `ask` rules apply right away"). |
+| 2 | No `include`/`extends` key, only the one-session `--settings` flag | confirmed for `--settings`; absence of an include key is a negative claim, still not disproven | S (section "Change a setting for one session") | S documents `--settings <file-or-json>`, one session, above user/project/local and below managed, writes no file. No include/extends key appears in S or in the first 100000 characters of SR. Absence cannot be proven from a summarised read. Cheapest test: search the published JSON schema (https://json.schemastore.org/claude-code-settings.json) and the rest of SR for `extends`/`include`, or run `claude doctor` on a throw-away fixture containing such a key and see whether it is reported as unknown. |
+| 3 | Plugins ship `hooks/hooks.json`; plugin `permissions`/`env`/`defaultMode` undocumented | confirmed (hooks.json); confirmed as undocumented in the pages read | PC (section "Hooks"), PR (Standard layout, `hooks` field) | PC: hooks are saved "in `hooks/hooks.json` at the plugin root"; PR adds a manifest `hooks` key merged with that file and lists the whole manifest field table: no `permissions`, `env`, `settings` or `defaultMode` field, and unknown top-level keys are stripped. SR (first 100000 characters) names only `enabledPlugins`, `pluginConfigs`, `strictPluginOnlyCustomization`; nothing on plugin-bundled settings. Residual risk: the remaining 358580 characters of SR were not read. |
+| 4 | Per-variable `env` merge is undocumented | still unknown | EV (Precedence), S | EV only says: between settings files `env` values follow settings precedence, "so a managed settings entry overrides the same variable"; this suggests per-variable but states no merge rule. S says an `env` block "is an ordinary key and follows the levels above" and the list-merge section does not cover objects. Cheapest test: in a scratchpad fixture project set `env: {A: "1"}` in `.claude/settings.json` and `env: {B: "2"}` in `.claude/settings.local.json`, run `claude -p "run: echo $A $B"` there with a throw-away HOME; both values present means per-variable merge. Not run here (research task, no settings writes beyond scratchpad). |
+| 5 | Settings files reload live; plugin changes need `/reload-plugins` | confirmed | S (section "When edits take effect"), PC (intro) | S: Claude Code "watches your settings files and reloads them when they change", including `permissions`, `hooks`; a few keys (e.g. `model`, `effortLevel`) are read at session start. PC: after adding a component "run `/reload-plugins` in a running session or start a new one". |
+| 6 | `settings.local.json` is read by CLI, IDE and desktop but not cloud; added to global git excludes only when Claude Code creates it | confirmed | S (intro note, "Keep personal settings out of a repository", "Settings in cloud sessions") | S: terminal, VS Code, JetBrains and desktop app "all read the same settings files"; cloud sessions: user and project local settings are "not read". Claude Code adds `**/.claude/settings.local.json` to the global git excludes "the first time it writes the file" in a repo that does not already ignore it; a hand-created file needs a manual `.gitignore` entry. |
+
+## Notes for the client-settings design
+
+- Finding 4 is the only one that blocks design assumptions; settle it with the fixture test before relying on per-variable `env` merging.
+- Worktree detail from S, relevant to local settings: the local file lives at the repository root (v2.1.211 and later), and in a worktree at the main checkout's root.
+- No settings file in this repository or in a client was written by this task.

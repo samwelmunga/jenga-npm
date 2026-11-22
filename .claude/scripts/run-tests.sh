@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# scripts/run-tests.sh - run the bats suite: a bounded fast set by default, the full suite only deliberately
-# (E43_S02_T01 parallel runner; E95_S01_T02 fast set, timeout, --all gate, --list)
+# scripts/run-tests.sh - run the bats suite by tier: tier:fast by default, large runs only deliberately
+# (E43_S02_T01 parallel runner; E95_S01_T02 timeout, --list; E95_S02_T03 tiers, --confirm-full above N files,
+# nesting refusal, a timeout in every mode, up-front estimate, per-file progress; E95_S02_T08 several files at once,
+# --jobs, relative tier:fast timeout)
 #
 # `npm test` delegates here with no arguments; `npm run test:ci` delegates here with `--all`. Every consumer of
 # either (/publish's `test` gate, the public staging gate's `npm run test:ci`) gets whatever this script does, so
@@ -9,115 +11,353 @@
 # every one of them passed.
 #
 # USAGE
-#   scripts/run-tests.sh                     the fast set (tests/fast-set.txt) under a hard timeout  (= npm test)
-#   scripts/run-tests.sh --all               every top-level tests/*.bats; refused unless CI=true or --confirm-full
-#   scripts/run-tests.sh --all --confirm-full    the full suite, deliberately, outside CI
-#   scripts/run-tests.sh [--all] --list      print the files that mode would run, one per line; run nothing
+#   scripts/run-tests.sh                        tier:fast under a max(180, 2 x estimate) s timeout      (= npm test)
+#   scripts/run-tests.sh --tier <a>[,<b>...]    the files tagged with those tiers (fast unit integration slow manual)
+#   scripts/run-tests.sh --all                  every tier except tier:manual                      (= npm run test:ci)
+#   ... --confirm-full                          accept a selection of more than N files (see LARGE RUNS)
+#   ... --jobs <n>                              run up to <n> files at once; 1 = one at a time (see PARALLEL FILES)
+#   ... --list                                  print the selection (stdout) and its estimate (stderr); run nothing
 #   scripts/run-tests.sh --help
-#   npm run test:ci                          = scripts/run-tests.sh --all (CI sets CI=true, so it is accepted there)
 #
 # EXIT STATUS
-#   0 every bats invocation passed   1.. the first failing bats status   2 usage error, `--all` refused, or an
-#   empty fast set   124 the fast run hit its timeout (never a pass)   127 bats not on PATH
+#   0 every bats invocation passed   1.. the first failing bats status (first in completion order)   2 usage error
+#   (unknown argument or tier, --tier with --all, a bad --jobs), an empty selection, a refused large run, or a
+#   missing helper script   3 refused: started
+#   from inside a bats run (NESTING)   124 the run hit its timeout (never a pass)   127 bats not on PATH
 #
 # ENVIRONMENT
-#   RUN_TESTS_JOBS     positive integer; use this many parallel jobs instead of detecting the core count.
-#                      A value below 2 means "do not parallelize". An invalid value is ignored with a warning.
-#   RUN_TESTS_TIMEOUT  positive integer seconds; the fast run's hard timeout (default 180). An invalid value is
-#                      ignored with a warning. `--all` has no timeout of its own (CI jobs carry theirs).
-#   CI                 `true` (set by GitHub Actions and most CI services) lets `--all` run without --confirm-full.
+#   RUN_TESTS_JOBS          positive integer; files run at once when --jobs is not given (wins over the config key),
+#                           and the in-file `bats --jobs` count when files run one at a time. 1 means "do not
+#                           parallelize". An invalid value is ignored with a warning.
+#   RUN_TESTS_TIMEOUT       positive integer seconds; overrides the TIMEOUT RULE. Invalid: ignored with a warning.
+#   CI                      `true` (GitHub Actions and most CI services) accepts a large run without --confirm-full.
+#   RUN_TESTS_ALLOW_NESTED  TEST-ONLY. `1` disables the NESTING refusal. Set only by tests/run-tests.bats, whose
+#                           stub-based cases call this script from inside bats with a stub `bats` on PATH and never
+#                           start a real suite. No other caller may set it.
 #
-# FAST SET (no arguments)
-#   The files listed in tests/fast-set.txt, chosen from project/logs/test-timings.jsonl so their summed recorded
-#   duration is at most about 90 s (the rule and the sum are in that file's header). An entry that is absent, not a
-#   top-level tests/*.bats, or in SERIAL_FILES is skipped with a note on stderr. When no runnable entry remains the
-#   script exits 2: a run of nothing is never a pass. The fast run uses the same parallel detection as `--all`
-#   (one `bats --jobs N` pass, or plain `bats` when that is not available) and runs under a WATCHDOG: bats runs in
-#   the background in its own process group with stdin from /dev/null and its output streaming as usual; on
-#   timeout the group and every descendant (pgrep -P, collected before signalling) get TERM, then KILL after 2 s,
-#   the script prints `run-tests: timed out after <n> s` and exits 124. No GNU `timeout` is needed (macOS has none).
-#   INT/TERM sent to this script are forwarded to the bats process group.
+# SELECTION
+#   Every top-level tests/*.bats carries one `# bats file_tags=tier:<name>` line (E95_S02_T01). The selection is
+#   `scripts/test-tiers.sh list` (a pre-selection by the written tag; bats' --filter-tags is not needed):
+#   `--tier <list>` takes exactly those tiers, `--all` takes every file not tagged tier:manual (an untagged file is
+#   included, so a missing tag never drops a file from the broad run). tier:manual runs only when named in --tier.
+#   Order: test-tiers.sh's byte order is the START order, except that SERIAL_FILES run last. An empty selection
+#   exits 2: a run of nothing is never a pass.
 #
-# --all BEHAVIOUR (unchanged from E43_S02_T01)
-#   No parallel binary (neither GNU `parallel` nor `rush` on PATH), fewer than 2 jobs, or a bats without `--jobs`:
-#       bats tests/*.bats                          exactly what `npm test` ran before this script existed
-#   Otherwise two passes:
-#       1. bats --jobs N [--parallel-binary-name rush] <every tests/*.bats except SERIAL_FILES>
-#       2. bats <SERIAL_FILES that exist>          plain serial, no --jobs
-#   Pass 2 always runs, even when pass 1 failed, so one run reports every failure. The exit status is the first
-#   non-zero status (pass 1, then pass 2).
+# LARGE RUNS
+#   A selection of more than N files, N = `full_run_confirm_file_count` read through
+#   skills/j-test/scripts/test-thresholds.sh (`get confirm-file-count`, default 60), is refused with exit 2 unless
+#   --confirm-full is given or CI=true. The refusal names the selection's file count and estimate, and the cheapest
+#   tier that covers the request (the lowest of fast < unit < integration < slow among the requested tiers that
+#   selects anything; for --all every one of the four is requested), with that tier's count and estimate.
 #
-# WHY TWO PASSES
-#   `bats --jobs` has no per-file exclusion: --no-parallelize-across-files and --no-parallelize-within-files are
-#   global switches (checked against `bats --help`, bats 1.14.0). The files in SERIAL_FILES mutate real, shared
-#   repository state (.claude/settings.json, .agents/settings.json, .jenga-permission-level.json, the shared
-#   .mirror-worktrees/public clone) instead of an isolated fixture tree, and concurrent runs of them are what
-#   corrupted this repo's .git/config `origin` on 2026-09-26
-#   (project/rapports/problems/E46_S02_T01-mirror-test-corrupted-shared-repo-state.md). Add a file to SERIAL_FILES
-#   when another test is found to share state; remove entries once the isolation defect is fixed. The fast set never
-#   contains a SERIAL_FILES entry, so the fast run is a single pass.
+# NESTING
+#   A run started from inside a bats run is refused (exit 3): either E77_S01's flag JENGA_NESTED_SUITE_RUN=1, read
+#   through tests/helpers/nested-suite.bash (`nested_suite_run_active`; the same flag read inline when the helper is
+#   absent), or a surrounding bats process (BATS_TEST_FILENAME or BATS_RUN_TMPDIR in the environment).
+#   --list runs nothing and is never refused. The only override is RUN_TESTS_ALLOW_NESTED (test-only, above).
 #
-# DEPENDENCY DETECTION
-#   bats picks its parallel backend through --parallel-binary-name (default `parallel`) and does not fall back to
-#   `rush` by itself, so when only `rush` is installed this script passes `--parallel-binary-name rush`.
-#   Rather than hardcode the bats release that introduced --jobs, the script probes `bats --help` for it.
-#   This repo ships as an npm package: a consumer may have neither binary, and that path stays a plain serial run.
+# PARALLEL FILES (E95_S02_T08)
+#   Up to J files run at once, each as its own bats invocation in its own process group, through the shared
+#   scheduler scripts/parallel-files.sh (also used by the private mirror tool's pre-push gate). J, first match:
+#   --jobs <n>; RUN_TESTS_JOBS; the key `test_parallel_jobs` of project/configs/test-config.json; else the CPU count
+#   capped at 8. The non-serial files run as one batch of up to J at a time; SERIAL_FILES then run alone, one after
+#   the other. With J > 1 each file runs as plain `bats <file>` and its output goes to its own file, printed only
+#   when that file fails. With J = 1 (--jobs 1) the run is the E95_S02_T03 loop: one file at a time, bats' output
+#   streamed unfiltered, and `bats --jobs N` inside each non-serial file when the parallel path is available (see
+#   DEPENDENCY DETECTION). Parallelism is across files or within one file, never both, so J files never start
+#   J x N processes.
+#
+# ESTIMATE AND PROGRESS
+#   Before running, the output of scripts/test-estimate.sh for the selection is printed on stderr (untimed files
+#   counted and named). When each file finishes (completion order) a progress line goes to stderr:
+#       run-tests: [i/N] <file> ok|FAILED (exit s) <d> s (elapsed <e> s)
+#   <d> is that file's own wall time. on_file_done() is called once per file with the same status and <d>: the
+#   hook point for per-file records (E95_S07).
+#
+# TIMEOUT RULE (every mode)
+#   RUN_TESTS_TIMEOUT when set; else, when the request is exactly `--tier fast` (the default, npm test),
+#       timeout = max(180, 2 x estimate_seconds)                                  (E95_S02_T08, untimed files add 0)
+#   and otherwise
+#       timeout = max(600, 2 x estimate_seconds + 120 x untimed_files)
+#   (an unavailable estimate counts every file as untimed). The whole run, SERIAL_FILES included, is under one
+#   deadline. On timeout every running file's process group and every descendant get TERM, then KILL after 2 s; the
+#   script prints `run-tests: timed out after <n> s`, the files that finished (with their result) and the files that
+#   did not (each one stopped and the ones never started), and exits 124. No GNU `timeout` is needed (macOS has
+#   none). INT/TERM sent to this script are forwarded to every running file's process group.
+#
+# SERIAL_FILES
+#   PF_SERIAL_FILES of scripts/parallel-files.sh (one list for both runners): files that mutate real, shared
+#   repository state instead of an isolated fixture tree. They run last, alone, plain (no --jobs). Add or remove
+#   entries there, with the reason, not here.
+#
+# DEPENDENCY DETECTION (in-file parallelism, J = 1 only)
+#   The in-file parallel path needs GNU `parallel` or `rush` on PATH, at least 2 jobs, and a bats whose --help mentions
+#   --jobs. bats does not fall back to `rush` by itself, so `--parallel-binary-name rush` is passed when only rush is
+#   installed. Without it every file runs plain. File-level parallelism (PARALLEL FILES) needs none of this. This
+#   repo ships as an npm package: a consumer may
+#   have neither binary.
 #
 # NOTES FOR EDITORS
-#   - Do not add `set -e` and do not pipe a bats invocation: the status of each pass is captured explicitly with
-#     `|| status=$?` (or `wait`), because a pipeline or errexit would let pass 1's failure be lost or skip pass 2.
+#   - Do not add `set -e` and do not pipe a bats invocation: each file's status is captured explicitly (in
+#     parallel-files.sh, `wait ... || st=$?`), because a pipeline or errexit would lose a failure or stop the run.
 #   - Bash 3.2 compatible (macOS /bin/bash): no mapfile, no associative arrays.
 # ---------------------------------------------------------------------------
 
 set -u
 
-# Files that must never run concurrently with anything else (repo-relative, one per array element).
-SERIAL_FILES=(
-  "tests/mirror-permission-level-invariant.bats"
-  "tests/mirror-test-subject-invariant.bats"
-)
-
-# The fast set `npm test` runs (repo-relative). See FAST SET above and the file's own header.
-FAST_SET_FILE="tests/fast-set.txt"
-DEFAULT_TIMEOUT=180
+FAST_TIMEOUT_FLOOR=180
+TIMEOUT_FLOOR=600
+TIMEOUT_PER_UNTIMED=120
+DEFAULT_CONFIRM_FILE_COUNT=60
+KNOWN_TIERS="fast unit integration slow manual"
+# Cheapest first; tier:manual is never suggested.
+TIER_ORDER="fast unit integration slow"
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/run-tests.sh [--all [--confirm-full]] [--list] [--help]
+Usage: scripts/run-tests.sh [--tier <a>[,<b>...] | --all] [--confirm-full] [--jobs <n>] [--list] [--help]
 
-  (no arguments)   run the fast set (tests/fast-set.txt) under a hard timeout     = npm test
-  --all            run every top-level tests/*.bats; refused unless CI=true or --confirm-full is given
-                                                                                  = npm run test:ci
-  --confirm-full   with --all: confirm a deliberate full run outside CI
-  --list           print the files the selected mode would run, one per line, and run nothing
-  --help           show this help
+  (no arguments)      tier:fast under a max(180, 2 x estimate) s timeout               = npm test
+  --tier <list>       the files tagged with these tiers: fast unit integration slow manual
+  --all               every tier except tier:manual                                    = npm run test:ci
+  --confirm-full      accept a selection of more than full_run_confirm_file_count files (default 60);
+                      not needed when CI=true
+  --jobs <n>          run up to <n> files at once (default: RUN_TESTS_JOBS, else test_parallel_jobs
+                      in test-config.json, else the CPU count capped at 8); 1 = one at a time
+  --list              print the selection (stdout) and its estimate (stderr); run nothing
+  --help              show this help
 
-Environment: RUN_TESTS_TIMEOUT (fast run, seconds, default 180), RUN_TESTS_JOBS, CI.
+Every run has a hard timeout (RUN_TESTS_TIMEOUT overrides it) and prints an estimate first.
+Environment: RUN_TESTS_TIMEOUT, RUN_TESTS_JOBS, CI.
 USAGE
 }
 
+is_known_tier() {
+  case " $KNOWN_TIERS " in *" $1 "*) return 0 ;; esac
+  return 1
+}
+
 # --- Arguments -------------------------------------------------------------------------------------------------------
-MODE="fast"
+ORIG_ARGS="$*"
+MODE=""
+TIER_LIST=""
 CONFIRM_FULL=0
 LIST_ONLY=0
-for arg in "$@"; do
-  case "$arg" in
-    --all) MODE="all" ;;
-    --confirm-full) CONFIRM_FULL=1 ;;
-    --list) LIST_ONLY=1 ;;
+JOBS_ARG=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --all) [ "$MODE" != "tier" ] || { echo "run-tests: give --tier or --all, not both" >&2; usage >&2; exit 2; }
+           MODE="all"; shift ;;
+    --tier|--tier=*)
+      [ "$MODE" != "all" ] || { echo "run-tests: give --tier or --all, not both" >&2; usage >&2; exit 2; }
+      if [ "$1" = "--tier" ]; then
+        [ "$#" -ge 2 ] || { echo "run-tests: --tier needs a tier list" >&2; usage >&2; exit 2; }
+        _t="$2"; shift 2
+      else
+        _t="${1#--tier=}"; shift
+      fi
+      [ -n "$_t" ] || { echo "run-tests: --tier needs a tier list" >&2; usage >&2; exit 2; }
+      MODE="tier"
+      TIER_LIST="${TIER_LIST:+$TIER_LIST,}$_t" ;;
+    --confirm-full) CONFIRM_FULL=1; shift ;;
+    --jobs|--jobs=*)
+      if [ "$1" = "--jobs" ]; then
+        [ "$#" -ge 2 ] || { echo "run-tests: --jobs needs a number" >&2; usage >&2; exit 2; }
+        JOBS_ARG="$2"; shift 2
+      else
+        JOBS_ARG="${1#--jobs=}"; shift
+      fi
+      case "$JOBS_ARG" in
+        ""|*[!0-9]*) echo "run-tests: --jobs wants a positive whole number, got '$JOBS_ARG'" >&2; usage >&2; exit 2 ;;
+      esac ;;
+    --list) LIST_ONLY=1; shift ;;
     -h|--help) usage; exit 0 ;;
-    *) echo "run-tests: unknown argument '$arg'" >&2; usage >&2; exit 2 ;;
+    *) echo "run-tests: unknown argument '$1'" >&2; usage >&2; exit 2 ;;
   esac
 done
-if [ "$CONFIRM_FULL" -eq 1 ] && [ "$MODE" != "all" ]; then
-  echo "run-tests: --confirm-full only applies to --all" >&2
-  usage >&2
-  exit 2
+if [ -z "$MODE" ]; then
+  MODE="tier"
+  TIER_LIST="fast"
+fi
+if [ "$MODE" = "tier" ]; then
+  _old_ifs="$IFS"; IFS=','
+  for _t in $TIER_LIST; do
+    if [ -z "$_t" ] || ! is_known_tier "$_t"; then
+      IFS="$_old_ifs"
+      echo "run-tests: unknown tier '$_t' (tiers: $KNOWN_TIERS)" >&2
+      usage >&2
+      exit 2
+    fi
+  done
+  IFS="$_old_ifs"
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT" || { echo "run-tests: cannot cd to $REPO_ROOT" >&2; exit 2; }
+
+TIERS_SCRIPT="$REPO_ROOT/scripts/test-tiers.sh"
+ESTIMATE_SCRIPT="$REPO_ROOT/scripts/test-estimate.sh"
+THRESHOLDS_SCRIPT="$REPO_ROOT/skills/j-test/scripts/test-thresholds.sh"
+NESTED_HELPER="$REPO_ROOT/tests/helpers/nested-suite.bash"
+PARALLEL_HELPER="$REPO_ROOT/scripts/parallel-files.sh"
+TEST_CONFIG="$REPO_ROOT/project/configs/test-config.json"
+
+# --- Nesting refusal (never for --list, which runs nothing) --------------------------------------------------------
+if [ "$LIST_ONLY" -ne 1 ] && [ "${RUN_TESTS_ALLOW_NESTED:-}" != "1" ]; then
+  NESTED_REASON=""
+  if [ -f "$NESTED_HELPER" ]; then
+    # shellcheck source=/dev/null
+    . "$NESTED_HELPER"
+    if nested_suite_run_active; then NESTED_REASON="JENGA_NESTED_SUITE_RUN=1 (a nested suite run)"; fi
+  elif [ "${JENGA_NESTED_SUITE_RUN:-0}" = "1" ]; then
+    NESTED_REASON="JENGA_NESTED_SUITE_RUN=1 (a nested suite run)"
+  fi
+  if [ -z "$NESTED_REASON" ]; then
+    if [ -n "${BATS_TEST_FILENAME:-}" ]; then
+      NESTED_REASON="started from inside a bats run (BATS_TEST_FILENAME=$BATS_TEST_FILENAME)"
+    elif [ -n "${BATS_RUN_TMPDIR:-}" ]; then
+      NESTED_REASON="started from inside a bats run (BATS_RUN_TMPDIR is set)"
+    fi
+  fi
+  if [ -n "$NESTED_REASON" ]; then
+    echo "run-tests: refusing to start a test run from inside another one: $NESTED_REASON." >&2
+    echo "run-tests: a test must never start a real suite run; use --list, or a stub bats in a fixture tree." >&2
+    exit 3
+  fi
+fi
+
+[ -f "$TIERS_SCRIPT" ] || { echo "run-tests: missing $TIERS_SCRIPT (it selects files by tier)" >&2; exit 2; }
+[ -f "$PARALLEL_HELPER" ] || { echo "run-tests: missing $PARALLEL_HELPER (it runs the files)" >&2; exit 2; }
+# shellcheck source=scripts/parallel-files.sh
+. "$PARALLEL_HELPER"
+if [ -n "$JOBS_ARG" ]; then
+  JOBS_ARG="$(_pf_pos_int "$JOBS_ARG")" || { echo "run-tests: --jobs wants a positive whole number" >&2; usage >&2; exit 2; }
+fi
+
+# Files that must never run concurrently with anything else (SERIAL_FILES): one list, PF_SERIAL_FILES in
+# scripts/parallel-files.sh.
+is_serial_file() {
+  pf_is_serial_file "$1"
+}
+
+# select_files <test-tiers.sh list arguments...>: the selection in run order (SERIAL_FILES last), one per line.
+select_files() {
+  local out f serial=""
+  out="$(bash "$TIERS_SCRIPT" list "$@" --root "$REPO_ROOT")" || return 2
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if is_serial_file "$f"; then serial="$serial$f
+"; else printf '%s\n' "$f"; fi
+  done <<EOF
+$out
+EOF
+  printf '%s' "$serial"
+}
+
+# estimate_numbers <files...>: sets EST_SECONDS and EST_UNTIMED from test-estimate.sh --json; EST_OK=0 when the
+# estimate is unavailable (then every file counts as untimed).
+estimate_numbers() {
+  local json s u
+  EST_OK=0; EST_SECONDS=0; EST_UNTIMED=$#
+  [ "$#" -gt 0 ] || return 0
+  json="$(printf '%s\n' "$@" | bash "$ESTIMATE_SCRIPT" --json --files-from - 2>/dev/null)" || return 0
+  s="$(printf '%s\n' "$json" | jq -r '.estimated_seconds' 2>/dev/null)" || return 0
+  u="$(printf '%s\n' "$json" | jq -r '.untimed | length' 2>/dev/null)" || return 0
+  case "$s$u" in *[!0-9]*|"") return 0 ;; esac
+  EST_OK=1; EST_SECONDS="$s"; EST_UNTIMED="$u"
+}
+
+# estimate_label: "<s> s (<u> untimed)" from the last estimate_numbers call.
+estimate_label() {
+  if [ "$EST_OK" -eq 1 ]; then
+    printf '%s s (%s untimed)' "$EST_SECONDS" "$EST_UNTIMED"
+  else
+    printf 'unknown (%s untimed)' "$EST_UNTIMED"
+  fi
+}
+
+# print_estimate <files...>: test-estimate.sh's own text on stderr, or a note when it is unavailable.
+print_estimate() {
+  local st=0
+  printf '%s\n' "$@" | bash "$ESTIMATE_SCRIPT" --files-from - >&2 || st=$?
+  if [ "$st" -ne 0 ]; then
+    echo "run-tests: no estimate available (scripts/test-estimate.sh exit $st); all $# file(s) counted as untimed" >&2
+  fi
+}
+
+# --- Selection -----------------------------------------------------------------------------------------------------
+if [ "$MODE" = "all" ]; then
+  REQUEST_LABEL="--all (every tier except tier:manual)"
+  SELECTION="$(select_files --exclude-tier manual)" || { echo "run-tests: scripts/test-tiers.sh list failed" >&2; exit 2; }
+else
+  REQUEST_LABEL="--tier $TIER_LIST"
+  SELECTION="$(select_files --tier "$TIER_LIST")" || { echo "run-tests: scripts/test-tiers.sh list failed" >&2; exit 2; }
+fi
+
+SELECTED=()
+while IFS= read -r f; do
+  [ -n "$f" ] && SELECTED+=("$f")
+done <<EOF
+$SELECTION
+EOF
+
+if [ "${#SELECTED[@]}" -eq 0 ]; then
+  echo "run-tests: $REQUEST_LABEL selects no file, nothing to run - this is not a pass" >&2
+  exit 2
+fi
+
+# --- --list: the selection on stdout, the estimate on stderr; no bats, no confirmation -----------------------------
+if [ "$LIST_ONLY" -eq 1 ]; then
+  for f in "${SELECTED[@]}"; do printf '%s\n' "$f"; done
+  print_estimate "${SELECTED[@]}"
+  exit 0
+fi
+
+estimate_numbers "${SELECTED[@]}"
+SEL_EST_SECONDS="$EST_SECONDS"; SEL_EST_UNTIMED="$EST_UNTIMED"
+SEL_EST_LABEL="$(estimate_label)"
+
+# --- Large runs are deliberate only --------------------------------------------------------------------------------
+CONFIRM_N=""
+if [ -f "$THRESHOLDS_SCRIPT" ]; then
+  CONFIRM_N="$(bash "$THRESHOLDS_SCRIPT" get confirm-file-count --root "$REPO_ROOT")" || CONFIRM_N=""
+fi
+case "$CONFIRM_N" in
+  ""|*[!0-9]*)
+    echo "run-tests: could not read full_run_confirm_file_count; using $DEFAULT_CONFIRM_FILE_COUNT" >&2
+    CONFIRM_N="$DEFAULT_CONFIRM_FILE_COUNT" ;;
+esac
+
+if [ "${#SELECTED[@]}" -gt "$CONFIRM_N" ] && [ "${CI:-}" != "true" ] && [ "$CONFIRM_FULL" -ne 1 ]; then
+  echo "run-tests: refusing $REQUEST_LABEL: it selects ${#SELECTED[@]} files, more than full_run_confirm_file_count ($CONFIRM_N); estimate $SEL_EST_LABEL." >&2
+  if [ "$MODE" = "all" ]; then REQUESTED="$TIER_ORDER"; else REQUESTED="$(printf '%s' "$TIER_LIST" | tr ',' ' ')"; fi
+  SUGGESTED=""
+  for t in $TIER_ORDER; do
+    case " $REQUESTED " in *" $t "*) ;; *) continue ;; esac
+    tier_sel="$(select_files --tier "$t")" || continue
+    [ -n "$tier_sel" ] || continue
+    tier_files=()
+    while IFS= read -r f; do [ -n "$f" ] && tier_files+=("$f"); done <<EOF
+$tier_sel
+EOF
+    estimate_numbers "${tier_files[@]}"
+    SUGGESTED="$t"
+    extra=""
+    [ "${#tier_files[@]}" -le "$CONFIRM_N" ] || extra=" --confirm-full"
+    echo "run-tests: the cheapest tier that covers the request is tier:$t: ${#tier_files[@]} file(s), estimate $(estimate_label)." >&2
+    echo "run-tests: next step: 'scripts/run-tests.sh --tier $t$extra'." >&2
+    break
+  done
+  [ -n "$SUGGESTED" ] || echo "run-tests: no cheaper tier selects anything for this request." >&2
+  echo "run-tests: to run this selection deliberately: 'scripts/run-tests.sh ${ORIG_ARGS:+$ORIG_ARGS }--confirm-full'; in CI (CI=true) no confirmation is needed." >&2
+  exit 2
+fi
+
+if ! command -v bats >/dev/null 2>&1; then
+  echo "run-tests: bats not found on PATH (npm install, or brew install bats-core)" >&2
+  exit 127
+fi
 
 # --- Core count (portable: getconf on Linux and macOS, then nproc, then sysctl) ----------------------------------
 detect_cores() {
@@ -136,7 +376,8 @@ detect_cores() {
   printf '%s\n' "$n"
 }
 
-# --- Fast-run timeout: RUN_TESTS_TIMEOUT when it is a positive integer, else the default -------------------------
+# --- Timeout: RUN_TESTS_TIMEOUT when valid, else the TIMEOUT RULE --------------------------------------------------
+TIMEOUT_RULE=""
 detect_timeout() {
   local t="${RUN_TESTS_TIMEOUT:-}"
   case "$t" in
@@ -147,8 +388,18 @@ detect_timeout() {
          t=""
        fi ;;
   esac
-  [ -n "$t" ] || t="$DEFAULT_TIMEOUT"
-  printf '%s\n' "$t"
+  if [ -n "$t" ]; then
+    TIMEOUT_RULE="RUN_TESTS_TIMEOUT"
+  elif [ "$MODE" = "tier" ] && [ "$TIER_LIST" = "fast" ]; then
+    t=$((2 * SEL_EST_SECONDS))
+    [ "$t" -ge "$FAST_TIMEOUT_FLOOR" ] || t="$FAST_TIMEOUT_FLOOR"
+    TIMEOUT_RULE="tier:fast: max($FAST_TIMEOUT_FLOOR, 2 x ${SEL_EST_SECONDS} s)"
+  else
+    t=$((2 * SEL_EST_SECONDS + TIMEOUT_PER_UNTIMED * SEL_EST_UNTIMED))
+    [ "$t" -ge "$TIMEOUT_FLOOR" ] || t="$TIMEOUT_FLOOR"
+    TIMEOUT_RULE="max($TIMEOUT_FLOOR, 2 x ${SEL_EST_SECONDS} s + $TIMEOUT_PER_UNTIMED s x $SEL_EST_UNTIMED untimed)"
+  fi
+  TIMEOUT="$t"
 }
 
 # --- Parallel backend: GNU parallel first, then rush; empty when neither is installed ----------------------------
@@ -164,89 +415,14 @@ bats_supports_jobs() {
   bats --help 2>&1 | grep -q -- '--jobs'
 }
 
-# --- File lists ----------------------------------------------------------------------------------------------------
-is_serial_file() {
-  local f="$1" s
-  for s in "${SERIAL_FILES[@]}"; do
-    [ "$f" = "$s" ] && return 0
-  done
-  return 1
-}
-
-# Top-level tests/*.bats only (tests/fixtures/ holds inputs, some deliberately failing). `nullglob` so an empty
-# tests/ yields an empty list instead of the literal pattern.
-shopt -s nullglob
-ALL_FILES=(tests/*.bats)
-shopt -u nullglob
-
-BULK_FILES=()
-for f in "${ALL_FILES[@]+"${ALL_FILES[@]}"}"; do
-  is_serial_file "$f" || BULK_FILES+=("$f")
-done
-
-SERIAL_PRESENT=()
-for f in "${SERIAL_FILES[@]}"; do
-  [ -f "$f" ] && SERIAL_PRESENT+=("$f")
-done
-
-# The fast set: the runnable entries of FAST_SET_FILE, in file order. Notes about skipped entries go to stderr.
-load_fast_set() {
-  local line entry
-  FAST_FILES=()
-  if [ ! -f "$FAST_SET_FILE" ]; then
-    echo "run-tests: fast-set list $FAST_SET_FILE not found" >&2
-    return 0
-  fi
-  while IFS= read -r line || [ -n "$line" ]; do
-    # Trim surrounding whitespace; skip blanks and comments.
-    entry="${line#"${line%%[![:space:]]*}"}"
-    entry="${entry%"${entry##*[![:space:]]}"}"
-    case "$entry" in ""|"#"*) continue ;; esac
-    case "$entry" in
-      tests/*/*) echo "run-tests: fast-set entry is not a top-level tests/*.bats, skipped: $entry" >&2; continue ;;
-      tests/*.bats) ;;
-      *) echo "run-tests: fast-set entry is not a top-level tests/*.bats, skipped: $entry" >&2; continue ;;
-    esac
-    if is_serial_file "$entry"; then
-      echo "run-tests: fast-set entry is a shared-state (SERIAL_FILES) file, skipped: $entry" >&2
-      continue
-    fi
-    if [ ! -f "$entry" ]; then
-      echo "run-tests: fast-set entry not present, skipped: $entry" >&2
-      continue
-    fi
-    FAST_FILES+=("$entry")
-  done < "$FAST_SET_FILE"
-}
-
-# --- --list: print the selection, run nothing (needs no bats and no confirmation) --------------------------------
-if [ "$LIST_ONLY" -eq 1 ]; then
-  if [ "$MODE" = "all" ]; then
-    for f in "${ALL_FILES[@]+"${ALL_FILES[@]}"}"; do printf '%s\n' "$f"; done
-  else
-    load_fast_set
-    for f in "${FAST_FILES[@]+"${FAST_FILES[@]}"}"; do printf '%s\n' "$f"; done
-  fi
-  exit 0
-fi
-
-# --- --all is deliberate only --------------------------------------------------------------------------------------
-if [ "$MODE" = "all" ] && [ "${CI:-}" != "true" ] && [ "$CONFIRM_FULL" -ne 1 ]; then
-  echo "run-tests: refusing --all: it runs every top-level tests/*.bats (${#ALL_FILES[@]} files), which takes hours locally." >&2
-  echo "run-tests: run the full suite deliberately with 'scripts/run-tests.sh --all --confirm-full'," >&2
-  echo "run-tests: or in CI with 'npm run test:ci' (accepted when CI=true). 'npm test' runs the bounded fast set." >&2
-  exit 2
-fi
-
-if ! command -v bats >/dev/null 2>&1; then
-  echo "run-tests: bats not found on PATH (npm install, or brew install bats-core)" >&2
-  exit 127
-fi
-
 PARALLEL_BIN="$(detect_parallel_binary)"
 JOBS="$(detect_cores)"
 
-# Why the parallel path is unavailable, or empty when it is available. Printed by each mode in its own words.
+# Files at once (PARALLEL FILES): --jobs, RUN_TESTS_JOBS, test_parallel_jobs, else the CPU count capped at 8.
+pf_resolve_jobs "$JOBS_ARG" "$TEST_CONFIG" "run-tests"
+FILE_JOBS="$PF_JOBS"
+
+# Why the in-file parallel path is unavailable, or empty when it is available (it is used only when FILE_JOBS = 1).
 SERIAL_REASON=""
 if [ -z "$PARALLEL_BIN" ]; then
   SERIAL_REASON="no parallel binary (GNU parallel / rush) on PATH"
@@ -257,116 +433,137 @@ elif ! bats_supports_jobs; then
 fi
 
 PARALLEL_FLAGS=()
-if [ -z "$SERIAL_REASON" ]; then
+if [ "$FILE_JOBS" -eq 1 ] && [ -z "$SERIAL_REASON" ]; then
   PARALLEL_FLAGS=(--jobs "$JOBS")
   [ "$PARALLEL_BIN" = "parallel" ] || PARALLEL_FLAGS+=(--parallel-binary-name "$PARALLEL_BIN")
 fi
 
+detect_timeout
+
 # ====================================================================================================================
-# Fast set (default): one bats invocation under a watchdog
+# The run: up to FILE_JOBS files at once (scripts/parallel-files.sh), SERIAL_FILES alone afterwards, one deadline
 # ====================================================================================================================
 
-# descendants <pid>: every descendant pid of <pid>, one per line (none when pgrep is not installed).
-descendants() {
-  local kids k
-  command -v pgrep >/dev/null 2>&1 || return 0
-  kids="$(pgrep -P "$1" 2>/dev/null || true)"
-  for k in $kids; do
-    printf '%s\n' "$k"
-    descendants "$k"
-  done
+# on_file_done <file> <status> <seconds>: called once per finished file, with that file's own duration. A no-op hook
+# point for per-file records (E95_S07 writes timing records here). It must not print to stdout and must not change
+# the run's status.
+on_file_done() {
+  :  # E95_S07 hook point
 }
 
-# signal_tree <signal> <pid>: the process group led by <pid> (it was started with job control on) and every
-# descendant found by pgrep, in case a child (GNU parallel, for one) moved its own jobs to another group.
-signal_tree() {
-  local sig="$1" pid="$2" p
-  for p in $(descendants "$pid"); do
-    kill "-$sig" "$p" 2>/dev/null || true
-  done
-  kill "-$sig" -- "-$pid" 2>/dev/null || true
-  kill "-$sig" "$pid" 2>/dev/null || true
-}
+# CAPTURE=1 (FILE_JOBS > 1): each file's output goes to its own file and is printed only when that file fails.
+# CAPTURE=0 (FILE_JOBS = 1): the E95_S02_T03 loop, output streamed unfiltered.
+CAPTURE=0
+[ "$FILE_JOBS" -eq 1 ] || CAPTURE=1
 
-if [ "$MODE" = "fast" ]; then
-  load_fast_set
-  if [ "${#FAST_FILES[@]}" -eq 0 ]; then
-    echo "run-tests: the fast set is empty, nothing to run - this is not a pass" >&2
-    exit 2
-  fi
-  TIMEOUT="$(detect_timeout)"
-  if [ -n "$SERIAL_REASON" ]; then
-    echo "run-tests: fast set - ${#FAST_FILES[@]} file(s), serially ($SERIAL_REASON), timeout ${TIMEOUT} s" >&2
+# pf_launch <file> <outfile>: one bats invocation (scripts/parallel-files.sh runs it in its own process group).
+pf_launch() {
+  if [ "$CAPTURE" -eq 1 ]; then
+    exec bats "$1" > "$2" 2>&1
+  elif is_serial_file "$1"; then
+    exec bats "$1"
   else
-    echo "run-tests: fast set - ${#FAST_FILES[@]} file(s) with --jobs $JOBS ($PARALLEL_BIN), timeout ${TIMEOUT} s" >&2
+    exec bats ${PARALLEL_FLAGS[@]+"${PARALLEL_FLAGS[@]}"} "$1"
   fi
-  echo "run-tests: the full suite is 'npm run test:ci' (CI) or 'scripts/run-tests.sh --all --confirm-full'" >&2
+}
 
-  # Job control on just for the launch, so bats leads its own process group and the whole tree can be signalled.
-  set -m
-  bats ${PARALLEL_FLAGS[@]+"${PARALLEL_FLAGS[@]}"} "${FAST_FILES[@]}" < /dev/null &
-  BATS_PID=$!
-  set +m
-  trap 'signal_tree TERM "$BATS_PID"; exit 130' INT
-  trap 'signal_tree TERM "$BATS_PID"; exit 143' TERM
+FINISHED=()      # "<result> <file> (<d> s)" per finished file, in completion order
+FAILED_FILES=()
+RUN_STATUS=0
+DONE_COUNT=0
 
-  START=$SECONDS
-  TIMED_OUT=0
-  while kill -0 "$BATS_PID" 2>/dev/null; do
-    if [ $((SECONDS - START)) -ge "$TIMEOUT" ]; then
-      TIMED_OUT=1
-      break
-    fi
-    sleep 0.2
+# pf_on_done <file> <status> <seconds> <outfile>: the progress line, the failing file's own output, the hook.
+pf_on_done() {
+  local f="$1" st="$2" dur="$3" out="$4" result
+  DONE_COUNT=$((DONE_COUNT + 1))
+  if [ "$st" -eq 0 ]; then
+    result="ok"
+  else
+    result="FAILED (exit $st)"
+    FAILED_FILES+=("$f")
+    [ "$RUN_STATUS" -ne 0 ] || RUN_STATUS="$st"
+  fi
+  FINISHED+=("$result $f ($dur s)")
+  echo "run-tests: [$DONE_COUNT/$TOTAL] $f $result $dur s (elapsed $((SECONDS - START)) s)" >&2
+  if [ "$st" -ne 0 ] && [ "$CAPTURE" -eq 1 ] && [ -f "$out" ]; then
+    echo "run-tests: --- output of $f ---" >&2
+    cat "$out"
+    echo "run-tests: --- end of output of $f ---" >&2
+  fi
+  on_file_done "$f" "$st" "$dur"
+  return 0
+}
+
+print_estimate "${SELECTED[@]}"
+TOTAL="${#SELECTED[@]}"
+BATCH=()
+SERIAL_SELECTED=()
+for f in "${SELECTED[@]}"; do
+  if is_serial_file "$f"; then SERIAL_SELECTED+=("$f"); else BATCH+=("$f"); fi
+done
+if [ "$FILE_JOBS" -gt 1 ]; then
+  RUN_HOW="up to $FILE_JOBS files at once ($PF_JOBS_SOURCE), plain bats per file, shared-state files alone afterwards"
+elif [ -n "$SERIAL_REASON" ]; then
+  RUN_HOW="one file at a time ($PF_JOBS_SOURCE), plain bats ($SERIAL_REASON)"
+else
+  RUN_HOW="one file at a time ($PF_JOBS_SOURCE), bats --jobs $JOBS ($PARALLEL_BIN) within each file"
+fi
+echo "run-tests: $REQUEST_LABEL - $TOTAL file(s), one bats invocation per file, $RUN_HOW; timeout $TIMEOUT s ($TIMEOUT_RULE)" >&2
+if [ "$MODE" = "tier" ] && [ "$TIER_LIST" = "fast" ]; then
+  echo "run-tests: larger runs: 'scripts/run-tests.sh --tier <name>', 'npm run test:ci' (CI) or 'scripts/run-tests.sh --all --confirm-full'" >&2
+fi
+
+OUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/run-tests.XXXXXX")" || { echo "run-tests: cannot create a temp directory" >&2; exit 2; }
+trap 'rm -rf "$OUT_DIR"' EXIT
+trap 'pf_stop_all; exit 130' INT
+trap 'pf_stop_all; exit 143' TERM
+
+START=$SECONDS
+DEADLINE=$((START + TIMEOUT))
+
+# report_timeout <never-started files...>: the timeout report; the caller exits 124.
+report_timeout() {
+  local j=0 not_finished
+  trap - INT TERM
+  not_finished=$((TOTAL - ${#FINISHED[@]}))
+  echo "run-tests: timed out after $TIMEOUT s ($TIMEOUT_RULE) - this is not a pass" >&2
+  echo "run-tests: finished (${#FINISHED[@]} of $TOTAL):" >&2
+  while [ "$j" -lt "${#FINISHED[@]}" ]; do
+    echo "run-tests:   ${FINISHED[$j]}" >&2
+    j=$((j + 1))
   done
+  echo "run-tests: not finished ($not_finished of $TOTAL):" >&2
+  j=0
+  while [ "$j" -lt "${#PF_STOPPED[@]}" ]; do
+    echo "run-tests:   stopped     ${PF_STOPPED[$j]}" >&2
+    j=$((j + 1))
+  done
+  for f in "$@"; do
+    echo "run-tests:   not started $f" >&2
+  done
+}
 
-  if [ "$TIMED_OUT" -eq 1 ]; then
-    signal_tree TERM "$BATS_PID"
-    GRACE_END=$((SECONDS + 2))
-    while kill -0 "$BATS_PID" 2>/dev/null && [ "$SECONDS" -lt "$GRACE_END" ]; do sleep 0.2; done
-    signal_tree KILL "$BATS_PID"
-    wait "$BATS_PID" 2>/dev/null
-    trap - INT TERM
-    echo "run-tests: timed out after ${TIMEOUT} s" >&2
+PF_ST=0
+if [ "${#BATCH[@]}" -gt 0 ]; then
+  pf_run_files "$FILE_JOBS" "$DEADLINE" "$OUT_DIR" "${BATCH[@]}" || PF_ST=$?
+  if [ "$PF_ST" -eq 124 ]; then
+    report_timeout ${PF_NOT_STARTED[@]+"${PF_NOT_STARTED[@]}"} ${SERIAL_SELECTED[@]+"${SERIAL_SELECTED[@]}"}
     exit 124
   fi
-
-  fast_status=0
-  wait "$BATS_PID" || fast_status=$?
-  trap - INT TERM
-  exit "$fast_status"
 fi
-
-# ====================================================================================================================
-# --all: the full suite, exactly as before E95_S01_T02
-# ====================================================================================================================
-
-# --- Fallback: exactly today's behaviour ---------------------------------------------------------------------------
-run_serial_fallback() {
-  # Unquoted glob on purpose: it is the literal command `npm test` used to run, so the behaviour (including
-  # bats' own "no tests" handling) stays identical. Bash expands it here, as the shell did for the old script.
-  bats tests/*.bats
-}
-
-if [ -n "$SERIAL_REASON" ]; then
-  echo "run-tests: $SERIAL_REASON - running the suite serially" >&2
-  run_serial_fallback
-  exit $?
+if [ "${#SERIAL_SELECTED[@]}" -gt 0 ]; then
+  pf_run_files 1 "$DEADLINE" "$OUT_DIR" "${SERIAL_SELECTED[@]}" || PF_ST=$?
+  if [ "$PF_ST" -eq 124 ]; then
+    report_timeout ${PF_NOT_STARTED[@]+"${PF_NOT_STARTED[@]}"}
+    exit 124
+  fi
 fi
+trap - INT TERM
 
-# --- Two passes ----------------------------------------------------------------------------------------------------
-echo "run-tests: $PARALLEL_BIN found - ${#BULK_FILES[@]} file(s) with --jobs $JOBS, then ${#SERIAL_PRESENT[@]} shared-state file(s) serially" >&2
-
-pass1=0
-pass2=0
-
-if [ "${#BULK_FILES[@]}" -gt 0 ]; then
-  bats "${PARALLEL_FLAGS[@]}" "${BULK_FILES[@]}" || pass1=$?
+if [ "${#FAILED_FILES[@]}" -eq 0 ]; then
+  echo "run-tests: $TOTAL file(s) passed in $((SECONDS - START)) s" >&2
+else
+  echo "run-tests: ${#FAILED_FILES[@]} of $TOTAL file(s) failed in $((SECONDS - START)) s:" >&2
+  for f in "${FAILED_FILES[@]}"; do echo "run-tests:   $f" >&2; done
 fi
-
-if [ "${#SERIAL_PRESENT[@]}" -gt 0 ]; then
-  bats "${SERIAL_PRESENT[@]}" || pass2=$?
-fi
-
-if [ "$pass1" -ne 0 ]; then exit "$pass1"; fi
-exit "$pass2"
+exit "$RUN_STATUS"

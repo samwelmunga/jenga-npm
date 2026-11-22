@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Mixed-history fixture tests for scripts/commits-for-item.sh (E79_S02_T03).
 #

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for validate-board.sh's external_refs support (E71_S03_T02).
 #

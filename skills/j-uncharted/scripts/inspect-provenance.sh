@@ -135,8 +135,13 @@ die() {
   exit "$code"
 }
 
+usage_text() {
+  sed -n '/^# Usage:/,/^# Exit codes:/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+# Usage error: usage on stderr, exit 1.
 usage() {
-  sed -n '/^# Usage:/,/^# Exit codes:/p' "$0" | sed 's/^# \{0,1\}//' >&2
+  usage_text >&2
   exit 1
 }
 
@@ -180,7 +185,7 @@ while [ "$#" -gt 0 ]; do
     --json-out=*)
       JSON_OUT="${1#--json-out=}"; shift ;;
     -h|--help)
-      usage ;;
+      usage_text; exit 0 ;;
     --)
       shift
       if [ "$#" -gt 0 ]; then TARGET="$1"; TARGET_SET=1; shift; fi

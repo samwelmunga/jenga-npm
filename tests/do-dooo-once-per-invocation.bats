@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for E67_S11_T04: standalone /do and /dooo ask the pre-task judgment item once per invocation, not once
 # per task.

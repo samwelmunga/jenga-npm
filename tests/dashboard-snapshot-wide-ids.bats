@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # The offline dashboard snapshot of a mixed-width board (E86_S05_T06, audit group 5 of E86_S05).
 #

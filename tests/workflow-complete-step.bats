@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E80_S03_T08: scripts/workflow/complete-step.sh - how the driving agent reports a step as passed or failed.
 # `passed` verifies typed outputs (verify-output.sh), stores them, completes the step and writes a checkpoint when

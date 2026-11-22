@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # j.tidy's worktree/branch enumeration and content-based safety classifier (E56_S06_T01).
 #

@@ -2,12 +2,21 @@
   <img src="project/documentation/assets/jenga-logo-readme.png" alt="Jenga AI" width="480">
 </p>
 
+> [!WARNING]
+> **Jenga version 5 is more likely to contain bugs and errors than version 4.** A broad overhaul of testing is under way, and several tester suites have been switched off temporarily while it runs. The first stable release, **Jenga version 6 (stable)**, is expected around **mid-December 2026**.
+>
+> Until then, please do these three things to avoid errors and bugs:
+>
+> 1. **Check that the postinstall script is allowed to run for Jenga.** Some package managers block install scripts by default.
+> 2. **Run `jenga doctor` in your regular terminal.** It can help bring your project back in sync.
+> 3. **Run `j.jenga-config` (also `/jenga-config`), choose the list mode, and check whether any settings are missing in your environment.**
+
 # Jenga AI
 ### The AI-driven development framework for large, long-lived codebases.
 
 Jenga AI is an agentic software engineering framework for AI-driven development at scale — on new projects and on large existing applications alike. It targets the case AI coding tools handle worst: a codebase far too big to fit in one context window, spread across many modules and often more than one repository, worked on over weeks rather than a single session.
 
-It splits work across three role-bounded agents — a Scrum Master that plans, a Developer that implements in an isolated git worktree, and a Tester that runs your test suite and owns the board status. Work survives session boundaries as Epics, Stories, and Tasks on a Markdown board your agent reads at the start of every session, so understanding of a large system accumulates instead of resetting. Existing code with no board history is onboarded explicitly, through investigation rather than guesswork (`j.uncharted`), and the same workflow propagates across every repository you run it in (`j.distribute`).
+It splits work across three role-bounded agents — a Scrum Master that plans, a Developer that implements in an isolated git worktree, and a Tester that runs your test suite and owns the board status. Work survives session boundaries as Epics, Stories, and Tasks on a Markdown board your agent reads at the start of every session, so understanding of a large system accumulates instead of resetting. Existing code with no board history is onboarded explicitly, through investigation rather than guesswork (`j.uncharted`), and the same workflow carries across every repository you run it in, installed once per repository with npm and kept current by `npx jenga sync`.
 
 [![npm version](https://img.shields.io/npm/v/@jenga-ai/agent.svg)](https://www.npmjs.com/package/@jenga-ai/agent)
 [![license](https://img.shields.io/npm/l/@jenga-ai/agent.svg)](LICENSE)
@@ -214,7 +223,6 @@ Skills live in `.agents/skills/<name>/SKILL.md`. Invoke with `j.<name>` in your 
 | `j.do` | Execute tasks from the scrum board, drives the Developer agent through the full loop |
 | `j.break` | Halt execution after the current task completes and before the next one starts; `hard` persists until cleared, `status` adds a progress rapport for the current run |
 | `j.test` | Discover the project's test suites, pick which to run (blank runs all), and get a pass/fail summary; exit code 0 when all passed, 1 otherwise. Answering `probe` only checks whether the machine is slow; when it is, `j.test` offers continue anyway, cancel, return to selection, change what counts as slow, or other |
-| `j.smoke-test` | Smoke-test every skill in the catalog (frontmatter, name versus directory, preferred agent, referenced scripts and assets) and get a pass/fail summary with critical findings called out |
 | `j.commit` | Commit finished work with the EST naming convention, after asking whether to run tests first (scoped to the change, the full suite, or skip, with a remembered default) |
 | `j.conventions` | Record the project's conventions (commit format, branching, naming, testing, file layout, docs placement) so every agent follows them — detects what the project already does and offers presets |
 | `j.check-in` | Report which dispatched agents are actually alive, silent, or finished-but-leaking processes |
@@ -310,7 +318,7 @@ Enforcement doesn't rest on an agent cooperating: a `PreToolUse` hook (`hooks/on
 - You want an agentic development workflow with separate planning, coding, testing, and review agents — not one model self-grading its own work
 - You need traceability — who did what, when, on which task
 - You're working across more than one AI coding agent or AI-native IDE and want one workflow, not a separate setup per tool
-- You want to reuse and propagate the same agentic workflow across multiple projects and repositories (`j.distribute`)
+- You want to reuse the same agentic workflow across multiple projects and repositories (install it with npm in each; `npx jenga sync` keeps each one current)
 
 **You might not need it when:**
 - You're doing a quick one-off script or single-session experiment

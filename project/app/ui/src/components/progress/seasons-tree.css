@@ -1,0 +1,132 @@
+/* goal: the seasons tree (E92_S13_T07), a storybook tree on a floating moss island in a misty forest, in pure SVG (TreeGoal.jsx).
+   It has a stylesheet of its own so that no existing section of dependency-tree.css, several of which are read by tests from a
+   marker to the end of that file, is touched; DependencyTree.jsx loads dependency-tree.css and TreeGoal.jsx loads this one, and the
+   build and the --snapshot export bundle both.
+   Every colour is a --color-tree-* token of tokens.css (light is its day, dark its night); the status ribbons and dots use the
+   E92 --color-progress-* tokens; the sky, the sun, the moon, the birds and the twinkling stars are the shared day and night
+   section of dependency-tree.css (.dn-scene, .dn-day, .dn-night, dt-twinkle), reused here, not copied. The classes carry no colour
+   in the markup. States are told apart by SHAPE as well as colour (E92_S11): done a full outlined clump, in progress a smaller
+   clump in blossom with flowers, to do a bare twig with snow, failed a withered clump shedding leaves on a drooping branch.
+   Every movement is declared in the one no-preference block at the end, for a root without data-motion="off", so reduced motion
+   and the Animations toggle both show the same drawing, still (the goal-reached state stays readable: petals, motes, a swing and
+   two spirits stand where they are). */
+.dep-tree .dt-tree.dn-scene {
+  --dn-sky-top: var(--color-tree-sky-top);
+  --dn-sky-bottom: var(--color-tree-sky-bottom);
+}
+/* season tones: three shades each, read by the clumps and masses inside the group that carries the tone */
+.dep-tree .dt-tree .tr-tone-0 { --tr-a: var(--color-tree-green-a); --tr-b: var(--color-tree-green-b); --tr-c: var(--color-tree-green-c); }
+.dep-tree .dt-tree .tr-tone-1 { --tr-a: var(--color-tree-gold-a); --tr-b: var(--color-tree-gold-b); --tr-c: var(--color-tree-gold-c); }
+.dep-tree .dt-tree .tr-tone-2 { --tr-a: var(--color-tree-rust-a); --tr-b: var(--color-tree-rust-b); --tr-c: var(--color-tree-rust-c); }
+.dep-tree .dt-tree .tr-tone-3 { --tr-a: var(--color-tree-rose-a); --tr-b: var(--color-tree-rose-b); --tr-c: var(--color-tree-rose-c); }
+.dep-tree .dt-tree .tr-tone-4 { --tr-a: var(--color-tree-teal-a); --tr-b: var(--color-tree-teal-b); --tr-c: var(--color-tree-teal-c); }
+.dep-tree .dt-tree .tr-tone-5 { --tr-a: var(--color-tree-ember-a); --tr-b: var(--color-tree-ember-b); --tr-c: var(--color-tree-ember-c); }
+.dep-tree .dt-tree .tr-tone-6 { --tr-a: var(--color-tree-lime-a); --tr-b: var(--color-tree-lime-b); --tr-c: var(--color-tree-lime-c); }
+.dep-tree .dt-tree .tr-tone-bloom { --tr-a: var(--color-tree-bloom-a); --tr-b: var(--color-tree-bloom-b); --tr-c: var(--color-tree-bloom-c); }
+.dep-tree .dt-tree .tr-tone-dead { --tr-a: var(--color-tree-dead-a); --tr-b: var(--color-tree-dead-b); --tr-c: var(--color-tree-dead-c); }
+.dep-tree .dt-tree .tr-tone-canopy { --tr-a: var(--color-tree-canopy-a); --tr-b: var(--color-tree-canopy-b); --tr-c: var(--color-tree-canopy-c); }
+.dep-tree .dt-tree .tr-tone-crown { --tr-a: var(--color-tree-crown-a); --tr-b: var(--color-tree-crown-b); --tr-c: var(--color-tree-crown-c); }
+.dep-tree .dt-tree .tr-ink { fill: var(--color-tree-ink); }
+.dep-tree .dt-tree .tr-shade { opacity: 0.16; }
+.dep-tree .dt-tree .tr-a { fill: var(--tr-a); }
+.dep-tree .dt-tree .tr-b { fill: var(--tr-b); }
+.dep-tree .dt-tree .tr-c { fill: var(--tr-c); }
+.dep-tree .dt-tree .tr-soft { opacity: 0.55; }
+.dep-tree .dt-tree .tr-soft2 { opacity: 0.85; }
+.dep-tree .dt-tree .tr-leaf { fill: var(--tr-a); stroke: var(--color-tree-ink); }
+.dep-tree .dt-tree .tr-leaf.tr-b { fill: var(--tr-b); }
+.dep-tree .dt-tree .tr-line-a { fill: none; stroke: var(--tr-a); stroke-linecap: round; opacity: 0.8; }
+.dep-tree .dt-tree .tr-line-c { fill: none; stroke: var(--tr-c); stroke-linecap: round; }
+.dep-tree .dt-tree .tr-edge { opacity: 0.55; }
+.dep-tree .dt-tree .tr-contour { fill: none; stroke: var(--color-tree-ink); stroke-width: 1.15; stroke-linecap: round; stroke-linejoin: round; opacity: 0.6; }
+.dep-tree .dt-tree .tr-fallen { stroke: var(--color-tree-ink); stroke-width: 0.3; }
+.dep-tree .dt-tree .tr-fallen.tr-b { fill: var(--tr-b); }
+.dep-tree .dt-tree .tr-fallen.tr-c { fill: var(--tr-c); }
+/* wood, snow, ribbons, the twig of a task still to do */
+.dep-tree .dt-tree .tr-bark { fill: var(--color-tree-bark); }
+.dep-tree .dt-tree .tr-bark-dark { fill: var(--color-tree-bark-dark); }
+.dep-tree .dt-tree .tr-outline { stroke: var(--color-tree-ink); stroke-linejoin: round; }
+.dep-tree .dt-tree .tr-line-hi { fill: none; stroke: var(--color-tree-bark-hi); stroke-linecap: round; }
+.dep-tree .dt-tree .tr-line-ink { fill: none; stroke: var(--color-tree-ink); stroke-linecap: round; }
+.dep-tree .dt-tree .tr-wood-line { fill: none; stroke: var(--color-tree-bark); stroke-linecap: round; }
+.dep-tree .dt-tree .tr-knot { fill: var(--color-tree-ink); stroke: var(--color-tree-bark-hi); stroke-width: 1.2; }
+.dep-tree .dt-tree .tr-snow { fill: var(--color-tree-snow); }
+.dep-tree .dt-tree .tr-snow-line { fill: none; stroke: var(--color-tree-snow); stroke-linecap: round; stroke-linejoin: round; }
+.dep-tree .dt-tree .tr-bud { fill: none; stroke: var(--color-tree-snow-shade); stroke-dasharray: 1.6 1.2; }
+.dep-tree .dt-tree .tr-stub-wood { fill: none; stroke: var(--color-tree-snow-shade); stroke-width: 1.2; stroke-dasharray: 3 2; }
+.dep-tree .dt-tree .tr-stub-ring { fill: none; stroke: var(--color-tree-snow-shade); stroke-width: 1.2; stroke-dasharray: 2 1.6; }
+.dep-tree .dt-tree .tr-ribbon { stroke: var(--color-tree-ink); stroke-width: 0.8; }
+.dep-tree .dt-tree .tr-st-done { fill: var(--color-progress-done); }
+.dep-tree .dt-tree .tr-st-wip { fill: var(--color-progress-in-progress); }
+.dep-tree .dt-tree .tr-st-fail { fill: var(--color-progress-failed); }
+.dep-tree .dt-tree .tr-st-todo { fill: var(--color-progress-pending); }
+.dep-tree .dt-tree .tr-crack { fill: none; stroke: var(--color-tree-ink); stroke-width: 1.6; }
+.dep-tree .dt-tree .tr-petal { fill: var(--color-tree-bloom-b); stroke: var(--color-tree-ink); stroke-width: 0.4; }
+.dep-tree .dt-tree .tr-flower-a { fill: var(--color-tree-flower-a); }
+.dep-tree .dt-tree .tr-flower-b { fill: var(--color-tree-flower-b); }
+.dep-tree .dt-tree .tr-flower-c { fill: var(--color-tree-flower-c); }
+.dep-tree .dt-tree .tr-flower-d { fill: var(--color-tree-flower-d); }
+.dep-tree .dt-tree .tr-flower-core { fill: var(--color-tree-flower-core); }
+.dep-tree .dt-tree .tr-tone-bloom .tr-flower-core { fill: var(--color-tree-bloom-core); }
+/* vines and lanterns: the lantern is lit at night (the glow is a .dn-night element) */
+.dep-tree .dt-tree .tr-vine-line { fill: none; stroke: var(--color-tree-vine); stroke-width: 1.4; }
+.dep-tree .dt-tree .tr-lantern { fill: var(--color-tree-lantern); stroke: var(--color-tree-ink); stroke-width: 1; }
+.dep-tree .dt-tree .tr-lantern-bar { stroke: var(--color-tree-ink); stroke-width: 0.6; }
+.dep-tree .dt-tree .tr-lantern-glow { fill: var(--color-tree-lantern); opacity: 0.25; }
+.dep-tree .dt-tree .tr-seat { fill: var(--color-tree-bark-hi); stroke: var(--color-tree-ink); stroke-width: 1; }
+/* the surroundings: forest, light, pool, stones, island */
+.dep-tree .dt-tree .tr-far-0 { fill: var(--color-tree-far-a); }
+.dep-tree .dt-tree .tr-far-1 { fill: var(--color-tree-far-b); }
+.dep-tree .dt-tree .tr-ray-stop { stop-color: var(--color-tree-ray); }
+.dep-tree .dt-tree .tr-fog { fill: var(--color-tree-fog); }
+.dep-tree .dt-tree .tr-water-top { stop-color: var(--color-tree-water-top); }
+.dep-tree .dt-tree .tr-water-bottom { stop-color: var(--color-tree-water-bottom); }
+.dep-tree .dt-tree .tr-reflect { opacity: 0.14; }
+.dep-tree .dt-tree .tr-ripple { fill: none; stroke: var(--color-tree-ripple); stroke-width: 1.2; }
+.dep-tree .dt-tree .tr-rock-a { fill: var(--color-tree-rock-a); stroke: var(--color-tree-ink); }
+.dep-tree .dt-tree .tr-rock-b { fill: var(--color-tree-rock-b); }
+.dep-tree .dt-tree .tr-rock-c { fill: var(--color-tree-rock-c); }
+.dep-tree .dt-tree .tr-moss-a { fill: var(--color-tree-moss-a); }
+.dep-tree .dt-tree .tr-moss-b { fill: var(--color-tree-moss-b); }
+.dep-tree .dt-tree .tr-moss-c { fill: var(--color-tree-moss-c); }
+.dep-tree .dt-tree .tr-glow { fill: var(--color-tree-ray); }
+.dep-tree .dt-tree .tr-drip { fill: var(--color-tree-ripple); opacity: 0.85; }
+.dep-tree .dt-tree .tr-grass { fill: none; stroke: var(--color-tree-moss-b); stroke-width: 1.2; stroke-linecap: round; }
+.dep-tree .dt-tree .tr-stem { fill: var(--color-tree-stem); }
+.dep-tree .dt-tree .tr-cap { fill: var(--color-tree-cap); stroke: var(--color-tree-ink); }
+.dep-tree .dt-tree .tr-spirit-a .tr-spirit-body { fill: var(--color-tree-spirit-a); stroke: var(--color-tree-ink); }
+.dep-tree .dt-tree .tr-spirit-b .tr-spirit-body { fill: var(--color-tree-spirit-b); stroke: var(--color-tree-ink); }
+.dep-tree .dt-tree .tr-mote { fill: var(--color-tree-mote); }
+.dep-tree .dt-tree .tr-plant-0 { fill: var(--color-tree-plant-a); }
+.dep-tree .dt-tree .tr-plant-1 { fill: var(--color-tree-plant-b); }
+/* labels and the stage track */
+.dep-tree .dt-tree .tr-pill { fill: var(--color-tree-pill); fill-opacity: 0.85; stroke: var(--color-tree-pill-line); stroke-width: 0.7; }
+.dep-tree .dt-tree .tr-dot { stroke: var(--color-tree-ink); stroke-width: 0.5; }
+.dep-tree .dt-tree .tr-leader { stroke: var(--color-tree-text); stroke-width: 0.7; opacity: 0.6; }
+.dep-tree .dt-tree .tr-pill-text { fill: var(--color-tree-text); font-weight: 600; font-family: ui-monospace, Menlo, monospace; }
+.dep-tree .dt-tree .tr-track-line { stroke: var(--color-tree-pill-line); stroke-width: 1; }
+.dep-tree .dt-tree .tr-stage-dot { fill: var(--color-tree-pill); stroke: var(--color-tree-pill-line); stroke-width: 1; }
+.dep-tree .dt-tree .tr-stage-dot.tr-reached { fill: var(--color-tree-green-b); }
+.dep-tree .dt-tree[data-stage="majestic"] .tr-stage-dot.tr-reached { fill: var(--color-tree-ok); }
+.dep-tree .dt-tree .tr-stage-name { fill: var(--color-tree-text); font-weight: 600; font-family: system-ui, sans-serif; }
+/* what moves wears transform-box: fill-box so its own centre is the pivot */
+.dep-tree .dt-tree .tr-sway, .dep-tree .dt-tree .tr-swing, .dep-tree .dt-tree .tr-vine, .dep-tree .dt-tree .tr-fall, .dep-tree .dt-tree .tr-mote, .dep-tree .dt-tree .tr-drip, .dep-tree .dt-tree .tr-stone { transform-box: fill-box; }
+.dep-tree .dt-tree .tr-sway { transform-origin: 50% 100%; }
+.dep-tree .dt-tree .tr-swing, .dep-tree .dt-tree .tr-vine { transform-origin: 50% 0; }
+.dep-tree .dt-tree .tr-mote { transform-origin: center; }
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion="off"]) .dep-tree .dt-tree .tr-sway { animation: tr-sway 7s ease-in-out infinite; }
+  :root:not([data-motion="off"]) .dep-tree .dt-tree .tr-swing { animation: tr-swing 3.4s ease-in-out infinite; }
+  :root:not([data-motion="off"]) .dep-tree .dt-tree .tr-vine { animation: tr-swing 3.4s ease-in-out infinite; animation-delay: var(--tr-delay, 0s); }
+  :root:not([data-motion="off"]) .dep-tree .dt-tree .tr-fall { animation: tr-fall 8s linear infinite; animation-delay: var(--tr-delay, 0s); }
+  :root:not([data-motion="off"]) .dep-tree .dt-tree .tr-mote { animation: tr-mote 3.2s ease-in-out infinite; animation-delay: var(--tr-delay, 0s); }
+  :root:not([data-motion="off"]) .dep-tree .dt-tree .tr-drip { animation: tr-drip 2.8s ease-in infinite; animation-delay: var(--tr-delay, 0s); }
+  :root:not([data-motion="off"]) .dep-tree .dt-tree .tr-stone { animation: tr-bob 5s ease-in-out infinite; animation-delay: var(--tr-delay, 0s); }
+}
+@keyframes tr-sway { 0%, 100% { transform: rotate(-0.5deg); } 50% { transform: rotate(0.5deg); } }
+@keyframes tr-swing { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(7deg); } }
+@keyframes tr-fall { 0% { transform: translate(0, 0) rotate(0); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { transform: translate(-40px, 200px) rotate(300deg); opacity: 0; } }
+@keyframes tr-mote { 0%, 100% { opacity: 0.2; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-6px); } }
+@keyframes tr-drip { 0% { transform: translateY(0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(44px); opacity: 0; } }
+@keyframes tr-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+/* end E92_S13_T07 */

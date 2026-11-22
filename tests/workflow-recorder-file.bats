@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # skills/j-workflow-recorder/scripts/recording-file.sh — create, append, and the step entry format
 # (E89, task E89_S01_T02).
@@ -104,6 +105,21 @@ seal_by_hand() {
   run grep -Fc 'recording-format.sh' "$REPO_ROOT/skills/j-workflow-recorder/scripts/record-answer.sh"
   [ "$status" -eq 0 ]
   [ "$output" != "0" ]
+}
+
+@test "no recorder script keeps an unread alias of a library constant or re-types a marker literal" {
+  # A local alias of a REC_* constant (X="$REC_X") that nothing reads is the same duplication as a
+  # restated format block, and it is how two dead aliases slipped past the test above.
+  local d="$REPO_ROOT/skills/j-workflow-recorder/scripts" f name uses
+  for f in "$d"/*.sh; do
+    [ "$(basename "$f")" = "recording-format.sh" ] && continue
+    run grep -nE "^[A-Za-z_]+='<!-- jenga-recorder:" "$f"
+    [ "$status" -ne 0 ]
+    for name in $(grep -E '^[A-Za-z_]+="\$\{?REC_[A-Z_]+\}?"' "$f" | sed -E 's/=.*//'); do
+      uses="$(grep -v "^$name=" "$f" | grep -c "$name" || true)"
+      [ "${uses:-0}" -ge 1 ] || { echo "$f: alias $name is assigned from the library but never read"; return 1; }
+    done
+  done
 }
 
 @test "the marker-injection exit codes are documented in the script's header comment" {

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E79_S04_T08: scripts/apply-ref-policy.sh applies the Phase 1 unresolved-ref policy (on_unresolved=fail, open decision 5) on top
 # of scripts/resolve-commit-ref.sh: a resolved ref is passed through, a project that is not opted in sees nothing, and an

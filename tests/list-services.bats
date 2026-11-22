@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for skills/j-connect/scripts/list-services.sh (E65_S02_T02).
 #

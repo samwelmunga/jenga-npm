@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for skills/jenga/scripts/detect-nl-intent.sh under the revised fuzzy-ID grammar
 # (E86_S03_T04): a three-digit epic written with letters classifies as all_resolved, a bare ambiguous

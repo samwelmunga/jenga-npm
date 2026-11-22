@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # The bounded default suite set: its config surface, its resolver and the shared
 # strict-subset guard (E72_S08_T06).

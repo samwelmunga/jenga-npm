@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Fixture-based coverage for run-playbook-step.sh's RUNTIME type verification at the
 # `advance <state_file> passed "<value>"` chokepoint (E62_S02_T01), which wires E62_S01's registry

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the `/uncharted onboard` subsystem pipeline under skills/j-uncharted/scripts/ (E43_S01_T02):
 #

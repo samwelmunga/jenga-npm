@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S01_T03: the --ids and --all scopes of scripts/board-progress.sh (contract: project/documentation/
 # progress-visualisation.md sections 2, 3 and 8). Every test runs against the throwaway fixture board built by

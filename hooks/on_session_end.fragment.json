@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "async": true,
+            "command": ". \"$(git rev-parse --show-toplevel)/lib/resolve-project-dir.sh\" && \"$JENGA_PROJECT_DIR\"/.claude/hooks/on_session_end.sh",
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  },
+  "id": "session-end",
+  "version": 1
+}

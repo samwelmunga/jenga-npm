@@ -88,6 +88,31 @@ lines_sorted "$R" "$TMP/r.sorted"
 lines_sorted "$A" "$TMP/a.sorted"
 lines_sorted "$U" "$TMP/u.sorted"
 
+# E89_S06_T06: the resolver deliberately drops a commit that names the id only in its BODY (a cross-reference, not
+# an attribution). So the anchored legacy call may return commits the resolver does not. Each such commit is
+# checked independently here: the id must not appear in its subject, in a body line that is an EST subject, or in
+# a Jenga-Task trailer. A commit that fails that check stays in the legacy set, so it is reported as a FAIL.
+: >"$TMP/bodyonly"
+if [ -n "$A" ]; then
+  A2=""
+  for sha in $A; do
+    if printf '%s\n' "$R" | grep -qx "$sha"; then A2="$A2$sha
+"; continue; fi
+    subj="$(git -C "$REPO" log -1 --format=%s "$sha")"
+    trl="$(git -C "$REPO" log -1 --format='%(trailers:key=Jenga-Task,valueonly)' "$sha")"
+    estline="$(git -C "$REPO" log -1 --format=%b "$sha" | grep -E "^[-* ]*[a-z]+\\(([^)]*[^A-Za-z0-9_])?${ID}([^0-9_)][^)]*)?\\):" || true)"
+    if printf '%s\n' "$subj" | grep -Eq "${ID}([^0-9_]|\$)" || [ -n "$estline" ] || printf '%s\n' "$trl" | grep -Eq "${ID}([^0-9_]|\$)"; then
+      A2="$A2$sha
+"
+    else
+      printf '%s\n' "$sha" >>"$TMP/bodyonly"
+    fi
+  done
+  A="$(printf '%s' "$A2")"
+  lines_sorted "$A" "$TMP/a.sorted"
+fi
+sort -o "$TMP/bodyonly.sorted" "$TMP/bodyonly"
+
 if [ "$R" != "$A" ]; then
   only_r="$(comm -23 "$TMP/r.sorted" "$TMP/a.sorted" | wc -l | tr -d ' ')"
   only_a="$(comm -13 "$TMP/r.sorted" "$TMP/a.sorted" | wc -l | tr -d ' ')"
@@ -113,6 +138,8 @@ git -C "$REPO" log --all --no-merges --extended-regexp --grep="${ID}[0-9_]" \
   --pretty=format:%H >"$TMP/prefix" 2>"$TMP/prefix.err" ||
   verdict "FAIL prefix-collision git log failed: $(tr '\n' ' ' <"$TMP/prefix.err")"
 lines_sorted "$(cat "$TMP/prefix")" "$TMP/prefix.sorted"
+# Body-only mentions are the other intended difference (E89_S06_T06), so they explain extras too.
+sort -u "$TMP/prefix.sorted" "$TMP/bodyonly.sorted" -o "$TMP/prefix.sorted"
 
 unexplained="$(comm -23 "$TMP/extra" "$TMP/prefix.sorted" | wc -l | tr -d ' ')"
 if [ "$unexplained" != "0" ]; then

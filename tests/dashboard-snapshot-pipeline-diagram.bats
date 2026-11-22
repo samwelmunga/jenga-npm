@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # The Jenga pipeline diagram survives the offline snapshot export end to end (E92_S04_T05).
 #

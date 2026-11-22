@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S11_T02: skills/j-reconcile/scripts/detect-done-before-dependency.sh, the j.reconcile finding "a task is done although
 # its dependency is not done" (user decision 2026-11-15, story E92_S11). The detection is board-progress.sh --graph's

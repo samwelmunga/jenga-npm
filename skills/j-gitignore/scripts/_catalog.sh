@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: none sourced catalog helper (callers source _catalog.sh), defines functions and has no entry point of its own
 # -----------------------------------------------------------------------------
 # skills/j-gitignore/scripts/_catalog.sh
 #

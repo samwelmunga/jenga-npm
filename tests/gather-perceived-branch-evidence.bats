@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the per-branch git evidence gatherer used by /j-reconcile (E78_S05_T03).
 #

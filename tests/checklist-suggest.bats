@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the suggestion flow of scripts/checklist.sh -- suggest, pending, rejected, resolve (E67_S05_T04).
 #

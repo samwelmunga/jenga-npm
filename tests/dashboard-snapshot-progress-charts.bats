@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # The four progress pie charts survive the offline snapshot export end to end (E92_S03_T07).
 #

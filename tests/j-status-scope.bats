@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S06_T15: skills/j-status/scripts/render-status-scope.sh - the extended `j.status <scope>` block: dependency tree,
 # "Ready to take" and "X unlocked by Y", all taken from `board-progress.sh --graph --within <id>`.

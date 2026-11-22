@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # Regression coverage for E46_S02_T03: smoke_test.sh's REPO_ROOT used to be a
 # fixed "three levels up" climb from the script's own directory

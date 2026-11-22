@@ -211,6 +211,42 @@ _progress_label_raw() {
     en:story_undecomposed) printf '%s\n' 'Not broken down yet' ;;
     en:story_undecomposed_aria) printf '%s\n' '%s - not broken down into tasks yet' ;;
     # --- end E92_S12_T03 ---
+    # --- begin E92_S13_T05 (the goal design selector of the epic view: the group name and one name per design) ---
+    sv:goal_design_group) printf '%s\n' 'Måldesign' ;;
+    sv:goal_design_star) printf '%s\n' 'Stjärna' ;;
+    sv:goal_design_citadel) printf '%s\n' 'Citadell' ;;
+    sv:goal_design_facade) printf '%s\n' 'Fasad' ;;
+    sv:goal_design_tree) printf '%s\n' 'Årstidsträd' ;;
+    en:goal_design_group) printf '%s\n' 'Goal design' ;;
+    en:goal_design_star) printf '%s\n' 'Star' ;;
+    en:goal_design_citadel) printf '%s\n' 'Citadel' ;;
+    en:goal_design_facade) printf '%s\n' 'Facade' ;;
+    en:goal_design_tree) printf '%s\n' 'Seasons tree' ;;
+    # --- end E92_S13_T05 ---
+    # --- begin E92_S13_T02 (the citadel: the aria label and tooltip of one tower; %s is the story id, %d the done and total counts the payload states, then the failed count) ---
+    sv:castle_tower) printf '%s\n' '%s: %d av %d klara' ;;
+    sv:castle_tower_failed) printf '%s\n' '%s: %d av %d klara, misslyckade: %d' ;;
+    sv:castle_tower_undecomposed) printf '%s\n' '%s: inte nedbruten ännu' ;;
+    en:castle_tower) printf '%s\n' '%s: %d of %d done' ;;
+    en:castle_tower_failed) printf '%s\n' '%s: %d of %d done, %d failed' ;;
+    en:castle_tower_undecomposed) printf '%s\n' '%s: not broken down yet' ;;
+    # --- end E92_S13_T02 ---
+    # --- begin E92_S13_T07 (the seasons tree: the six growth stage names, and the aria label of the stage track; %s is the stage name) ---
+    en:tree_stage_sprout) printf '%s\n' 'Sprout' ;;
+    en:tree_stage_seedling) printf '%s\n' 'Seedling' ;;
+    en:tree_stage_sapling) printf '%s\n' 'Sapling' ;;
+    en:tree_stage_young) printf '%s\n' 'Young tree' ;;
+    en:tree_stage_mature) printf '%s\n' 'Mature tree' ;;
+    en:tree_stage_majestic) printf '%s\n' 'Majestic tree' ;;
+    en:tree_stage_track) printf '%s\n' 'Growth stage: %s' ;;
+    sv:tree_stage_sprout) printf '%s\n' 'Grodd' ;;
+    sv:tree_stage_seedling) printf '%s\n' 'Småplanta' ;;
+    sv:tree_stage_sapling) printf '%s\n' 'Ungplanta' ;;
+    sv:tree_stage_young) printf '%s\n' 'Ungt träd' ;;
+    sv:tree_stage_mature) printf '%s\n' 'Moget träd' ;;
+    sv:tree_stage_majestic) printf '%s\n' 'Majestätiskt träd' ;;
+    sv:tree_stage_track) printf '%s\n' 'Växtsteg: %s' ;;
+    # --- end E92_S13_T07 ---
     *) return 1 ;;
   esac
 }
@@ -270,3 +306,12 @@ PROGRESS_LABEL_KEYS="$PROGRESS_LABEL_KEYS dep_unfinished dep_unfinished_more"
 # --- begin E92_S12_T03 (key list of the undecomposed-story labels) ---
 PROGRESS_LABEL_KEYS="$PROGRESS_LABEL_KEYS story_undecomposed story_undecomposed_aria"
 # --- end E92_S12_T03 ---
+# --- begin E92_S13_T05 (key list of the goal design selector labels) ---
+PROGRESS_LABEL_KEYS="$PROGRESS_LABEL_KEYS goal_design_group goal_design_star goal_design_citadel goal_design_facade goal_design_tree"
+# --- end E92_S13_T05 ---
+# --- begin E92_S13_T02 (key list of the citadel tower labels) ---
+PROGRESS_LABEL_KEYS="$PROGRESS_LABEL_KEYS castle_tower castle_tower_failed castle_tower_undecomposed"
+# --- end E92_S13_T02 ---
+# --- begin E92_S13_T07 (key list of the seasons tree's growth stage labels) ---
+PROGRESS_LABEL_KEYS="$PROGRESS_LABEL_KEYS tree_stage_sprout tree_stage_seedling tree_stage_sapling tree_stage_young tree_stage_mature tree_stage_majestic tree_stage_track"
+# --- end E92_S13_T07 ---

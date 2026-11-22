@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: none needs project/configs/publish.json, which the consumer fixture does not create
 set -u
 
 TARGET_NAME="${1:-}"

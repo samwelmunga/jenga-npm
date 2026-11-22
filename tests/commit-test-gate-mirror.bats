@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Mirror parity for the commit test gate (E72_S04_T07).
 #

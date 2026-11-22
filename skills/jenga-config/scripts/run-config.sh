@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: none without jenga on PATH it npm-installs a pinned CLI into a per-user cache and then runs it, so it is never run blind
 #
 # run-config.sh - the deterministic entry point for `/jenga-config` (E68_S04_T01).
 #

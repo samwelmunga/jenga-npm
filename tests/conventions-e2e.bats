@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # End-to-end coverage of the whole conventions pipeline (E69_S06_T04): detect, the wizard's scripted answers, the
 # conventions.json it writes, the conv- checklist items generated from it, and the real checker listing them.

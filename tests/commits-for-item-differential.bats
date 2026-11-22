@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Differential tests for scripts/commits-for-item.sh (E79_S02_T02): the resolver against the legacy `git log --grep`.
 #
@@ -100,7 +101,7 @@ commit() {
 #    6  task(E10_S01_T01): add retry                 E10_S01_T01 anchored; E10_S01, E10, E1 prefix
 #    7  task(E10_S01_T010): add backoff              E10_S01_T010 anchored; E10_S01_T01, E10_S01, E10, E1 prefix
 #    8  chore(E10_S01_T01): add rapport - retry      like 6
-#    9  wip: tidy  + body "Refs E10_S01_T01 and E1."   E10_S01_T01 and E1 anchored (body only); E10_S01, E10 prefix
+#    9  wip: tidy, refs E10_S01_T01 and E1.      E10_S01_T01 and E1 anchored (subject; a body-only mention no longer resolves, E89_S06_T06); E10_S01, E10 prefix
 #   10  task(E10_S01_T010): wip on branch            like 7, on the unmerged branch feat
 #   11  task(E10_S01_T01): topic work                like 6, on branch topic (merged below)
 #   12  rapport: E1                                  E1 anchored, at the very end of the message
@@ -127,7 +128,7 @@ build_fixture() {
   commit "task(E10_S01_T01): add retry"
   commit "task(E10_S01_T010): add backoff"
   commit "chore(E10_S01_T01): add rapport - retry"
-  commit "wip: tidy" "Refs E10_S01_T01 and E1."
+  commit "wip: tidy, refs E10_S01_T01 and E1."
   git -C "$FIX" checkout -q -b feat
   commit "task(E10_S01_T010): wip on branch"
   git -C "$FIX" checkout -q main
@@ -234,15 +235,15 @@ E10_S02" ]
   shas=($output)
   [ "${#shas[@]}" -eq 4 ]
   [ "$(subjects_of "${shas[@]}")" = "task(E10_S01_T01): topic work
-wip: tidy
+wip: tidy, refs E10_S01_T01 and E1.
 chore(E10_S01_T01): add rapport - retry
 task(E10_S01_T01): add retry" ]
-  # E1: rapport: E1 (12), wip: tidy (9, body only), epic(E1): scaffold (2). Nothing that only names E10, E100 or E10_...
+  # E1: rapport: E1 (12), wip: tidy (9), epic(E1): scaffold (2). Nothing that only names E10, E100 or E10_...
   run bash "$SCRIPT" E1 --repo "$FIX"
   [ "$status" -eq 0 ]
   shas=($output)
   [ "$(subjects_of "${shas[@]}")" = "rapport: E1
-wip: tidy
+wip: tidy, refs E10_S01_T01 and E1.
 epic(E1): scaffold" ]
   # A story id does not collect its task commits, and an unqueried-for-by-name id yields nothing.
   run bash "$SCRIPT" E10_S01 --repo "$FIX"

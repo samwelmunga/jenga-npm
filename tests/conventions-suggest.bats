@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for E69_S05_T06: the non-blocking "run j.conventions" suggestion at the end of j.init and
 # `j.uncharted onboard`.

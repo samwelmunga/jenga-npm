@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 # Coverage for scripts/check-test-links.sh (E83_S04_T02): the read-only freshness check of the derived links file
 # project/knowledge-graph/test-links.json. The verdicts, reasons, exit codes and JSON shape are documented in the script's
 # own header; the record schema is owned by scripts/validate-test-links.sh and the file is written only by

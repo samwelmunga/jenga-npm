@@ -214,8 +214,6 @@ ANSWER_MARKER_PREFIX="$REC_ANSWER_MARKER_PREFIX"
 ANSWER_END_PREFIX="$REC_ANSWER_END_PREFIX"
 # Owned by recording-file.sh's layer; read, never written, by this script.
 STEPS_ANCHOR="$REC_STEPS_ANCHOR"
-STEP_MARKER_PREFIX="$REC_STEP_MARKER_PREFIX"
-STEP_END_PREFIX="$REC_STEP_END_PREFIX"
 
 VALID_KINDS='deviation, end-of-process, relevance, step-type'
 

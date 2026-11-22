@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # E76_S01_T01: the per-task usage frontmatter fields (usage_*) are allow-listed for tasks in
 # scripts/validate-board.sh (the USAGE_KEYS group), and a misspelled usage key is still rejected.
@@ -96,4 +97,60 @@ usage_total_tokens: 100'
   run bash "$VALIDATE" "$FIXTURE_DIR/cost.md"
   [ "$status" -ne 0 ]
   assert_output_contains "usage_cost_usd"
+}
+
+# E90_S01_T05: the cost-equivalent unit field on a task (a derived view, not a currency amount).
+
+@test "accepts a task carrying usage_cost_units" {
+  write_task "cu.md" 'usage_cost_units: 12345'
+
+  run bash "$VALIDATE" "$FIXTURE_DIR/cu.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "accepts an explicit zero usage_cost_units (a measured zero)" {
+  write_task "cu0.md" 'usage_cost_units: 0'
+
+  run bash "$VALIDATE" "$FIXTURE_DIR/cu0.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "rejects a misspelled cost-unit key on a task" {
+  write_task "cu-typo.md" 'usage_cost_unit: 5'
+  run bash "$VALIDATE" "$FIXTURE_DIR/cu-typo.md"
+  [ "$status" -ne 0 ]
+  assert_output_contains "usage_cost_unit"
+
+  write_task "cu-typo2.md" 'usage_costunits: 5'
+  run bash "$VALIDATE" "$FIXTURE_DIR/cu-typo2.md"
+  [ "$status" -ne 0 ]
+  assert_output_contains "usage_costunits"
+}
+
+@test "rejects a negative usage_cost_units" {
+  write_task "cu-neg.md" 'usage_cost_units: -3'
+
+  run bash "$VALIDATE" "$FIXTURE_DIR/cu-neg.md"
+  [ "$status" -ne 0 ]
+  assert_output_contains "usage_cost_units"
+}
+
+@test "rejects a non-numeric or decimal usage_cost_units" {
+  write_task "cu-str.md" 'usage_cost_units: lots'
+  run bash "$VALIDATE" "$FIXTURE_DIR/cu-str.md"
+  [ "$status" -ne 0 ]
+  assert_output_contains "usage_cost_units"
+
+  write_task "cu-dec.md" 'usage_cost_units: 12.5'
+  run bash "$VALIDATE" "$FIXTURE_DIR/cu-dec.md"
+  [ "$status" -ne 0 ]
+  assert_output_contains "usage_cost_units"
+}
+
+@test "rejects a story-only cost-unit key on a task" {
+  write_task "cu-story.md" 'usage_tasks_cost_units: 5'
+
+  run bash "$VALIDATE" "$FIXTURE_DIR/cu-story.md"
+  [ "$status" -ne 0 ]
+  assert_output_contains "usage_tasks_cost_units"
 }

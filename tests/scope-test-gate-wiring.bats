@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Wiring coverage for the scope test gate in the agent definitions (E72_S06_T04).
 #

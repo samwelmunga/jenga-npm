@@ -62,14 +62,21 @@ est_files=""
 est_lines=""
 prerequisites="None."
 
-usage() {
-  cat >&2 <<EOF
+usage_text() {
+  cat <<EOF
 Usage: $0 --story <E##_S##> --title "<title>" --description "<description>" \\
        --criteria "<c1>|<c2>|..." --computed-tier <inline|task|story> \\
        --est-files <N> --est-lines <M> [--prerequisites "<text>"]
 EOF
+}
+
+# Usage error: usage on stderr, non-zero exit.
+usage() {
+  usage_text >&2
   exit 1
 }
+
+[ $# -gt 0 ] || usage
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -81,7 +88,7 @@ while [ $# -gt 0 ]; do
     --est-files) est_files="$2"; shift 2 ;;
     --est-lines) est_lines="$2"; shift 2 ;;
     --prerequisites) prerequisites="$2"; shift 2 ;;
-    -h|--help) usage ;;
+    -h|--help) usage_text; exit 0 ;;
     *) echo "Error: unknown argument '$1'" >&2; usage ;;
   esac
 done

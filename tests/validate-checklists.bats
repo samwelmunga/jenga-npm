@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for scripts/validate-checklists.sh (E67_S01_T04).
 #

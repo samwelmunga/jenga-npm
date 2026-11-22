@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E69_S05_T05: can the pre-commit checklist phase see the commit message that is about to be written?
 #

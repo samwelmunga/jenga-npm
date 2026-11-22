@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E76_S01_T02: scripts/task-usage.sh stage 1 - transcript discovery and task mapping (--list-transcripts).
 #

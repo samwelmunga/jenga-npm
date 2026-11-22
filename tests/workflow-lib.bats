@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E80_S01_T02: scripts/workflow/lib.sh is the shared location resolver for the workflow tools (package root,
 # schema, types, built-in workflow directory, project-local workflow directory).

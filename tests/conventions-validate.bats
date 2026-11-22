@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for scripts/validate-conventions.sh, templates/conventions.json and
 # templates/conventions-presets.json (E69_S01_T05).

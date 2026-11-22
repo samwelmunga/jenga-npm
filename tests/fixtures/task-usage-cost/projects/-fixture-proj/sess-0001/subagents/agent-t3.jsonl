@@ -1,0 +1,2 @@
+{"type":"user","message":{"role":"user","content":"synthetic"}}
+{"type":"assistant","requestId":"req_t3","message":{"role":"assistant","model":"fixture-priced","usage":{"input_tokens":7,"output_tokens":2,"cache_creation_input_tokens":0,"cache_read_input_tokens":30,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0}}}}

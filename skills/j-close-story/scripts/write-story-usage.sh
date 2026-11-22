@@ -23,6 +23,15 @@
 #      board file, in one critical section (scripts/with-lock.sh), through update-task-frontmatter.sh applied to a
 #      temporary copy that replaces the file only when every write succeeded. usage_possibly_incomplete (the literal
 #      true) is written only when a task of the story carries it, and an existing one is never cleared.
+#      Cost units (task E90_S01_T07): when the report carries the derived cost-equivalent unit for the story
+#      (tasks.cost_units, allocated_overhead.cost_units, total.cost_units, none of them null) and the story is not
+#      cost_units_partial, usage_tasks_cost_units, usage_overhead_cost_units and usage_cost_units are written beside the
+#      raw fields, and the total must equal the task part plus the overhead part (else NOTHING is written, like the raw
+#      numbers). A partial story (an unpriced task or model) gets none of the three and the block says
+#      "cost units ...: not priced: <reason>". The price-ratio loader and config are a DIRECT dependency of
+#      task-usage.sh (E90_S02_T02): when they are missing it exits 10 and this helper reports "not measured: price-ratio
+#      dependency missing ..." and writes nothing. A report that arrives WITHOUT the derived keys is treated the same way
+#      (a reported error, nothing written), never as the raw-only output of before E90.
 #   4. Prints the report block: the task part, the overhead part and the total, the story's tasks that have no
 #      measurement, and any unallocated overhead of the story's session(s).
 #
@@ -44,6 +53,24 @@
 # ---------------------------------------------------------------------------
 
 set -u
+
+# --help / -h: print usage on stdout and exit 0 before anything is parsed, read or written (E99_S01_T02).
+case "${1:-}" in
+  --help|-h)
+    cat <<'USAGE'
+write-story-usage.sh - roll a story's task usage plus allocated overhead into the story record
+
+Usage: write-story-usage.sh <story-id>
+       write-story-usage.sh --help | -h
+
+Writes the story usage fields into the story's board file and prints the Story usage
+block of the closing report. Exits 0 even when the numbers cannot be produced; exit 2
+for a missing or malformed story id. --help only prints this text and writes nothing.
+  Example: write-story-usage.sh E76_S03
+USAGE
+    exit 0
+    ;;
+esac
 
 # --- internal: the writes, run under the lock ------------------------------------------------------------------------
 if [ "${1:-}" = "--apply" ]; then
@@ -102,6 +129,9 @@ command -v jq >/dev/null 2>&1 || not_measured "jq is not installed, so the usage
 
 bash "$TU" --report --stories "$STORY" >"$TMP/out" 2>"$TMP/err" </dev/null
 rc=$?
+if [ "$rc" -eq 10 ]; then
+  not_measured "price-ratio dependency missing, nothing written (task-usage.sh exit 10): $(grep . "$TMP/err" 2>/dev/null | head -n 1)"
+fi
 if [ "$rc" -ne 0 ]; then
   not_measured "usage measurement failed (exit $rc): $(grep . "$TMP/err" 2>/dev/null | head -n 1)"
 fi
@@ -128,6 +158,32 @@ done
   || not_measured "the report's story total ($s_tot) is not the task part ($t_tot) plus the overhead part ($o_tot); nothing written"
 
 unmeasured="$(jq -r --arg s "$STORY" '.stories[$s].unmeasured_tasks // [] | join(", ")' "$TMP/out" 2>/dev/null)"
+
+# the derived cost-equivalent unit (E90_S01_T07, a direct dependency since E90_S02_T02). cmode: ok = three whole numbers
+# that add up, partial = the story has an unpriced part (no number, a reason). A report with no derived keys is an error.
+cmode=none; c_t=""; c_o=""; c_s=""; c_reason=""
+if jq -e --arg s "$STORY" '.stories[$s] | (.total | has("cost_units")) or (.cost_units_partial == true)' "$TMP/out" >/dev/null 2>&1; then
+  if [ "$(jq -r --arg s "$STORY" '.stories[$s].cost_units_partial // false' "$TMP/out" 2>/dev/null)" = true ]; then
+    cmode=partial
+    um="$(jq -r --arg s "$STORY" '.stories[$s].unpriced_models // [] | join(", ")' "$TMP/out" 2>/dev/null)"
+    c_reason="part of the story has no price ratios${um:+ (unpriced model(s): $um)}, so no cost-unit total is given"
+  else
+    crow="$(jq -r --arg s "$STORY" '.stories[$s] | [.tasks.cost_units, .allocated_overhead.cost_units, .total.cost_units] | map(tostring) | @tsv' "$TMP/out" 2>/dev/null)"
+    IFS="$tab" read -r c_t c_o c_s <<EOF
+$crow
+EOF
+    ok=1
+    for v in "$c_t" "$c_o" "$c_s"; do
+      case "$v" in ''|*[!0-9]*) ok=0 ;; esac
+    done
+    [ "$ok" -eq 1 ] || not_measured "the usage report carries a missing or non-integer cost-unit number for $STORY; nothing written"
+    [ "$((c_s))" -eq "$((c_t + c_o))" ] \
+      || not_measured "the report's cost-unit total ($c_s) is not the task part ($c_t) plus the overhead part ($c_o); nothing written"
+    cmode=ok
+  fi
+else
+  not_measured "the usage report carries no derived cost-unit keys for $STORY (the price-ratio dependency of task-usage.sh is required); nothing written"
+fi
 
 # unallocated overhead of this story's session(s): the records whose session directory (the allocation rule's
 # derivation: a subagent path minus its last two components, a session path minus .jsonl) is the session of one of
@@ -194,6 +250,7 @@ if [ "$action" = write ]; then
     usage_overhead_input_tokens "$o_in" usage_overhead_output_tokens "$o_out" usage_overhead_cache_write_tokens "$o_cw" \
     usage_overhead_cache_read_tokens "$o_cr" usage_overhead_total_tokens "$o_tot" \
     usage_total_tokens "$s_tot" usage_measured_on "$today"
+  [ "$cmode" = ok ] && set -- "$@" usage_tasks_cost_units "$c_t" usage_overhead_cost_units "$c_o" usage_cost_units "$c_s"
   [ "$incomplete" -eq 1 ] && set -- "$@" usage_possibly_incomplete true
 elif [ "$action" = keep ]; then
   # the recomputed task part is below the persisted one: transcripts were pruned. Keep every stored number, flag it.
@@ -228,6 +285,10 @@ else
   printf '  tasks:    %s\n' "$(fmt "$t_tot" "$t_in" "$t_out" "$t_cw" "$t_cr")"
   printf '  overhead: %s\n' "$(fmt "$o_tot" "$o_in" "$o_out" "$o_cw" "$o_cr")"
   printf '  story:    total=%s tokens (tasks %s + overhead %s)\n' "$s_tot" "$t_tot" "$o_tot"
+  case "$cmode" in
+    ok) printf '  cost units (derived cost-equivalent unit, not a currency amount): total=%s (tasks %s + overhead %s)\n' "$c_s" "$c_t" "$c_o" ;;
+    partial) printf '  cost units (derived cost-equivalent unit): not priced: %s\n' "$c_reason" ;;
+  esac
 fi
 if [ "$u_n" -gt 0 ]; then
   printf "  unallocated overhead in this story's session (charged to no story): %s, entries=%s (%s)\n" \

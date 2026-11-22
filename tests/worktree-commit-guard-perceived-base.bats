@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the worktree commit guard with a task branch cut from a perceived branch (E78_S03_T01).
 #

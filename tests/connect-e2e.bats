@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # End-to-end proof that the j.connect pieces compose (E65_S01_T06):
 # validate-descriptor.sh + run-descriptor.sh + ensure-secret-safe.sh +

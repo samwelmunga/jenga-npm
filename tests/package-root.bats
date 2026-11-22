@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E98_S01: skills/index/scripts/package-root.sh - the shared resolver a mirrored skill script uses to find the
 # package (scripts/, templates/, lib/). In a consumer, `.claude/skills/<skill>/scripts/../../..` is `.claude/`, which

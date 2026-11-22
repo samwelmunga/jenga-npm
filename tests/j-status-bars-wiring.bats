@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S05_T05: j.status shows the render-status-bars.sh bar on every epic and story row, and changes nothing else.
 # E92_S06_T26: the default path of j.status is now the T24 overview (skills/j-status/scripts/resolve-status-mode.sh picks the
@@ -21,7 +22,7 @@ setup() {
 @test "SKILL.md step 6.9 sits between step 6.8 and step 6.10, and 6.5, 6.7 and 6.8 keep their commands" {
   run grep -n '^6\.[0-9]*\. \|^7\. ' "$SKILL"
   [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | sed 's/^\([0-9]*\):\([0-9.]*\)\..*/\2/' | tr '\n' ' ')" = "6.5 6.7 6.8 6.9 6.10 7 " ]
+  [ "$(printf '%s\n' "$output" | sed 's/^\([0-9]*\):\([0-9.]*\)\..*/\2/' | tr '\n' ' ')" = "6.5 6.7 6.8 6.85 6.9 6.10 7 " ]
   grep -qF 'bash "$([ -f scripts/mark-deployed.sh ]' "$SKILL"
   grep -qF 'bash "$([ -f scripts/check-todo-format.sh ]' "$SKILL"
   grep -qF 'bash "$([ -f scripts/audit-status.sh ]' "$SKILL"

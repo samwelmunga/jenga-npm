@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 # Coverage for scripts/validate-test-links.sh (E83_S02_T01): the validator and schema source of truth for the derived
 # test-to-architecture links file (project/knowledge-graph/test-links.json). The rules and their order are documented in the
 # script's own header comment; the decisions behind them are D2/D4/D6 of project/documentation/test-architecture-linking-spike.md.

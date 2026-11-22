@@ -19,8 +19,8 @@
 # id order. epics[] carry id, title, depends_on, stories {totals, complete} (totals over the epic's stories, complete = the
 # number of stories whose complete flag is true), tasks {totals} (over every task under the epic, by each task's own
 # epic_id) and epic_progress (the epic percent, see below). stories[] carry id, epic_id, title, depends_on, totals (over
-# the story's tasks), complete (task denominator > 0 and done == denominator; rejected tasks are excluded as everywhere)
-# and stop, the story's single
+# the story's tasks), complete (task denominator > 0 and done == denominator; rejected tasks are excluded as everywhere),
+# decomposed (E92_S12_T01, below) and stop, the story's single
 # colour bucket: rejected (the story's own status is Rejected), done (complete), failed (any failed task), in_progress (any
 # task in progress, or some but not all done), else pending. tasks[] carry id, story_id, epic_id, title, status, bucket and
 # depends_on. The totals are the very objects --epic/--story print: the same load stage, status table and bucket
@@ -30,6 +30,16 @@
 # as written (reported as an unknown_dependency warning, see below). An edge points from an item to each id in its depends_on. It is a scope
 # of its own (combining it with another scope flag, --items or --summary is a usage error, exit 2) and exits 3 only when
 # the board has no epic file at all.
+#
+# decomposed (E92_S12_T01): every stories[] entry of --graph (full board, --counts-only and --within alike) states
+# whether the story has been broken down into tasks, by the same figures epic_progress uses (no second counting pass):
+#   true   a counted story (its own bucket is not rejected and not unknown) with at least one counted task (task
+#          denominator > 0, a task counts under its story as for epic_progress)
+#   false  a counted story with no counted task: no task files, every task rejected, or every task of unknown status
+#   null   a story that is not counted at all (its own status is Rejected or unknown); a view must not draw it as "not
+#          broken down", because epic_progress.stories does not count it either
+# Invariant per epic: the number of true entries equals epic_progress.decomposed and the number of false entries equals
+# epic_progress.stories - epic_progress.decomposed. The key sits after complete; an added key, schema_version stays 1.
 #
 # --graph states (E92_S06_T02). Every task also carries state, blocked_by and unlocked_by, and the payload gains ready,
 # ready_count and (with --within) external, so no consumer re-derives the dependency semantics.
@@ -816,7 +826,8 @@ function derive_states(   i, id, b, n, a, j, v, best, sidk, sj, d, w) {
     tunl[id] = best
   }
 }
-function graph_end(   i, id, b, k, first, tt, den, ek, v, n, a, j, ex) {
+function graph_end(   i, id, b, k, first, tt, den, ek, v, n, a, j, ex, sb, dec) {
+  epic_progress_calc()
   bk["done"] = 1; bk["in_progress"] = 1; bk["failed"] = 1; bk["pending"] = 1; bk["rejected"] = 1; bk["unknown"] = 1
   derive_states()
   for (i = 1; i <= no; i++) {
@@ -863,7 +874,12 @@ function graph_end(   i, id, b, k, first, tt, den, ek, v, n, a, j, ex) {
     else stop = "pending"
     printf "%s\n    {\n      \"id\": \"%s\",\n      \"epic_id\": \"%s\",\n      \"title\": \"%s\",\n      \"depends_on\": %s,\n      \"totals\": ", (first ? "" : ","), jesc(id), jesc(geid[id]), jesc(gttl[id]), deps_json(gdep[id])
     totals_obj(tt, "      ")
-    printf ",\n      \"complete\": %s,\n      \"stop\": \"%s\",\n      \"ready_count\": %d\n    }", (scomp[id] ? "true" : "false"), stop, rcs[gkey[id]] + 0
+    # E92_S12_T01: decomposed, from the very figures epic_progress_calc derived (same counted-story test, same task
+    # denominator epc_den, same key); null for a story that is not counted.
+    sb = bucket(st[id])
+    if (sb == "rejected" || sb == "unknown") dec = "null"
+    else dec = (epc_den[gkey[id] SUBSEP gpe[id]] > 0) ? "true" : "false"
+    printf ",\n      \"complete\": %s,\n      \"decomposed\": %s,\n      \"stop\": \"%s\",\n      \"ready_count\": %d\n    }", (scomp[id] ? "true" : "false"), dec, stop, rcs[gkey[id]] + 0
     first = 0
   }
   printf "%s],\n", (first ? "" : "\n  ")

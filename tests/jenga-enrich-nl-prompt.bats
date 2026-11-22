@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # Coverage for skills/jenga/scripts/enrich-nl-prompt.sh (E53_S13_T01) — the board + docs
 # enrichment scan ported from the now-retired /route's Steps 3-5, wired into /jenga's

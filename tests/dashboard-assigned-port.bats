@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E47_S11_T03: the dashboard prefers the project's assigned port (scripts/dashboard-port.sh get), falls back to
 # the verified-free search with a warning when it is busy, missing or invalid, and an explicit port still wins.

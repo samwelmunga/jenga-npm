@@ -19,9 +19,15 @@
  *   4. The Jenga block in `CLAUDE.md` and `AGENTS.md` (`generateAgentContext`; the J- collision
  *      rule applies). Runs after step 2 because the block renders the allow-list.
  *   5. Repair a legacy array-shaped `project/logs/events.json` (`lib/events-log-repair.js`).
- *   6. Write `.jenga-version`.
+ *   6. Merge the shipped settings fragments into `<consumer>/.claude/settings.json` and
+ *      `.agents/settings.json` (`scripts/merge-settings.sh`, E100_S03): hooks, per-key `env`, and `permissions.allow` rules, additive and
+ *      idempotent, never touching a client entry. The allow rules are opt-in: the script asks only when
+ *      `interactive` is set (`jenga sync` on a terminal), never from postinstall, CI or a dry run, and
+ *      otherwise reports them inactive. Exit 6 ("completed with conflicts or inactive allow rules") is a
+ *      warning in the summary, not a failure; any other non-zero exit fails the step.
+ *   7. Write `.jenga-version`.
  *
- * It never modifies `jenga.cli.json`, never writes outside `.claude/`, `.agents/`, `.github/`,
+ * It never modifies `jenga.cli.json`, never writes outside `.claude/` (the mirrors and `settings.json`), `.agents/`, `.github/`,
  * `CLAUDE.md`, `AGENTS.md`, `J-*.md`, `project/logs/events.json` and `.jenga-version` (the allow-list
  * artifact lives in the installed package's own `lib/`), and never deletes a consumer-owned file.
  *
@@ -73,6 +79,7 @@
  */
 
 import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -200,6 +207,8 @@ export function readPackageInfo(packageRoot) {
  * @param {string}   opts.packageRoot   Installed package root (source of skills/, agents/, templates/).
  * @param {string}   opts.consumerRoot  Consumer project root to bring in line.
  * @param {boolean} [opts.dryRun=false] Compute and report; write nothing in the consumer tree.
+ * @param {boolean} [opts.interactive=false] Let step 6 ask on the terminal whether to write the opt-in
+ *   `permissions.allow` rules. Only `jenga sync` on a terminal sets it; ignored under `dryRun`.
  * @param {function} [opts.log]         Receives every output line. Default `console.log`.
  * @returns {{
  *   skipped?: 'inside-package',
@@ -210,13 +219,14 @@ export function readPackageInfo(packageRoot) {
  *   roots: Object<string, {added: string[], overwritten: string[], removed: string[], skipped: number}>,
  *   agentContext: {written: object[], changed: boolean, skipped?: boolean}|null,
  *   steps: Array<{step: string, status: string, detail?: string}>,
+ *   warnings: string[],
  *   failures: Array<{step: string, message: string}>
  * }}
  *   `changes` lists every file that was (or, under `dryRun`, would be) added, overwritten, removed
  *   or regenerated, as consumer-relative POSIX paths; `changed` is its length, so a second real run
  *   over an unchanged tree reports `changed: 0`. `skippedFiles` counts byte-identical mirror files.
  */
-export function syncConsumer({ packageRoot, consumerRoot, dryRun = false, log = console.log } = {}) {
+export function syncConsumer({ packageRoot, consumerRoot, dryRun = false, interactive = false, log = console.log } = {}) {
   if (!packageRoot || !consumerRoot) {
     throw new TypeError('syncConsumer: `packageRoot` and `consumerRoot` are required');
   }
@@ -235,6 +245,7 @@ export function syncConsumer({ packageRoot, consumerRoot, dryRun = false, log = 
     roots: {},
     agentContext: null,
     steps: [],
+    warnings: [],
     failures: [],
   };
 
@@ -525,7 +536,55 @@ export function syncConsumer({ packageRoot, consumerRoot, dryRun = false, log = 
       fail('events-log', e.message);
     }
 
-    // ── 6. .jenga-version ──────────────────────────────────────────────────────
+    // ── 6. settings merge in .claude/settings.json and .agents/settings.json (E100_S03_T07) ──
+    // Nothing else in the install path writes hooks, env or allow rules into a consumer's settings, so a
+    // project updated from a release that predates one never got it. Best-effort like the event-log
+    // repair: a failure is reported and never aborts the sync. Exit 6 is a warning, not a failure.
+    try {
+      const script = path.join(packageRoot, 'scripts', 'merge-settings.sh');
+      if (!fs.existsSync(script)) {
+        note('hooks', 'skipped', 'scripts/merge-settings.sh not found');
+      } else {
+        const ask = interactive && !dryRun;
+        const r = spawnSync('bash', [script, '--consumer-root', consumerRoot, '--package-root', packageRoot,
+          ...(dryRun ? ['--dry-run'] : []), ...(ask ? ['--interactive'] : [])],
+        { encoding: 'utf8', ...(ask ? { stdio: ['inherit', 'pipe', 'pipe'] } : {}) });
+        if (r.status !== 0 && r.status !== 6) {
+          const detail = (r.stderr || r.stdout || '').trim();
+          log(`  ⚠  Could not merge settings into .claude/settings.json (exit ${r.status})${detail ? ` — ${detail}` : ''}; file left unchanged`);
+          fail('hooks', `merge failed (exit ${r.status})`);
+        } else {
+          const lines = r.stdout.split('\n');
+          const events = lines.map((l) => l.match(/^(?:would add|added) (\S+)$/)).filter(Boolean).map((m) => m[1]);
+          const other = lines.filter((l) => /^(?:would add|added) (?:env|allow) |^(?:would remove|removed) /.test(l)).length;
+          if (events.length > 0) {
+            log(`  ✓ .claude/settings.json — hooks ${dryRun ? 'would be registered' : 'registered'}: ${events.join(', ')}`);
+            change('.claude/settings.json', 'hooks-registered');
+          }
+          if (other > 0) {
+            log(`  ✓ .claude/settings.json, .agents/settings.json — ${other} env/allow/removal entr${other === 1 ? 'y' : 'ies'} ${dryRun ? 'would be updated' : 'updated'}`);
+            if (events.length === 0) change('.claude/settings.json', 'settings-updated');
+          }
+          if (r.status === 6) {
+            const conflicts = lines.filter((l) => /^conflict /.test(l)).length;
+            const inactive = lines.filter((l) => /^inactive allow /.test(l)).length;
+            const msg = (conflicts + inactive) > 0
+              ? `settings: ${conflicts} conflict(s), ${inactive} allow rule(s) inactive`
+              : 'settings: completed with conflicts or inactive entries (exit 6)';
+            log(`  ⚠  ${msg}; those requirements are inactive${inactive > 0 && !ask ? ' (allow rules are only written after a yes at the terminal: run jenga sync)' : ''}`);
+            result.warnings.push(msg);
+            note('hooks', 'warning', msg);
+          } else {
+            note('hooks', 'ok');
+          }
+        }
+      }
+    } catch (e) {
+      log(`  ⚠  Could not merge settings into .claude/settings.json — ${e.message}`);
+      fail('hooks', e.message);
+    }
+
+    // ── 7. .jenga-version ──────────────────────────────────────────────────────
     try {
       const versionFile = path.join(consumerRoot, '.jenga-version');
       const next = packageVersion + '\n';

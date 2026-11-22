@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for scripts/check-public-playbook-steps.sh's two E28_S14_T02 extensions:
 # the project/.playbooks/ scan, and the terminal-step deny-list.

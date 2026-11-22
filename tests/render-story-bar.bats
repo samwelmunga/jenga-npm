@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for scripts/render-story-bar.sh (E92_S06_T23): the after-story progress line, Proposal A of
 # project/documentation/prototypes/E92_S06/bars-prototype.html.

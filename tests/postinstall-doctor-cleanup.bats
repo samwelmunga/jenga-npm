@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # `jenga doctor` / `jenga clean` interactive orphan cleanup (E26_S08_T02).
 #

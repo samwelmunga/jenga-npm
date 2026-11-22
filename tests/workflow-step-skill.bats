@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E80_S03_T04: scripts/workflow/step-skill.sh validates a workflow skill step's skill against the skills catalog
 # and prints the action payload the calling agent invokes.

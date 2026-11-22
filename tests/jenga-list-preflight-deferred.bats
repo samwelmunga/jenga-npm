@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for skills/jenga/scripts/list-preflight-deferred.sh (E67_S03_T06) -- the deterministic
 # extraction of `preflight_deferred` item ids that /jenga Phase 4 uses as a run-scoped exclusion set.

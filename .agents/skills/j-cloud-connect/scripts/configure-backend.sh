@@ -215,6 +215,16 @@ fi
 # every backend — no per-backend branch here.
 # -----------------------------------------------------------------------------
 
+if [ "$BACKEND_TYPE" = "drive" ]; then
+  # E89_S06_T08: rclone is retiring its shared Google Drive client_id (during 2026).
+  # Informational only - no prompt is intercepted and no value is read or stored.
+  echo ""
+  echo "NOTE: rclone's shared Google Drive client_id is being retired and will stop working"
+  echo "during 2026. When rclone asks for 'client_id' and 'client_secret', enter your OWN"
+  echo "(you type them to rclone; Jenga never sees or stores them). How to create them:"
+  echo "  https://rclone.org/drive/#making-your-own-client-id"
+fi
+
 echo ""
 echo "Running: rclone config create $REMOTE_NAME $BACKEND_TYPE"
 echo "Follow any prompts below, including opening any authorization link shown,"

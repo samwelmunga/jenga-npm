@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # Coverage for scripts/events-log-migrate.sh (E75_S01_T02): the one-off conversion of the shared event
 # log from a JSON array to JSONL, which is also the recovery path for in-flight branches.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the two Atlassian j.connect descriptors (E71_S01_T03):
 #   skills/j-connect/descriptors/atlassian-cloud.json  (remote MCP server, registered in .mcp.json)

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Host-tool regression gate: can GitHub Copilot CLI actually load our skills?
 # (E50_S07_T04)

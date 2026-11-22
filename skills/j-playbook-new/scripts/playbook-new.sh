@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: validate-id smoke-probe-id
 # ---------------------------------------------------------------------------
 # skills/j-playbook-new/scripts/playbook-new.sh
 #

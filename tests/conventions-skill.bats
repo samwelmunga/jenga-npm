@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Structure and registration coverage for the j.conventions skill (E69_S04_T06): skills/j-conventions/SKILL.md, its
 # allow-list and CLAUDE.md registration, its script contract against `conventions-entry.sh --help`, its numbered-choice

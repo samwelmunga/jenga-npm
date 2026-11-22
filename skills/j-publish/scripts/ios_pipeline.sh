@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: none needs two positional arguments plus a publish.json and drives xcrun notarytool and xcrun altool; has no --help handler
 set -euo pipefail
 
 EXIT_DEPLOY_FAILURE=3

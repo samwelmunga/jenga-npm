@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S06_T05: the upgrade-and-go regression. The proof that width-agnostic board IDs need no migration step.
 #

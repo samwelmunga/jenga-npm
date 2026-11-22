@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Expo-specific coverage of the j.connect runner (E65_S06_T04), run against the real
 # skills/j-connect/descriptors/expo.json with STUBBED `eas` and `expo` CLIs on PATH. Generic

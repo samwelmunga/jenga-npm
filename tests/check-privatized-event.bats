@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for the publicized_privatized_mismatch event that
 # skills/j-close-story/scripts/check-privatized.sh appends through the shared
@@ -41,4 +42,20 @@ setup() {
   [ "$status" -eq 0 ]
   [ "$(cksum < project/logs/events.json)" = "$before" ]
   grep -q '^status: Privatized' project/board/tasks/E01_S01_T01_x.md
+}
+
+# E99_S01_T04: an explicit --help / -h is a success (usage on stdout, exit 0); a missing or wrong
+# argument count keeps exiting non-zero with the usage on stderr.
+@test "--help and -h print usage on stdout and exit 0; wrong argument count exits 1 with usage on stderr" {
+  local flag
+  for flag in --help -h; do
+    run --separate-stderr bash skills/j-close-story/scripts/check-privatized.sh "$flag"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Usage: check-privatized.sh"* ]]
+    [ -z "$stderr" ]
+  done
+  run --separate-stderr bash skills/j-close-story/scripts/check-privatized.sh
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+  [[ "$stderr" == *"Usage: check-privatized.sh"* ]]
 }

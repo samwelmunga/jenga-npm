@@ -1,45 +1,66 @@
 #!/usr/bin/env bash
 # scripts/jenga-permission-level-switch.sh — switch the current session's
-# 5-tier permission level by copying the matching template into
-# .claude/settings.json and .agents/settings.json, and recording the level
+# 5-tier permission level by merging the matching template's level-policy keys
+# into .claude/settings.json and .agents/settings.json, and recording the level
 # in .jenga-permission-level.json at the repo root.
 #
 # Usage: bash scripts/jenga-permission-level-switch.sh <n>
+#        bash scripts/jenga-permission-level-switch.sh --help
 #   <n> must be an integer 1-5.
 #
+# Owned keys (the level policy; the only keys this script writes):
+#   defaultMode, permissions.deny, permissions.ask, autoMode
+#   (E100_S01: project/documentation/client-settings-requirements.md; the
+#   list lives in OWNED_KEYS below.)
+#
 # Behavior:
-#   - Templates live at templates/permission-levels/level-<n>-<name>.json
-#     and are COMPLETE settings.json documents (defaultMode, env,
-#     permissions, hooks). The copy is a whole-file overwrite of the
-#     destination, not a merge — this intentionally drops any extra
-#     top-level blocks (e.g. autoMode) present in the destination but
-#     absent from the template. autoMode is never used at any permission
-#     level (see PROJECT_SUMMARY.md, epic E33).
+#   - Templates live at templates/permission-levels/level-<n>-<name>.json.
+#     This is a KEY-LEVEL MERGE, not a copy of the whole template: for each owned key
+#     the destination takes the template's value, or loses the key when the
+#     template does not set it (the new level's policy replaces the old one).
+#     Every other key (hooks, permissions.allow, env, statusLine, ...) is left
+#     exactly as it was, in its original order. Key order of the destination is
+#     preserved; an owned key the destination lacked is appended.
+#   - A destination that does not exist is created holding only the owned keys.
+#     A destination that is not a valid JSON object fails loud, names the
+#     file, and is left unchanged.
 #   - Both destination writes use a temp-file-then-atomic-rename pattern.
 #   - .jenga-permission-level.json is only written after BOTH settings.json
-#     copies succeed. If the .claude/ copy succeeds but the .agents/ copy
-#     fails, the script fails loud (no rollback of the .claude/ copy, no
+#     merges succeed. If the .claude/ merge succeeds but the .agents/ merge
+#     fails, the script fails loud (no rollback of the .claude/ merge, no
 #     write to .jenga-permission-level.json) and instructs the user to
-#     re-run — re-running with the same <n> is idempotent and self-heals
-#     the inconsistency, since every copy is an unconditional overwrite.
+#     re-run; re-running with the same <n> is idempotent and self-heals.
+#   - After success, a destination with no PreToolUse entry that runs
+#     hooks/on_preflight_check.sh gets one stderr line saying the pre-flight
+#     backstop is not registered and that `npx jenga sync` registers it.
 #   - Invalid input (missing/extra args, non-integer, out of range 1-5)
-#     exits non-zero and makes zero file changes.
+#     exits non-zero and makes zero file changes. --help exits 0, no changes.
 #
 # Exit codes:
-#   0  Success — all three files updated consistently.
+#   0  Success (also --help).
 #   1  Invalid usage/argument — no files changed.
 #   2  Mapped template file missing — no files changed.
-#   3  Failed to copy template to .claude/settings.json — no files changed.
-#   4  Failed to copy template to .agents/settings.json — .claude/settings.json
-#      WAS updated (inconsistent state); re-run the script to repair.
+#   3  .claude/settings.json is not valid JSON or could not be written — unchanged.
+#   4  .agents/settings.json is not valid JSON or could not be written —
+#      .claude/settings.json WAS updated (inconsistent state); re-run to repair.
 #   5  Failed to write .jenga-permission-level.json — both settings.json
 #      files WERE updated (inconsistent state); re-run the script to repair.
 
 set -euo pipefail
 
+# The level-policy key paths this script owns. Nothing else is ever written.
+OWNED_KEYS='[["defaultMode"],["permissions","deny"],["permissions","ask"],["autoMode"]]'
+
 usage() {
   echo "Usage: $(basename "$0") <n>   (n must be an integer 1-5)" >&2
 }
+
+if [[ $# -eq 1 && ( "$1" == "--help" || "$1" == "-h" ) ]]; then
+  usage
+  echo "Merges the level policy (defaultMode, permissions.deny, permissions.ask, autoMode) of level <n> into" >&2
+  echo ".claude/settings.json and .agents/settings.json; every other key is left as it was." >&2
+  exit 0
+fi
 
 if [[ $# -ne 1 ]]; then
   echo "Error: expected exactly one argument, got $#." >&2
@@ -90,22 +111,40 @@ if [[ ! -f "$TEMPLATE" ]]; then
   exit 2
 fi
 
-# Whole-file overwrite of destination via temp-file + atomic rename.
-copy_template() {
+# Key-level merge of the owned keys into dest via temp-file + atomic rename.
+merge_template() {
   local dest="$1"
   local tmp="${dest}.tmp"
+  local base='{}'
+  if [[ -e "$dest" ]]; then
+    base="$(cat "$dest")" || return 1
+    if ! printf '%s' "$base" | jq -e 'type == "object"' >/dev/null 2>&1; then
+      echo "Error: $dest is not a valid JSON object; leaving it unchanged." >&2
+      return 1
+    fi
+  fi
   mkdir -p "$(dirname "$dest")"
-  cp "$TEMPLATE" "$tmp" && mv "$tmp" "$dest"
+  printf '%s' "$base" | jq --slurpfile tpl "$TEMPLATE" --argjson owned "$OWNED_KEYS" '
+    . as $dest | $tpl[0] as $t
+    | reduce $owned[] as $p ($dest;
+        if ($t | try getpath($p) catch null) != null
+        then setpath($p; $t | getpath($p))
+        else delpaths([$p]) end)' > "$tmp" && mv "$tmp" "$dest"
 }
 
-if ! copy_template "$CLAUDE_SETTINGS"; then
-  echo "Error: failed to copy template to $CLAUDE_SETTINGS. No files changed." >&2
+# True when dest registers a PreToolUse hook that runs on_preflight_check.sh.
+has_preflight_hook() {
+  jq -e '[.hooks.PreToolUse[]?.hooks[]?.command? | strings | contains("hooks/on_preflight_check.sh")] | any' "$1" >/dev/null 2>&1
+}
+
+if ! merge_template "$CLAUDE_SETTINGS"; then
+  echo "Error: failed to merge the level policy into $CLAUDE_SETTINGS. No files changed." >&2
   rm -f "${CLAUDE_SETTINGS}.tmp"
   exit 3
 fi
 
-if ! copy_template "$AGENTS_SETTINGS"; then
-  echo "Error: failed to copy template to $AGENTS_SETTINGS." >&2
+if ! merge_template "$AGENTS_SETTINGS"; then
+  echo "Error: failed to merge the level policy into $AGENTS_SETTINGS." >&2
   echo "State is now INCONSISTENT: $CLAUDE_SETTINGS was updated to level $LEVEL but $AGENTS_SETTINGS was not." >&2
   echo ".jenga-permission-level.json was NOT updated. Re-run this script to repair (it is idempotent)." >&2
   rm -f "${AGENTS_SETTINGS}.tmp"
@@ -122,4 +161,9 @@ if ! jq -n --argjson n "$LEVEL" '{"session_level": $n}' > "$LEVEL_TMP" || ! mv "
 fi
 
 echo "Switched to level $LEVEL ($NAME)."
+for f in "$CLAUDE_SETTINGS" "$AGENTS_SETTINGS"; do
+  if ! has_preflight_hook "$f"; then
+    echo "Note: $f has no PreToolUse entry for hooks/on_preflight_check.sh, so the pre-flight backstop is not registered; run 'npx jenga sync' to register it." >&2
+  fi
+done
 exit 0

@@ -19,6 +19,10 @@ where that text appears (9.2, 12.4, 16 and 18), and the superseded text is kept 
 
 The story `E92_S07` (2026-11-13) adds one more section: the large and fullscreen view of the dependency tree (29).
 
+The story `E92_S13` (2026-11-16, reopening `E92`) adds sections 31 to 35: the goal designs and the citadel (31), the facade (32),
+day and night for both castles (33), the seasons tree (34) and the whole picture of the castle and the tree, with what was
+observed in the running dashboard and what was not (35).
+
 The story `E92_S08` (2026-11-14) adds section 30: the Node terminal renderer (`lib/progress/cli.js`, `jenga progress`) is
 now the default for every terminal view, and the bash renderers of sections 17, 18 and 23 to 26 are the `--legacy` path.
 
@@ -2665,3 +2669,543 @@ because which side is wrong is the user's call. With no flagged task it reports 
 a STORY dependency (none through a task's own `depends_on`): `E51_S05_T01`..`T03` (`Merged`, story `E51_S04` is
 `Pending`), `E91_S04_T01` (`Passed`, `E91_S03` is `Pending`) and `E92_S09_T01`..`T04` (`Merged`, `E92_S08` is `Failed`). The
 story's count of 0 cases on 2026-11-15 looked at the tasks' own dependencies only.
+
+## 31. The goal designs and the citadel (`E92_S13`, `E92_S13_T02`)
+
+The Goal of the epic progress map is drawn by one of several designs. The list, the default and the stored choice are in
+`goalDesignModel.js` (`E92_S13_T05`): star, citadel, facade, seasons tree, in that order, the citadel the default, the choice kept
+per browser and falling back to the default when storage is unavailable or holds an unknown value. A design is registered in
+`goalDesigns.js` and absent from the selector until it is. This section describes the citadel, registered by `E92_S13_T02`; the
+facade, the day and night details and the seasons tree are `E92_S13_T03`, `T04` and `T07`. The star (`StarGoal.jsx`) stays and is
+chosen from the selector. The visual reference is
+[`project/documentation/prototypes/E92_S13/jenga-castle.html`](prototypes/E92_S13/jenga-castle.html) (citadel = prototype A).
+
+### 31.1 What is drawn
+
+An isometric Jenga castle in pure SVG (no canvas, no image, no script), so it is part of the `--snapshot` export and works over
+`file://`. One tower per story; one layer of three blocks per task, layers alternating direction like a real Jenga tower.
+
+| State | Shape (readable without colour, `E92_S11`) |
+|---|---|
+| done | wood with grain lines |
+| in progress | hatched, the middle block half pulled out of the layer |
+| pending (ready and locked too) | dashed wireframe |
+| failed | a cracked layer, and the tower leans (sheared 7 degrees, with what stands on it) |
+| rejected task | a block lying in front of the tower, not a layer, not counted |
+| story not broken down | a dashed foundation (dash 11 4, a dash of its own: the ghost outline of `E92_S12` is 9 4) marked "?" |
+
+A story that depends on one story stands on that story's tower; a story that depends on two or more stands on a **bridge** deck
+between their towers (piers where a support is lower). A finished tower nothing stands on has a leaning-plank roof with a flag; a
+finished tower that carries others has battlements of upright blocks. Each tower stands on a status base in the E92 colours
+(green, yellow, red, grey). The curtain wall of lying blocks runs round the towers and is built **from the gate** by the wall
+share of the model (`epic_progress.percent`; it replaces the old progress ring); bastions stand at the four corners; the whole
+castle stands on a plank table top. The layers in a tower are a **status picture** (done at the bottom, then in progress, failed,
+pending), not a task-dependency structure; story dependencies are the stacking and the bridges.
+
+### 31.2 Who computes what
+
+`castleModel.js` (`E92_S13_T01`) decides what stands on what, the layers and their states, the roof or battlements and the wall
+share. `castleLayout.js` only gives that positions and sizes (the table, the wall blocks, where each tower stands, the box).
+`CitadelGoal.jsx` paints what it is given. Nothing in the view recomputes a status, a percent or "decomposed"; the counts in a
+tower's label are the payload's (`done`, `total` and the failed bucket of the story's start node facts). The terminal renderers
+and `lib/progress/` are untouched, so terminal output is byte-identical.
+
+### 31.3 Layout, size limits and why
+
+Roots (stories that stand on the table) stand side by side in one row along the table, so two stacks never overlap. Stories on
+one tower stand side by side on its top, so a tower that carries several is as wide as they need; a story is never wider than
+the tower it stands on. A story stands at the top of the highest of its supports.
+
+| Limit | Value | Why |
+|---|---|---|
+| block size | 5 units half-width per block across | one brick size everywhere; a normal tower (3 blocks) is 15 each side of its centre |
+| layer height | 7.5, never below 7 or above 14 | keeps a brick a brick; a wide tower (it carries others) gets proportionally taller bricks |
+| layers per tower | at most 8 (`MAX_TOWER_LAYERS`, `E92_S13_T01`) | above it a layer holds k = ceil(n / 8) tasks, so the story's own tower gets wider, not taller (a 26-task story: 7 layers of 4) |
+| castle width | at most 440 units | a 22-story castle with every story on the table is about 870 wide: it is drawn at a uniform scale, which cannot create an overlap |
+| castle height | at most 420 units | a chain of 22 stories on top of each other would be about 820 tall: same uniform scale |
+| smallest scale | 0.3 | below it a block is too small to tell its state; a castle that would still be larger is allowed to be larger |
+
+Fixtures at the median (16 tasks, 6 stories), p75 (32, 8), max (94, 22) and a 26-task story are tested for no overlap between
+towers, between the castle and the tree, and between the castle and the goal text.
+
+### 31.4 The goal area, Fit and fullscreen
+
+`dependencyTreeModel.js` no longer reserves a fixed `goalAreaW: 260`. `layoutTree(s, { goalArea })` lays the goal out for a goal
+area: `'castle'` (the default) is the castle box plus a margin of 10 left and 20 right, the goal centre is the centre of the box,
+and the drawing grows in height when the castle plus the goal text is taller than the tree; `'disc'` is the star's fixed area
+(`DISC_AREA`, 260 wide, centre 70 right of its left edge), exactly the layout it always had. A design without a `goalArea` of its
+own (the star) gets the disc area; `DependencyTree` lays the tree out for the chosen design. The model carries `castle` only in
+a castle layout. Zoom, pan, Fit and fullscreen (`E92_S07`) read `layout.width` and `layout.height`, which include the castle and
+the text under it. The text under the node (Goal, the title, "12 / 16 done · 61 %", "9/11 stories decomposed") is unchanged and
+drawn by `DependencyTree` for every design, from the castle box downwards.
+
+The parity recordings of `E92_S08_T02` are the disc layout: `dependency-structure-parity.test.cjs` builds them with
+`{ goalArea: 'disc' }` and **no recorded case was re-recorded**; it also pins that the castle area changes only `layout`, the
+goal position and the `castle` key.
+
+### 31.5 Goal edges
+
+An edge to the goal ends on the wall, not at one inset from the centre: `goalAnchors` spreads one point per goal edge along the
+left half of the wall's top edge (back corner, left corner, front corner), top to bottom, and the edges are matched to them by the
+height of their source, so none crosses another. `GOAL_EDGE_INSET` is only the star's.
+
+### 31.6 Labels and accessibility
+
+Each tower is an image of its own with an aria label and a tooltip in the style "E92_S06: 20 of 26 done, 1 failed"
+(`castle_tower`, `castle_tower_failed`, `castle_tower_undecomposed`; English and Swedish in `scripts/lib/progress-labels.sh`, with
+the same English fallback words in `DependencyTree.jsx`). The goal group is a `group` (its towers are images) and keeps the old
+goal node's label. Nothing in the drawing moves, so reduced motion has nothing to stop.
+
+### 31.7 Colours and the palette hook
+
+Colours are `--color-castle-*` tokens in `tokens.css` (light is the day palette of the prototype, dark its night). They reach the
+drawing through the `--cc-*` custom properties of the `.dt-castle` rule in `dependency-tree.css`, **the one palette hook**:
+the day and night details of `E92_S13_T04` (section 33) added `--cc-win-l` and `--cc-win-r` to it and a second, shared hook,
+`--dn-*`. The group `cc-effects` (goal-reached birds or stars) is empty until the goal is reached and is filled by section 33.
+The status bases use the existing `--color-progress-*` tokens.
+
+## 32. The facade (`E92_S13`, `E92_S13_T03`)
+
+The facade is the second castle design: the same Jenga castle drawn as a flat elevation on a drawing-board ground. It is
+registered as the `facade` entry of the goal design list (`goalDesigns.js`), so it is in the selector and drawn when chosen; the
+citadel stays the default and the star stays. The visual reference is prototype C3 in
+[`project/documentation/prototypes/E92_S13/jenga-castle.html`](prototypes/E92_S13/jenga-castle.html). Pure SVG, no new dependency.
+
+### 32.1 One model, two drawings
+
+The citadel and the facade are two renderers of **one castle model object**: `buildDependencyTreeModel` builds the model of
+`castleModel.js` (`E92_S13_T01`) once and makes two geometries from that same object, `castleLayout.js` (the citadel) and
+`facadeLayout.js` (the facade). Both keep it as `source` (`model.castle.source === model.castle.facade.source`, asserted by a
+test), and the facade sits in the model as `model.castle.facade`. The facade has no state or count logic of its own: every tower,
+layer state, stacking, bridge, roof, battlement, loose block, dashed foundation, wall share and status base is the model's. A value
+the facade needs and the model lacks is added to the model, with a test, not to the view. The terminal renderers and
+`lib/progress/` are untouched.
+
+### 32.2 What is drawn
+
+| Element | Facade |
+|---|---|
+| layer | alternates by the model's direction: `x` shows the block ENDS (three blocks side by side, k above the height cap), `z` shows ONE LONG block |
+| done | wood with grain: arcs on a block end, lines on a long block |
+| in progress | hatched; the middle block is pulled out of its layer with a dashed slot behind it (a long block juts out at its end) |
+| pending | dashed wireframe |
+| failed | a cracked red layer, and the tower leans (sheared 4 degrees, with what stands on it) |
+| rejected task | a small block lying in the gap beside the tower, not a layer, not counted |
+| story not broken down | a sparsely dashed foundation (dash 1.5 3.5) marked "?" |
+| stacking, bridge | a story stands on its tower's top; two or more supports: a bridge deck with piers under lower supports |
+| roof, battlements | a finished leaf tower: roof with a flag; a finished tower that carries others: upright blocks along its top |
+| status base | a slab under each tower in the E92 colours |
+| ground | a dotted board, a ground line and a hatched strip |
+
+**The curtain wall grows outward from the main building in both directions.** The wall segments stand left and right of the row
+of roots, and are built nearest first, alternating left, right, left, right; the two bastions at the outer ends come last
+(`built = round(count * wall share)`, the share is `epic_progress.percent`). So at any percent the two sides differ by at most one
+segment, and the built ones are always those next to the building. A bastion gets a roof and a flag when the goal is reached.
+**The gate** is a block pulled out of the ground in front of the main building (the model's trunk root, else the first root): a
+wireframe slot until the wall has started, a dark block pulled out once it has. As in the citadel, the layers in a tower are a
+status picture, not a task-dependency structure; story dependencies are the stacking and the bridges.
+
+### 32.3 Size, edges and labels
+
+The facade is wide and low where the citadel is square, so it has **its own box**, `model.castle.facade.box`, and its own goal
+area (`goalArea: 'facade'`, `layoutTree`/`unfoldGroups`; the area is the box plus the same margins as the citadel's). Limits
+(`FACADE_LIMITS`): a block end is 4.5 units half-width (a normal tower 13.5 each side), a layer 9 to 16 high, a wall segment 16
+wide and 18 high; the facade is drawn at a uniform scale so that it is at most 480 units wide and 360 high, never below 0.3.
+Roots stand side by side on the ground line, so two stacks never overlap; stories on one tower stand side by side on its top; the
+wall lies beside the row, never over a tower. Fixtures at 16/6, 32/8, 94/22 and a 26-task story are tested for no overlap and for
+the box, the text and the Fit and fullscreen bounding boxes. Goal edges end at the facade: `facadeAnchors` spreads one point per
+edge down the left face of the left bastion, top to bottom. Each tower has the same aria label and tooltip as in the citadel (one
+function, `castleCaption.js`, from the payload's `castle_tower*` labels, en and sv); the text under the goal node is unchanged. No
+label key was added.
+
+### 32.4 Colours and the hooks
+
+The facade is drawn inside the same `.dt-castle` group, so it takes the **same palette hook** (the `--cc-*` custom properties) and
+has no token of its own; its `.cf-*` rules in `dependency-tree.css` only paint its rect shapes. It has the same empty
+`cc-effects` group (`data-castle-effects="goal-reached"`), which `E92_S13_T04` fills with the day and night effects (section
+33). The castle itself does not move.
+
+## 33. Day and night (`E92_S13`, `E92_S13_T04`)
+
+Story decision 2: the citadel and the facade are drawn as day in the light theme and as night in the dark theme. There is no
+control of its own; the theme is the dashboard's, read by CSS alone, which is why it also holds in the `--snapshot` file (which
+inlines `tokens.css` and `dependency-tree.css` and needs no script). Reference: the day and night panels of
+[`prototypes/E92_S13/jenga-castle.html`](prototypes/E92_S13/jenga-castle.html).
+
+### 33.1 How the theme is read
+
+`DayNightScene.jsx` draws **both halves** of a scene always. What belongs to the day carries the class `dn-day`, what belongs to
+the night `dn-night`, and `dependency-tree.css` gives them `display: var(--theme-day-display)` and `display: var(--theme-night-display)`.
+Those two are not colours but are defined with the colour tokens in `tokens.css`: `inline` / `none` in the light block, `none` /
+`inline` in the media-query dark block and in the `[data-theme="dark"]` block, so they switch exactly as every `--color-*` token
+does (`prefers-color-scheme: dark` unless `data-theme="light"`, and an explicit `data-theme`). Nothing in the markup or in a
+script knows which theme is active.
+
+### 33.2 What is drawn
+
+| | Day (light theme) | Night (dark theme) |
+|---|---|---|
+| Sky | a gradient backdrop behind the citadel (the facade keeps its drawing board) | the same gradient in its night colours |
+| Sun / moon | a sun whose height is the epic percent: `epic_progress.percent` from the payload, as the castle model states it (`wall.percent`), not recomputed; 0 % is low, 100 % is high, straight up | a crescent moon and twelve dim stars |
+| Finished layers | wood with grain | a lit window on the middle block end of every finished layer (a window is drawn on every finished layer end; the facade draws it on block-end layers) |
+| Gate | the dark gate block | the same block, lit: the gate token is dark by day and warm by night |
+| Goal reached | flapping bird silhouettes in three flocks (7 birds) replace the old sparks | six stars twinkle, using the existing `dt-twinkle` keyframes (no new twinkle) |
+
+The sun and the stars are the geometry of `dayNightModel.js` (pure, `day-night-model.test.cjs`): the sun's place across the box is
+fixed and its height is the percent; birds and stars are fractions of the box, so they sit inside it at every castle scale, and
+`k` keeps them the same size on screen when a large castle is scaled down. "Goal reached" is the existing `E92_S10` flag
+(`epic_progress.goal_reached`, `wall.reached`); a story that failed or is not broken down keeps it false, so no bird flies and
+no star twinkles. The old star disc's `dt-shimmer` sweep and its five sparks are not part of either castle: the shimmer rule and
+keyframes **remain** only because the star design (`StarGoal.jsx`, still a selectable design) uses them.
+
+### 33.3 Tokens
+
+New tokens, each defined for light and dark in `tokens.css` and guarded by `check-theme-contrast.cjs`:
+`--color-sky-top`, `--color-sky-bottom`, `--color-sky-sun`, `--color-sky-sun-ray`, `--color-sky-moon`, `--color-sky-star`,
+`--color-sky-twinkle`, `--color-sky-bird` (shared by any design with a sky) and `--color-castle-win-l`, `--color-castle-win-r`
+(the castle's lit windows), plus the two display tokens. The wood, wireframe, crack, hatch, wall, table, gate and flag colours were
+already theme tokens (`E92_S13_T02`); the E92 status colours are unchanged. The guard now fails when one of these tokens is
+missing from a theme, a display token is the wrong way round, or a bird (day), a star, the moon, a window or the gate (night) is
+below 3:1 on what it is drawn on. Components hold no colour: they use `--cc-*` (castle hook, windows) and `--dn-*` (shared hook
+on `.dn-scene`, mapped from `--color-sky-*`).
+
+### 33.4 Reduced motion
+
+All movement of the castle goal is in one `@media (prefers-reduced-motion: no-preference)` block at the end of
+`dependency-tree.css`, every selector starting at `:root:not([data-motion="off"])`, so `prefers-reduced-motion: reduce` and the
+Animations toggle (`data-motion="off"`) both stop it. It holds: bird flap (`dn-flap`) and flock drift (`dn-drift`), the only two new
+keyframes, and the stars' `dt-twinkle`. The sun's rays and the flags do not move (there is no flag wave). Without motion the
+goal-reached state is still readable: the birds are drawn with their wings up and the stars lit, because the base rules paint
+them and nothing hides them.
+
+### 33.5 Reuse by the seasons tree
+
+The seasons tree (`E92_S13_T07`) reuses this and does not copy it: it draws `DayNightScene.jsx`'s components with its own frame
+from `dayNightModel.js`, puts the class `dn-scene` on its root group to get the `--dn-*` hook, uses the same `dn-day` / `dn-night`
+display classes and the same animation classes (`dn-bird`, `dn-flock`, `dn-star`), and adds its own tokens and its own pairs to
+`DAY_NIGHT_TOKENS` / `DAY_NIGHT_PAIRS` in `check-theme-contrast.cjs`. No tree colour is defined here.
+
+### 33.6 What was checked
+
+Tests: `dependency-tree.test.cjs` (both halves in both designs, sun height from the payload percent, birds only at goal reached
+and none for a failed or undecomposed epic, windows, the gate token, the motion rules, no second twinkle, tokens for both themes,
+no colour literal), `fullscreen-css.test.cjs` (the section is rooted at `.dep-tree`, independent of the large view, one motion
+guard, still state readable), `day-night-model.test.cjs`, `check-theme-contrast.test.cjs` and the guard itself. **Not checked:**
+the result in the running dashboard (the UI build does not run in this checkout, see the task summary), the `--snapshot` file
+over `file://`, and the two themes with motion on and off by eye.
+
+## 34. The seasons tree (`E92_S13`, `E92_S13_T07`)
+
+> **Not in the public build (2026-11-18, task `E92_S13_T09`).** The user decided the seasons tree needs refinement before it ships.
+> Everything below describes the code as it is, and the tests still exercise it, but a normal build leaves it out: `goalDesigns.js`
+> imports it only through `seasonsTreeEntry.js`, and `vite.config.js` swaps that import for the stub `seasonsTreeEntry.off.js`
+> unless `JENGA_UI_SEASONS_TREE=1`. Without the flag (the package's `prepack`, `j.dashboard --snapshot`) the renderer and
+> `seasons-tree.css` are not bundled, the selector offers Star, Citadel and Facade, and a stored choice of `tree` falls back to
+> the citadel. To see or work on it, build or serve with the flag: `JENGA_UI_SEASONS_TREE=1 npm run ui:build` or `ui:dev`.
+> `E92_S13_T09` is the refinement and ends by removing this exclusion. The statements in sections 31, 33.5 and 35 that name the
+> tree as a selectable design hold for a build with the flag.
+
+The third goal design (story decision 9). Prototype: `project/documentation/prototypes/E92_S13/seasons-tree.html`. It is one more entry of the
+goal design list (`goalDesignModel.js`) and one more line of the renderer registry (`goalDesigns.js`: `tree: TreeGoal`), so it appears in the
+selector and is drawn when chosen; the citadel stays the default and the star, citadel and facade are untouched. Pure SVG, no canvas, so it
+works in the `--snapshot` export over `file://`. The text under the node (Goal, title, done/total and percent, decomposed) is drawn by
+`DependencyTree.jsx` for every design and is not repeated inside the drawing; only the prototype's stage track is taken over.
+
+### 34.1 What is drawn, and the mapping
+
+| Board | Tree |
+|---|---|
+| Epic progress (`epic_progress.percent`) | the whole tree scales with it (`GROWTH.minScale` .42 to 1 about the base), the trunk's girth and height grow with it, six growth stages, the surroundings |
+| Root story | the trunk and the heart of the crown |
+| Story | a branch with its own crown section, growing out of its parent story's branch; a story with two or more dependencies grows from the first and bends toward the others (`tree.lean` of the castle model) |
+| Task done / in progress / to do / failed | a full shaded outlined clump (summer) / a smaller pink clump in blossom with flowers (spring) / a bare twig with snow (winter) / a withered brown clump shedding dead leaves on a drooping branch; a branch where nothing has started carries snow along it |
+| Undecomposed story | a dashed bare stub under snow, and a "?" in its label pill |
+| Finished story nothing depends on | a vine with a lantern; the lantern is lit at night (its glow is a `dn-night` element) |
+| Story status | a ribbon in the E92 colours (`--color-progress-*`) tied round the branch base |
+| Rejected task | not counted (E92 decision 3) and **not drawn** (see 34.5) |
+
+The clumps on a branch are placed in the census order of the castle model (done, in progress, failed, pending), the done ones on the slots nearest
+the crown heart. They are a status picture, not a dependency structure; branching is what shows story dependencies. A detailed crown body (a
+scalloped rim with leaves poking out, inner sub-clumps with contour lines, light edges and shade, the prototype's `mass()`) sits behind the clumps,
+one for the whole crown (sized by what is done) and one per story's section.
+
+### 34.2 Who computes what, and why the layout lives where it does
+
+`treeLayout.js` is a pure file (no DOM, no React, no colour, no word; its only import is `castleModel.js` for the id order) next to `castleLayout.js` and
+`facadeLayout.js`. It is fed the **same castle model object** the citadel and the facade draw (kept in `layout.source`; `dependencyTreeModel.js`
+builds the model once and the three geometries from it) and the payload's per-story facts. It computes **no count, percent, status or "decomposed"**: the
+percent and the goal-reached state are the model's `wall` (`epic_progress`), the done / total figures of a label are the payload's (`facts`), and the
+done share that lengthens a branch is `facts.done / facts.total` (only without facts is it read off the task states). What it makes are positions, sizes
+and the deterministic order things are placed in. Why a file of its own: the model owns what grows from what, the layout owns where; the layout feeds edge
+routing, zoom, Fit and fullscreen through the tree box `dependencyTreeModel.js` carries, so it must be Node-testable without a bundler
+(`scripts/tree-layout.test.cjs`); the renderer then stays a painter. It is dashboard-only (story decision 8), so it is not in `lib/progress/` and has no
+second copy and no parity test. Its geometry is in **tree space** (base of the trunk at 0,0, up is negative y); `scale`, `shiftX` and `shiftY` turn it into the
+goal node's coordinates, and the frame is sized for the fully grown tree, so the box never changes with the percent.
+
+### 34.3 Branch layout rules
+
+- **Trunk among several roots.** The model's `trunk`: the first story without an in-epic dependency in board order that is not in a cycle. Every other story with
+  no tree parent (a second root, a story whose dependency lies outside the epic, a cycle member; the model gives them `parent: null` and `anchor` = the trunk) grows
+  from the trunk. A parent that is not a drawn story, or a parent chain that loops (the model never makes one; this is defence), falls back to the trunk. Nothing throws
+  or loops: the walks are cycle-guarded and the iterations bounded.
+- **Angles (no crossing, no overlap).** Branches radiate from the crown heart (the trunk's tip) in a fan of `FAN` = 220 degrees (up, a little below the horizontal at
+  both ends). Every story has a territory, the circle that holds its clumps (`arrangeClumps(n).territory`; a stub has `STUB.territory`). A story's sector is as wide
+  as its subtree needs: the angle its territory takes at the smallest radius its tip can have (`BRANCH.minReach` of its ring), or the sum of its children's sectors,
+  whichever is larger; the children divide the parent's sector in board order and each points at the middle of its slice. Sectors of different subtrees are
+  disjoint and the rings of consecutive depths are `territory + territory + TERRITORY_GAP` apart (divided by `minReach`), so two clusters never overlap. When the fan
+  is too narrow for the sectors the rings move out (`ring.X`), and the drawing is scaled down to its box; the sectors never overlap instead.
+- **Length and droop.** A tip stands between `BRANCH.minReach` and 1 of its ring by the story's done share (so a branch lengthens with it); an undecomposed story's
+  stub stands at `stubReach`. A failed story's tip sags by `BRANCH.droop` (inside the territory pad) and its curve sags by `droopSag` of its length.
+- **Attachment and bending.** Children attach along the parent's branch between `ATTACH.from` and `ATTACH.to`; on each side of the parent's heading the child that
+  points furthest sideways attaches lowest, and a branch bulges away from its parent's heading (`BRANCH.bend`) so siblings stay apart; a story with several dependencies
+  also bends toward its other dependencies' tips (`BRANCH.leanBend`). Girth tapers with what grows beyond a branch (the share of the subtree in the tree, never more than
+  3/4 of the parent where it leaves it).
+- **Checked, not only argued:** `tree-layout.test.cjs` and `dependency-tree-model.test.cjs` assert, for 16 tasks / 6 stories, 32 / 8, 94 / 22 and a 26-task story, at 0 %, the
+  fixture's percent and 100 %: one clump per counted task in census order, no two clumps overlap, no two branches cross (sampled curves, parent and child excepted),
+  no two labels overlap, everything lies inside the frame, and the same input gives the same output.
+
+### 34.4 The large-story rule and its constants
+
+`arrangeClumps(n)` is the one function. Clumps are packed on a hexagonal lattice whose neighbouring slots are `CLUMP.pitch` (2.05) radii apart, so nothing overlaps whatever the count,
+centred on the point (lattice point, edge middle or triangle middle) that holds the n slots in the smallest circle: 1 clump is a slot, 2 sit side by side, 3 form a triangle, 7 are a
+middle and a ring of six, 19 are two rings and the 26-task story three. Up to `LARGE_STORY.fanMax` (7) clumps keep the full radius `CLUMP.radius` (22); a larger story shrinks its clumps by
+sqrt(7 / n), never below `LARGE_STORY.minShrink` (.55), so the 26-task story's clumps are 12 units, not 22. The reason: story decision 6 (the tower widens) does not apply to a tree; a
+branch with 26 clumps would otherwise either dominate the crown or overlap itself, and the measured data (p90 of tasks per story is 7) says 90 % of stories never shrink. A clump drawn
+below `FLAT_BELOW` (9) units is drawn as an outline and a fill (no contour lines), so a 94-task epic stays light.
+
+### 34.5 Rejected tasks
+
+They are not drawn at all. A rejected task is not counted by the board (E92 decision 3), is neither a season nor a leaf, and a fallen leaf on the island would read as a state the board does not
+have. (The castle shows it as a pulled-out block because a block lying beside a tower is not a layer; the tree has no such counterpart.) The castle model still lists their ids in `loose`.
+
+### 34.6 Growth stages and surroundings
+
+`GROWTH_STAGES` is one named table: Sprout 0, Seedling 10, Sapling 25, Young tree 45, Mature tree 70 and Majestic tree only at goal reached (`growthStage(percent, reached)`; 99 % is Mature
+tree, and a failed task blocks the goal and so Majestic tree). Names are the `tree_stage_*` labels (en and sv, `scripts/lib/progress-labels.sh`, with the English JSX fallbacks in
+`DependencyTree.jsx` and `tests/progress-labels.bats` covering them). The surroundings read the percent and the goal-reached state only: the island widens and gets mossier, grass and flowers
+spread, mushrooms stand from `MUSHROOM_AT` (55), the four stones of the pool lift out at 25, 45, 65 and 85 % (`STONES`, tested at 24/25, 44/45, 64/65, 84/85), light rays and motes strengthen. At goal
+reached (and not with a failed or undecomposed story, which the payload never calls reached) each crown section takes its own season tone (seven tones), rays fall, motes (day) or fireflies (night) drift,
+petals fall, birds fly (day, the shared scene), stars twinkle (night, the shared `dt-twinkle`), a swing hangs from the first branch of the trunk and two forest spirits stand on the island.
+
+### 34.7 The tree box, Fit and the edges
+
+`dependencyTreeModel.js` carries `castle.tree` (`box`, `text`, `scale`, `frame`, the whole layout) next to the citadel and the facade, and `goalArea: 'tree'` lays the goal out for it (`GOAL_AREAS`,
+`layoutTree`): the area is the box plus `CASTLE_MARGIN`, the drawing grows when the tree is taller than the progress tree, and the box is at most 560 x 460 in the goal frame (never scaled below .3).
+Fit and the large view read the layout's width and height, so they include it. Edges to the goal end on points spread down the left rim of the island (`treeAnchors`), matched to the edges by the height of
+their source so none crosses another.
+
+### 34.8 Colours, day and night, motion
+
+The tree has a stylesheet of its own, `seasons-tree.css` (imported by `TreeGoal.jsx`; the build and the `--snapshot` export bundle both), **not** a section appended to `dependency-tree.css`: several tests slice
+that file from a marker to its end, so an appended section would be swept into their assertions. All 74 colours are `--color-tree-*` tokens in `tokens.css` for light (day) and both dark blocks (night); the
+status ribbons and dots use the E92 `--color-progress-*` tokens; the sky is the shared `.dn-scene` hook with the tree's own sky tokens; the sun, moon, birds and stars are the shared `DayNightScene.jsx`.
+`check-theme-contrast.cjs` guards the tree tokens (`checkTreeTokens`: names equal in the three blocks; label text 4.5:1 on its pill; the night lantern and mote 3:1 on the night sky). Every movement (sway, swing,
+falling petals and leaves, motes, drips, bobbing stones) is declared once, in the no-preference block, for `:root:not([data-motion="off"])`, so reduced motion and the Animations toggle both show the same drawing,
+still; nothing is hidden at rest, so the goal-reached state stays readable.
+
+### 34.9 What was checked
+
+`tree-layout.test.cjs` (new: the layout over the four fixtures, the large-story rule, the stage table, the thresholds, effects, fallbacks, purity), `dependency-tree.test.cjs` (registry, drawing, shapes, labels,
+stage track, surroundings, day and night, motion), `dependency-tree-model.test.cjs` (tree box, no overlap, edges, Fit), `fullscreen-css.test.cjs` (rooted at `.dep-tree`, one guard, readable at rest),
+`check-theme-contrast.test.cjs` and the guard, `tests/progress-labels.bats`. The SVG was also rendered to static HTML with the real tokens and stylesheets and looked at in headless Chrome (median, complete and
+26-task epics, day and night). **Not checked:** `npm run ui:build` (it does not run with the borrowed install: `@vitejs/plugin-react` is missing), the running dashboard, the `--snapshot` file over `file://`, zoom and
+fullscreen by hand, and motion by eye.
+
+## 35. The castle and the seasons tree as a whole, and what was observed (`E92_S13`, `E92_S13_T06`)
+
+Sections 31 to 34 describe each piece as its task built it. This section puts them side by side, states what is **picture and what is
+structure**, lists what the three designs read, and records, honestly, what was looked at in the running dashboard and what was not.
+Reference prototypes (the repo copies, the designs the renderers were built from):
+
+- [`prototypes/E92_S13/jenga-castle.html`](prototypes/E92_S13/jenga-castle.html), **the chosen castle design**: the citadel (prototype A)
+  and the facade (prototype C3), in day and night, in progress and complete.
+- [`prototypes/E92_S13/seasons-tree.html`](prototypes/E92_S13/seasons-tree.html), **the chosen seasons tree design**, with a strip of
+  all six growth stages.
+- [`prototypes/E92_S13/jenga-castle-explorations.html`](prototypes/E92_S13/jenga-castle-explorations.html): the earlier explorations
+  A1 to A3 and C1 to C3. **History only**; nothing is built from it.
+
+The project-level idea this story is the first zoom level of (the whole project as a Jenga city) is only a pointer: see
+`project/ideas.md`. It is not part of `E92_S13` and nothing here promises it.
+
+### 35.1 The designs and the selector
+
+The Goal of the epic progress map is drawn by one of four designs, in this order: the star (the original node, kept), the
+**citadel** (default), the **facade** and the **seasons tree**. The list, the default and the stored choice are
+`goalDesignModel.js`; a design is drawn when it is registered in `goalDesigns.js`.
+
+| | |
+|---|---|
+| Control | a labelled group of buttons (`role="group"`, `aria-pressed`, a check mark on the chosen one) in the zoom frame, below the zoom controls; it wraps instead of overflowing |
+| Storage | `localStorage`, key `jenga-dashboard-goal-design`, one of `star`, `citadel`, `facade`, `tree` |
+| Default | the citadel. That the citadel stayed the default when the seasons tree was added is the Scrum Master's reading of 2026-11-17 (the user did not say otherwise); the default is the constant `DEFAULT_GOAL_DESIGN`, not "first in the list" |
+| Fallback | storage that is missing, blocked or throws, a stored value that names no registered design, and a design with no renderer all give the citadel, silently; the selector still switches for the page |
+| Words | the group name, the four design names and the six stage names come from the progress `labels` payload (en and sv: `goal_design_*`, `tree_stage_*`), so they are in the `--snapshot` export |
+| Text under the node | Goal (or "Goal reached!"), the title, "12 / 16 done . 61 %" and "9/11 stories decomposed" are drawn by `DependencyTree.jsx` for every design and are not repeated inside any drawing |
+
+### 35.2 The castle (citadel and facade), mapping
+
+One model, `castleModel.js`, two geometries (`castleLayout.js`, `facadeLayout.js`). Nothing is counted in the view: every number is
+the payload's (`epic_progress`, the story `complete`, `decomposed`, `stop`, the task `state`).
+
+| Board | Castle |
+|---|---|
+| Task (counted) | **one layer** of three blocks; layers alternate direction (`x`, `z`) like a real Jenga tower |
+| Story | **one tower** |
+| Epic | the castle: every tower, the bridges between them, the curtain wall, the gate, the bastions and the table top (citadel) or ground board (facade) |
+| Epic percent (`epic_progress.percent`) | the curtain wall: built from the gate by that share; also the height of the sun by day (not recomputed) |
+| Goal reached (`E92_S10`) | birds by day, twinkling stars by night, roofs on the bastions of the facade |
+
+**The layer marks, and why each works without colour (`E92_S11`).** Done is wood *with grain lines*; in progress is *hatched* with the
+middle block *half pulled out*; pending (ready and locked alike) is a *dashed wireframe*; failed is a *cracked* layer and the tower
+*leans* (7 degrees in the citadel, 4 in the facade, with what stands on it); a rejected task is *a block lying beside the tower*,
+not a layer and not counted; a story not broken down is a *dashed foundation* marked "?". Shape carries the state; the colours are
+the same E92 colours as everywhere else.
+
+**Census order, alternating layers.** In a tower, layers are in the census order of the model: done at the bottom, then in progress,
+failed, pending. The direction alternates layer by layer whatever the state.
+
+**Stacking and bridges (story dependencies).** A story that depends on one story of the epic stands on that story's tower; a story
+that depends on two or more stands on a **bridge** between their towers (piers where a support is lower). A dependency that is
+outside the epic, on an uncounted story, a self dependency or one already implied through another dependency is not drawn as a
+support (the rules are in `castleModel.js` and recorded below); stories in a dependency cycle stand on the ground.
+
+**Roofs, battlements, gate, wall, bastions, table.** A finished tower that nothing stands on has a leaning-plank roof with a flag; a
+finished tower that carries other towers has battlements of upright blocks; a failed or not broken down tower has neither. The gate is a block pulled out of the
+wall (a wireframe slot until the wall has started). The curtain wall (blocks lying down) is built from the gate by the percent and
+replaces the old progress ring; the citadel grows it round the towers, the facade outward from the main building in both directions
+(nearest first, alternating). Bastions stand at the corners (the ends of the facade); the citadel stands on a plank table top.
+**Status bases:** each tower stands on a base in the E92 colours (green, yellow, red, grey).
+
+**The height cap H and the widening rule (confirmed by the user on 2026-11-17).** `H = MAX_TOWER_LAYERS = 8` (p90 of tasks per story is 7,
+so 90 % of stories never widen). Above H a layer holds `k = ceil(n / H)` tasks as `k` blocks: **the story's own tower widens, the
+castle's base does not** (the alternative reading was rejected). A 26-task story is 7 layers of 4. The footprint never drops below a
+normal tower's 3 blocks (`plan.width`).
+
+### 35.3 The seasons tree, mapping (story decision 9)
+
+`treeLayout.js` reads the same castle model object and adds only positions. Details are in section 34; the mapping in one place:
+
+| Board | Seasons tree |
+|---|---|
+| Epic percent (`epic_progress.percent`) | **growth**: the whole tree scales with it (`GROWTH.minScale` .42 to 1), the trunk's girth and height grow with it; six stages shown in a stage track: **Sprout** 0, **Seedling** 10, **Sapling** 25, **Young tree** 45, **Mature tree** 70, **Majestic tree** only at goal reached (99 % is still Mature tree; a failed story blocks the goal and so Majestic tree) |
+| Root story | the **trunk** and the heart of the crown (the model's `trunk`: the first story without an in-epic dependency, not in a cycle) |
+| Story | a **branch** with its own crown section; a story that depends on another **grows out of that story's branch** (branching shows story dependencies); with two or more dependencies it grows from the first (the deepest, ties to the lowest id) and **leans toward the others** (rule of `E92_S13_T01`); a branch lengthens with its story's done share |
+| Task done | a **full shaded clump** (summer) |
+| Task in progress | a **smaller pink clump in blossom with flowers** (spring) |
+| Task to do (pending, ready, locked) | a **bare twig with snow** (winter); a branch where nothing has started carries snow along it |
+| Task failed | a **withered brown clump shedding dead leaves** (autumn) on a **drooping** branch; the goal is blocked while it is there |
+| Story not broken down | a **dashed bare stub under snow**, "?" in its label |
+| Finished story nothing depends on | a **vine with a lantern**, lit at night (replaces the castle's roof and flag) |
+| Story status | a **ribbon** tied round the branch base, in the E92 colours (replaces the status base) |
+| Rejected task | not counted and **not drawn** (section 34.5) |
+
+**The four seasons, told apart by shape and not only colour (`E92_S11`):** summer is a *full outlined clump*, spring a *smaller clump with
+flowers on it*, winter a *bare twig with a snow cap* and autumn a *brown clump with leaves falling from it*. A colour-blind reader
+still separates all four; the E92 colours sit on the ribbon and on the status dot of each label.
+
+**The crown body** sits behind the clumps and is sized by what is done: a scalloped rim with leaves poking out, inner sub-clumps with
+contour lines, light edges and shade. **The large-story rule** (`arrangeClumps`, section 34.4): clumps are packed on a hexagonal
+lattice; up to 7 clumps keep the full radius (22), above that the radius shrinks by sqrt(7 / n), never below .55, so the 26-task
+story has 26 clumps of radius 12 in three rings (decision 6 does not apply to a tree: nothing widens).
+
+**The surroundings count nothing.** They read `epic_progress.percent` and the goal-reached state only (`E92` decision 1): the island
+widens and gets mossier, grass and flowers spread, **mushrooms stand from 55 %**, **stones lift out of the pool one at a time at 25, 45, 65
+and 85 %**, the light rays and the floating motes strengthen. **At goal reached** each crown section takes its own season colour
+(an all-seasons tree) and the rays, motes (day) or fireflies (night), falling petals, birds (day), a swing and two forest spirits appear
+(stars twinkle at night through the shared scene).
+
+**Labels** are pills with a status dot, pushed apart when they collide, and linked to their branch by a short leader line when moved.
+
+**How story decisions 3 to 6 apply to the tree:** the Jenga theme (3) applies to the castle only; dependencies (4) become branching;
+the status base (5) becomes a ribbon; the height cap (6) does not apply as such and the large-story rule above replaces it.
+
+### 35.4 Both: the picture versus the structure
+
+**The layers in a tower and the clumps on a branch are a status picture, not a dependency structure.** They are placed in the census
+order (done, in progress, failed, pending); the order says nothing about which task depends on which. **Task dependencies are in the
+tree beside the Goal** (the dependency tree of `E92_S06`). **Story dependencies are structure and are drawn**: by **stacking and bridges**
+in the castle and by **branching** in the seasons tree. Both statements hold in both themes and in every design.
+
+**Day and night** follow the dashboard's light and dark theme in all three designs (section 33, and 34.8 for the tree's own tokens):
+the sun rises with the percent (by day), birds replace sparks at goal reached; at night finished layers carry lit windows, the gate and
+the lanterns are lit, fireflies drift and the stars twinkle (the existing `dt-twinkle`). **Reduced motion:** `data-motion="off"` (the
+Animations toggle) and `prefers-reduced-motion: reduce` stop every movement in every design through one guarded block each; the
+goal-reached state stays readable because nothing is hidden at rest.
+
+**What the designs read.** Only the existing `--graph` payload: the story `depends_on`, `complete`, `decomposed`, `stop`, the task
+`state` and the epic's `epic_progress`. No key was added by `E92_S13` (`castle-model.test.cjs` builds a real payload to prove every
+key is printed; `schema_version` stays 1), nothing is recomputed in the UI (`E92` decision 1), and `lib/progress/` and
+`scripts/board-progress.sh` are untouched, so the terminal output is unchanged. The terminal structure imports none of the models
+(asserted in `dependency-structure-parity.test.cjs`).
+
+### 35.5 Parity and the recording (`E92_S13_T06`)
+
+`tests/fixtures/progress/dependency-tree-parity.json` gained one key, `castleTree`, **new in this task: no recorded case was changed or
+re-recorded** (the key `rerecorded` of the new part says so, the older `rerecorded` text is unchanged). Its 14 cases are real
+`board-progress.sh --graph --within` payloads (built from temporary boards by `project/app/ui/scripts/record-castle-tree-parity.mjs`) and the
+structure the castle and the tree draw from each (`castle-tree-summary.mjs`: towers with their stacking, top, layers and plan; bridges;
+the wall; the tree's parents, lean targets, branches, clumps per state, stubs, vines, labels, stones, mushrooms, effects; no pixel):
+stacking on one story and a bridge on two (16 tasks, 6 stories, one rejected); an out-of-epic, an uncounted, a self and a cyclic dependency;
+undecomposed stories, one a dependency; a failed story; a 26-task story; 94 tasks in 22 stories stacked and in 22 independent roots; the
+growth stages at 24, 25, 45, 65, 85, 99 and 100 percent; a complete epic. `dependency-structure-parity.test.cjs` compares the recording and
+also states, independently of it, that the wall and the growth are the script's percent, that there is one tower and one branch per counted
+story and one clump per counted task, that the stage follows the thresholds with Majestic tree only at goal reached, that the stones lift at
+25, 45, 65 and 85, and that every older recorded case feeds the castle and the tree with the percent its goal states.
+`tests/dashboard-snapshot-progress-graph.bats` renders each design from the captured payload
+(`render-captured-epic-tree.cjs --design <id>`, a stub `localStorage`) and asserts the castle and the tree markup, the citadel fallback
+and that the single-file export carries the drawing code of every design, the selector, the storage key and the labels.
+
+### 35.6 What was observed, and what was not
+
+Observed in the running dashboard by the developer of `E92_S13_T06` on 2026-11-17, with the UI built from this task's worktree. **Setup:**
+`npm install` inside the worktree's `project/app` (workspaces; nothing linked to another checkout), `npm run ui:build` (1.4 s, 630
+modules), then `dashboard-start.cjs` with `JENGA_PROJECT_ROOT` set to a scratch project of 18 fixture epics (598 task files), so every
+number came from the real `board-progress.sh --graph`. The built-in browser pane was emulated at 800 x 600 (a screenshot is then 1:1)
+and its colour-scheme emulation gave day (light) and night (dark). For detail the goal group of the real SVG was cloned into a scratch
+overlay of the page (looking only, no file touched); label sizes were judged at 1:1, where the pills have their on-screen size.
+This is a developer's look, not a Tester verdict. Nothing is claimed that was not seen; "read" means read from the real DOM.
+
+| What | Result |
+|---|---|
+| Selector at the overlay width, four entries | **Observed.** The overlay is about 424 px wide at 800 px; Star, Citadel, Facade and Seasons tree sit in one row under the zoom controls, the chosen one with a check mark |
+| Selector by keyboard | **Observed** with real key presses: focus on Star, Tab, Tab, Enter chose the Facade (`aria-pressed`, the drawing and the stored value all changed). Space and arrow keys were not tried |
+| Choice survives a reload | **Observed** (facade stored, page reloaded, epic reopened: facade) |
+| Unknown stored value | **Observed** (`bogus-design` stored, reload: citadel, no error, the stored value left alone) |
+| Unavailable storage | **Observed as a stand-in:** `Storage.prototype.getItem` and `setItem` were made to throw after the page had loaded and before the overlay opened: citadel at the start, all four designs still selectable, no error event. A page with storage blocked from the start was not available |
+| Four designs, light and dark, median (16 / 6) | **Observed:** star, citadel, facade and tree at night (E01); by day the tree (E01) and, for the complete epic (E08, same size), all three designs. The citadel and the facade of the median epic by day on their own: **not viewed** |
+| p75 (32 / 8), max (94 / 22) and 26-task story | **Observed**, night: all three designs for each (a sheet of the goal groups); day: citadel E02, E03, E05, E06; facade E02 to E07; tree E02 to E07. Not viewed by day: citadel E04 and E07 on their own |
+| No overlap | **Observed** for towers (none touch in any fixture); for the tree, `getBoundingClientRect` of every label pill in the real SVG: **0 overlapping pairs** in all 18 fixtures at the overlay's Fit (23 pills at 94 / 22) |
+| Failed story | **Observed** in the citadel (a red cracked layer, the tower leaning), the facade (red cracked layer, leaning) and the tree (a red-dot label and a withered brown clump beside it; the drooping of the branch is slight and not obvious at this size); the goal text reads 8 / 15 and not "Goal reached" |
+| Undecomposed stories | **Observed**: dashed foundations in the citadel and the facade, dashed stubs under snow with "?" in the label in the tree; "3/6 stories decomposed" under the node |
+| Complete epic | **Observed**, day and night, all three designs: birds by day and stars by night (citadel, facade, tree), and the tree's all-seasons crown (green, pink, orange, red sections), lanterns, swing, two spirits, petals and the stage track at Majestic tree; "Goal reached!" |
+| Motion off | **Observed** (header toggle, `data-motion="off"`): the running Web Animations in the goal group went from 16 (citadel), 16 (facade), 62 (tree) and 7 (star) to **0** in every design, and the goal-reached effects (birds, stars, swing, spirits, petals) were still in the markup |
+| `prefers-reduced-motion: reduce` | **Not observed.** The pane can emulate colour scheme and size but not this media query; the rule is checked by `fullscreen-css.test.cjs` and `dependency-tree.test.cjs` (one guarded block) |
+| Six growth stages, day and night | **Observed**: the stage track read from the markup and looked at for 0 % and 5 % (Sprout), 15 % and 24 % (Seedling), 25 % (Sapling), 45 % and 65 % (Young tree), 70 %, 85 % and 99 % (Mature tree) and 100 % (Majestic tree), in light and dark; Majestic tree appears only for the epic whose goal is reached |
+| Stones, mushrooms, flowers | **Observed** (read from the real markup): stones 0 at 24 %, 1 at 25, 2 at 45, 3 at 65, 4 at 85 (and still 4 at 99 and 100); mushrooms from 55 % (none at 45 %, two at 56 and 65); flower elements 0 (5, 15 %), 7 (24, 25 %), 28 (45 %), 35 (65, 70 %), 56 (85 %), 63 (99 %), 84 (100 %). The island, the rays and the motes were seen to grow across the stage sheets, not measured |
+| Zoom, Fit, 100 % | **Observed** with real clicks (25 %, in 31 %, 100 %, Fit back to 25 %) in the epic overlay; the fullscreen layer (see below) at Fit 57 % |
+| Fullscreen | **Partly.** The fallback layer was observed in all four designs (zoom controls and selector inside it, "Press Esc to exit"). **A real click on the button did nothing for 3 s and a second click did nothing either:** the pane's `requestFullscreen()` never settled, and `useFullscreen.js` has no timeout, so the toggle ignores further presses while it is pending. This is open item 1 of section 29.8 again and is not new; a `requestFullscreen()` made by script was rejected ("Permissions check failed"), which the hook turned into the fallback layer. Real native fullscreen is therefore still unverified |
+| `--snapshot` export | **Partly.** `snapshot.sh` built it (1.0 MB, 14 s). **`file://` was not possible:** the pane answered "couldn't open file ... the file may be missing, unreadable, or the user declined access". The file was served over `http://127.0.0.1` from a throwaway `python3 -m http.server` instead, which is not `file://` (an http origin has storage, and `file://` pages can lack it). There: 18 epic cards, no `/v1/` request, the embedded payload drives the page, the citadel by default (empty storage), and E08 chosen in all four designs showed the curtain wall at 1.00, six towers (castle) or six branches (tree), the goal-reached effects and the four selector labels. The day and night palette and the citadel fallback without storage in the export itself: **not separately observed**; the fallback is asserted by the bats test through the same component |
+
+**Findings, not changed in this task (follow-ups proposed, none opened):**
+
+1. **A young tree sits small in a frame sized for the fully grown tree** (the observation of `E92_S13_T07`). Seen again: at 56 % (median) the
+   crown fills about a third of the frame; at 5 % the sprout is a stem low in a 650-wide frame. The frame is deliberately percent-independent
+   so Fit does not jump as the epic grows. A follow-up could scale the frame with the stage or crop to the tree plus a margin.
+2. **At 22 stories the label pills are larger than the clumps.** Seen at 50 % (22 stories stacked: the tree is drawn at the minimum scale .3,
+   a column of 22 pills climbing the frame) and at 31 % (22 independent roots: a half circle of 22 pills round a small crown). The
+   pills keep a fixed on-screen size by design, so they are legible and do not overlap (0 overlapping pairs measured), but they dominate the picture; at the
+   median (56 %) they already cover about as much of the crown as the clumps do. A follow-up could drop the story id from the pill or show
+   pills on hover for many stories.
+3. **22 independent root stories make a very wide castle** (`E92_S13_T02`'s note, confirmed): the citadel is drawn at scale .51 and the
+   facade as a long thin strip; with 30 of 94 tasks done most towers are wireframes, so what is left is a table of faint outlines with a few
+   towers at one end. A stacked 22-story epic is .65 and tall. A second row of roots would use the table better but risks overlap.
+4. **Native fullscreen can leave the toggle dead** (section 29.8, open item 1, observed again; a pending timeout in `useFullscreen.js` would harden it).
+5. **The to-do bubble paints over the bottom-right corner of the fallback layer** (section 29.8, open item 3): visible in the fullscreen screenshots of this run.
+6. **A fixture board of 598 task files makes the dashboard slow to load** (each of `/v1/progress`, `/v1/progress-cards` and `/v1/progress-graph` took about 3 s
+   because `board-progress.sh` runs per request); the Progress tab showed "Loading" for several seconds. Not specific to the goal designs.
+
+**Not observed at all:** `prefers-reduced-motion: reduce`; `file://` (reason above); real native fullscreen; a stored-value-free page with
+storage blocked from the start; the Swedish words of the selector and the stage track in the running dashboard (covered by `tests/progress-labels.bats`);
+light theme of the citadel at 22 independent roots and of the tree at the failed-story and undecomposed fixtures at 1:1 (seen small only); a phone-width
+viewport (375 px) for the selector (it wraps by `flex-wrap`, asserted by the CSS test; the narrowest width looked at was the 424 px overlay).
+Real epics of the needed sizes were not used: the fixtures above were, so the shapes are those of the fixtures, not of this repository's board.

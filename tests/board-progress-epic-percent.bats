@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S09_T03: the epic percent that counts undecomposed stories, printed by scripts/board-progress.sh as the
 # `epic_progress` object (section 5 of project/documentation/progress-visualisation.md):

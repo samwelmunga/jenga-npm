@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S05_T04: skills/j-status/scripts/render-status-bars.sh - one `<id><TAB><bar>` line per epic and per story, made by
 # piping `board-progress.sh --by-parent` into `render-progress-bar.sh --each epics|stories` (one board read, no counting

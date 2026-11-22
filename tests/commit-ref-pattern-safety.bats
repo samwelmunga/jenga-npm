@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E79_S04_T03: permissive and hostile ref_pattern values are neutralised by the existing gate.
 #

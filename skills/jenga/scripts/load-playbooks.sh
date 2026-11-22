@@ -524,6 +524,24 @@
 
 set -euo pipefail
 
+# -h / --help: print the usage on stdout and exit 0 before anything is parsed, read or written (E99_S01_T01).
+case "${1:-}" in
+  -h|--help)
+    cat <<'USAGE'
+Usage: load-playbooks.sh [lookup <id>]
+       load-playbooks.sh -h|--help
+
+With no arguments, print the full /jenga playbook catalog as a JSON array on
+stdout (skipped playbooks are reported on stderr). With `lookup <id>`, print
+the one playbook with that id. Read-only.
+
+Exit codes: 0 catalog or lookup result written; 2 usage error or setup failure
+(playbooks directory missing, python3 unavailable).
+USAGE
+    exit 0
+    ;;
+esac
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # --- E53_S06_T02: additive `lookup <id>` CLI mode ------------------------------------------------

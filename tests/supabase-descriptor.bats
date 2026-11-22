@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for the real Supabase descriptor skills/j-connect/descriptors/supabase.json
 # (E65_S04_T02). Pure data checks with jq, the validator and list-services.sh;

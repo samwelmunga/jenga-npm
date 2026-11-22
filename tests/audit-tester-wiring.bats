@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # E85_S01_T05: agents/tester.md wires scripts/audit-deps.sh in as the opt-in vulnerability executor.
 # Reads files relative to the checkout this test runs in; nothing is written.

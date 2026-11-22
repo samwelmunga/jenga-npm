@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for skills/j-uncharted/scripts/resolve-segment-target.sh (E43_S01_T02).
 #

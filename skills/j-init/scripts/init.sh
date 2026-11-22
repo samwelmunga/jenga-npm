@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: none scaffolds a project in the working directory and runs git commit
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -34,7 +35,7 @@ fi
 # queue/, rapports/, logs/). scaffold_visibility is a distinct, independent
 # flag (E31_S07_T01, ported here in E31_S07_T03) covering the distributed
 # .claude/.agents framework scaffold — kept separate per
-# skills/j-distribute/CONFIG_SCHEMA.md's "Scaffold visibility" section, rather
+# skills/j-init/CONFIG_SCHEMA.md's "Scaffold visibility" section, rather
 # than folded into project_files_visibility's existing enum.
 VISIBILITY="${JENGA_PROJECT_FILES_VISIBILITY:-visible}"
 SCAFFOLD_VISIBILITY="${JENGA_SCAFFOLD_VISIBILITY:-visible}"

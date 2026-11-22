@@ -8,10 +8,10 @@
 # E31_S05's own Background section scopes it to that tree only. This script
 # instead covers the *distributed framework scaffold* — `.claude/` and
 # `.agents/` — which is a different tree with a different lifecycle (it is
-# overwritten wholesale by every `/distribute` run or npm upgrade; project/
+# overwritten wholesale by every npm postinstall or `npx jenga sync`; project/
 # is not). Filed as new, adjacent scope under E31_S07 rather than folded
 # silently into project_files_visibility's existing enum. See
-# skills/j-distribute/CONFIG_SCHEMA.md's "Scaffold visibility" section for the
+# skills/j-init/CONFIG_SCHEMA.md's "Scaffold visibility" section for the
 # full rationale.
 #
 # This file is the sole copy. It was added by E31_S07_T03 as skills/j-init/'s own
@@ -26,18 +26,19 @@
 # Usage:
 #   apply-scaffold-visibility.sh <mode> [project_root]
 #   apply-scaffold-visibility.sh --check-only <mode>
+# smoke-invoke: --check-only ignored
 #
 # Modes:
 #   visible   Scaffold directories stay where they are. No-op on disk beyond
 #             the config write. This is the default — matches the behavior
 #             of every /init run before this flag existed.
 #   ignored   .claude/ and .agents/ are added to the project's .gitignore —
-#             present on disk (whenever npm postinstall or /distribute
+#             present on disk (whenever npm postinstall or `npx jenga sync`
 #             places them, whether that happens before or after this runs),
 #             never committed. Entries are written unconditionally, the same
 #             way apply-project-visibility.sh gitignores project/ whether or
 #             not it exists yet, so a scaffold created by a later
-#             /distribute run is covered too, not just one already on disk.
+#             sync run is covered too, not just one already on disk.
 #
 # Exit codes:
 #   0  Success
@@ -143,7 +144,7 @@ write_scaffold_config() {
   local tmp="${config}.tmp"
   local existing='{}'
 
-  # /init normally runs before any /distribute, so the file usually does not
+  # /init normally runs before any install or sync, so the file usually does not
   # exist yet. Merge rather than overwrite so other fields survive.
   if [ -f "$config" ]; then
     if ! jq empty "$config" 2>/dev/null; then

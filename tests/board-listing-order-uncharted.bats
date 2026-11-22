@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S02_T06: skills/j-uncharted/scripts/run-engine.sh lists the board items that reference a target, in the
 # understanding document's "Board linkage" row, in NUMERIC board-ID order.

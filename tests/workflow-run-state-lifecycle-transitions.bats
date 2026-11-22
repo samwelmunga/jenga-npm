@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E80_S02_T05: the run lifecycle transition table (assert_transition), run_state_transition, and the pause and
 # cancel commands of scripts/workflow/run-state.sh.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E76_S02_T02: smoke test that scripts/task-usage.sh --check-layout detects transcript layout drift.
 #

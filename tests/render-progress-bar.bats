@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S02_T02, E92_S02_T03 and E92_S05_T03: scripts/render-progress-bar.sh - board-progress JSON in, one progress line out, fitted to the
 # terminal width (the width tests are at the end of the file).

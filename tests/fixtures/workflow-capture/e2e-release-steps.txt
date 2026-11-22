@@ -1,0 +1,2 @@
+mkdir -p releases/1.4.0
+Announce the release in the team channel

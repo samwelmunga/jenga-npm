@@ -178,7 +178,7 @@ set -u
 export LC_ALL=C
 
 STATE_SUBDIR="active-recordings"
-STATE_FILE_VERSION=1
+# The on-disk "version" value lives in the embedded python (FILE_VERSION); a shell copy was never read.
 DEFAULT_TTL_MINUTES=90
 SESSION_KEY_PATTERN='^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
 TOKEN_PATTERN='^[A-Za-z0-9._:-]{1,160}$'

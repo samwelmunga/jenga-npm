@@ -5,6 +5,16 @@ title: Jenga AI
 
 # Jenga AI Documentation
 
+> **Heads-up**
+>
+> **Jenga version 5 is more likely to contain bugs and errors than version 4.** A broad overhaul of testing is under way, and several tester suites have been switched off temporarily while it runs. The first stable release, **Jenga version 6 (stable)**, is expected around **mid-December 2026**.
+>
+> Until then, please do these three things to avoid errors and bugs:
+>
+> 1. **Check that the postinstall script is allowed to run for Jenga.** Some package managers block install scripts by default.
+> 2. **Run `jenga doctor` in your regular terminal.** It can help bring your project back in sync.
+> 3. **Run `j.jenga-config` (also `/jenga-config`), choose the list mode, and check whether any settings are missing in your environment.**
+
 Jenga AI is a meta-framework for agentic software development. It provides a
 suite of Claude-based AI agents (scrum-master, developer, tester, ai-engineer),
 a skill library, scripting infrastructure, and a project board system

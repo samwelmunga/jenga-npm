@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E85_S01_T09: the CI workflows /j-publish generates for an npm-ci target carry a dependency audit: an `audit`
 # job that `publish` and `stage` depend on, plus a scheduled dependency-audit.yml rendered from

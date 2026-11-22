@@ -97,7 +97,24 @@ Run `active-recording.sh status --field active`. It prints `true` or `false` and
 
 ### 1. `start [<name>]`
 
-**Your judgment first, then three script calls in order.**
+**Check the hook first, then your judgment, then three script calls in order.**
+
+**0. The hook.** First run the advisory settings preflight, which prints a notice once per session and never fails:
+`bash "$([ -f scripts/settings-doctor-once.sh ] && echo scripts/settings-doctor-once.sh || echo node_modules/@jenga-ai/agent/scripts/settings-doctor-once.sh)" j-workflow-recorder`.
+Then run `check-recorder-hook.sh`, which stays the blocking guard for this skill: a shim over `scripts/settings-doctor.sh --fragment workflow-recorder`. Exit 0 (prints `registered: <file>`) means capture can
+work — continue to **a**. Exit 1 means the `UserPromptSubmit` recorder hook is registered in none of
+`.claude/settings.json`, `.claude/settings.local.json` and `~/.claude/settings.json`, so a recording
+started now would capture nothing. Print the script's message verbatim (it names what was checked, the fix
+`npx jenga sync`, that Claude Code must be restarted, and that the restart loses this session's recording
+pointer) and ask:
+
+```
+1. Stop — I'll run npx jenga sync, restart Claude Code and start again
+2. Record anyway — I understand no steps will be captured automatically
+3. Other (describe below)
+```
+
+Never carry on to **a** without an answer, and never report a recording as working after choosing **2**.
 
 **a. The name.** With `<name>` given, use it. With no `<name>`, derive a short descriptive name from
 the user's opening interaction — what process is about to be performed, in a handful of words, as the
@@ -117,7 +134,7 @@ one sentence describing what they are about to do rather than inventing a name.
 
 **c. The document.** `recording-file.sh create <path> <title...>` — pass the path from **b** and the
 descriptive name from **a** as the title. Exit 4 means something was created at that path in the
-meantime: go back to **b** for a fresh path and try once more. Exit 2, 5 or 6 is a real failure —
+meantime: go back to **b** for a fresh path and try once more. Exit 2 or 6 is a real failure —
 surface stderr verbatim and halt without setting the pointer.
 
 **d. The pointer.** `active-recording.sh set <path> --title <name>` prints a token on stdout. Keep that

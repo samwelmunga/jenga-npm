@@ -77,7 +77,15 @@
 #      acquired (the write was skipped, never forced), the write failed, a transcript of the task could not be read, a
 #      stored usage value is not a plain integer, or more than one board file matches the task ID. Tasks that could be
 #      persisted still are; the failing ones are listed in the stdout summary and on stderr
-# Every failure (4 to 8) writes a message on stderr that names the missing thing and the path that was searched,
+#  10  price-ratio dependency missing (task E90_S02_T02): the cost-aware modes (--report, --persist, --usage) need the
+#      price-ratio loader scripts/token-price-ratios.sh and its config project/configs/token-price-ratios.json
+#      (override: $JENGA_PRICE_RATIOS_FILE) as an ordinary dependency, exactly like scripts/lib/board-ids.sh. When the
+#      loader is absent, or the config is absent, unreadable or malformed, the run stops with this code and a message on
+#      stderr that names the file, and writes nothing on stdout and nothing on the board. There is no silent fallback to
+#      the pre-E90 raw-only output. A MODEL WITH NO RATIOS is not this case: it stays reported as unpriced (cost_units
+#      null, unpriced_models), never given a guessed number. --list-transcripts and --check-layout never price anything
+#      and are UNAFFECTED: they run, and keep their own exit codes, with the loader and config absent.
+# Every failure (4 to 8, and 10) writes a message on stderr that names the missing thing and the path that was searched,
 # and --report and --persist write NOTHING on stdout (the report is built in a temporary file and printed last, so a failing run
 # can never leave a half-written JSON document). Exit codes 4 to 7 are checked in that order; the first failing
 # check decides the code (--check-layout lists every check that failed in its verdict, the code is the first's).
@@ -122,8 +130,8 @@
 # REPORT (--report)  -  stage 3, task E76_S01_T04
 # ---------------------------------------------------------------------------
 # Lists the transcripts (stage 1), extracts each one's usage (stage 2) and prints ONE JSON document on stdout.
-# Valid JSON always (jq . succeeds); it never carries a price, cost or currency field (E76 decision 1: tokens
-# only); every human-readable message goes to stderr, including one line per entry of "warnings". Exit 0 also when
+# Valid JSON always (jq . succeeds); it never carries a price or currency field (E76 decision 1: no currency; E90
+# adds exactly one labelled derived key, the cost-equivalent unit, see COST UNITS); every human-readable message goes to stderr, including one line per entry of "warnings". Exit 0 also when
 # nothing matched (empty maps and lists, and a warning when a filtered ID has no transcripts).
 #
 # The output contract (schema_version 1; a breaking change to any key below raises schema_version):
@@ -205,6 +213,11 @@
 # still carry allocated_overhead, because an entry named for that story (level "story") is charged to it in full. The
 # section lists every story with a measured task or a direct charge; with --stories only the requested IDs, and a
 # requested ID with neither appears as measured false with an all-zero allocated_overhead.
+# Cost mode (task E90_S01_T04; always on in --report, the loader and config are required): weight is the sum of the tasks' cost_units (unpriced tasks
+# weigh nothing), tasks / allocated_overhead / total also carry cost_units, a story may carry cost_units_partial true and
+# unpriced_models, and each unallocated record carries cost_units and unpriced_models. The loader and config are a direct
+# dependency (E90_S02_T02): without them the run stops with exit 10, it never prints the pre-E90 raw-only allocation.
+# See task-usage.md, "Implemented by E90_S01_T04".
 # The sums come from the transcripts (the tasks map), never from the board: the roster only names the unmeasured tasks.
 # Per field: sum of every story's allocated_overhead + sum of unallocated_overhead = sum of overhead.
 # The allocation reads the UNFILTERED task set, so --task, --story and --stories never change a number in it.
@@ -252,6 +265,15 @@
 #   * R at or above S everywhere and differing (rework added transcripts, or a session grew): rewrite the numbers,
 #     usage_transcripts and usage_measured_on. A stored usage_possibly_incomplete is NEVER cleared by --persist, because
 #     the earlier gap is not known to be closed.                                                    status updated
+#   * COST UNIT (task E90_S01_T06; the price-ratio loader and config are a direct dependency, exit 10 when missing): usage_cost_units is
+#     written in the same critical section as the raw fields. R equals S but usage_cost_units is absent (a task measured
+#     before E90) or lower than the recomputed unit: only usage_cost_units and usage_measured_on are written, the raw
+#     fields and usage_possibly_incomplete are untouched.                                            status updated
+#     A stored unit above the recomputed one is kept (never lowered; the raw sums being equal, usage_possibly_incomplete
+#     is NOT set, as nothing was pruned), stderr says so.                                            status kept-stored
+#     A task with an unpriced model gets no usage_cost_units (absence means not measured): its raw fields persist as
+#     before and stderr and the result message name the model. A task with no transcripts gains no derived number.
+#     A missing loader or config never degrades --persist to the raw-only behaviour: it stops with exit 10 first.
 #   DEFAULT (not a user decision): "refresh on rework" is this recompute-and-never-lower rule.
 #   DEFAULT (not a user decision): a recently completed task with no transcripts is reported as not measured / possibly
 #     pruned rather than skipped silently, and nothing is written for it.
@@ -346,6 +368,8 @@
 #   assistant_lines           assistant lines of any kind (with or without a usage object)
 #   usage_incomplete_lines    assistant lines whose usage object lacks one of the four numeric fields
 #   usage_missing_fields      the sorted names of those missing fields, [] when none
+#   cost_units, unpriced_models  the cost-equivalent unit (see COST UNITS). The price-ratio loader and its config are a
+#                             direct dependency: when either is missing --usage stops with exit 10 (task E90_S02_T02)
 #   unreadable_lines          lines that mention "usage" but are not valid JSON (for example a final line cut off
 #                             while the session was still writing); they are skipped, never guessed
 # The four sums are kept separate here; --report adds usage_total_tokens, defined as the sum of the four.
@@ -444,7 +468,8 @@ usage: task-usage.sh --list-transcripts [--projects-dir <dir>] [--project-dir <p
 
 exit codes: 0 ok, 2 usage, 3 environment, 4 transcript root or project slug directory missing, 5 no subagent
 transcripts, 6 sidecar meta missing/unparseable/incomplete, 7 usage object missing or incomplete, 8 every requested
---task/--story ID has no transcripts, 9 --persist could not persist at least one task
+--task/--story ID has no transcripts, 9 --persist could not persist at least one task, 10 price-ratio loader or
+config missing or malformed (--report, --persist, --usage; not --list-transcripts or --check-layout)
 USAGE
 }
 
@@ -466,6 +491,7 @@ TU_EX_META=6
 TU_EX_USAGE=7
 TU_EX_ABSENT=8
 TU_EX_PERSIST=9
+TU_EX_RATIOS=10
 
 # --- arguments --------------------------------------------------------------------------------------------------
 MODE=""
@@ -498,7 +524,12 @@ while [ $# -gt 0 ]; do
     --persist-apply)
       # Internal: the critical section that --persist runs under scripts/with-lock.sh. Not a user-facing mode.
       [ $# -ge 8 ] || tu_die_usage "--persist-apply is internal and takes <file> <id> <input> <output> <cache_write> <cache_read> <transcripts>"
-      tu_set_mode "persist-apply"; APPLY_ARGS=("$2" "$3" "$4" "$5" "$6" "$7" "$8"); shift 7 ;;
+      # Optional 8th and 9th values (task E90_S01_T06): the recomputed cost units ("-" no value given, "none" unpriced, or
+      # whole units) and the comma-joined unpriced model names ("-" none).
+      tu_set_mode "persist-apply"; APPLY_ARGS=("$2" "$3" "$4" "$5" "$6" "$7" "$8"); NSHIFT=7
+      if [ $# -ge 9 ]; then APPLY_ARGS+=("$9"); NSHIFT=8; fi
+      if [ $# -ge 10 ]; then APPLY_ARGS+=("${10}"); NSHIFT=9; fi
+      shift "$NSHIFT" ;;
     --usage)
       [ $# -ge 2 ] || tu_die_usage "--usage requires a transcript path"
       tu_set_mode "usage"; USAGE_FILE="$2"; shift ;;
@@ -548,6 +579,29 @@ fi
 
 # --- environment ------------------------------------------------------------------------------------------------
 command -v jq >/dev/null 2>&1 || tu_die_env "jq is required but was not found on PATH"
+# Price ratios are a direct dependency of the cost-aware modes (task E90_S02_T02): the loader scripts/token-price-ratios.sh
+# and its config. The check runs once, up front, and stops with exit 10 and a message naming the missing file; nothing
+# has been written to stdout or the board at this point (it runs right after the jq check, before any other environment lookup). --list-transcripts and --check-layout never price anything and
+# skip it. A model with no ratios is NOT checked here (the probe model is one that can never have ratios): it stays
+# reported as unpriced later.
+TU_LOADER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/token-price-ratios.sh"
+tu_die_ratios() {
+  printf 'task-usage.sh: %s\n' "$1" >&2
+  exit "$TU_EX_RATIOS"
+}
+tu_require_ratios() {
+  local rc cfg out
+  cfg="${JENGA_PRICE_RATIOS_FILE:-$(cd "$_TU_DIR/.." && pwd)/project/configs/token-price-ratios.json}"
+  [ -f "$TU_LOADER" ] || tu_die_ratios "missing $TU_LOADER (the price-ratio loader; the cost-weighted measure is a required dependency)"
+  out="$(bash "$TU_LOADER" "no-such-model-probe" 2>&1 >/dev/null)"; rc=$?
+  case "$rc" in
+    4) return 0 ;;   # config valid; the probe model has no ratios, as intended
+    5) tu_die_ratios "price-ratio config missing or unreadable: $cfg (the cost-weighted measure needs it)" ;;
+    6) tu_die_ratios "price-ratio config malformed: $cfg (${out#token-price-ratios: })" ;;
+    *) tu_die_ratios "price-ratio loader failed (exit $rc) on $cfg: ${out:-no message}" ;;
+  esac
+}
+case "$MODE" in report|persist|usage) tu_require_ratios ;; esac
 # The discovery environment (board-ID library, projects directory, project slug) is only needed by
 # --list-transcripts and --report; --usage needs only jq and the transcript file.
 if [ "$MODE" = "list-transcripts" ] || [ "$MODE" = "report" ] || [ "$MODE" = "check-layout" ] || [ "$MODE" = "persist" ]; then
@@ -758,8 +812,11 @@ tu_list_transcripts() {
 # shellcheck disable=SC2016  # a jq program: its $ names are jq variables, not shell expansions
 TU_USAGE_JQ='
 def num: if type == "number" then . else 0 end;
-def tuple($u):
-  { input: ($u.input_tokens | num),
+def tuple($u; $model):
+  { model: (if ($model | type) == "string" and $model != "" then $model else null end),
+    cw5: (if ($u.cache_creation | type) == "object" then ($u.cache_creation.ephemeral_5m_input_tokens | num) else 0 end),
+    cw1: (if ($u.cache_creation | type) == "object" then ($u.cache_creation.ephemeral_1h_input_tokens | num) else 0 end),
+    input: ($u.input_tokens | num),
     output: ($u.output_tokens | num),
     cache_write: (if ($u.cache_creation_input_tokens | type) == "number" then $u.cache_creation_input_tokens
                   elif ($u.cache_creation | type) == "object" then ([$u.cache_creation[] | num] | add // 0)
@@ -780,7 +837,7 @@ reduce inputs as $raw ({n: 0, lines: 0, bad: 0, asst: 0, inc: 0, miss: {}, units
           elif $j.type == "assistant" then
             .asst += 1
             | if (($j.message | type) == "object") and (($j.message.usage | type) == "object")
-              then .lines += 1 | .units[$j | key($ln)] = tuple($j.message.usage)
+              then .lines += 1 | .units[$j | key($ln)] = tuple($j.message.usage; $j.message.model)
                    | ($j.message.usage) as $u
                    | ([four_names[] | select(($u[.] | type) != "number")]) as $m
                    | if ($m | length) > 0 then .inc += 1 | .miss += ($m | map({key: ., value: true}) | from_entries) else . end
@@ -800,22 +857,79 @@ reduce inputs as $raw ({n: 0, lines: 0, bad: 0, asst: 0, inc: 0, miss: {}, units
     assistant_lines: $s.asst,
     usage_incomplete_lines: $s.inc,
     usage_missing_fields: ($s.miss | keys),
-    unreadable_lines: $s.bad }
+    unreadable_lines: $s.bad,
+    by_model: ( [ $e[].value | select(.input + .output + .cache_write + .cache_read > 0) ]
+                | group_by(.model)
+                | map( { model: .[0].model,
+                         input: (map(.input) | add), output: (map(.output) | add),
+                         cache_read: (map(.cache_read) | add),
+                         cw5: (map(.cw5) | add), cw1: (map(.cw1) | add),
+                         cw_rest: (map([.cache_write - .cw5 - .cw1, 0] | max) | add) } ) ) }
 '
+
+# Pricing step (task E90_S01_T03). Input: the usage object above (with by_model) and $ratios, an object model id ->
+# {input, cache_write_5m, cache_write_1h, cache_read, output} for every model that HAS ratios (a model absent from
+# $ratios is unpriced). $priced false (--check-layout only, which never prices): by_model is dropped and nothing else changes. Arithmetic is in hundredths (ratios have at most two
+# decimals), so it is exact in integers; cost_units is the hundredths rounded half up to whole units, once. A
+# transcript with an unpriced model has cost_units null. _cost_h (the exact hundredths) is internal: the report sums
+# it so that a task is rounded once from its exact total, and --usage strips it.
+TU_PRICE_JQ='
+def h($r): ($r * 100 | round);
+def line_h($m; $r):
+  $m.input * h($r.input) + ($m.cw5 + $m.cw_rest) * h($r.cache_write_5m) + $m.cw1 * h($r.cache_write_1h)
+  + $m.cache_read * h($r.cache_read) + $m.output * h($r.output);
+if $priced | not then del(.by_model)
+else
+  ( [ .by_model[] | select($ratios[.model // ""] != null) | line_h(.; $ratios[.model]) ] ) as $ph
+  | ( [ .by_model[] | select($ratios[.model // ""] == null) | (.model // "(no model)") ] | unique ) as $un
+  | (if ($un | length) > 0 then null else ($ph | add // 0) end) as $tot
+  | . + { cost_units: (if $tot == null then null else (($tot + 50) / 100 | floor) end),
+          unpriced_models: $un,
+          _cost_h: $tot }
+  | del(.by_model)
+end
+'
+
+# Price ratios (task E90_S01_T03). tu_ratios_for <model> prints the ratios object, or nothing for a model without
+# ratios (the loader and config themselves were verified by tu_require_ratios). Results are cached under $TU_TMP so
+# the subshells that read transcripts share them.
+tu_ratios_for() {
+  local m="$1" key out
+  tu_mktmp
+  key="$(printf '%s' "$m" | tr -c 'A-Za-z0-9._-' '_')-$(printf '%s' "$m" | cksum | cut -d' ' -f1)"
+  mkdir -p "$TU_TMP/ratios"
+  if [ ! -f "$TU_TMP/ratios/$key" ]; then
+    out="$(bash "$TU_LOADER" "$m" 2>/dev/null)" && printf '%s' "$out" >"$TU_TMP/ratios/$key" || : >"$TU_TMP/ratios/$key"
+  fi
+  cat "$TU_TMP/ratios/$key"
+}
 
 # Prints the compact usage JSON of one transcript; returns non-zero (nothing on stdout) when it cannot be read.
 tu_usage_json() {
-  local f="$1"
+  local f="$1" raw models m r ratios='{}' priced=false
   [ -f "$f" ] && [ -r "$f" ] || return 1
   # The transcript is a stdin redirect: read once, never an argument and never a shell variable.
   # shellcheck disable=SC2094  # --arg path only carries the string; the file is read once, from stdin
-  jq -n -R -c --arg path "$f" "$TU_USAGE_JQ" <"$f" 2>/dev/null
+  raw="$(jq -n -R -c --arg path "$f" "$TU_USAGE_JQ" <"$f" 2>/dev/null)" || return 1
+  [ -n "$raw" ] || return 1
+  # --check-layout only checks the fields and never prices
+  if [ "$MODE" != "check-layout" ]; then
+    priced=true
+    models="$(printf '%s' "$raw" | jq -r '[.by_model[].model | select(. != null)] | unique[]')"
+    while IFS= read -r m; do
+      [ -n "$m" ] || continue
+      r="$(tu_ratios_for "$m")"
+      if [ -n "$r" ]; then ratios="$(printf '%s' "$ratios" | jq -c --arg m "$m" --argjson r "$(printf '%s' "$r" | jq -c .ratios)" '.[$m] = $r')"; fi
+    done <<<"$models"
+  fi
+  printf '%s' "$raw" | jq -c --argjson priced "$priced" --argjson ratios "$ratios" "$TU_PRICE_JQ"
 }
 
 tu_usage_extract() {
-  local f="$1"
+  local f="$1" u
   [ -f "$f" ] && [ -r "$f" ] || tu_die_env "transcript not found or not readable: $f"
-  tu_usage_json "$f" || tu_die_env "could not read usage from: $f"
+  u="$(tu_usage_json "$f")" || tu_die_env "could not read usage from: $f"
+  printf '%s\n' "$u" | jq -c 'del(._cost_h)'  # _cost_h is the report's internal exact hundredths
 }
 
 # --- layout checks (drift protection, task E76_S02_T01) ----------------------------------------------------------
@@ -1100,17 +1214,27 @@ def split_field($t; $c; $w):
   | ($t - ($d | map(.q) | add)) as $l
   | ($d | sort_by([-.r, .key[0], .key[1]]) | .[0:$l] | map(.s)) as $plus
   | $d | map(. as $x | {key: $x.s, value: ($x.q + (if ($plus | index($x.s)) != null then 1 else 0 end))}) | from_entries;
+# Task weight (task E90_S01_T04): $cost_mode is always true in a run that got here (the price-ratio loader and config are a
+# required dependency, checked up front, exit 10). The weight of a task is its cost_units, and an unpriced task
+# (cost_units null) weighs nothing, so a story weighs the cost units of its PRICED tasks only. The $cost_mode false
+# branches below are the retired pre-E90 measure and are unreachable from the script.
+def tw($t): if $cost_mode then ($t.cost_units // 0) else ($t.input + $t.output + $t.cache_write) end;
+def cost_zero: if $cost_mode then {cost_units: 0, _part: false, _um: []} else {} end;
 def tu_alloc($ov; $at):
-  ( reduce $at[] as $t ({}; .[$t.value.story_id] += ($t.value.input + $t.value.output + $t.value.cache_write)) ) as $wmap
+  ( reduce $at[] as $t ({}; .[$t.value.story_id] += tw($t.value)) ) as $wmap
   | ( reduce $at[] as $t ({};
         reduce ($t.value.transcripts[] | split("/") | .[:-2] | join("/")) as $d
           (.; .[$d] = ((.[$d] // []) + [$t.value.story_id])))
       | map_values(unique) ) as $sess
   | ( reduce $ov[] as $e ({shares: [], unalloc: []};
-        ($e | {input, output, cache_write, cache_read}) as $amt
-        | ($amt | map(. != 0) | any) as $nonzero
+        ($e | {input, output, cache_write, cache_read}) as $amt4
+        | ($e.cost_units // null) as $cu
+        | ($amt4 + (if $cost_mode and $cu != null then {cost_units: $cu} else {} end)) as $amt
+        | ($amt | keys) as $fs
+        | ({_part: ($cost_mode and $cu == null), _um: (if $cost_mode and $cu == null then ($e.unpriced_models // []) else [] end)}) as $pm
+        | ($amt4 | map(. != 0) | any) as $nonzero
         | if $e.level == "story" and (($e.id | type) == "string") and ($e.id | test("^E[0-9]+_S[0-9]+$"))
-          then .shares += [{story: $e.id} + $amt]
+          then .shares += [{story: $e.id} + $amt + $pm]
           else
             ( $sess[ (if $e.kind == "session" then ($e.path | sub("\\.jsonl$"; ""))
                       else ($e.path | split("/") | .[:-2] | join("/")) end) ] // [] ) as $cs
@@ -1119,25 +1243,38 @@ def tu_alloc($ov; $at):
             | (if ($cs | length) == 0 then "no-candidate-story" elif $w == 0 then "zero-weight" else null end) as $why
             | if $why != null
               then (if $nonzero
-                    then .unalloc += [{path: $e.path, id: $e.id, level: $e.level} + $amt + {reason: $why}]
+                    then .unalloc += [{path: $e.path, id: $e.id, level: $e.level} + $amt4
+                                      + (if $cost_mode then {cost_units: $cu, unpriced_models: ($e.unpriced_models // [])} else {} end)
+                                      + {reason: $why}]
                     else . end)
               else
-                (reduce f4[] as $f ({}; .[$f] = split_field($amt[$f]; $c; $w))) as $sp
-                | .shares += [ $c[] | .s as $s | {story: $s} + (reduce f4[] as $f ({}; .[$f] = $sp[$f][$s])) ]
+                (reduce $fs[] as $f ({}; .[$f] = split_field($amt[$f]; $c; $w))) as $sp
+                | .shares += [ $c[] | .s as $s | {story: $s} + (reduce $fs[] as $f ({}; .[$f] = $sp[$f][$s])) + $pm ]
               end
           end) ) as $r
   | { alloc: ( reduce $r.shares[] as $x ({};
-                 .[$x.story] = (reduce f4[] as $f (.[$x.story] // zero4; .[$f] += $x[$f]))) ),
+                 .[$x.story] = (reduce f4[] as $f ((.[$x.story] // (zero4 + cost_zero)); .[$f] += $x[$f])
+                                | if $cost_mode
+                                  then .cost_units += ($x.cost_units // 0) | ._part = (._part or $x._part)
+                                       | ._um = ((._um + $x._um) | unique)
+                                  else . end)) ),
       unalloc: $r.unalloc };
 def with_total: . + {total_tokens: (.input + .output + .cache_write + .cache_read)};
 # The "stories" section. $board is the roster text ("S<TAB><story id><TAB><task>,<task>,..." per story file),
-# $sel the requested story IDs ([] = every story that has a measured task or a direct charge).
+# $sel the requested story IDs ([] = every story that has a measured task or a direct charge). In cost mode (task
+# E90_S01_T04) weight is the task-part cost units, tasks, allocated_overhead and total also carry cost_units,
+# and a story whose number covers only the priced part (an unpriced task, or a share of an overhead entry with an
+# unpriced line) carries cost_units_partial true and the union of the unpriced models.
 def tu_stories($al; $at; $board; $board_ok; $sel):
   ( reduce $at[] as $t ({};
-      .[$t.value.story_id] |= ((. // {tasks: [], sum: zero4, weight: 0})
+      .[$t.value.story_id] |= ((. // ({tasks: [], sum: zero4, weight: 0} + (if $cost_mode then {cu: 0, part: false, um: []} else {} end)))
         | .tasks += [$t.key]
         | .sum = (reduce f4[] as $f (.sum; .[$f] += $t.value[$f]))
-        | .weight += ($t.value.input + $t.value.output + $t.value.cache_write))) ) as $m
+        | .weight += tw($t.value)
+        | if $cost_mode
+          then .cu += ($t.value.cost_units // 0) | .part = (.part or ($t.value.cost_units == null))
+               | .um = ((.um + ($t.value.unpriced_models // [])) | unique)
+          else . end)) ) as $m
   | ( if $board_ok
       then ( $board | split("\n") | map(select(length > 0) | split("\t"))
              | map({key: .[1], value: ((.[2] // "") | split(",") | map(select(test("^E[0-9]+_S[0-9]+_T[0-9]+$"))))})
@@ -1148,18 +1285,23 @@ def tu_stories($al; $at; $board; $board_ok; $sel):
   | ($ids | sort_by(skey)) as $sorted
   | $sorted | map( . as $id
       | ($m[$id]) as $mm
-      | ($al.alloc[$id] // zero4 | with_total) as $ao
+      | ($al.alloc[$id] // (zero4 + cost_zero)) as $aor
+      | ($aor | {input, output, cache_write, cache_read} | with_total
+         | if $cost_mode then . + {cost_units: $aor.cost_units} else . end) as $ao
       | ($bm[$id]) as $bt
+      | (if $cost_mode and (($mm.part // false) or $aor._part) then true else false end) as $partial
       | { key: $id,
-          value: { epic_id: ($id | split("_")[0]),
+          value: ( { epic_id: ($id | split("_")[0]),
                    measured: ($mm != null),
                    weight: ($mm.weight // null),
                    board_tasks: $bt,
                    measured_tasks: ($mm.tasks // []),
                    unmeasured_tasks: (if $bt == null then null else ($bt - ($mm.tasks // [])) end),
-                   tasks: (if $mm then ($mm.sum | with_total) else null end),
+                   tasks: (if $mm then ($mm.sum | with_total | if $cost_mode then . + {cost_units: $mm.cu} else . end) else null end),
                    allocated_overhead: $ao,
-                   total: (if $mm then (reduce f4[] as $f ({}; .[$f] = ($mm.sum[$f] + $ao[$f])) | with_total) else null end) } } )
+                   total: (if $mm then (reduce f4[] as $f ({}; .[$f] = ($mm.sum[$f] + $ao[$f])) | with_total
+                                        | if $cost_mode then . + {cost_units: ($mm.cu + $ao.cost_units)} else . end) else null end) }
+                   + (if $partial then {cost_units_partial: true, unpriced_models: ((($mm.um // []) + $aor._um) | unique)} else {} end)) } )
   | from_entries;
 '
 
@@ -1206,6 +1348,15 @@ TU_REPORT_JQ='
 def four: {input: .input, output: .output, cache_write: .cache_write, cache_read: .cache_read};
 def sum4: { input: (map(.usage.input) | add // 0), output: (map(.usage.output) | add // 0),
             cache_write: (map(.usage.cache_write) | add // 0), cache_read: (map(.usage.cache_read) | add // 0) };
+# Cost unit (task E90_S01_T03): present when the transcripts carry it (every priced mode), and with
+# the pricing step skipped (--check-layout) a record has none. A sum of transcripts is the sum of their priced
+# exact hundredths, rounded half up to whole units once; unpriced_models is the union and any unpriced model makes
+# cost_units null (never a guess, never a partial number).
+def cost_of($us): if ($us | map(has("_cost_h")) | any | not) then {}
+  else ($us | map(.unpriced_models) | add | unique) as $un
+       | { cost_units: (if ($un | length) > 0 then null
+                        else (($us | map(._cost_h) | add // 0) + 50) / 100 | floor end),
+           unpriced_models: $un } end;
 def lines: split("\n") | map(select(length > 0));
 ($tasks_f | lines) as $tf
 | ($stories_f | lines) as $sf
@@ -1218,6 +1369,7 @@ def lines: split("\n") | map(select(length > 0));
            | { key: $id,
                value: ( { story_id: ($id | split("_")[0:2] | join("_")), epic_id: ($id | split("_")[0]) }
                         + $s
+                        + cost_of(map(.usage))
                         + { usage_total_tokens: ($s.input + $s.output + $s.cache_write + $s.cache_read),
                             usage_transcripts: length,
                             transcripts: (map(.rec.path) | sort) } ) } ) ) as $all_tasks
@@ -1227,7 +1379,7 @@ def lines: split("\n") | map(select(length > 0));
       | select(.rec.kind == "session"
                or (.rec.kind == "subagent" and (.rec.level == "story" or .rec.level == "epic")))
       | { kind: .rec.kind, agent_type: .rec.agent_type, id: .rec.id, level: .rec.level }
-        + (.usage | four) + { path: .rec.path } ]
+        + (.usage | four) + cost_of([.usage]) + { path: .rec.path } ]
     | sort_by(.path) ) as $overhead
 | ( if $want_stories then tu_alloc($overhead; $all_tasks) else null end ) as $al
 | { schema_version: 1,
@@ -1240,7 +1392,7 @@ def lines: split("\n") | map(select(length > 0));
     unmapped: ( [ $ok[]
                   | select(.rec.kind == "subagent" and .rec.level == "none")
                   | { kind: .rec.kind, agent_type: .rec.agent_type, name: .rec.name, reason: .rec.reason }
-                    + (.usage | four) + { path: .rec.path } ]
+                    + (.usage | four) + cost_of([.usage]) + { path: .rec.path } ]
                 | sort_by(.path) ),
     warnings: ( [ $tf[] | select(. as $i | $task_ids | index($i) | not)
                   | {code: "no-transcripts-for-task", id: ., message: ("no transcripts map to task " + .)} ]
@@ -1269,8 +1421,11 @@ tu_report() {
   # The whole report is built in a temporary file and printed last, so nothing reaches stdout before every
   # failure check (above and below) has passed.
   tu_board_roster
+  # Cost mode is always on in --report and --persist: the loader and config were verified by tu_require_ratios.
+  TU_COST_MODE=true
   jq -s -c --arg now "$now" --arg tasks_f "$TASK_FILTERS" --arg stories_f "$STORY_FILTERS" \
     --arg sel_f "$STORIES_SEL" --argjson want_stories "$TU_WANT_STORIES" \
+    --argjson cost_mode "$TU_COST_MODE" \
     --rawfile board "$TU_TMP/board" --argjson board_ok "$TU_BOARD_OK" \
     "${TU_ALLOC_JQ}${TU_REPORT_JQ}" "$TU_TMP/rows" >"$TU_TMP/out" || tu_die_env "could not build the report"
   # Zero versus absent: when every requested ID has no transcripts there is nothing to report, so say so.
@@ -1311,8 +1466,9 @@ tu_fm_get() {
 # stderr. Without a status line on stdout the caller treats the run as failed. Exit 0 whenever a status was printed.
 tu_persist_apply() {
   local file="$1" id="$2" r_in="$3" r_out="$4" r_cw="$5" r_cr="$6" r_nt="$7"
+  local r_cost="${8:--}" r_um="${9:--}"
   local v have=0 lower=0 same=1 r_total flag
-  local s_in s_out s_cw s_cr s_nt s_tot
+  local s_in s_out s_cw s_cr s_nt s_tot s_cost cost_write=0 cost_low=0
   for v in "$r_in" "$r_out" "$r_cw" "$r_cr" "$r_nt"; do
     case "$v" in ''|*[!0-9]*) printf 'task-usage.sh: %s: internal error, non-numeric measurement\n' "$id" >&2; return 1 ;; esac
   done
@@ -1335,6 +1491,19 @@ tu_persist_apply() {
     esac
   done
   : "${s_in:=0}" "${s_out:=0}" "${s_cw:=0}" "${s_cr:=0}" "${s_nt:=0}"
+  # The cost unit (task E90_S01_T06): r_cost is whole units, "none" (a model without ratios: nothing is written, absence
+  # means not measured) or "-" (no cost value was handed in; unreachable from --persist, which always carries one). A stored unit is never silently lowered.
+  s_cost="$(tu_fm_get "$file" usage_cost_units)"
+  case "$s_cost" in
+    *[!0-9]*) printf 'task-usage.sh: %s: the stored usage_cost_units is not a plain integer (%s in %s); nothing written\n' "$id" "$s_cost" "$file" >&2
+              printf 'persist-status: failed\n'; return 0 ;;
+  esac
+  case "$r_cost" in
+    -|none|"") ;;
+    *[!0-9]*) printf 'task-usage.sh: %s: internal error, non-numeric cost units\n' "$id" >&2; return 1 ;;
+    *) if [ -z "$s_cost" ] || [ "$r_cost" -gt "$s_cost" ]; then cost_write=1
+       elif [ "$r_cost" -lt "$s_cost" ]; then cost_low=1; fi ;;
+  esac
 
   if [ "$have" = 1 ]; then
     if [ "$r_in" -lt "$s_in" ] || [ "$r_out" -lt "$s_out" ] || [ "$r_cw" -lt "$s_cw" ] || [ "$r_cr" -lt "$s_cr" ] \
@@ -1357,14 +1526,27 @@ tu_persist_apply() {
       printf 'persist-status: kept-stored\n'; return 0
     fi
     if [ "$same" = 1 ]; then
+      if [ "$cost_write" = 1 ]; then
+        # Raw sums equal the stored ones but the derived unit is missing (a task measured before E90) or has risen: write
+        # only usage_cost_units and usage_measured_on; the raw fields and usage_possibly_incomplete are untouched.
+        tu_apply_write "$file" "$id" usage_cost_units "$r_cost" usage_measured_on "$TU_TODAY" || return 1
+        printf 'persist-status: updated\n'; return 0
+      fi
+      if [ "$cost_low" = 1 ]; then
+        printf 'task-usage.sh: %s: recomputed %s cost units is below the persisted %s: kept the persisted value\n' "$id" "$r_cost" "$s_cost" >&2
+        printf 'persist-status: kept-stored\n'; return 0
+      fi
       printf 'persist-status: unchanged\n'; return 0
     fi
   fi
 
-  tu_apply_write "$file" "$id" \
-    usage_input_tokens "$r_in" usage_output_tokens "$r_out" usage_cache_write_tokens "$r_cw" \
-    usage_cache_read_tokens "$r_cr" usage_total_tokens "$r_total" usage_transcripts "$r_nt" \
-    usage_measured_on "$TU_TODAY" || return 1
+  set -- usage_input_tokens "$r_in" usage_output_tokens "$r_out" usage_cache_write_tokens "$r_cw" \
+    usage_cache_read_tokens "$r_cr" usage_total_tokens "$r_total" usage_transcripts "$r_nt"
+  if [ "$cost_write" = 1 ]; then set -- "$@" usage_cost_units "$r_cost"; fi
+  if [ "$cost_low" = 1 ]; then
+    printf 'task-usage.sh: %s: recomputed %s cost units is below the persisted %s: kept the persisted value\n' "$id" "$r_cost" "$s_cost" >&2
+  fi
+  tu_apply_write "$file" "$id" "$@" usage_measured_on "$TU_TODAY" || return 1
   if [ "$have" = 1 ]; then printf 'persist-status: updated\n'; else printf 'persist-status: persisted\n'; fi
 }
 
@@ -1417,7 +1599,7 @@ tu_in_list() {
 
 # Persists the tasks of the report in $TU_TMP/out and reports the ones that were asked for but have no measurement.
 tu_persist() {
-  local tab id in out cw cr nt st rc failed_ids measured_ids cand stored status f
+  local tab id in out cw cr nt cu um st rc failed_ids measured_ids cand stored status f
   local n_new=0 n_upd=0 n_same=0 n_kept=0 n_skip=0 n_nm=0 n_fail=0
   tab="$(printf '\t')"
   : >"$TU_TMP/results"
@@ -1427,7 +1609,7 @@ tu_persist() {
   measured_ids="$(jq -r '.tasks | keys[]' "$TU_TMP/out")"
 
   # 1. every measured task
-  while IFS="$tab" read -r id in out cw cr nt; do
+  while IFS="$tab" read -r id in out cw cr nt cu um; do
     # An empty tasks map still feeds the loop one empty line; there is nothing to persist then.
     [ -n "$id" ] || continue
     if tu_in_list "$failed_ids" "$id"; then
@@ -1445,7 +1627,7 @@ tu_persist() {
       continue
     fi
     f="$TU_BFILE"
-    st="$(bash "$TU_WITH_LOCK" "$f" -- bash "$_TU_SELF" --persist-apply "$f" "$id" "$in" "$out" "$cw" "$cr" "$nt" </dev/null)"
+    st="$(bash "$TU_WITH_LOCK" "$f" -- bash "$_TU_SELF" --persist-apply "$f" "$id" "$in" "$out" "$cw" "$cr" "$nt" "$cu" "$um" </dev/null)"
     rc=$?
     status="$(printf '%s\n' "$st" | sed -n 's/^persist-status: //p' | head -n 1)"
     if [ -n "$status" ] && [ "$status" != failed ]; then
@@ -1453,9 +1635,14 @@ tu_persist() {
         persisted)   st="usage fields written for the first time" ;;
         updated)     st="usage fields rewritten upward (rework or a longer session)" ;;
         unchanged)   st="recomputed totals equal the persisted ones; nothing written" ;;
-        kept-stored) st="recomputed totals are below the persisted ones (possibly pruned); persisted values kept, usage_possibly_incomplete: true" ;;
+        kept-stored) st="recomputed totals are below the persisted ones (possibly pruned); persisted values kept, usage_possibly_incomplete: true"
+                     [ "$(tu_fm_get "$f" usage_possibly_incomplete)" = true ] || st="the recomputed cost units are below the persisted ones; the persisted value is kept" ;;
         *)           st="$status" ;;
       esac
+      if [ "$cu" = none ]; then
+        st="$st; unpriced model(s) $um: usage_cost_units not written (not measured)"
+        printf 'task-usage.sh: %s: unpriced model(s) %s: usage_cost_units not written (not measured); the raw token fields are persisted as usual\n' "$id" "$um" >&2
+      fi
       tu_result "$id" "$status" "$st" "$f"
     elif [ "$status" = failed ]; then
       tu_result "$id" failed "a stored usage value is not a plain integer; nothing written" "$f"
@@ -1467,7 +1654,9 @@ tu_persist() {
       tu_result "$id" failed "write failed; the board file is unchanged" "$f"
     fi
   done <<TU_PERSIST_ROWS
-$(jq -r '.tasks | to_entries[] | [.key, .value.input, .value.output, .value.cache_write, .value.cache_read, .value.usage_transcripts] | @tsv' "$TU_TMP/out")
+$(jq -r '.tasks | to_entries[] | [.key, .value.input, .value.output, .value.cache_write, .value.cache_read, .value.usage_transcripts,
+    (if (.value | has("cost_units")) then (if .value.cost_units == null then "none" else (.value.cost_units | tostring) end) else "-" end),
+    (if ((.value.unpriced_models // []) | length) > 0 then (.value.unpriced_models | join(",")) else "-" end)] | @tsv' "$TU_TMP/out")
 TU_PERSIST_ROWS
 
   # 2. asked for but not measured: requested tasks, the tasks of requested stories, and (with no filter) every task that

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E83_S04_T04: end-to-end proof that the test-links refresh workflow (project/.workflows/test-links-refresh.json) runs
 # through the real E80 workflow scripts and does what the story promises: leaves a fresh links file byte-identical,

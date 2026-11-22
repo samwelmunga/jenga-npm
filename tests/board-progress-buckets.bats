@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S01_T02: the status-to-bucket table of scripts/board-progress.sh (contract: project/documentation/
 # progress-visualisation.md sections 3-5). Every test runs against the throwaway fixture board built by

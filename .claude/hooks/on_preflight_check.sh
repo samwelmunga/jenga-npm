@@ -205,16 +205,16 @@
 # something an autoMode.allow entry can pre-empt. There is deliberately NO environment variable that
 # disables this hook: the only way off is unregistering it in settings.json.
 #
-# THE REAL RISK TO THAT PROPERTY IS NOT THIS SCRIPT, IT IS THE LEVEL SWITCH, and it is why this hook is
-# registered in six files rather than one. All five templates/permission-levels/level-*.json are COMPLETE
-# settings.json documents, and scripts/jenga-permission-level-switch.sh copies the matching one over
-# .claude/settings.json and .agents/settings.json as a WHOLE-FILE OVERWRITE. Per
-# skills/jenga-permission-level/SKILL.md: "All 5 templates carry byte-identical defaultMode, env, hooks, and
-# permissions.allow; that invariant is what keeps the overwrite safe... any top-level key present in a
-# destination file but absent from the templates is silently dropped by a switch." Registering this hook only
-# in the root settings.json would therefore mean /jenga-permission-level 5 DELETES it. It is registered in
-# the root settings.json and in all five templates, keeping that hooks-block invariant intact.
-# If you add, rename or change this registration, change all six files together.
+# THE REAL RISK TO THAT PROPERTY IS NOT THIS SCRIPT, IT IS THE LEVEL SWITCH. Before E100_S04 the switch
+# copied one of five COMPLETE templates/permission-levels/level-*.json over .claude/settings.json and
+# .agents/settings.json, so this hook had to be registered in six files (the root settings.json and all five
+# templates, byte-identical) or /jenga-permission-level 5 would delete it. That is no longer so.
+# scripts/jenga-permission-level-switch.sh now owns only defaultMode, permissions.deny, permissions.ask and
+# autoMode, merged key by key; it never writes hooks, permissions.allow or env, and the templates carry no
+# hooks. The hook is registered in the root settings.json and reaches a client's .claude/ and .agents/
+# settings through the E100_S03 settings merge, so no level switch can drop it, level 5 included.
+# If you change this registration, change the root settings.json (and the merge fragment, if any);
+# tests/permission-level-template-commit-guard.bats guards it.
 #
 # ---------------------------------------------------------------------------
 # EXIT CODES

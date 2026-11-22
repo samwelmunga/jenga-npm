@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the confirmed .publicignore exclusion step (E77_S06_T06), written by
 # E77_S06_T09.

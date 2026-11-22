@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for E92_S02_T07: /j-dooo shows the progress bar once per wave and keeps its inner /do calls silent.
 #

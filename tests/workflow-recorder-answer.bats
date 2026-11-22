@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # skills/j-workflow-recorder/scripts/record-answer.sh — the annotation layer and its format
 # (E89, this story's annotation task).

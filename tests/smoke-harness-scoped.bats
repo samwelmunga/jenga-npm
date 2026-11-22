@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E95_S01_T01: scripts/smoke-harness.sh never infers a runner.
 #

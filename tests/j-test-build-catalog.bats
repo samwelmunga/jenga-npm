@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for skills/j-test/scripts/build-catalog.sh (E72_S02_T02).
 #
@@ -164,7 +165,7 @@ make_bin() {
 @test "npm alias: npm test folds into the bats suite and the catalog has exactly one entry for bats tests/*.bats" {
   catalog_ok --root "$FIX/npm-alias" --discovery-file "$FIX/npm-alias/discovery.json"
   json_check '(.runnable | length) == 2'
-  json_check '[.runnable[] | select(.id == "npm:test" or .command == "bats tests/*.bats" or (.also | map(.id) | index("bats:tests")))] | length == 1'
+  json_check '[.runnable[] | select(.id == "npm:test" or .command == "bats --filter-tags !tier:manual tests/*.bats" or (.also | map(.id) | index("bats:tests")))] | length == 1'
   json_check '.runnable[0].id == "npm:test" and .runnable[0].command == "npm test"'
   json_check '(.runnable[0].also | map(.id)) == ["bats:tests","config:bats:integration"]'
   json_check '.runnable[1].id == "shellcheck:all"'
@@ -232,6 +233,9 @@ make_bin() {
 
 # E43_S02_T01 / E95_S01_T02: `bash scripts/run-tests.sh --all` (this repo's `test:ci`) is the full parallel aggregate of
 # `bats tests/*.bats`; the bare `bash scripts/run-tests.sh` (this repo's `test`) runs only a bounded fast set.
+# E95_S02_T04: the npm-alias discovery carries the discovered command `bats --filter-tags !tier:manual tests/*.bats`,
+# while package.json bodies stay unfiltered, so these cases also pin build-catalog.sh's rule 2b (the fold key ignores
+# exactly that filter pair).
 # Each case builds its own isolated fixture root under BATS_TEST_TMPDIR (no shared repo state).
 @test "npm alias: the full aggregate-runner body (run-tests.sh --all) folds with the bats suites, and the plain bats entry survives" {
   local body
@@ -240,7 +244,7 @@ make_bin() {
     jq -n --arg b "$body" '{scripts:{test:$b}}' > "$BATS_TEST_TMPDIR/agg/package.json"
     catalog_ok --root "$BATS_TEST_TMPDIR/agg" --discovery-file "$FIX/npm-alias/discovery.json"
     # --all is refused outside CI, so the npm script must never be the entry j.test runs.
-    json_check '(.runnable | length) == 2 and .runnable[0].id == "bats:tests" and .runnable[0].command == "bats tests/*.bats"'
+    json_check '(.runnable | length) == 2 and .runnable[0].id == "bats:tests" and .runnable[0].command == "bats --filter-tags !tier:manual tests/*.bats"'
     json_check '(.runnable[0].also | map(.id)) == ["config:bats:integration","npm:test"]'
   done
 }
@@ -250,7 +254,7 @@ make_bin() {
   printf '%s' '{"scripts":{"test":"bash scripts/run-tests.sh"}}' > "$BATS_TEST_TMPDIR/agg/package.json"
   catalog_ok --root "$BATS_TEST_TMPDIR/agg" --discovery-file "$FIX/npm-alias/discovery.json"
   json_check '[.runnable[].id] == ["bats:tests","npm:test","shellcheck:all"]'
-  json_check '.runnable[0].command == "bats tests/*.bats" and (.runnable[0].also | map(.id)) == ["config:bats:integration"]'
+  json_check '.runnable[0].command == "bats --filter-tags !tier:manual tests/*.bats" and (.runnable[0].also | map(.id)) == ["config:bats:integration"]'
 }
 
 @test "npm alias: a body that merely mentions run-tests.sh (extra command or argument) does not fold" {

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # End-to-end coverage for the j.commit test gate (E72_S04_T05).
 #

@@ -4,6 +4,8 @@
 // E47_S08_T01: also fails on any colour literal (named keyword such as `white`, hex, rgb()/hsl()) used as a
 // colour value in a stylesheet other than tokens.css, so a card cannot pin itself to one theme.
 // E92_S03_T03: also guards the five --color-progress-* tokens (see PROGRESS_* below).
+// E92_S13_T04: also guards the day and night tokens of the goal designs (see DAY_NIGHT_* below).
+// E92_S13_T07: also guards the seasons tree's --color-tree-* tokens (see TREE_* below).
 // Zero dependencies. Exits non-zero if any checked pair is below 4.5:1, a progress token is not distinct or below
 // 3:1 on the card surface, or a colour literal is found.
 const fs = require('fs')
@@ -123,8 +125,95 @@ function checkProgressTokens(theme, themeName) {
   return out
 }
 
+// ---- day and night tokens (E92_S13_T04) ----
+// Day is the light theme and night the dark one. Every goal design that has a sky (the citadel, the facade and, in
+// E92_S13_T07, the seasons tree) draws its sun, moon, stars, birds and lit windows from these tokens and shows the day half or the
+// night half with the two display tokens, so a token missing from a theme, or a display token the wrong way round, would draw a
+// sun at night or no stars. Three guards: (1) every token below is defined in the light block, the dark block and the media block
+// (the dark/media parity above then keeps those two equal); (2) the display tokens are inline/none in the light theme and
+// none/inline in the dark one; (3) what is drawn against another colour keeps 3:1 (WCAG non-text contrast) in the theme it is
+// shown in: the bird on the day sky, the stars and moon on the night sky, the lit window on the night wood and the lit gate on
+// the night wall (and the dark gate on the day wall). A later design appends its own tokens to DAY_NIGHT_TOKENS and its own
+// pairs to DAY_NIGHT_PAIRS; it never copies the checks.
+const DAY_NIGHT_TOKENS = ['--color-castle-win-l', '--color-castle-win-r', '--color-sky-top', '--color-sky-bottom', '--color-sky-sun',
+  '--color-sky-sun-ray', '--color-sky-moon', '--color-sky-star', '--color-sky-twinkle', '--color-sky-bird']
+const DAY_NIGHT_DISPLAY = { light: { day: 'inline', night: 'none' }, dark: { day: 'none', night: 'inline' } }
+const DAY_NIGHT_MIN_CONTRAST = 3
+// [theme it is shown in, foreground token, background token]
+const DAY_NIGHT_PAIRS = [
+  ['light', '--color-sky-bird', '--color-sky-bottom'],
+  ['light', '--color-castle-gate', '--color-castle-wall-l'],
+  ['dark', '--color-sky-star', '--color-sky-top'],
+  ['dark', '--color-sky-twinkle', '--color-sky-top'],
+  ['dark', '--color-sky-moon', '--color-sky-top'],
+  ['dark', '--color-castle-win-l', '--color-castle-end-l'],
+  ['dark', '--color-castle-win-r', '--color-castle-end-r'],
+  ['dark', '--color-castle-gate', '--color-castle-wall-l'],
+]
+
+// `blocks` is { light, dark, mediaDark }: each the token map of that block ({ '--x': '#rrggbb' }); `display` is the same shape
+// for the display tokens ({ '--theme-day-display': 'inline' }). Returns [{ ok, kind, message }].
+function checkDayNightTokens(blocks, display) {
+  const out = []
+  for (const [name, t] of Object.entries(blocks)) {
+    const missing = DAY_NIGHT_TOKENS.filter(k => !t[k])
+    out.push({ ok: missing.length === 0, kind: 'defined', message: `${name.padEnd(9)} day and night tokens defined` + (missing.length ? ` (missing: ${missing.join(' ')})` : ` (${DAY_NIGHT_TOKENS.length})`) })
+  }
+  for (const [theme, want] of Object.entries(DAY_NIGHT_DISPLAY)) {
+    const d = (display && display[theme]) || {}
+    const ok = d['--theme-day-display'] === want.day && d['--theme-night-display'] === want.night
+    out.push({ ok, kind: 'display', message: `${theme.padEnd(5)} --theme-day-display ${d['--theme-day-display']}, --theme-night-display ${d['--theme-night-display']} (want ${want.day} / ${want.night})` })
+  }
+  for (const [theme, fg, bg] of DAY_NIGHT_PAIRS) {
+    const t = blocks[theme] || {}
+    if (!t[fg] || !t[bg]) { out.push({ ok: false, kind: 'contrast', message: `${theme.padEnd(5)} missing ${fg} or ${bg}` }); continue }
+    const r = ratio(t[fg], t[bg])
+    out.push({ ok: r >= DAY_NIGHT_MIN_CONTRAST, kind: 'contrast', message: `${theme.padEnd(5)} ${fg} on ${bg}: ${r.toFixed(2)}:1 (min ${DAY_NIGHT_MIN_CONTRAST}:1)` })
+  }
+  return out
+}
+
+// ---- the seasons tree's tokens (E92_S13_T07) ----
+// The tree has about 70 `--color-tree-*` tokens of its own (sky, forest, pool, island, bark, snow, seven season tones, blossom,
+// withered, flowers, label pill). Two guards: (1) the set of names is the same in the light block, the dark block and the media
+// block (a token missing from a theme draws nothing in it, the same way a missing sky token would); (2) the label text keeps 4.5:1
+// on its pill in both themes (it is text), and the lit lantern keeps 3:1 on the night sky (non-text contrast).
+// [theme it is shown in, foreground token, background token, minimum ratio]
+const TREE_PAIRS = [
+  ['light', '--color-tree-text', '--color-tree-pill', 4.5],
+  ['dark', '--color-tree-text', '--color-tree-pill', 4.5],
+  ['dark', '--color-tree-lantern', '--color-tree-sky-top', 3],
+  ['dark', '--color-tree-mote', '--color-tree-sky-bottom', 3],
+]
+const TREE_PREFIX = '--color-tree-'
+const TREE_MIN_TOKENS = 60
+
+// `blocks` is { light, dark, mediaDark }: each the token map of that block. Returns [{ ok, kind, message }].
+function checkTreeTokens(blocks) {
+  const out = []
+  const names = t => Object.keys(t || {}).filter(k => k.startsWith(TREE_PREFIX)).sort()
+  const light = names(blocks.light)
+  out.push({ ok: light.length >= TREE_MIN_TOKENS, kind: 'defined', message: `light     ${light.length} tree tokens defined (min ${TREE_MIN_TOKENS})` })
+  for (const [name, t] of Object.entries(blocks)) {
+    if (name === 'light') continue
+    const have = new Set(names(t))
+    const missing = light.filter(k => !have.has(k))
+    const extra = [...have].filter(k => !light.includes(k))
+    out.push({ ok: missing.length === 0 && extra.length === 0, kind: 'defined', message: `${name.padEnd(9)} tree tokens match the light block` + (missing.length ? ` (missing: ${missing.join(' ')})` : '') + (extra.length ? ` (extra: ${extra.join(' ')})` : '') })
+  }
+  for (const [theme, fg, bg, min] of TREE_PAIRS) {
+    const t = blocks[theme] || {}
+    if (!t[fg] || !t[bg]) { out.push({ ok: false, kind: 'contrast', message: `${theme.padEnd(5)} missing ${fg} or ${bg}` }); continue }
+    const r = ratio(t[fg], t[bg])
+    out.push({ ok: r >= min, kind: 'contrast', message: `${theme.padEnd(5)} ${fg} on ${bg}: ${r.toFixed(2)}:1 (min ${min}:1)` })
+  }
+  return out
+}
+
 module.exports = { findColourLiterals, cssFiles, hexToLab, deltaE76, ratio, checkProgressTokens,
-  PROGRESS_TOKENS, PROGRESS_MIN_DELTA_E, PROGRESS_MIN_CONTRAST }
+  PROGRESS_TOKENS, PROGRESS_MIN_DELTA_E, PROGRESS_MIN_CONTRAST,
+  checkDayNightTokens, DAY_NIGHT_TOKENS, DAY_NIGHT_DISPLAY, DAY_NIGHT_PAIRS, DAY_NIGHT_MIN_CONTRAST,
+  checkTreeTokens, TREE_PAIRS, TREE_MIN_TOKENS }
 
 if (require.main === module) {
   const srcDir = path.join(__dirname, '..', 'src')
@@ -169,6 +258,33 @@ if (require.main === module) {
       if (!res.ok) failed = true
       console.log(`${res.ok ? 'ok  ' : 'FAIL'}  ${res.message}`)
     }
+
+  // the display tokens are not colours: read them from the same three blocks
+  const displayOf = re => {
+    const m = css.match(re)
+    if (!m) throw new Error('token block not found: ' + re)
+    const out = {}
+    for (const d of m[1].matchAll(/(--theme-(?:day|night)-display)\s*:\s*([a-z]+)\s*;/g)) out[d[1]] = d[2]
+    return out
+  }
+  const display = {
+    light: displayOf(/:root\s*\{\s*color-scheme:\s*light;([\s\S]*?)\n\}/),
+    dark: displayOf(/:root\[data-theme="dark"\]\s*\{([\s\S]*?)\n\}/),
+  }
+  const displayMedia = displayOf(/prefers-color-scheme:\s*dark\)\s*\{\s*:root:not\(\[data-theme="light"\]\)\s*\{([\s\S]*?)\n  \}/)
+  if (JSON.stringify(display.dark) !== JSON.stringify(displayMedia)) {
+    console.log('FAIL  media-query dark block and [data-theme="dark"] block differ in the --theme-*-display tokens')
+    failed = true
+  }
+  for (const res of checkDayNightTokens({ light, dark, 'dark(media)': mediaDark }, display)) {
+    if (!res.ok) failed = true
+    console.log(`${res.ok ? 'ok  ' : 'FAIL'}  ${res.message}`)
+  }
+
+  for (const res of checkTreeTokens({ light, dark, 'dark(media)': mediaDark })) {
+    if (!res.ok) failed = true
+    console.log(`${res.ok ? 'ok  ' : 'FAIL'}  ${res.message}`)
+  }
 
   let literals = 0
   for (const f of cssFiles(srcDir))

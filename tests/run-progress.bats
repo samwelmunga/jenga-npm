@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for skills/j-break/scripts/run-progress.sh (E92_S02_T04) and the shared ledger reader it uses
 # (skills/j-break/scripts/lib/ledger_reader.py).
@@ -748,7 +749,8 @@ STUB
 
 @test "the Node command is not blocked at the Guarded level: Bash(*) is allowed and no deny rule matches bash or node" {
   G="$REPO_ROOT/templates/permission-levels/level-2-guarded.json"
-  [ "$(jq -r '.permissions.allow | index("Bash(*)") != null' "$G")" = "true" ]
+  # E100_S04_T05: the allow list is no longer in the templates; the baseline a consumer runs is root settings.json.
+  [ "$(jq -r '.permissions.allow | index("Bash(*)") != null' "$REPO_ROOT/settings.json")" = "true" ]
   # The skills run `bash <run-progress.sh> ...`, which runs node inside the script; neither word starts a deny rule.
   [ "$(jq -r '[.permissions.deny[] | select(test("^Bash\\((bash|node)( |\\*|\\))"))] | length' "$G")" = "0" ]
 }

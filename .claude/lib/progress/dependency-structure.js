@@ -20,6 +20,16 @@
  * depends on to the goal, whose id is GOAL_NODE_ID). Edges between the visible nodes are de-duplicated by `from` + `to`;
  * once groups fold, the edges of a group are the union of its members'.
  *
+ * Undecomposed stories (E92_S12_T02, opt-in): a fourth `options` argument `{ includeUndecomposed: true }` (default off, so the
+ * terminal renderers, which never pass it, get the structure they always got) lets a story of the epic that the payload states
+ * `decomposed: false` (graph.stories[], E92_S12_T01) and that has no task nodes appear as a GHOST BAND: a band with empty
+ * `cells` and a start node `0/0`, `undecomposed: true` on the band and on the start fact. A story with task nodes that is
+ * stated `decomposed: false` (all its tasks rejected or of unknown status) keeps every node and carries `undecomposed: true`
+ * on its start fact only. The flag is read, never derived (E92 decision 1): `true`, `null` or a missing key (an older
+ * payload) adds no key at all, so such a structure is deep-equal to the one built without the option. A ghost band also gets
+ * one edge of kind `ghost`, its start node to the goal, so the band is not an orphan; an epic without ghost bands has none.
+ * An epic with no task nodes stays `empty` (below), also when every one of its stories is undecomposed.
+ *
  * Structure shape (arrays are sorted, so the same input gives a deep-equal output):
  *   empty        true only when the epic has no tasks (the goal is still filled in). An epic with at least one task always
  *                gets the full structure, with or without dependency edges (user request 2026-11-15, E92_S09_T01): with no
@@ -30,7 +40,8 @@
  *                percent and reached as stated (percent / 100 is the fraction 0..1 the drawing scales by), done/total its
  *                tasks_done/tasks_denominator, stories/decomposed its counts (the view shows decomposed/stories when lower).
  *                An epic entry without epic_progress gives the zero goal
- *   stories      per story: { storyId, title, done, total, buckets }   the start-node facts, id order
+ *   stories      per story: { storyId, title, done, total, buckets }   the start-node facts, id order, plus
+ *                undecomposed: true on a story the payload states `decomposed: false` (only with includeUndecomposed)
  *   tasks        every task, never folded: { kind:'task', id, title, storyId, state, bucket, row, column, gate,
  *                mark, dependsOn, unlocks, upstream, downstream }   gate: none | locked | open, from the task's EFFECTIVE
  *                dependencies (its own depends_on plus its story's; see gateOf): none only when there are none at all,
@@ -47,9 +58,10 @@
  *                upstream, downstream }, plus unfinishedDeps (the union of its members', sorted) only when a member has it
  *   headers      one collapse header per expanded group: { kind:'header', id, state, count, row, column }
  *   bands        per story: { storyId, row, start, cells }   `start` is the start node (id `story:<storyId>`) with its
- *                facts; `cells` is [{ column, slots }] in column order, a slot being { type:'node', node } or
+ *                facts (and `undecomposed: true` for an undecomposed story); a ghost band has `cells` [] and
+ *                `undecomposed: true` on the band itself; `cells` is [{ column, slots }] in column order, a slot being { type:'node', node } or
  *                { type:'header', header }, in the order the cell stacks them
- *   edges        the visible edges, see above
+ *   edges        the visible edges, see above (a `ghost` edge, after the task edges, per ghost band in band order)
  *   boundary     nodes outside the epic, { id, status, bucket }
  *   foldable     ids of every group that would fold, folded or not
  *   expanded     ids currently unfolded
@@ -252,9 +264,10 @@ function closure(start, next) {
 
 /**
  * The structure of the dependency tree of one epic, folded (no group expanded). Accepts the full-board payload or a
- * `--within`-restricted one and selects the epic itself, so both give the same structure.
+ * `--within`-restricted one and selects the epic itself, so both give the same structure. `options.includeUndecomposed === true`
+ * adds the ghost bands and the `undecomposed` flags described at the top of this file; without it nothing changes.
  */
-export function buildDependencyStructure(graph, epicId, labels) {
+export function buildDependencyStructure(graph, epicId, labels, options) {
   if (!graph || typeof graph !== 'object' || typeof epicId !== 'string' || !epicId) return emptyStructure()
   const lab = labels || graph.labels || {}
   const allTasks = arr(graph.tasks).filter(t => t && typeof t === 'object')
@@ -291,11 +304,24 @@ export function buildDependencyStructure(graph, epicId, labels) {
   const cols = computeColumns(tasks.map(t => t.id), inner)
 
   const storyEntries = new Map(arr(graph.stories).filter(s => s && s.id).map(s => [s.id, s]))
-  const storyIds = [...new Set(tasks.map(t => t.story_id))].sort()
+  // E92_S12_T02: with includeUndecomposed, a story of this epic stated `decomposed: false` that has no task nodes is a ghost band
+  const withUndecomposed = !!options && options.includeUndecomposed === true
+  const taskStoryIds = new Set(tasks.map(t => t.story_id))
+  const ghostIds = withUndecomposed
+    ? arr(graph.stories).filter(s => s && s.id && s.epic_id === epicId && s.decomposed === false && !taskStoryIds.has(s.id)).map(s => s.id)
+    : []
+  const storyIds = [...new Set([...taskStoryIds, ...ghostIds])].sort()
   const stories = storyIds.map(sid => {
     const entry = storyEntries.get(sid)
     const figures = fromTotals(entry && entry.totals) || fromTasks(tasks.filter(t => t.story_id === sid))
-    return { storyId: sid, title: (entry && entry.title) || '', done: figures.done, total: figures.total, buckets: figures.buckets }
+    return {
+      storyId: sid,
+      title: (entry && entry.title) || '',
+      done: figures.done,
+      total: figures.total,
+      buckets: figures.buckets,
+      ...(withUndecomposed && entry && entry.decomposed === false ? { undecomposed: true } : {}),
+    }
   })
   const rowOf = new Map(storyIds.map((sid, i) => [sid, i]))
 
@@ -362,6 +388,8 @@ export function groupFacts(sid, column, state, members) {
  * ordered by state, then id. A state with more than FOLD_THRESHOLD tasks in one cell folds into one group node unless its
  * id is in `expandedIn`, in which case a collapse header precedes the members. Returns the structure: the facts it was
  * given plus nodes, headers, bands (with their cells), edges, foldable, expanded and columns. Pure; the input is not changed.
+ * A story fact flagged `undecomposed` (E92_S12_T02) keeps its band, with no cells when it has no task, so folding and unfolding
+ * a model that carries ghost bands gives them back.
  */
 export function foldStructure(m, expandedIn) {
   const expanded = new Set(expandedIn)
@@ -417,6 +445,8 @@ export function foldStructure(m, expandedIn) {
       cells.push({ column, slots })
     }
 
+    // E92_S12_T02: a story flagged undecomposed with no task nodes is a ghost band (empty cells, flag on the band too)
+    const ghost = story.undecomposed === true && inStory.length === 0
     bands.push({
       storyId: story.storyId,
       row,
@@ -428,8 +458,10 @@ export function foldStructure(m, expandedIn) {
         done: story.done,
         total: story.total,
         buckets: story.buckets,
+        ...(story.undecomposed === true ? { undecomposed: true } : {}),
       },
       cells,
+      ...(ghost ? { undecomposed: true } : {}),
     })
   })
 
@@ -453,6 +485,8 @@ export function foldStructure(m, expandedIn) {
     if (inEpic === 0) add(`story:${t.storyId}`, to, false, 'start')
     if (t.unlocks.length === 0) add(to, GOAL_NODE_ID, false, 'goal')
   }
+  // E92_S12_T02: a ghost band has no task to reach the goal through, so its start node gets its own (dashed) edge to it
+  for (const band of bands) if (band.undecomposed) add(band.start.id, GOAL_NODE_ID, false, 'ghost')
 
   return {
     empty: m.empty,

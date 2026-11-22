@@ -293,9 +293,11 @@ stays traceable to why it exists. **Authored items remain valid with no `provena
 without one is validated exactly as before; absence means "authored by hand".
 
 Only the Scrum Master ever writes `project/configs/checklists.json` by hand, and only after the user confirms. Agents
-suggest through a rapport and never write a `provenance` key themselves. The one other writer is
+suggest through a rapport and never write a `provenance` key themselves. The only other writers are
 `scripts/generate-convention-checklist.sh` (run by the `j.conventions` wizard), which touches only its own
-`conv-` items (below).
+`conv-` items (below), and `scripts/checklist-required-merge.sh` (run by postinstall and `jenga sync`,
+`E99_S04_T05`), which only appends the required ids an existing instance lacks, copied unchanged from the shipped
+default and with no `provenance` key (see "Sync-time merge of required ids" in section 9).
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
@@ -640,11 +642,11 @@ non-trivial subagent work is dispatched. **No new trigger mechanism exists for i
 }
 ```
 
-**No hook wiring is touched by this feature, and you should not open the six files that carry it.** The
-`PreToolUse` block that CLAUDE.md requires to stay byte-identical across the root `settings.json` and all
-five `templates/permission-levels/level-*.json` files registers `hooks/on_preflight_check.sh`
+**No hook wiring is touched by this feature, and you should not open the settings files that carry it.** The
+`PreToolUse` block in the root `settings.json` registers `hooks/on_preflight_check.sh`
 *generically*: the hook reads the situation marker and runs `checklist.sh check <phase>` for whatever
-phase it finds. Adding a registry item changes no wiring. Recorded here so no future maintainer goes
+phase it finds. A client receives that block through the `E100_S03` settings merge, and the permission-level
+templates carry no hooks. Adding a registry item changes no wiring. Recorded here so no future maintainer goes
 looking.
 
 #### `enforcement` must never be `block`
@@ -740,6 +742,19 @@ unit verifies it before believing it.
 The deterministic work lives in one script, `scripts/foreground-preflight.sh` (subcommands `mint`, `gate`,
 `verify`; the header is the contract). It builds on `scripts/checklist.sh tick` and `checklist.sh list` and changes
 neither.
+
+**Both items ship in the default (`E99_S04_T01`).** `foreground-preflight.sh` hard-requires the two ids, and a project
+with no instance reads the shipped default whole (section 9, "Combining the two files"), so `templates/checklists.json`
+carries both with the instance's `id`, `text`, `situations`, `kind`, `enforcement` (`confirm`, never `block`) and
+`tick_scope` (`run`). Before that, every npm consumer failed the foreground gate with `unknown checklist item id`, exit
+`12`. Only `checkin-run-before-dispatch`'s `verify` differs: the instance's `bash skills/j-check-in/scripts/checkin-gate.sh`
+is relative to this repository's root, so the shipped one is a candidate loop run from the project root, first hit wins:
+`skills/j-check-in/scripts/checkin-gate.sh` (this repository), `node_modules/@jenga-ai/agent/skills/j-check-in/scripts/checkin-gate.sh`
+(the installed package) and `.claude/skills/j-check-in/scripts/checkin-gate.sh` (the postinstall mirror). The hit is
+`exec`'d, so its exit status is the item's. With no hit it names every path it looked at on stderr and exits `127`
+(`not_found`), never `0`, because a masked failure scores as a pass. From either consumer copy `checkin-gate.sh` finds
+`scripts/resolve-root.sh` and `scripts/checklist-marker.sh` through `skills/index/scripts/package-root.sh`. A consumer
+whose project instance predates the two items still lacks them: the instance replaces the default whole.
 
 #### The foreground step: where it runs and why it must be the host session
 
@@ -1409,20 +1424,19 @@ level could relax it, and `PreToolUse` is evaluated ahead of permission resoluti
 something an `autoMode.allow` entry can pre-empt. There is deliberately **no environment variable that
 disables the hook**: the only way off is unregistering it.
 
-**The real risk to that property is the level switch, not the script, and it is why the hook is registered
-in six files rather than one.** All five `templates/permission-levels/level-*.json` are *complete*
-`settings.json` documents, and `scripts/jenga-permission-level-switch.sh` copies the matching one over
-`.claude/settings.json` and `.agents/settings.json` as a **whole-file overwrite**.
-`skills/jenga-permission-level/SKILL.md` states the invariant: "All 5 templates carry byte-identical
-`defaultMode`, `env`, `hooks`, and `permissions.allow`; that invariant is what keeps the overwrite safe…
-any top-level key present in a destination file but absent from the templates is **silently dropped** by a
-switch." A hook registered only in the root `settings.json` would therefore be deleted by
-`/jenga-permission-level 5` — the exact level the acceptance criterion names. This is not hypothetical: it
-is the bug `E15_S04_T01` fixed for the `WorktreeCreate` commit guard, and
-`tests/permission-level-template-commit-guard.bats` exists to keep it fixed.
+**The real risk to that property was the level switch, not the script, and it is why the registration no longer
+lives in the templates.** Before `E100_S04` the five `templates/permission-levels/level-*.json` were *complete*
+`settings.json` documents that `scripts/jenga-permission-level-switch.sh` copied over `.claude/settings.json`
+and `.agents/settings.json` as a whole-file overwrite, so a hook registered only in the root `settings.json`
+was deleted by `/jenga-permission-level 5` (the bug `E15_S04_T01` fixed for the `WorktreeCreate` commit
+guard), and the hook had to be registered in six byte-identical places.
 
-The `PreToolUse` block is therefore byte-identical across the root `settings.json` and all five templates.
-**Change all six together.**
+The switch now owns only the level policy keys (`defaultMode`, `permissions.deny`, `permissions.ask`,
+`autoMode`) and merges them key by key; it never writes `hooks`, `permissions.allow` or `env`. The templates
+carry no hooks. The `PreToolUse` block is registered in the root `settings.json` and reaches a client through
+the `E100_S03` settings merge, so the switch cannot drop it at any level. No level can relax the backstop, and
+the switch cannot remove it. `tests/permission-level-template-commit-guard.bats` (`E100_S04_T03`) guards
+this. To change the registration, change the root `settings.json` (and the merge fragment, if any).
 
 #### Registration
 
@@ -1486,6 +1500,140 @@ This follows from section 1: each file is validated on its own and nothing is in
 "which items apply" is answered by opening one file. The checker validates only the file it selected,
 before reading any item, and refuses to list from an invalid one. The full behaviour (output format, exit
 codes, unknown-situation handling) is documented in the header comment of `scripts/checklist.sh`.
+
+The checker's rule above is unchanged by the decision below. What that decision adds is a narrow write at
+install and sync time, outside the checker, for the item ids a shipped script cannot run without.
+
+#### Decision `E99_S04_T02` (2026-11-20): a project instance that lacks a required shipped item
+
+**Problem.** `scripts/foreground-preflight.sh` hard-requires two `pre-task` items,
+`checkin-run-before-dispatch` and `dispatch-cost-and-cadence`. `E99_S04_T01` ships both in
+`templates/checklists.json`, which fixes a consumer with no project instance. A consumer that already holds
+`<configs>/checklists.json` (seeded by `j.checklist` copy or move, or written by `j.conventions`) still reads
+only that file, so it still lacks both ids and its foreground gate keeps exiting `12` until something adds
+them. "Required" below means an id listed in the shipped declaration of required ids that `E99_S04_T03`
+introduces.
+
+**Options evaluated.**
+
+| | 1. `jenga doctor` warning only | 2. Sync-time merge of every missing shipped item | 3. Both, merge narrowed to required ids | 4. Per-id fallback in `checklist.sh` |
+|---|---|---|---|---|
+| What the consumer sees | `jenga doctor` names the missing ids, the registry it read and the remedy. Nothing changes until the user adds the items; `/jenga`, `j.do` and `j.dooo` keep exiting `12`, and a user who never runs `jenga doctor` sees only the exit `12`. | After `npm install`/upgrade or `npx jenga sync`, every shipped item absent from the instance reappears, reported in the sync summary. | After `npm install`/upgrade or `npx jenga sync`, only the missing required ids are added, reported in the sync summary. The gate works. `jenga doctor` still warns when they are missing (for example when npm blocked postinstall and `jenga sync` was never run). | The gate works with no visible change. The file and the effective registry disagree: `j.checklist` print shows the file, while `check` and `tick` also see items the file does not hold. |
+| Writes to the consumer's registry | No. | Yes, on every install, upgrade and sync. | Yes, only when a required id is missing; a second run writes nothing. Never creates an instance where none exists (the shipped default already applies there). | No. |
+| A deliberately removed item | Untouched, and not reported unless it is required. | Restored on the next sync. Safe only with a removal record (a tombstone), which is a schema change to section 1 and to `scripts/validate-checklists.sh`, plus a change to `j.checklist` remove. This repository's own instance omits `acceptance-criteria-reread`, `no-conflict-markers-staged` and `no-env-files-staged` on purpose; a blanket merge would put all three back. | A removed item that is not required is never touched. A removed required item is added back on the next sync: accepted, because removing it breaks the foreground gate anyway. | A removed item that is not required stays removed. A removed required item is silently resurrected at read time, and nothing in the file can switch it off. |
+| Files and tests touched | `E99_S04_T03`'s files only: the required-id declaration, `scripts/checklist-required-check.sh`, a read-only selection sub-command in `scripts/checklist.sh`, `lib/commands/doctor.js`, one new bats file, this document. | `lib/sync.js` (one new step, shared by `scripts/postinstall.js` and `lib/commands/sync.js`), a new merge script, sync bats cases, plus the tombstone: section 1, `scripts/validate-checklists.sh`, `skills/j-checklist/scripts/checklist-entry.sh`, `tests/validate-checklists.bats`, `tests/checklist-entry.bats`. | `E99_S04_T03`'s files, plus `lib/sync.js` (one new step), one new merge script under `scripts/`, one new bats file, this document. No schema change. | `scripts/checklist.sh` (`select_registry` and its item lookup) and its header contract, this section's whole-file rule, `tests/checklist-sh.bats`, `tests/checklist-gating.bats`, and the view of every `checklist.sh` caller (`check`, `tick`, the hook, `j.checklist`). |
+
+**Choice: option 3.** The user chose it in chat on 2026-11-20, when shown these four options as a numbered
+list ("3: Båda, smal merge"). The user gave no reason beyond the choice; the recommendation it accepted was:
+a project cannot remove a required item without breaking the foreground gate, so restoring only those ids
+takes nothing a working project could have wanted, while a blanket merge (option 2) would undo deliberate
+removals such as this repository's three, and a read-time fallback (option 4) would break the whole-file rule
+for every caller. The doctor warning stays because postinstall can be blocked (npm `--ignore-scripts`, pnpm)
+and the merge then never runs.
+
+**What this means in practice.**
+
+- **Doctor** (`E99_S04_T03`): warning only, never writes, never changes the exit code. Its remedy names
+  `npx jenga sync` once `E99_S04_T05` has landed, and copying the items from the shipped default with
+  `j.checklist` as the manual alternative.
+- **Sync** (`E99_S04_T05`): a step in `lib/sync.js`, so postinstall and `jenga sync` cannot diverge. It adds to
+  an existing instance only the required ids it lacks, each copied as the shipped default defines it, through
+  a validated candidate file and an atomic replace. It never edits, reorders or removes any other item
+  (authored, `suggested` or managed `conv-`), never overwrites an id the instance already has even when its
+  fields differ from the shipped ones, never creates an instance, and writes nothing in a dry run.
+- **The checker** keeps reading exactly one file. Nothing in `scripts/checklist.sh` merges.
+
+#### Required checklist ids (`E99_S04_T03`)
+
+Some shipped scripts cannot run without particular items in the effective registry. Three pieces make that
+visible before a run fails on it.
+
+**The declaration: `templates/checklist-required-ids.json`.** The one machine-readable list of those ids, each
+with the script that requires it. It ships (`templates/` is in `package.json` `files` and not in
+`.publicignore`) and is plain JSON, so a shell script can read it (the sync-time merge of `E99_S04_T05` does):
+
+```json
+{ "version": 1, "required": [ { "id": "checkin-run-before-dispatch", "required_by": "scripts/foreground-preflight.sh" },
+                              { "id": "dispatch-cost-and-cadence",   "required_by": "scripts/foreground-preflight.sh" } ] }
+```
+
+`scripts/foreground-preflight.sh` keeps its own `CHECKIN_ITEM` and `COST_ITEM` constants and does not read the
+declaration. The two ids drive different steps of the gate (one machine item ticked after the check-in passes,
+one judgment item ticked only on `--user-yes`), which a flat list cannot say, and a gate that parses a file on
+every dispatch gains a failure mode (a missing or malformed declaration) on the path every `/jenga` run takes.
+Instead `tests/checklist-required-check.bats` fails when the script's constants and the ids declared for it
+differ, and when a declared id is missing from `templates/checklists.json` or a declared script does not exist.
+A new script that hard-requires an id adds an entry here and a matching drift case.
+
+**The check: `scripts/checklist-required-check.sh`.** Reads the declaration, asks `scripts/checklist.sh
+registry` which registry is in effect (the same `select_registry` every other sub-command uses; the check has
+no copy of that rule), and prints one `missing<TAB><id><TAB><required_by><TAB><registry>` line per required id
+that file lacks (`<registry>` is `none` when there is no registry at all). Read-only. Exit codes: `0` none
+missing, `10` some missing, `1` the declaration or the registry is unreadable or the configs directory cannot be
+resolved, `2` usage, `3` `checklist.sh` not found, `4` no `python3`. `--help` prints the usage. It resolves the
+registry from its working directory, like every `checklist.sh` call. `checklist.sh registry` itself prints the
+selected path (nothing when neither file exists) and exits `0`, or `1` when the configs directory cannot be
+resolved; it does not validate the file.
+
+**The warning: `jenga doctor`.** Right after the drift warning, `runDoctor` runs the check from the consumer
+root (`lib/checklist-required.js`) and, when ids are missing, prints them, the registry file it read and the
+remedy. Warning only, per the decision above: it never writes the registry and the exit code is the same
+either way. A check that fails for another reason prints one "could not check" line. The remedy is one constant
+(`REMEDY_LINES` in `lib/checklist-required.js`); today it is copying the missing items from the shipped default
+with `j.checklist` (copy) as the manual alternative, after `npx jenga sync` (`E99_S04_T05`, below).
+
+#### Sync-time merge of required ids (`E99_S04_T05`)
+
+The sync half of the decision above. `syncConsumer` in `lib/sync.js` is shared by `scripts/postinstall.js` and
+`jenga sync`, so both run the same step (step 7, after the settings merge and before `.jenga-version`). The step runs
+`scripts/checklist-required-merge.sh --consumer-root <consumer> --package-root <package> [--dry-run]`, which holds all
+the logic (`--help` prints the full contract):
+
+- **Which file.** `<configs>/checklists.json`, with `<configs>` from `scripts/resolve-root.sh get configs` run from the
+  consumer root with `JENGA_PROJECT_ROOT` unset. Containment is checked on **physical** paths (`cd -P` / `pwd -P`,
+  portable to macOS and GNU): a configs directory whose physical path lies outside the consumer root is refused, whether
+  it gets there by an absolute path, by `..` in `paths.configs`, or through a symlinked directory. A configs directory
+  that is a symlink to a directory **inside** the consumer root is allowed, and the instance is written at its physical
+  path. A `checklists.json` that is itself a symlink is never followed (exit `4`), wherever it points. Only a configs
+  path the operating system resolves as a whole can hold an instance: when any component is missing (`not/yet/there`,
+  or `missing/../link`, where the OS fails on `missing` and never reaches `link`), the configs directory does not exist
+  and the script exits `0` with nothing written. That unresolvable part is never normalised as text into an address,
+  because dropping `missing/..` as text would re-enter a `link` symlink the real path never reaches. Its text form is
+  still checked for containment first, so a path that leaves the root even as text (`not/yet/../../../escape-new`) is
+  refused with exit `1`. With **no instance** it does nothing and prints nothing: the shipped default already applies,
+  so an instance is never created. `lib/sync.js` names the written file in its change list from the same OS resolution
+  (`fs.realpathSync.native`, no lexical normalisation first), so the summary never names a different file.
+- **What is added.** Only the ids in `templates/checklist-required-ids.json` that the instance lacks, in declaration
+  order, each copied from `templates/checklists.json` as the shipped default writes it (only the indentation is
+  adapted). No `provenance` key is added: section 9 reads an item without one as authored, and the item is the shipped
+  item unchanged, so marking it would need a new `provenance.source` value, which is a schema change.
+- **What is never touched.** The new items are inserted as text after the last element of the top-level `items`
+  array; every other byte of the file stays as it was. No other item is edited, reordered or removed (authored,
+  `suggested` or managed `conv-`), other top-level keys are carried through, and an id the instance already holds is
+  never overwritten, even when its fields differ from the shipped item. A shipped item that is not required and is
+  absent from the instance (this repository's `acceptance-criteria-reread`, `no-conflict-markers-staged`,
+  `no-env-files-staged`) stays absent.
+- **How it writes.** Under `scripts/with-lock.sh` on the instance: a candidate file in the same directory, a structural
+  self-check (the candidate parses, its items are the old items followed by the added ones, its other keys are
+  unchanged), `scripts/validate-checklists.sh` on the candidate, then `mv` over the instance. Any failure removes the
+  candidate and leaves the instance byte-identical.
+- **Dry run and idempotence.** `--dry-run` builds and validates the candidate in a scratch directory under `$TMPDIR`,
+  prints `would add <id>` and writes nothing in the consumer tree. A second run on a merged instance prints nothing and
+  writes nothing.
+- **Output and exit codes.** One `added <id>` (or `would add <id>`) line per id. `0` done or nothing to do (including
+  a configs path with a missing component whose text form stays inside the root), `1` the configs directory cannot be
+  resolved, or it lies outside the consumer root: its physical path when the whole path exists, otherwise the physical
+  path of the existing leading part with the rest normalised as text (nothing is written), `2`
+  usage, `3` the package source is unusable (including a shipped default that lacks a declared id: a packaging
+  regression), `4` the instance is unusable (malformed JSON, no `items` array, a duplicate top-level key, not a regular
+  file or a symlink, or it fails the validator before any change), `5` the candidate failed the self-check or the
+  validator, `6` the lock or the write failed.
+
+In the sync summary the added ids appear as `project checklist registry — required item(s) added: <ids>`, and the
+instance is listed as a change (`would add required checklist ids to <path>` in a dry run), named by its physical path
+relative to the physical consumer root, the file the script actually wrote. Any non-zero exit is reported with the
+script's message, recorded in `result.failures` (step `checklist-required`) and never aborts the other steps; `jenga
+sync` then exits `1` as it does for any failed step. Tests: `tests/checklist-required-merge.bats`.
 
 ### Release skills: gated sub-commands and modes (`E67_S03_T04`)
 

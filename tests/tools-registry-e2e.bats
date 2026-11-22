@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # End-to-end scenario for the preferred-tools registry (E66_S04_T04).
 #

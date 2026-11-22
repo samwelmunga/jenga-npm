@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for scripts/dashboard-port.sh and its config descriptor (E47_S11_T01).
 # Scheme: port = PP*1000 + NNN, PP 50..64, NNN 000..999; next <n> counts PP up, capped at 64.

@@ -42,7 +42,7 @@
 # sources. It used to be restated in this header and again in recording-file.sh's; E89_S06_T15
 # converged both onto that file so a change to the format is a change to exactly one document.
 #
-# Read it before changing anything below. What this script adds on top of it is the four KINDS and
+# Read it before changing anything below. What this script adds on top of it is the seven KINDS and
 # their vocabularies, which it owns and which are documented in the next block.
 #
 # Three properties of that contract matter most to the code here:
@@ -60,7 +60,7 @@
 #     promotes a clean one.
 #
 # ---------------------------------------------------------------------------
-# THE FOUR KINDS AND THEIR VOCABULARIES
+# THE FOUR KINDS AND THEIR VOCABULARIES (the heading predates parameters, portability and wrapper; all seven below)
 # ---------------------------------------------------------------------------
 #   kind="deviation"        value="in-process" | "out-of-process"
 #       The verdict on "is this in fact a deviation from the process?".
@@ -95,7 +95,44 @@
 #       re-judges, so re-emitting a fully annotated recording is deterministic.
 #       Accepted inputs: the five tokens only. Nothing is inferred.
 #
-# Any other kind is refused with a message listing these four. Any value outside a kind's vocabulary
+#   kind="parameters"       value="confirmed" | "none"                       (E103_S01_T04)
+#       The user's decision on which project-specific values in this step become workflow inputs, made in
+#       j.workflow-capture's review mode. Like relevance, the PAYLOAD IS THE BODY, but here the body has a
+#       fixed machine shape rather than prose, because a consumer decides from it:
+#       none        no value in this step is a parameter. Accepted inputs: none, no, n (case-insensitive);
+#                   the body is that word.
+#       confirmed   the body is one line per confirmed parameter, either `<name>=<literal>` (the literal
+#                   text in the step that the input replaces) or a bare `<name>` (an input with no recorded
+#                   literal: the value looked like a credential and is never written down). <name> matches
+#                   ^[a-z][a-z0-9_]*$ and appears once. Any answer in exactly that shape maps to confirmed;
+#                   anything else is refused, never guessed.
+#       Additive: emit-workflow.sh turns a confirmed body on an included step into the definition's `inputs`
+#       and substitutes `${inputs.<name>}` (E103_S02_T04; its PARAMETERS section), so a recording without
+#       this kind, and the live recorder, are unaffected.
+#
+#   kind="portability"      value="accepted"                                  (E103_S05_T01)
+#       The user's explicit acceptance of a non-portable finding of j.workflow-capture's check-portability.sh
+#       on this step. The PAYLOAD IS THE BODY: one `<finding-kind> <text>` line per accepted finding, <finding-kind>
+#       being unshipped-skill, absolute-path or project-name and <text> the offending text, no line twice.
+#       check-portability.sh accept writes it (adding a line with --replace); emit-workflow.sh does not read this
+#       kind, so an acceptance never changes an emitted definition. Anything else is refused.
+#
+#   kind="wrapper"          value="confirmed" | "declined"                    (E103_S04_T02)
+#       The user's decision on the wrapper script j.workflow-capture's generate-wrapper.sh derived for a step judged
+#       compute. The PAYLOAD IS THE BODY, in a fixed machine shape, because emit-workflow.sh decides from it:
+#       declined    the user did not want the script written; the step becomes a confirm step. Accepted inputs:
+#                   declined, no, n (case-insensitive); the body is that word.
+#       confirmed   the body is, in this order, one line each:
+#                     path=<anchor-relative path of the wrapper>   one plain token, relative, no `..` segment
+#                     sha256=<64 lowercase hex>                    the content the user saw and confirmed
+#                     args=<name> <name> ...                       the run inputs passed as positional arguments,
+#                                                                  in order, each ^[a-z][a-z0-9_]*$; may be empty
+#                     timeout_seconds=<n>                          optional, a positive integer
+#                   Anything else is refused, never guessed.
+#       Additive: emit-workflow.sh emits a step carrying `wrapper: confirmed` as a confirm step followed by the
+#       compute step that runs the wrapper (its WRAPPERS section); a recording without this kind is unaffected.
+#
+# Any other kind is refused with a message listing these seven. Any value outside a kind's vocabulary
 # is refused. Nothing is guessed: a verdict that cannot be mapped is a usage error, never a default.
 #
 # ---------------------------------------------------------------------------
@@ -214,10 +251,8 @@ ANSWER_MARKER_PREFIX="$REC_ANSWER_MARKER_PREFIX"
 ANSWER_END_PREFIX="$REC_ANSWER_END_PREFIX"
 # Owned by recording-file.sh's layer; read, never written, by this script.
 STEPS_ANCHOR="$REC_STEPS_ANCHOR"
-STEP_MARKER_PREFIX="$REC_STEP_MARKER_PREFIX"
-STEP_END_PREFIX="$REC_STEP_END_PREFIX"
 
-VALID_KINDS='deviation, end-of-process, relevance, step-type'
+VALID_KINDS='deviation, end-of-process, relevance, step-type, parameters, portability, wrapper'
 
 err() {
   printf '%s: %s\n' "$SELF" "$*" >&2
@@ -247,13 +282,16 @@ kinds and their machine values:
   end-of-process   ended | continuing
   relevance        stated                        (the answer text is the payload)
   step-type        skill | playbook | confirm | compute | render
+  parameters       confirmed | none              (confirmed: one <name>=<literal> or <name> per line)
+  portability      accepted                      (one <finding-kind> <text> line per accepted finding)
+  wrapper          confirmed | declined          (confirmed: path=, sha256=, args=[, timeout_seconds=] lines)
 
 Attaches a user's answer, and the Scrum Master's step-type judgment, to a step already captured in a
 recording. The annotation is inserted inside the step, before its step-end marker, so it stays with
 the step it concerns. Every other step entry is left byte-identical, and the write is whole or not at
 all (same-directory temp file, then an atomic mv).
 Full contract, including the machine-readable annotation format every consumer parses: the header of
-recording-format.sh, which this script sources. The four kinds are documented in this script's header.
+recording-format.sh, which this script sources. The seven kinds are documented in this script's header.
 USAGE
 }
 
@@ -305,8 +343,73 @@ normalise_value() {
       esac
       return 1
       ;;
+    parameters)
+      case "$lc" in
+        none|no|n) printf 'none'; return 0 ;;
+      esac
+      is_parameter_list "$raw" || return 1
+      printf 'confirmed'
+      return 0
+      ;;
+    portability)
+      is_portability_list "$raw" || return 1
+      printf 'accepted'
+      return 0
+      ;;
+    wrapper)
+      case "$lc" in
+        declined|no|n) printf 'declined'; return 0 ;;
+      esac
+      is_wrapper_body "$raw" || return 1
+      printf 'confirmed'
+      return 0
+      ;;
   esac
   return 1
+}
+
+# True when $1 is a confirmed-parameters body: at least one line, every line `<name>=<literal>` (non-empty
+# literal) or a bare `<name>`, <name> matching ^[a-z][a-z0-9_]*$, and no name twice. See the header.
+is_parameter_list() {
+  [ -n "$1" ] || return 1
+  printf '%s\n' "$1" | awk '
+    { n++ }
+    !/^[a-z][a-z0-9_]*(=.+)?$/ { bad = 1; exit }
+    {
+      name = $0; i = index(name, "="); if (i > 0) { name = substr(name, 1, i - 1) }
+      if (name in seen) { bad = 1; exit }
+      seen[name] = 1
+    }
+    END { exit (bad || n == 0) ? 1 : 0 }
+  '
+}
+
+# True when $1 is an accepted-portability body: at least one line, every line `<finding-kind> <text>` with
+# <finding-kind> one of check-portability.sh's three, and no line twice. See the header.
+is_portability_list() {
+  [ -n "$1" ] || return 1
+  printf '%s\n' "$1" | awk '
+    { n++ }
+    !/^(unshipped-skill|absolute-path|project-name) [^ ].*$/ { bad = 1; exit }
+    ($0 in seen) { bad = 1; exit }
+    { seen[$0] = 1 }
+    END { exit (bad || n == 0) ? 1 : 0 }
+  '
+}
+
+# True when $1 is a confirmed-wrapper body: path=, sha256=, args= and an optional timeout_seconds= line, in that
+# order and nothing else. See the header.
+is_wrapper_body() {
+  [ -n "$1" ] || return 1
+  printf '%s\n' "$1" | awk '
+    { n++ }
+    n == 1 { if ($0 !~ /^path=[A-Za-z0-9._@+-][A-Za-z0-9._@+\/-]*$/ || ("/" substr($0, 6) "/") ~ /\/\.\.\//) bad = 1; next }
+    n == 2 { if ($0 !~ /^sha256=[0-9a-f]+$/ || length($0) != 71) bad = 1; next }
+    n == 3 { if ($0 !~ /^args=([a-z][a-z0-9_]*( [a-z][a-z0-9_]*)*)?$/) bad = 1; next }
+    n == 4 { if ($0 !~ /^timeout_seconds=[1-9][0-9]*$/) bad = 1; next }
+    { bad = 1 }
+    END { exit (bad || n < 3) ? 1 : 0 }
+  '
 }
 
 # Prints the accepted-values message for <kind>, for a usage error that must be actionable.
@@ -316,12 +419,15 @@ vocabulary_of() {
     end-of-process) printf 'ended (also: end, yes, y, true) or continuing (also: continue, no, n, false)' ;;
     relevance)      printf 'any non-empty text' ;;
     step-type)      printf 'skill, playbook, confirm, compute or render' ;;
+    parameters)     printf 'none (also: no, n), or one <name>=<literal> or bare <name> per line, <name> matching ^[a-z][a-z0-9_]*$ and used once (maps to confirmed)' ;;
+    portability)    printf 'one "<finding-kind> <text>" line per accepted finding, <finding-kind> being unshipped-skill, absolute-path or project-name, no line twice (maps to accepted)' ;;
+    wrapper)        printf 'declined (also: no, n), or the lines path=<relative path>, sha256=<64 hex>, args=<names> and optionally timeout_seconds=<n>, in that order (maps to confirmed)' ;;
   esac
 }
 
 is_valid_kind() {
   case "$1" in
-    deviation|end-of-process|relevance|step-type) return 0 ;;
+    deviation|end-of-process|relevance|step-type|parameters|portability|wrapper) return 0 ;;
   esac
   return 1
 }

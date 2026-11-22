@@ -19,6 +19,23 @@
 
 set -euo pipefail
 
+# --help / -h: print usage on stdout and exit 0 before anything is parsed, read or written (E99_S01_T02).
+case "${1:-}" in
+  --help|-h)
+    cat <<'USAGE'
+extract-diff-stats.sh - story-level aggregate git diff stats
+
+Usage: extract-diff-stats.sh <story-id> [<date_started> <date_completed>]
+       extract-diff-stats.sh --help | -h
+
+Prints diff_added, diff_removed, commits_matched and commits_unmatched_in_window.
+Read-only: reads git history and the board, writes nothing.
+  Example: extract-diff-stats.sh E32_S06
+USAGE
+    exit 0
+    ;;
+esac
+
 STORY_ID="${1:-}"
 DATE_STARTED="${2:-}"
 DATE_COMPLETED="${3:-}"

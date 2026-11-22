@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E71_S04_T01: scripts/link-external-ref.sh validates a Jira key / Confluence page URL / Bitbucket repo or
 # pull-request URL offline and records it as an `external_refs` entry on an epic, story or task file, under

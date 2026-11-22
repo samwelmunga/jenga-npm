@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Characterization coverage for skills/jenga/scripts/resolve-id.sh (E86_S03_T01): the fuzzy-ID grammar
 # parser and board-backed resolver behind `/jenga <ids>`.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E80_S02_T04: scripts/workflow/run-state.sh start, definition_hash, and the internal __create writer.
 #

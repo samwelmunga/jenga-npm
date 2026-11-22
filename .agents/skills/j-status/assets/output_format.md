@@ -116,6 +116,29 @@ Ready to take
 
 The example is abridged to two task rows; the script prints every task of the scope. When it printed nothing, the block is omitted.
 
+## Settings requirements section (`E100_S05_T04`)
+
+Printed after the dependency audit (overview and legacy views; a scope view prints only the view), as plain text outside the
+renderer's fenced block, from `scripts/settings-doctor.sh --quiet` (SKILL.md step 6.85). Every requirement active, one line:
+
+```
+Settings requirements: all 6 active
+```
+
+A requirement inactive: each is listed with the fix lines the doctor printed, unchanged:
+
+```
+Settings requirements: 1 inactive
+j-recorder: hook PreToolUse: inactive
+  fix: run npx jenga sync
+```
+
+The doctor could not run (exit 2, missing script, jq missing): one line, never an error:
+
+```
+Settings requirements: could not be checked
+```
+
 ## Status Icons
 
 | Icon | Status |

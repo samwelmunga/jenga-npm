@@ -6,7 +6,12 @@
 // (markdown is not under test), and renders it with react-dom/server. Prints ONE JSON object of facts read back from the markup, so a
 // caller asserts on facts and not on a markup string:
 //   { epic, empty, bands: [{ story, ghost, undecomposed }], starts: [{ story, ghost, undecomposed, text, aria, count }], taskNodes: [id],
-//     goalText, ghostEdges, htmlBytes }
+//     goalText, ghostEdges, htmlBytes, goalDesign, castle, tree }
+// E92_S13_T06: `--design <star|citadel|facade|tree|none>` chooses the goal design the way a browser does, through a stored choice: a stub
+// `window.localStorage` that answers with that id (`none` = no storage at all, which must give the citadel, as in a file:// page with
+// storage blocked; any other string is stored as is, so an unknown value must give the citadel too). Without the flag nothing is stubbed
+// and the page's own default applies. The extra facts are read back from the markup: goalDesign (data-goal-design), castle { kind, towers,
+// wallShare, dashed, effects } (the citadel and the facade) and tree { stage, branches, stubs, pills, effects } (the seasons tree).
 // Usage: node render-captured-epic-tree.cjs --data <snapshot-data.json | snapshot.html> --epic <E##>
 // A .html input is read the way the page reads it: the JSON in <script id="jenga-dashboard-data">, so the render input is what the file
 // carries and nothing else (no server, no fetch).
@@ -20,6 +25,7 @@ function arg(name) {
 }
 const dataFile = arg('--data')
 const epic = arg('--epic')
+const design = arg('--design')
 if (!dataFile || !epic) {
   console.error('usage: render-captured-epic-tree.cjs --data <snapshot-data.json|snapshot.html> --epic <E##>')
   process.exit(2)
@@ -72,7 +78,14 @@ async function main() {
     console.error('routes.progressGraph is missing or carries an error')
     process.exit(1)
   }
+  // E92_S13_T06: the stored goal design, answered by a stub storage (set before the render, removed after it)
+  if (design === 'none') {
+    globalThis.window = { get localStorage() { throw new Error('storage blocked') } }
+  } else if (design) {
+    globalThis.window = { localStorage: { getItem: () => design, setItem() {}, removeItem() {} } }
+  }
   const html = renderToStaticMarkup(ce(EpicTreeBody, { status: 'ok', graph: env.data, epicId: epic }))
+  delete globalThis.window
 
   const attr = (tag, name) => { const m = tag.match(new RegExp(`\\b${name}="([^"]*)"`)); return m ? m[1] : null }
   const text = s => s.replace(/&amp;/g, '&').replace(/&#x27;/g, "'").replace(/&quot;/g, '"')
@@ -90,6 +103,11 @@ async function main() {
     }
   })
   const goal = html.match(/class="dt-goal-count"[^>]*>([^<]*)</)
+  const all = (re, i = 1) => [...html.matchAll(re)].map(m => m[i])
+  const goalTag = html.match(/<g[^>]*data-goal-design="([^"]+)"[^>]*>/)
+  const castleTag = html.match(/<g[^>]*data-castle="(citadel|facade)"[^>]*data-wall-share="([^"]*)"[^>]*>/)
+  const treeTag = html.match(/<g[^>]*data-castle="tree"[^>]*data-stage="([^"]*)"[^>]*>/) || html.match(/<g[^>]*data-stage="([^"]*)"[^>]*data-castle="tree"[^>]*>/)
+  const effects = [...new Set(all(/data-effect="([^"]+)"/g))]
   console.log(JSON.stringify({
     epic,
     empty: /class="dt-empty"/.test(html),
@@ -98,6 +116,21 @@ async function main() {
     taskNodes: [...html.matchAll(/data-node="([^"]+)"/g)].map(m => m[1]),
     goalText: goal ? text(goal[1]) : null,
     ghostEdges: (html.match(/dt-edge-ghost/g) || []).length,
+    goalDesign: goalTag ? goalTag[1] : null,
+    castle: castleTag ? {
+      kind: castleTag[1],
+      towers: all(/data-tower="([^"]+)"/g),
+      wallShare: castleTag[2],
+      dashed: all(/<g class="cc-tower cc-tower-undecomposed[^"]*"[^>]*data-tower="([^"]+)"/g).concat(all(/<g class="cc-tower cf-tower cc-tower-undecomposed[^"]*"[^>]*data-tower="([^"]+)"/g)),
+      effects,
+    } : null,
+    tree: treeTag ? {
+      stage: treeTag[1],
+      branches: all(/data-branch="([^"]+)"/g),
+      stubs: all(/data-stub="([^"]+)"/g),
+      pills: (html.match(/class="tr-pill"/g) || []).length,
+      effects,
+    } : null,
     htmlBytes: html.length,
   }))
 }

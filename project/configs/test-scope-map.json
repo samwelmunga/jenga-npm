@@ -340,19 +340,15 @@
     {
       "source": "scripts/run-tests.sh",
       "tests": [
-        "tests/run-tests.bats"
+        "tests/run-tests.bats",
+        "tests/test-tiers.bats",
+        "tests/test-estimate.bats"
       ]
     },
     {
       "source": "scripts/test-estimate.sh",
       "tests": [
         "tests/test-estimate.bats"
-      ]
-    },
-    {
-      "source": "tests/fast-set.txt",
-      "tests": [
-        "tests/run-tests.bats"
       ]
     },
     {
@@ -714,6 +710,12 @@
       "source": "src/**/*.rs",
       "tests": [
         "tests/*.rs"
+      ]
+    },
+    {
+      "source": "scripts/test-tiers.sh",
+      "tests": [
+        "tests/test-tiers.bats"
       ]
     }
   ]

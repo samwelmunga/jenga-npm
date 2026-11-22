@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S06_T01: self-test of the mixed-width synthetic board generator, tests/helpers/mixed-width-board.sh.
 #

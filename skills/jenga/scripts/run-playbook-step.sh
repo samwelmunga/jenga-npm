@@ -271,6 +271,28 @@
 
 set -euo pipefail
 
+# -h / --help: print the usage on stdout and exit 0 before anything is parsed, read or written (E99_S01_T01).
+case "${1:-}" in
+  -h|--help)
+    cat <<'USAGE'
+Usage:
+  run-playbook-step.sh init "<playbook_id>" "<name>" "<comma-separated confirmed step names>" ["<json-conditionals>" ["<json-origins>"]]
+  run-playbook-step.sh should-skip <state_file>
+  run-playbook-step.sh advance <state_file> passed ["<typed-output-value>"]
+  run-playbook-step.sh advance <state_file> skipped
+  run-playbook-step.sh advance <state_file> failed ["<note>"]
+  run-playbook-step.sh get-output <state_file> <step_name>
+  run-playbook-step.sh -h|--help
+
+Drive a confirmed /jenga playbook chain one step at a time, tracking progress in
+a state file under TMPDIR. `--help` prints this text and changes nothing.
+
+Exit codes: 0 success; 2 usage error or setup failure.
+USAGE
+    exit 0
+    ;;
+esac
+
 # Resolve project root (E53_S04_T05, mirrors scripts/write-context-digest.sh's own probing order).
 # JENGA_PLAYBOOK_RUNS_TEST_ROOT is a TEST-ONLY override for the artifact-persistence path -- never
 # set it in a real invocation (see "ARTIFACT PERSISTENCE AND REDACTION POLICY" above).

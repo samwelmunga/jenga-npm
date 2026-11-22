@@ -28,6 +28,7 @@ examples:
 - The developer agent never invokes it on its own: the developer never runs tests (see `CLAUDE.md`).
 - Per-scope test-run policy (which run must pass before a task, story or epic closes) is a separate mechanism owned by the tester agent: see `scope-policy.sh` and `scope-test-gate.sh` in `skills/j-test/scripts/` and the "Scope test policy" section of `project/documentation/test-runner.md`.
 - Blank input means **all suites**: running the full suite is the default.
+- Manual tests (`tier:manual`, see `manual-only.sh`) never run in this skill's "all" or in any gate: the discovered bats suite is `bats --filter-tags !tier:manual ...` and scoped narrowing keeps that filter. They run only when named, for example `scripts/run-tests.sh --tier manual --confirm-full`. See "Manual-only tests" in `project/documentation/test-runner.md`.
 - The slowness probe never changes which suites run. What a slow result leads to is always the user's choice (step 5); the only thing it writes is the machine-local threshold, and only when the user asks to change it.
 
 ## Instructions
@@ -98,6 +99,11 @@ Relay its report unchanged and act on its exit code:
   - **Other**: follow what the user describes.
 
 ### 6. Run
+
+Two rules hold for every run:
+
+- **Never hide test output.** Do not pipe a test run (`bats`, `npm test`, `npm run test:*`, `scripts/run-tests.sh`, `run-suites.sh`) through `tail`, `head`, `grep` or any other filter that hides progress, and do not redirect it to a file you read only at the end. Let it stream.
+- **Estimate first, ask above the threshold.** Before starting the run, get its estimate: `scripts/test-estimate.sh <files>` for the test files the selected suites run, or `scripts/run-tests.sh --tier <list> --list` (or `--all --list`; the selection goes to stdout, the estimate to stderr). If the estimate exceeds `ask_before_run_seconds` (`project/configs/test-config.json`, read with `bash "$TEST_DIR/test-thresholds.sh" get ask-before-run`), ask the user before starting it, stating the selection, the file count and the estimate. Untimed files count as unknown, not as zero: when the selection has untimed files, say so in the question.
 
 ```bash
 bash "$TEST_DIR/run-suites.sh" --catalog "$CATALOG" --no-probe <numbers...>

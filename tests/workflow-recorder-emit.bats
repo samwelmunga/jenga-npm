@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # skills/j-workflow-recorder/scripts/emit-workflow.sh — the emission layer (E89, E89_S04_T01).
 #

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/ensure-dashboard-port.sh - call-site wrapper for the dashboard port allocator (E47_S11_T02)
 #
-# j.init and j.distribute both need "make sure this project has a valid dashboard port, report what
+# j.init (and the maintainer-only distribute script) both need "make sure this project has a valid dashboard port, report what
 # happened". The allocation itself lives in scripts/dashboard-port.sh (E47_S11_T01); this wrapper only
 # locates it, classifies the prior state and prints one report line, so the two call sites stay identical.
 #

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for skills/j-playbook/scripts/playbook-list.sh (E53_S06_T07): the ranked_list rendering of
 # bare `j.playbook` and the number-to-id resolution of `j.playbook <n>`.

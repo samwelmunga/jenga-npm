@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for E69_S05_T04: skills/j-commit applies the project's commit-format convention to NON-board commits only.
 #

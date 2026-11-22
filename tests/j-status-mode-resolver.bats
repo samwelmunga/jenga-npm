@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S06_T26: skills/j-status/scripts/resolve-status-mode.sh - the deterministic argument handling behind `j.status`:
 # `--legacy`, `--all`, one epic or story id, `--root`, `--cols`, `--color`, in any order, an unknown flag exits 2.
@@ -244,7 +245,8 @@ nodeless_path() {
 
 @test "the skill's command is not blocked at the Guarded level: Bash(*) is allowed and no deny rule matches it" {
   G="$REPO/templates/permission-levels/level-2-guarded.json"
-  [ "$(jq -r '.permissions.allow | index("Bash(*)") != null' "$G")" = "true" ]
+  # E100_S04_T05: the allow list is no longer in the templates; the baseline a consumer runs is root settings.json.
+  [ "$(jq -r '.permissions.allow | index("Bash(*)") != null' "$REPO/settings.json")" = "true" ]
   # The skill runs `bash <resolver> render ...`, which execs node inside the script; neither word starts a deny rule.
   [ "$(jq -r '[.permissions.deny[] | select(test("^Bash\\((bash|node)( |\\*|\\))"))] | length' "$G")" = "0" ]
 }

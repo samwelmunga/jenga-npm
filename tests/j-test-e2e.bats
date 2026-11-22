@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # End-to-end coverage for j.test over a real project on disk (E72_S05_T02).
 #
@@ -28,7 +29,7 @@
 # Case 8 scans THIS repository (no --root) and only builds and inspects the catalog. It never calls run-suites.sh, never
 # runs npm test and never runs the repository's own suites. It is the heavy case: discovery walks the whole tree, which
 # the scripts' headers put at 25-35 seconds on a large or cold tree (measured here: well under a second on a warm one),
-# which is why it is a single case. It asserts facts (npm:test with the bats suites folded under `also`, shellcheck:all,
+# which is why it is a single case. It asserts facts (bats:tests with npm run test:ci folded under `also`, shellcheck:all,
 # no fixtures entry), not a suite count, so a future ecosystem here does not break it.
 #
 # No network, no writes outside BATS_TEST_TMPDIR; the repository is only read (case 8 checks that git status is
@@ -350,7 +351,7 @@ add_semgrep_config() {
 # HEAVY: no --root, so discovery walks this repository's whole tree (25-35 seconds per the scripts' headers on a large
 # or cold tree; under a second measured on a warm one). Discovery and catalog only: run-suites.sh is never called here,
 # and neither npm test nor any of the repository's own suites is ever run.
-@test "8. the catalog of this repository lists npm:test with the bats suites folded under also, and shellcheck:all, with no fixtures entry" {
+@test "8. the catalog of this repository lists the bats suite (manual tests excluded) with npm run test:ci folded under also, and shellcheck:all, with no fixtures entry" {
   # The real PATH, not the stub: this case is about what the real tools make discovery report.
   PATH="$ORIG_PATH"
   command -v shellcheck >/dev/null 2>&1 || skip "shellcheck is not on PATH; discovery lists no shellcheck:all suite"
@@ -369,9 +370,11 @@ add_semgrep_config() {
   json_check '.runnable | length >= 2'
   json_check '[.runnable[].id] | index("npm:test") != null'
   json_check '[.runnable[].id] | index("shellcheck:all") != null'
-  # The bats suites are covered by npm test, so they ride along under `also` and are never entries of their own.
-  json_check '[.runnable[] | select(.id == "npm:test") | .also[].id] | index("bats:tests") != null'
-  json_check '[.runnable[].id | select(startswith("bats:"))] | length == 0'
+  # E95_S01_T02: npm test is the bounded fast set, its own entry. E95_S02_T04: the bats suite is an entry of its own,
+  # leaves tier:manual out, and `npm run test:ci` (the full aggregate) folds under it rather than surviving.
+  json_check '[.runnable[] | select(.id == "bats:tests") | .command] == ["bats --filter-tags !tier:manual tests/*.bats"]'
+  json_check '[.runnable[] | select(.id == "bats:tests") | .also[].id] | index("npm:test:ci") != null'
+  json_check '[.runnable[].id | select(. == "npm:test:ci")] | length == 0'
   json_check '[.runnable[], (.runnable[].also[]), .not_runnable[] | .id, .name | select(contains("fixtures"))] | length == 0'
   json_check '[.runnable[].n] == [range(1; (.runnable | length) + 1)]'
 

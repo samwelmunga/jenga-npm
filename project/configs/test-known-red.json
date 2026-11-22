@@ -1,0 +1,20 @@
+{
+  "_comment": "Known-red baseline (E89_S06_T10). Consumed by skills/j-test/scripts/scope-test-gate.sh. A failing gate run is downgraded to 'satisfied with known-red' ONLY when every failed suite failed solely on cases listed here, matched on the exact file and exact case name; any other failing case still exits 1. An entry is a recorded, owned defect, never a way to hide one: each carries a reason and a follow_up. Remove an entry when its case is fixed. See project/documentation/test-runner.md, 'The known-red baseline'.",
+  "version": 1,
+  "cases": [
+    {
+      "file": "tests/perceived-branch.bats",
+      "case": "the hook removes the ending session's state file and leaves another session's untouched",
+      "reason": "hooks/on_session_end.sh locates scripts/events-append.sh only under its own project dir; the fixture project has none, so it logs 'events-append.sh not found; sender event not logged' and never writes the events.json the case asserts on (line 492). Same cause as the next entry. Red since before E89_S02_T04 (git log 2e977bc85..main empty for the files involved).",
+      "recorded": "2026-11-17",
+      "follow_up": "hooks/on_session_end.sh: resolve events-append.sh from the package root as well, or have the fixture carry the helper"
+    },
+    {
+      "file": "tests/perceived-branch.bats",
+      "case": "the hook with no session key at all (empty stdin, no environment key) removes nothing and still succeeds",
+      "reason": "case 24 of tests/perceived-branch.bats: the same missing-events-append.sh cause as the previous entry (assertion at line 544). A real, unrelated pre-existing defect found live on E89_S02_T04.",
+      "recorded": "2026-11-17",
+      "follow_up": "hooks/on_session_end.sh: resolve events-append.sh from the package root as well, or have the fixture carry the helper"
+    }
+  ]
+}

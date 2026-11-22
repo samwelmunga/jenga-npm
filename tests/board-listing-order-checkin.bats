@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S02_T06: skills/j-check-in/scripts/collect-liveness.sh lists the In Progress board items, and so builds its F5/F6
 # findings, in NUMERIC board-ID order.

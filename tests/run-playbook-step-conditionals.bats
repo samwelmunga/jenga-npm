@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Fixture-based coverage for run-playbook-step.sh's conditional predicate evaluation, the
 # `skipped` status, the `get-output` forward_from lookup, and the artifact-persistence/redaction

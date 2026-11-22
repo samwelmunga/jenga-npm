@@ -3,6 +3,9 @@ import './dependency-tree.css'
 import { GOAL_NODE_ID, goalFailedText, LAYOUT, unfinishedDepText, unfoldGroups } from './dependencyTreeModel'
 import { toggleLabelKey } from './fullscreenModel'
 import FullscreenToggle from './FullscreenToggle'
+import { GOAL_RENDERERS } from './goalDesigns'
+import { GOAL_DESIGN_GROUP_LABEL_KEY, GOAL_DESIGNS, readGoalDesign, registeredDesigns, resolveGoalDesign, writeGoalDesign } from './goalDesignModel'
+import GoalDesignSelector from './GoalDesignSelector'
 import useFocusContain from './useFocusContain'
 import useFullscreen from './useFullscreen'
 import useZoomPan from './useZoomPan'
@@ -32,8 +35,16 @@ import { transformOf } from './zoomPanModel'
  *     the direct dependencies and what it unlocks. A group of more than FOLD_THRESHOLD same-state tasks is one stacked
  *     card; click or Enter expands it, an expanded group gets a collapse header. Expansion state lives here and uses
  *     unfoldGroups from the model.
- *   - The goal is a star in a disc with a progress ring. Its halo strength and radius and the star's fill grow with the
- *     completed share; at 100 % it turns done-green, shimmers and twinkles five sparks.
+ *   - The goal is drawn by the chosen goal design (E92_S13_T05). The designs are one ordered list (goalDesignModel.js:
+ *     star, citadel, facade, seasons tree) and a renderer registry (goalDesigns.js); a design without a renderer is absent.
+ *     The goal slot below picks the renderer of the chosen design (the stored choice, else the default: the citadel while it
+ *     is registered, else the first registered design) and draws its defs and its drawing, and GoalDesignSelector (next to
+ *     the zoom controls, hidden with fewer than two registered designs) changes it for the page and stores it per browser.
+ *     The star is the Goal node as it was before (StarGoal.jsx): a star in a disc with a progress ring whose halo strength
+ *     and radius and fill grow with the completed share; at 100 % it turns done-green, shimmers and twinkles five sparks.
+ *     The text under the node (name, title, count, decomposed) is drawn here for every design. `renderers` is the
+ *     registry (default GOAL_RENDERERS) and `designs` the ordered list (default GOAL_DESIGNS); a test passes its own to
+ *     register designs that are not built yet and to add a further entry.
  *   - Every word comes from `labels` (the progress payload, scripts/lib/progress-labels.sh). Colours are
  *     var(--color-*) tokens only, set in dependency-tree.css. No colour literal here.
  *   - Animation is CSS only and lives in dependency-tree.css, stopped by prefers-reduced-motion: reduce and by
@@ -61,7 +72,6 @@ const NODE_H = LAYOUT.cardH
 const PAD = 12
 const GOAL_GAP = 40
 const BOUNDARY_ROW = 56
-const GOAL_EDGE_INSET = 46 // an edge to the goal ends just inside its ring (ring radius 50)
 const TITLE_MAX = 25
 
 const clip = (s, n) => (typeof s === 'string' && s.length > n ? s.slice(0, n - 1) + '…' : s || '')
@@ -106,6 +116,21 @@ const FALLBACK = {
   tip_depends_on: 'Depends on',
   tip_unlocks: 'Unlocks',
   tip_goal_direct: 'Leads straight to the goal',
+  goal_design_group: 'Goal design',
+  goal_design_star: 'Star',
+  goal_design_citadel: 'Citadel',
+  goal_design_facade: 'Facade',
+  goal_design_tree: 'Seasons tree',
+  castle_tower: '%s: %d of %d done',
+  castle_tower_failed: '%s: %d of %d done, %d failed',
+  castle_tower_undecomposed: '%s: not broken down yet',
+  tree_stage_sprout: 'Sprout',
+  tree_stage_seedling: 'Seedling',
+  tree_stage_sapling: 'Sapling',
+  tree_stage_young: 'Young tree',
+  tree_stage_mature: 'Mature tree',
+  tree_stage_majestic: 'Majestic tree',
+  tree_stage_track: 'Growth stage: %s',
 }
 // The zoom controls' words are optional: no fallback word is written here (a control without its label shows its symbol
 // only). The percent format is a number format, not a word, so it has a fallback.
@@ -151,10 +176,7 @@ function edgeState(depState, targetState) {
   return depState === 'done' ? 'done' : 'locked'
 }
 
-// Star and spark outlines, and the final padlock values, copied from the prototype.
-const STAR = 'M0 -22 L6.5 -7 L22.5 -6.8 L10 3.5 L14 19 L0 10 L-14 19 L-10 3.5 L-22.5 -6.8 L-6.5 -7Z'
-const SPARK = 'M0 -6 L1.4 -1.4 L6 0 L1.4 1.4 L0 6 L-1.4 1.4 L-6 0 L-1.4 -1.4Z'
-const SPARK_POSITIONS = [[-50, -46], [54, -38], [60, 28], [-58, 34], [0, -68]]
+// The final padlock values, copied from the prototype (the star and spark outlines moved to StarGoal.jsx).
 const SHACKLE_CLOSED = 'M-2.8 0 V-2.6 A2.8 2.8 0 0 1 2.8 -2.6 V0'
 const SHACKLE_OPEN = 'M-2.8 0 V-3.4 A2.8 2.8 0 0 1 2.8 -3.4 V-2.3'
 
@@ -206,16 +228,27 @@ function Gate({ kind, text }) {
   )
 }
 
-export default function DependencyTree({ model, labels }) {
+export default function DependencyTree({ model, labels, renderers = GOAL_RENDERERS, designs = GOAL_DESIGNS }) {
   const [expanded, setExpanded] = useState(() => new Set())
   const [hover, setHover] = useState(null)
+  // The goal design (E92_S13_T05): the ordered list filtered to the registered renderers, and the chosen id. The initial
+  // value is the stored choice or the default (never throws, also without storage); a later pick is kept in this state, so
+  // it switches for the page even when it cannot be stored. resolveGoalDesign guards a choice that is no longer registered.
+  const registered = registeredDesigns(renderers, designs)
+  const [designChoice, setDesignChoice] = useState(() => readGoalDesign(registered))
+  const designId = resolveGoalDesign(designChoice, registered)
+  const design = designId ? renderers[designId] : null
+  const pickDesign = id => {
+    setDesignChoice(id)
+    writeGoalDesign(id)
+  }
   // The large view (E92_S07): the tree's own root becomes large, never re-parented, so every piece of state here is kept.
   const rootRef = useRef(null)
   const fs = useFullscreen({ rootRef })
   useFocusContain({ rootRef, active: fs.open })
   const empty = !model || model.empty
 
-  const view = empty ? null : unfoldGroups(model, expanded)
+  const view = empty ? null : unfoldGroups(model, expanded, { goalArea: design && design.goalArea ? design.goalArea : 'disc' })
   const boundary = empty ? [] : model.boundary || []
 
   // Boundary nodes (outside the epic) sit in a column left of the story start nodes, so their lines point rightwards.
@@ -341,10 +374,26 @@ export default function DependencyTree({ model, labels }) {
     )
   }
 
-  // Goal: strength and radius of the halo grow with the completed share, the star fills from the bottom.
+  // Goal: the chosen design draws the goal (its own defs and drawing, its own edge inset and custom properties); the text
+  // under the node is drawn here for every design. data-progress is the completed share.
   const p = goal.fraction
   const gid = safeId(goal.id)
-  const fillH = 41 * p
+  const GoalDefs = design ? design.Defs : null
+  const GoalDrawing = design ? design.Drawing : null
+  const goalStyle = design && design.rootStyle ? design.rootStyle(goal) : undefined
+  const edgeInset = design && typeof design.edgeInset === 'number' ? design.edgeInset : 0
+  // E92_S13_T02: a design that ends the edges along its own outline (the citadel) gives `edgeAnchors`: one point per goal
+  // edge, top to bottom, and the edges are matched to them by the height of their source so none crosses another. A design
+  // without it (the star) ends them all at the one inset.
+  const goalEdges = edges.filter(e => e.to === GOAL_NODE_ID && source(e.from))
+  const anchorOf = new Map()
+  if (design && design.edgeAnchors && goalEdges.length) {
+    const sorted = goalEdges.map((e, i) => ({ e, i, y: source(e.from).y })).sort((a, b) => a.y - b.y || a.i - b.i)
+    const points = design.edgeAnchors(goal, sorted.length, view.castle)
+    sorted.forEach(({ e }, k) => anchorOf.set(`${e.from}>${e.to}`, points[k]))
+  }
+  const goalRole = design && design.role ? design.role : 'img'
+  const nameY = design && design.textTop ? design.textTop(view.castle) : 80
   const progressText = fill(label(labels, 'goal_progress'), goal.done, goal.total, goal.percent)
   // E92_S09_T04: the goal shows the epic percent (epic_progress); while some stories have no task yet it also shows
   // decomposed/stories, so the percent reads as the product of the two fractions shown (section 5.1).
@@ -355,11 +404,6 @@ export default function DependencyTree({ model, labels }) {
   const failedLines = failedText ? wrapWords(failedText, 24) : []
   // the lines under the name move down by the extra lines of a wrapped failed-story line (0 otherwise)
   const below = Math.max(0, failedLines.length - 1) * GOAL_LINE_H
-  const ring = 2 * Math.PI * 50
-  const haloStyle = {
-    '--goal-halo-opacity': (0.07 + 0.38 * p).toFixed(3),
-    '--goal-halo-scale': ((54 + 26 * p) / 54).toFixed(3),
-  }
 
   const edgeEls = edges.map(e => {
     const from = source(e.from)
@@ -367,7 +411,7 @@ export default function DependencyTree({ model, labels }) {
     let to
     let cls
     if (e.to === GOAL_NODE_ID) {
-      to = { x: goal.x - GOAL_EDGE_INSET, y: goal.y }
+      to = anchorOf.get(`${e.from}>${e.to}`) || { x: goal.x - edgeInset, y: goal.y }
       // E92_S12_T03: the ghost edge (a not-broken-down story's start node to the goal) is dashed and neutral; a start node
       // counts as done as a source, which would paint it like finished work. Never part of a hover chain (no card in its
       // story), so the chain logic below leaves it to recede like any edge outside the chain.
@@ -429,24 +473,7 @@ export default function DependencyTree({ model, labels }) {
           {...zoom.handlers}
         >
           <svg className="dt-svg" viewBox={zoom.view ? undefined : `${vbX} ${vbY} ${vbW} ${vbH}`} role="group" aria-label={goalText}>
-            <defs>
-              <radialGradient id={`dt-halo-${gid}`} className={`dt-halo-grad${goal.reached ? ' dt-complete' : ''}`}>
-                <stop className="dt-halo-stop-0" offset="0" />
-                <stop className="dt-halo-stop-1" offset=".55" />
-                <stop className="dt-halo-stop-2" offset="1" />
-              </radialGradient>
-              <linearGradient id={`dt-shine-${gid}`} x1="0" x2="1" y1="0" y2="0">
-                <stop className="dt-shine-stop dt-shine-edge" offset="0" />
-                <stop className="dt-shine-stop dt-shine-mid" offset=".5" />
-                <stop className="dt-shine-stop dt-shine-edge" offset="1" />
-              </linearGradient>
-              <clipPath id={`dt-starclip-${gid}`}>
-                <path d={STAR} />
-              </clipPath>
-              <clipPath id={`dt-starfill-${gid}`}>
-                <rect className="dt-starfill-rect" x="-25" y={(19 - fillH).toFixed(2)} width="50" height={(fillH + 1).toFixed(2)} />
-              </clipPath>
-            </defs>
+            <defs>{GoalDefs ? <GoalDefs goal={goal} gid={gid} /> : null}</defs>
 
             <g className="dt-root" transform={zoom.view ? transformOf(zoom.view) : undefined}>
               <g className="dt-bands">
@@ -458,7 +485,7 @@ export default function DependencyTree({ model, labels }) {
                     data-undecomposed={b.start.undecomposed ? 'true' : undefined}
                     x={LAYOUT.pad / 2}
                     y={b.y}
-                    width={goal.x - LAYOUT.goalOffsetX - LAYOUT.goalGap / 2}
+                    width={goal.x - view.layout.goalOffsetX - LAYOUT.goalGap / 2}
                     height={b.h}
                     rx="12"
                   />
@@ -600,47 +627,25 @@ export default function DependencyTree({ model, labels }) {
                 data-goal={model.goal.id}
                 data-progress={p.toFixed(3)}
                 transform={`translate(${goal.x} ${goal.y})`}
-                role="img"
+                role={goalRole}
                 aria-label={`${goalText} · ${progressText}${decomposedText ? ` · ${decomposedText}` : ''}${failedText ? ` · ${failedText}` : ''}`}
-                style={haloStyle}
+                data-goal-design={designId || undefined}
+                style={goalStyle}
               >
-                <g className="dt-halo-wrap">
-                  <circle className="dt-halo" r="54" fill={`url(#dt-halo-${gid})`} />
-                </g>
-                <circle className="dt-goal-ring-bg" r="50" />
-                <circle className="dt-goal-ring" r="50" strokeDasharray={`${(ring * p).toFixed(2)} ${ring.toFixed(2)}`} transform="rotate(-90)" />
-                <circle className="dt-goal-disc" r="42" />
-                <path className="dt-star-fill" d={STAR} clipPath={`url(#dt-starfill-${gid})`} />
-                <path className="dt-star-outline" d={STAR} />
-                {goal.reached ? (
-                  <g>
-                    <g clipPath={`url(#dt-starclip-${gid})`}>
-                      <g transform="rotate(20)">
-                        <rect className="dt-shimmer" x="-9" y="-40" width="18" height="80" fill={`url(#dt-shine-${gid})`} />
-                      </g>
-                    </g>
-                    <g className="dt-twinkles">
-                      {SPARK_POSITIONS.map(([x, y]) => (
-                        <g key={`${x},${y}`} transform={`translate(${x} ${y})`}>
-                          <path className="dt-spark" d={SPARK} />
-                        </g>
-                      ))}
-                    </g>
-                  </g>
-                ) : null}
+                {GoalDrawing ? <GoalDrawing goal={goal} gid={gid} castle={view.castle} label={key => label(labels, key)} fill={fill} /> : null}
                 {failedText ? (
-                  <text className="dt-goal-name dt-goal-failed" y="80" textAnchor="middle">
+                  <text className="dt-goal-name dt-goal-failed" y={nameY} textAnchor="middle">
                     {failedLines.map((l, i) => (
                       <tspan key={i} x="0" dy={i === 0 ? 0 : GOAL_LINE_H}>{l}</tspan>
                     ))}
                   </text>
                 ) : (
-                  <text className="dt-goal-name" y="80" textAnchor="middle">{goal.reached ? label(labels, 'goal_reached') : goalName}</text>
+                  <text className="dt-goal-name" y={nameY} textAnchor="middle">{goal.reached ? label(labels, 'goal_reached') : goalName}</text>
                 )}
-                <text className="dt-goal-title" y={98 + below} textAnchor="middle">{clip(model.goal.title, 34)}</text>
-                <text className="dt-goal-count" y={116 + below} textAnchor="middle">{progressText}</text>
+                <text className="dt-goal-title" y={nameY + 18 + below} textAnchor="middle">{clip(model.goal.title, 34)}</text>
+                <text className="dt-goal-count" y={nameY + 36 + below} textAnchor="middle">{progressText}</text>
                 {decomposedText ? (
-                  <text className="dt-goal-count dt-goal-decomposed" y={132 + below} textAnchor="middle">{decomposedText}</text>
+                  <text className="dt-goal-count dt-goal-decomposed" y={nameY + 52 + below} textAnchor="middle">{decomposedText}</text>
                 ) : null}
               </g>
             </g>
@@ -655,6 +660,12 @@ export default function DependencyTree({ model, labels }) {
           onZoomIn={zoom.zoomIn}
           onFit={zoom.fit}
           onActual={zoom.actual}
+        />
+        <GoalDesignSelector
+          items={registered.map(d => ({ id: d.id, text: label(labels, d.labelKey) }))}
+          value={designId}
+          groupText={label(labels, GOAL_DESIGN_GROUP_LABEL_KEY)}
+          onSelect={pickDesign}
         />
         {zoomText.hint ? <p className="dt-zoom-hint">{zoomText.hint}</p> : null}
       </div>

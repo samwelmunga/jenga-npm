@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S05_T03 (audit group 6a, commit names): pin the two commit-name scripts against item numbers of three or
 # more digits, on a MIXED-WIDTH history. Both scripts are width-agnostic by regex today

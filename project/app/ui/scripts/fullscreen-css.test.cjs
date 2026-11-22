@@ -206,4 +206,111 @@ test('stylesheet: the overlay rules the large view overrides are still in place,
   assert.ok(before.length > 5000, 'the block is appended, not a replacement')
 })
 
+// ---------- 8. E92_S13_T04: day and night for the castle designs hold in every place the tree is shown ----------
+// The overlay, the large view (native fullscreen and the fixed fallback layer) and the --snapshot file all show the SAME root,
+// .dep-tree (the large view only flips data-fullscreen on it), and the snapshot inlines this stylesheet and tokens.css with no
+// script. So the day and night section works in all four exactly when it is rooted at .dep-tree, never keys off the large view,
+// names no script, and keeps every movement in the one guard that data-motion="off" and reduce both close.
+const DN_MARK = '/* day and night (E92_S13_T04)'
+const DN_END_MARK = '/* end E92_S13_T04 */'
+const dnAt = css.indexOf(DN_MARK)
+const dnSection = strip(css.slice(dnAt, css.indexOf(DN_END_MARK)))
+const dnBlocks = topLevel(dnSection)
+
+test('day and night: the section is after the large-view block, closed by its end comment, and rooted at .dep-tree so the overlay, both large views and the snapshot all get it', () => {
+  assert.ok(dnAt > endAt, 'the section follows the E92_S07_T06 block')
+  assert.ok(css.indexOf(DN_END_MARK) > dnAt && css.indexOf(DN_MARK, dnAt + 1) === -1, 'one section, closed')
+  const selectors = []
+  for (const b of dnBlocks) {
+    if (b.head.startsWith('@media')) for (const r of rulesOf(b.body)) selectors.push(...r.sel.split(','))
+    else if (!b.head.startsWith('@')) selectors.push(...b.head.split(','))
+  }
+  assert.ok(selectors.length >= 30, 'rules found: ' + selectors.length)
+  for (const sel of selectors.map(x => x.trim())) {
+    assert.ok(/^(:root:not\(\[data-motion="off"\]\) )?\.dep-tree\b/.test(sel), 'rooted at the tree: ' + sel)
+    assert.ok(!/data-fullscreen|data-dt-fullscreen|:fullscreen|:-webkit-full-screen/.test(sel), 'does not depend on the large view: ' + sel)
+  }
+  assert.ok(!/@import|url\(|<script|javascript:/.test(dnSection), 'no import, no url, no script: the snapshot needs nothing else')
+})
+
+test('day and night: the large view neither overrides nor repeats the scene: nothing in its block touches the scene classes', () => {
+  assert.ok(!/\.dn-|\.dt-castle|\.cc-|\.cf-/.test(block), 'the E92_S07_T06 block leaves the scene alone')
+  assert.ok(!/display\s*:\s*var\(--theme-/.test(block))
+})
+
+test('day and night: every movement of the castle goal is in one no-preference guard for a root without data-motion="off", for birds, flocks and twinkling stars', () => {
+  const guard = dnBlocks.filter(b => /^@media\s*\(prefers-reduced-motion:\s*no-preference\)$/.test(b.head))
+  assert.strictEqual(guard.length, 1)
+  const moving = rulesOf(guard[0].body).filter(r => MOTION.test(r.decl))
+  assert.ok(moving.length >= 8)
+  for (const r of moving) for (const one of r.sel.split(',')) assert.ok(one.trim().startsWith(':root:not([data-motion="off"])'), 'gated: ' + one.trim())
+  const all = rulesOf(guard[0].body).map(r => r.sel + '{' + r.decl).join('\n')
+  for (const cls of ['.dn-bird', '.dn-flock', '.dn-star']) assert.ok(all.includes(cls + ' {') || all.includes(cls + '{') || all.includes(cls + ':'), cls + ' moves only in the guard')
+  for (const b of dnBlocks) if (b !== guard[0]) assert.ok(!MOTION.test(b.body), 'movement outside the guard: ' + b.head)
+  assert.ok(/animation:\s*dt-twinkle\b/.test(all), 'the stars use the existing dt-twinkle')
+  assert.ok(!/@keyframes\s+[a-z-]*twinkle/.test(dnSection), 'no second twinkle keyframes')
+})
+
+test('day and night: the goal-reached birds and stars are drawn still when nothing moves: their base rules paint them and none hides them', () => {
+  const base = dnBlocks.filter(b => !b.head.startsWith('@'))
+  const decl = sel => base.filter(b => b.head.split(',').map(x => x.trim()).includes(sel)).map(b => b.body).join(';')
+  assert.ok(/stroke:\s*var\(--dn-bird\)/.test(decl('.dep-tree .dn-bird')) && !/display:\s*none/.test(decl('.dep-tree .dn-bird')))
+  assert.ok(/fill:\s*var\(--dn-twinkle\)/.test(decl('.dep-tree .dn-star')) && /fill-opacity:\s*0\.9/.test(decl('.dep-tree .dn-star')))
+  for (const b of base) assert.ok(!/(^|[;\s])opacity\s*:\s*0(\.\d+)?\s*(;|$)/.test(b.body), 'no base rule fades anything out: ' + b.head)
+  const tk = strip(tokens)
+  for (const t of ['--theme-day-display', '--theme-night-display']) assert.strictEqual((tk.match(new RegExp(t + '\\s*:', 'g')) || []).length, 3, t + ' in the light block and both dark blocks')
+})
+
+// ---------- 9. E92_S13_T07: the seasons tree holds in every place the tree is shown, with its own stylesheet ----------
+// The tree's rules are in seasons-tree.css (loaded by TreeGoal.jsx, bundled into the build and inlined by the --snapshot export), not
+// appended to dependency-tree.css, so the sections of that file the tests above slice (the large view's block, the day and night
+// section) are not touched. The tree is drawn inside the same .dep-tree root as everything else, so the overlay, both large views and
+// the snapshot all show it; its rules are rooted there, key off no large-view attribute, name no script, and keep every movement in the
+// one guard that data-motion="off" and reduce both close.
+const treeCssRaw = fs.readFileSync(path.join(uiDir, 'src', 'components', 'progress', 'seasons-tree.css'), 'utf8')
+const treeCss = strip(treeCssRaw)
+const treeBlocks = topLevel(treeCss)
+
+test('seasons tree: every rule is rooted at .dep-tree, none depends on the large view, none reads a script, import or url', () => {
+  const selectors = []
+  for (const b of treeBlocks) {
+    if (b.head.startsWith('@media')) for (const r of rulesOf(b.body)) selectors.push(...r.sel.split(','))
+    else if (!b.head.startsWith('@')) selectors.push(...b.head.split(','))
+  }
+  assert.ok(selectors.length >= 80, 'rules found: ' + selectors.length)
+  for (const sel of selectors.map(x => x.trim())) {
+    assert.ok(/^(:root:not\(\[data-motion="off"\]\) )?\.dep-tree\b/.test(sel), 'rooted at the tree: ' + sel)
+    assert.ok(!/data-fullscreen|data-dt-fullscreen|:fullscreen|:-webkit-full-screen/.test(sel), 'does not depend on the large view: ' + sel)
+  }
+  assert.ok(!/@import|url\(|<script|javascript:/.test(treeCss), 'nothing else is needed in the snapshot')
+  assert.ok(/\/\* end E92_S13_T07 \*\/\s*$/.test(treeCssRaw))
+  assert.ok(!/\.tr-|\.dt-tree|--color-tree/.test(css), 'dependency-tree.css holds no tree rule: the slices of the tests above are unchanged')
+})
+
+test('seasons tree: every movement is in one no-preference guard for a root without data-motion="off"; nothing else moves; the goal-reached effects rest visible', () => {
+  const guard = treeBlocks.filter(b => /^@media\s*\(prefers-reduced-motion:\s*no-preference\)$/.test(b.head))
+  assert.strictEqual(guard.length, 1)
+  const moving = rulesOf(guard[0].body).filter(r => MOTION.test(r.decl))
+  assert.ok(moving.length >= 7)
+  for (const r of moving) for (const one of r.sel.split(',')) assert.ok(one.trim().startsWith(':root:not([data-motion="off"])'), 'gated: ' + one.trim())
+  for (const b of treeBlocks) if (b !== guard[0] && !b.head.startsWith('@keyframes')) assert.ok(!MOTION.test(b.body), 'movement outside the guard: ' + b.head)
+  assert.ok(!/@media[^{]*prefers-reduced-motion:\s*reduce/.test(treeCss), 'no reduce-only branch needed: the base state is the final state')
+  // reduced motion and the Animations toggle both leave the petals, motes, swing and spirits where they stand: no base rule hides them
+  for (const b of treeBlocks.filter(x => !x.head.startsWith('@'))) {
+    assert.ok(!/(^|[;\s])opacity\s*:\s*0(\.0+)?\s*(;|$)/.test(b.body) && !/display\s*:\s*none/.test(b.body) && !/visibility\s*:\s*hidden/.test(b.body), 'a base rule hides something: ' + b.head)
+  }
+  // the twinkle of the stars at goal reached is the shared dt-twinkle, the flap of the birds the shared one; the tree adds no second
+  assert.ok(!/@keyframes\s+[a-z-]*(twinkle|flap)/.test(treeCss))
+  assert.ok(/animation:\s*dt-twinkle\b/.test(strip(css)))
+})
+
+test('seasons tree: every tree colour is a token defined for light and dark, no colour literal in the stylesheet; the status ribbons use the E92 tokens', () => {
+  assert.ok(!/#[0-9a-fA-F]{3,8}\b/.test(treeCss) && !/\b(rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color-mix)\(/.test(treeCss))
+  const tk = strip(tokens)
+  const used = [...new Set([...treeCss.matchAll(/var\((--color-[a-z-]+)\)/g)].map(m => m[1]))]
+  assert.ok(used.length > 50, 'tokens in use: ' + used.length)
+  for (const u of used) assert.strictEqual((tk.match(new RegExp(u + '\\s*:', 'g')) || []).length, 3, u + ': light, dark media block, dark attribute block')
+  for (const r of ['done', 'in-progress', 'failed', 'pending']) assert.ok(used.includes('--color-progress-' + r), 'the E92 colour ' + r)
+})
+
 console.log(`\n${n} passed`)

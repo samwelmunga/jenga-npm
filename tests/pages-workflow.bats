@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 # tests/pages-workflow.bats  (E70_S03_T01)
 #
 # Locks the shape of .github/workflows/pages.yml: it parses, it builds site/

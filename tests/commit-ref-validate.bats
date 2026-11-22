@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E79_S04_T01: scripts/commit-ref.sh validate is the one safety gate every candidate commit ref must pass.
 #

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for scripts/check-events-log-shrink.sh (E75_S01_T03). Builds scratch git repos; never touches this repo's log.
 

@@ -1,5 +1,14 @@
 # Jenga AI — Documentation Reference
 
+> [!WARNING]
+> **Jenga version 5 is more likely to contain bugs and errors than version 4.** A broad overhaul of testing is under way, and several tester suites have been switched off temporarily while it runs. The first stable release, **Jenga version 6 (stable)**, is expected around **mid-December 2026**.
+>
+> Until then, please do these three things to avoid errors and bugs:
+>
+> 1. **Check that the postinstall script is allowed to run for Jenga.** Some package managers block install scripts by default.
+> 2. **Run `jenga doctor` in your regular terminal.** It can help bring your project back in sync.
+> 3. **Run `j.jenga-config` (also `/jenga-config`), choose the list mode, and check whether any settings are missing in your environment.**
+
 This document is the full reference for Jenga AI: every skill, every agent, MCP tools, hooks, and the inter-agent communication contract.
 
 > For an introduction to the framework, see the [README](../../README.md).  
@@ -999,22 +1008,6 @@ Queue depth: 2 triggers pending
 
 ---
 
-#### `/j-smoke-test`
-
-**Description:** Structural smoke test of every skill in the catalog — frontmatter parses, `name` matches the directory, `metadata.prefered_agent` resolves, and referenced scripts and assets exist with scripts passing `bash -n`.
-
-**Output type:** `any`
-
-**Invokes:** none
-
-**When to use:** After authoring or restructuring skills, and before a release or mirror, to catch a skill that no longer loads.
-
-**What it reports:** Findings classified as **critical** or **minor**, plus a pass/fail summary. Exits `1` when any critical finding exists.
-
-**Notes:** Structural and read-only — it does not replace `tests/*.bats`, and it does not execute skill logic.
-
----
-
 #### `/j-commit`
 
 **Description:** Commit implemented epic, story, or task work using the EST naming convention. Also handles user-action prerequisites and new-epic boundaries.
@@ -1053,55 +1046,6 @@ Queue depth: 2 triggers pending
 → /j-commit (creates EST commit)
 → /j-continue (identifies next task)
 → "Next: E01_S02_T02 — Refresh token rotation. Start? [yes/no]"
-```
-
----
-
-#### `/j-distribute`
-
-**Description:** Distribute Jenga AI framework files from this private monorepo to one or more consuming projects via the local filesystem — release type selection, version bumping, a dry-run preview, per-target file copy, and a post-distribution git commit.
-
-**Output type:** `any`
-
-**Invokes:** none
-
-**What it is:** `/j-distribute` treats this repository as the master copy of your Jenga AI framework and each registered consumer project as a versioned snapshot of it. Consumer projects are registered in `distribute.config.json` at the repo root (not `.jenga_paths`/`jenga.config.json` — that mechanism has been retired), as entries in a `targets` array:
-
-```json
-{
-  "name": "my-project",
-  "path": "/absolute/or/relative/path/to/project",
-  "active": true
-}
-```
-
-Passing a path argument (e.g. `/j-distribute /path/to/project`) adds a new entry to `distribute.config.json` automatically, deriving `name` from the target directory's name. Schema reference: `skills/j-distribute/CONFIG_SCHEMA.md`.
-
-**When to use:** Use `major`, `minor`, or `patch` after making framework changes that should become a versioned upgrade for every active target — these bump the version in `package.json` (via `npm version`) and distribute to every active, path-valid target. Use `amend` when quietly onboarding a new consumer project or fixing files missed in a previous release; it keeps the version unchanged and only updates targets whose config reports they're behind. Every release type stops at a dry-run preview (`distribute-changes.sh --dry-run`) and requires explicit confirmation before any file is copied.
-
-**Release types:**
-- `major` / `minor` / `patch` — bumps `package.json`'s version via `npm version`, distributes to all active targets
-- `amend` — no version bump; distributes only to targets that are behind or have no prior config, via `check-version.sh`
-
-**What it does:**
-- Validates each target's `active` flag and on-disk `path` before including it in the run
-- Runs a dry-run preview per target and waits for `y` confirmation before touching anything
-- Copies files via `skills/j-distribute/scripts/distribute-changes.sh`, never inline
-- Commits the version bump via `scripts/commit-version-bump.sh` (skipped for `amend`)
-- Never invokes `/j-self-sync` or `/j-mirror-public` — those are separate distribution surfaces with separate triggers
-
-**Example:**
-```
-/j-distribute
-Release type? → minor
-→ Version bumped to 1.3.0
-→ Scanning distribute.config.json...
-→ Eligible targets: my-app-1, my-app-2
-→ Dry-run preview for my-app-1 ... my-app-2 ...
-Proceed with distribution to the above targets? [y/N] → y
-→ Syncing my-app-1: ✅ succeeded
-→ Syncing my-app-2: ✅ succeeded
-→ Committed version bump: chore(release): bump to 1.3.0
 ```
 
 ---
@@ -1335,7 +1279,7 @@ How far should I take the untracking? → 2 (commit locally)
 
 #### `/j-self-sync`
 
-**Description:** Mirror this repo's root-level framework directories into its own `.claude/` and `.agents/` sub-trees so edits to `skills/`, `agents/`, `hooks/`, `scripts/`, `templates/`, and `settings.json` take effect in the current session — the in-repo replacement for the retired `/j-distribute` self-sync loop.
+**Description:** Mirror this repo's root-level framework directories into its own `.claude/` and `.agents/` sub-trees so edits to `skills/`, `agents/`, `hooks/`, `scripts/`, `templates/`, and `settings.json` take effect in the current session — the in-repo way to apply local framework edits to a session.
 
 **Output type:** `any`
 
@@ -1899,7 +1843,6 @@ skills/                    ← Canonical skill source — invoke as j.<name> or 
 ├── j-dashboard-share/
 ├── j-deep-dive/
 ├── j-dev-done/
-├── j-distribute/
 ├── j-do/
 ├── j-doc/
 ├── j-doc-sync/
@@ -1925,7 +1868,6 @@ skills/                    ← Canonical skill source — invoke as j.<name> or 
 ├── j-redo/
 ├── j-self-sync/
 ├── j-skillify/
-├── j-smoke-test/
 ├── j-spinoff/
 ├── j-status/
 ├── j-strategy/

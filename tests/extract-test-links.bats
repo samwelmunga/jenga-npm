@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 # Coverage for scripts/extract-test-links.sh (E83_S02_T03): the annotation extractor that derives
 # project/knowledge-graph/test-links.json from `arch-node:` lines inside test files. The grammar, the scan set, the exit codes
 # and the output shape are documented in the script's own header; the decisions behind them are D1/D2/D6 of

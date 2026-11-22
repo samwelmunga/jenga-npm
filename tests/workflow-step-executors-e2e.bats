@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E80_S03_T09: end-to-end proof that the step executors compose the way the j.workflow skill will drive them.
 #

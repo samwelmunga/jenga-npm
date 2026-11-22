@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: smoke
 # ---------------------------------------------------------------------------
 # skills/j-todo/scripts/argument-is-not-ranked-list.sh
 #

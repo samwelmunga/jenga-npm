@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for skills/j-check-in/scripts/collect-liveness.sh (E44_S05_T01).
 #

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 # tests/pages-cutover.bats  (E70_S03_T03)
 #
 # Covers scripts/pages-cutover.sh with a stub gh on PATH. The stub logs every

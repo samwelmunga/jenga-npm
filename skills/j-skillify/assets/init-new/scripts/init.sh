@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke: none template of a new skill script, runs git init and git commit and writes scaffold files in the current directory
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S01_T04: the --backlog scope of scripts/board-progress.sh (the board items named by the real entries of the todo
 # file) and the orphan reporting (contract: project/documentation/progress-visualisation.md sections 3, 6 and 7). Every

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Static checks for .github/workflows/dependency-audit.yml (epic E85, story E85_S01, task E85_S01_T08).
 #

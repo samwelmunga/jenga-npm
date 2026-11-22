@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # Proves the merge strategy for project/logs/events.json (E75_S01_T02): two branches that each
 # append one event to the shared JSONL log merge cleanly under the `merge=union` rule declared in

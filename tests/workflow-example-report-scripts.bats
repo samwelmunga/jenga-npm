@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E80_S06_T01: the two example-report `compute` scripts (scripts/workflow/examples/) and their fixture.
 # Read only against this repository: every test that needs a scratch file builds it under $BATS_TEST_TMPDIR.

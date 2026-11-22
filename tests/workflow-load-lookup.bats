@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E80_S01_T06: `scripts/workflow/load-workflows.sh lookup <id>`.
 # Covers: a builtin id and a project id each print exactly that one definition as valid JSON with the right `source`

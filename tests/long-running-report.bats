@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the long-running report (E77_S06_T05), written by E77_S06_T08.
 #

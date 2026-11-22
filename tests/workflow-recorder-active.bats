@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # skills/j-workflow-recorder/scripts/active-recording.sh — the pointer to the live recording
 # (E89, task E89_S01_T03).

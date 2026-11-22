@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E80_S02_T06: the step and await-confirmation commands of scripts/workflow/run-state.sh - per-step status,
 # started_at / finished_at, --output and --note, checkpoints, and the run status that follows.

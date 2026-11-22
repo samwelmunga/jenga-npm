@@ -475,6 +475,13 @@ documents the recording side; the emission side has its own section.
   between continuing it, stopping it first, or replacing the pointer (the replaced document stays on disk and stops
   being appended to).
 
+`start` first runs `skills/j-workflow-recorder/scripts/check-recorder-hook.sh`, a shim over the settings doctor
+(`scripts/settings-doctor.sh --fragment workflow-recorder`) that holds no matching logic of its own. Capture only works when the
+`UserPromptSubmit` recorder hook is registered in `.claude/settings.json`, `.claude/settings.local.json` or
+`~/.claude/settings.json`; when it is in none of them the check says so plainly, with the fix (`npx jenga sync`,
+which registers it, see `distribution.md`, "Settings merge"), that Claude Code must be restarted and that the
+restart loses the current session's recording pointer, and the user chooses between stopping and recording anyway.
+
 Two writers share the file, which is why a recording survives a context summarisation. **Capture** is a
 `UserPromptSubmit` hook (`hooks/on_recording_step.sh`): it appends one verbatim step per user interaction, holds no
 state, reads the pointer from disk on every event and is fail-open. **Interpretation** is the Scrum Master: it
@@ -586,11 +593,396 @@ ordinary one: it lists in `j.workflow list` and runs with `j.workflow run`.
   top-level `source_recording: <recording file name>` and a per-step `description`. None of these three keys is in
   `templates/workflow-schema.json`: the schema declares no `additionalProperties` rule and the validator ignores
   unknown keys (as it does `renderer` and `timeout_seconds`), so they are additive.
+- **Provenance (`E103_S01_T01`).** A recording's frontmatter says where its process came from: `source` is one of
+  `live`, `session-transcript`, `external-url` or `pasted`, and the optional `source_ref` names it (a session id or
+  transcript path, or for an external source the URL plus fetch time and content hash; never a credential).
+  `recording-file.sh create [--source <kind>] [--source-ref <ref>] <path> <title...>` writes them, defaulting to
+  `source: live` with no `source_ref`, so the live recorder is unchanged; a recording without the key (written
+  before the field existed) reads as `live`. The emitted definition carries both in a top-level
+  `provenance: {source, source_ref}` object (`source_ref` only when present) right after `source_recording`, also
+  additive. An unknown `source`, or a `source_ref` with URL user information, a credential-named query parameter or
+  a bearer token, is refused by `create` (exit `2`) and by the emitter (exit `5`). The contract is the PROVENANCE
+  section of `skills/j-workflow-recorder/scripts/recording-format.sh`.
 - **Re-emission is byte-identical** from a fully annotated recording: fixed key order, no timestamps. A re-emission
   may overwrite the definition only when the recording already names it; any other file at the destination is
   refused (exit `7`).
 
 The exit-code table and the exact mapping are in the script's header; `tests/workflow-recorder-emit.bats` pins them.
+
+## Capturing a workflow from a finished process (`j.workflow-capture`)
+
+`j.workflow-recorder` follows a process while it happens. `j.workflow-capture` (`skills/j-workflow-capture/SKILL.md`,
+epic `E103`) starts from a process that is already done (the current session, another session's transcript, or a
+vendor's setup guide) and writes the same `_RECORDING.md` document, so a captured workflow and a live-recorded one
+are the same artifact and differ only in the recording's `source` provenance (see "Emitting a definition from a
+recording"). It is a separate skill that shares the recorder's scripts rather than an extension of the recorder: the
+recorder is hook-driven, forward-only and silent by default, while capture has every step up front and asks by
+default. It runs in the host session, never in a sub-agent, because picking a source and reviewing steps are
+conversations with the user and the current session's transcript is only readable from there.
+
+**The rule that is never bent: a captured recording never becomes the session's active recording.** No capture
+script reads, sets or clears the recorder's active-recording pointer, so the `UserPromptSubmit` recorder hook can never
+append the review conversation into the recording under review, and a live recording already running in the session
+is left exactly as it is. Every capture script names the recording by its explicit path, from creation to emission.
+`tests/workflow-capture-pointer-isolation.bats` pins it.
+
+Every capture runs the same five stages, each owned by one script under `skills/j-workflow-capture/scripts/`; the
+skill body adds only the questions and the judgment between them:
+
+| Stage | Script(s) | What it produces |
+|-------|-----------|------------------|
+| 1. Source | `capture-sources.sh`, `resolve-source.sh`, `snapshot-external.sh` | one readable local file plus its `source` and `source_ref` |
+| 2. Range | `extract-steps.sh` | a candidate-steps file for the prompts the user picked |
+| 3. Write | `scan-secrets.sh`, then `write-capture.sh create` | a recording with one step per candidate row, no credential in it |
+| 4. Review | `detect-parameters.sh`, `classify-command.sh`, `render-review-table.sh`, `record-review.sh`, `generate-wrapper.sh` | every decision persisted as an annotation in the recording |
+| 5. Seal and emit | `write-capture.sh seal` / `emit`, then `check-portability.sh` | a validated definition that `j.workflow list` shows |
+
+The candidate-steps file is the hand-off between stages 2 and 4; its format is the header of
+`skills/j-workflow-capture/scripts/render-review-table.sh`. The sub-commands `export` and `import` sit beside the
+flow and move a finished workflow between projects (see "Export and import" below). Each script's header is its
+contract; the subsections below summarise them and never override them.
+
+### The source picker
+
+`skills/j-workflow-capture/scripts/capture-sources.sh` owns the list of sources, the wording of the picker and the
+rule that decides whether a source can be used yet, so the skill body never re-derives any of them. When the user
+typed a recognisable source after the skill name ("what we just did", a session UUID, a link, "record from now") the
+skill maps it to a catalog key; otherwise `capture-sources.sh menu` prints the picker verbatim:
+
+```
+Where should the workflow be captured from?
+1. The current session (what we just did)
+2. Another session
+3. External instructions (a link or pasted text)
+4. Start a live recording instead (hands off to j.workflow-recorder)
+5. Other (describe below)
+```
+
+- `check <n|key>` answers whether a source is usable now: exit `0` prints `available<TAB><key><TAB><follow-up>`
+  (the follow-up question, such as "Which session?", is asked before anything else), exit `3` prints why it is not
+  yet available, and exit `2` is an unknown key. `list` prints the whole catalog as TSV.
+- **Availability.** A source with no implementing story is always available. Otherwise, when the board carries the
+  implementing story's file, the source is available only once that story is `Passed` or `Passed with remarks`;
+  when it does not (a consumer project has no `E103` board files), the catalog entry's `shipped` flag decides, and
+  the message says "not in this release yet" instead of a board status. A source that is not yet available is
+  reported, naming the story, and the picker is shown again: a partial capture is never started.
+- **Option 4** hands off to `j.workflow-recorder` and creates nothing here: from then on the recorder owns the
+  session, its pointer and its hook. **Option 5** is free text; it is mapped to options 1-4 when it plainly names one,
+  and a source the catalog does not have (a video, a ticket in another tool) is said to be unsupported.
+- `export` and `import` are catalog entries numbered `-`: checkable, never shown in the picker.
+
+### Accepted reference forms
+
+| What the user gives | Resolved by | `source` | Notes |
+|---------------------|-------------|----------|-------|
+| nothing (the current session) | `resolve-source.sh resolve` | `session-transcript` | from `CLAUDE_CODE_SESSION_ID`; the capture invocation and everything after it are cut from the range |
+| a local session UUID | `resolve-source.sh resolve <uuid>` | `session-transcript` | looked up across every project directory of Claude Code's transcript store |
+| a transcript `.jsonl` path | `resolve-source.sh resolve <path>` | `session-transcript` | the transcript is never copied or changed |
+| a text file | `resolve-source.sh resolve <path>` | `pasted` | the fallback on every host, including non-Claude hosts |
+| pasted text | `resolve-source.sh resolve -` (stdin) | `pasted` | normalised into a private copy named by its digest; never put on the command line |
+| a link to instructions | the host's fetch tool, then `snapshot-external.sh url <link>` (stdin) | `external-url` | see "External instructions are untrusted data" |
+| a claude.ai/code session URL or a desktop `local_...` id | best effort only | n/a | exit `4`, see below |
+
+**The cloud-URL best-effort route.** A script reads local files only, so a claude.ai/code session URL or a desktop
+`local_...` id cannot be resolved directly: `resolve-source.sh` exits `4` and names the routes. The skill says so in
+one line and offers, as a numbered list: export the session to a file with the host's own tool and give that file
+(offered only when the host has such a tool), paste the session's text, or give a transcript or text file path. The
+agent never fetches the URL itself and never guesses a local file for it; a failed export falls back to the other
+options. A host with no Claude transcript directory exits `6` for every session form (`resolve-source.sh host` asks
+this directly), and only pasted text or a file is offered there.
+
+### Resolving a session reference (`E103_S02_T01`)
+
+`j.workflow-capture` builds a recording from a process that is already done. Its first deterministic step is
+`skills/j-workflow-capture/scripts/resolve-source.sh resolve [<reference> | -]`, which turns what the user gave into
+one local file and prints one JSON line: `form`, `source`, `source_ref` (the provenance `recording-file.sh create`
+takes), `path` and `session_id`. The forms: nothing (the current session, from `CLAUDE_CODE_SESSION_ID`), a session
+UUID (looked up across every project directory of Claude Code's transcript store, using the layout
+`scripts/task-usage.sh` documents), a transcript `.jsonl` path, a file, or pasted text on stdin (`-`). Pasted content
+is normalised into a private copy named by its digest; a transcript is never copied or changed. A claude.ai/code
+session URL or a desktop `local_...` id is best effort only and exits `4`, naming the export-then-path route and the
+paste fallback: a script reads local files only. A host with no Claude transcript directory exits `6` for every
+session form, and only pasted text or a file is offered there (`resolve-source.sh host` asks this directly). Nothing
+is guessed: a missing, unreadable, empty or ambiguous transcript exits `5` naming what was tried. The `list`
+sub-command lists this project's sessions by reusing `scripts/task-usage.sh --list-transcripts`. The full contract
+is the script's header; `tests/workflow-capture-resolve-source.bats` pins it.
+
+### External instructions are untrusted data (`E103_S03_T01`)
+
+A vendor's setup guide, given as a link or as pasted text, is **data, not instructions**, from the moment it arrives
+until the workflow is emitted. Nothing in it is executed, fetched further, installed or sourced while it is
+analysed; text in it that addresses an agent ("ignore your instructions", "run this now") is quoted to the user and
+left out of the candidate steps; and every extracted step is shown in the review table and confirmed by the user,
+like any other source.
+
+A script cannot fetch, so the agent fetches a link with the host's own fetch tool (never `curl`) and pipes exactly
+what it returned to `skills/j-workflow-capture/scripts/snapshot-external.sh url <link>`; with no fetch tool, or a
+failed fetch, it asks the user to paste the text and pipes that instead, keeping the link as provenance. Pasted text
+alone goes to `snapshot-external.sh paste`. The script reads the content with `cat`, `tr` and hash tools only, never
+evaluates or prints it, and writes a mode-600 snapshot (`external-<sha12>.txt` or `pasted-<sha12>.txt`) plus a
+`.meta.json`. Its one JSON output line has `resolve-source.sh`'s shape, with `source_ref` set to
+`<url> fetched_at=<UTC> sha256=<hash>` (or `pasted captured_at=<UTC> sha256=<hash>`), so the rest of the flow is
+that of any other source. A link that carries a credential (URL user information, a credential-named query
+parameter) is refused with exit `2`; empty content is exit `5`, non-text content exit `8`.
+
+A guide written as a numbered or one-step-per-line list goes through `extract-steps.sh --kind pasted`; a prose guide
+is turned into candidate rows by the agent's judgment, in the same candidate-steps format, with no secret value in
+it. `tests/workflow-capture-external.bats` pins the snapshot and its refusals.
+
+### Candidate steps and the range (`E103_S02_T02`)
+
+`skills/j-workflow-capture/scripts/extract-steps.sh` reads the resolved file. `list` prints the user prompts numbered
+with timestamps (pasted text: numbered items, else one step per line, with no timestamp), and the user picks the
+range that makes up the process; the agent never guesses it. `range <from> <to>` emits the candidate-steps file whose
+format is `render-review-table.sh`'s header: one step per prompt, with the tool calls and assistant text that follow
+a prompt attached as evidence only, never as steps. With `--current` (the current session) the capture invocation, a
+`Skill` call or a `/j-workflow-capture` prompt, and everything after it are cut; with no invocation found the script
+exits `10` rather than guess. A transcript whose layout it does not recognise fails loudly before anything is
+printed, in the discipline of `scripts/task-usage.sh --check-layout` (exit `4` to `7`, one per check), and a partial
+result is never written: the built file is checked with `render-review-table.sh --check` and written atomically.
+Secret-looking values are replaced by `<redacted>` in steps and evidence. The full contract is the script's header;
+`tests/workflow-capture-extract-steps.bats` pins it.
+
+### Secrets become placeholders, never values (`E103_S03_T02`)
+
+A captured process often creates, copies, exports or pastes a credential. Before anything is written to a recording,
+`skills/j-workflow-capture/scripts/scan-secrets.sh scan --apply <candidates-file>` rewrites the candidates file:
+
+- **Literal values** (private-key blocks, URL user information, bearer and `Authorization` tokens, `-u user:pass`,
+  credential-named options and assignments such as `GITHUB_TOKEN=...`, and vendor key shapes such as `sk_live_`,
+  `ghp_`, `AKIA...` or a JWT) are replaced by `${inputs.<name>}` in every row's text and evidence, and every further
+  occurrence of the same value with them. A placeholder value (`<...>`, `$VAR`, `changeme`) is not a literal.
+- **Phrasing** that handles a credential without holding one ("copy the API key from the dashboard", `export NAME`
+  with no value, `$GITHUB_TOKEN`) is flagged with the variable's name; a copy-key row is proposed as a `confirm` step.
+- A flagged row gets `secret_flags`, is marked uncertain so the review asks about it on its own, and gets a secret
+  parameter `{name, secret: true}` with no value.
+
+`write-capture.sh create` runs `scan-secrets.sh check` and refuses (exit `13`) a candidates file that still holds a
+literal. When the user says a flag is a false positive, `scan-secrets.sh clear` records that decision through
+`record-review.sh`; a literal's input stays even then, because its value was replaced before the recording was
+written and cannot be recovered, so the run asks for it. The script never prints a value: every report names the
+input and the pattern only. `extract-steps.sh` has already replaced secret-looking values with `<redacted>`, which
+parametrisation later turns into a named secret input. `tests/workflow-capture-secrets.bats` pins it.
+
+### Writing, sealing and emitting (`E103_S02_T03`)
+
+`skills/j-workflow-capture/scripts/write-capture.sh` is capture's own writer, built only from the recorder's
+scripts. `create --source <kind> [--source-ref <ref>] <candidates-file> <name>` writes a new recording where a live
+one would go (`recording-path.sh`), with the resolver's provenance (`recording-file.sh create`) and one step per
+candidate row, in row order (`recording-file.sh append`), so row `n` is step `step-%03d`; it is built in a staging
+directory and moved into place only when every step is written, and `--source live` is refused. After the review,
+`seal <recording> <candidates-file>` refuses while `record-review.sh pending` lists a row and then seals with
+`close-recording.sh <path>`, and `emit <recording>` runs `emit-workflow.sh` with its exit codes passed through, so
+the definition is validated by `validate-workflow.sh` and appears in `j.workflow list`. The recording is only ever
+named by its path: the seal runs `close-recording.sh` with the pointer's directory override aimed at a private,
+empty directory, so the session's active-recording pointer is neither read nor written and a live recording running
+in the same session is untouched. The full contract is the script's header; `tests/workflow-capture-write.bats`
+pins it, end to end from a fixture transcript.
+
+### Review mode (`E103_S01_T04`)
+
+Every source ends in the same review of the candidate steps before the recording is sealed. Unlike the live
+recorder, **asking is the default**: every row gets a decision, and every decision is persisted in the recording as
+an annotation, so emission never re-makes a judgment and re-emission stays deterministic.
+
+- **Steps versus evidence.** User prompts are the steps, one per interaction; tool calls and assistant text are
+  attached as evidence that informs a proposal and never become steps.
+- **The table first.** `skills/j-workflow-capture/scripts/render-review-table.sh <candidates-file>` prints one Markdown
+  table (`# | Step | Proposed | Type | Parameters | Uncertain`) and a summary line naming the uncertain rows. It is
+  read-only and deterministic: the same file always renders the same bytes. `--uncertain` lists the uncertain rows,
+  `--row <n>` shows one row in full (with its secret flags), `--check` validates the file. A secret parameter that
+  carries a value is refused (exit `4`) rather than rendered.
+- **One uncertain rule, in one place.** A row is uncertain when it is marked uncertain, has no proposal, or proposes
+  include without a step type. An extractor's bare output is therefore walked row by row in full, and a row is
+  accepted in a batch only when every decision emission needs has been proposed and nobody doubted it.
+- **The writer.** `skills/j-workflow-capture/scripts/record-review.sh` maps review row `n` to recording step
+  `step-%03d` and each decision to an annotation kind, writing only through the recorder's `record-answer.sh`:
+  `include` and `exclude` become `deviation` (`in-process` or `out-of-process`), `type <t>` becomes `step-type`, and
+  `params none | <name>=<literal> | <name>` becomes `parameters` (a credential by bare name only; a literal that
+  looks like one is refused, exit `2`). `accept` persists the proposals of every certain row and never overwrites a
+  correction already made; it refuses an uncertain row, which is decided one at a time. `pending` exits `1` while
+  any row still lacks an include/exclude decision or, when included, a step type; sealing is refused until it
+  exits `0`. A correction is re-written with `--replace`.
+- **The prompts.** `skills/j-workflow-capture/assets/review-prompts.md` holds the exact wording and the command
+  each answer maps to: R1 after the table (accept the certain rows, correct some first, mark more uncertain), R2 for
+  batch corrections, R3 one uncertain row at a time (R3a include or exclude, R3b step type, R3c parameters), and W1
+  for one generated wrapper script. A free-text answer is resolved to a listed option with the user's words in
+  `--note`; one that cannot be placed leaves the decision unmade rather than guessed.
+
+`tests/workflow-capture-review.bats` pins the table, the uncertain rule and the writer.
+
+### Parametrisation: project-specific values become inputs (`E103_S02_T04`)
+
+A captured workflow should run in another project, so project-specific values become run inputs.
+`skills/j-workflow-capture/scripts/detect-parameters.sh propose --apply <candidates-file>` proposes them for every
+candidate row: absolute and `~/` paths, the project root, the repository, package and project names, cloud regions
+and environment names as `{name, value}`, and every key-shaped or `<redacted>` value as `{name, secret: true}`, by
+name only. The review table's Parameters column shows them and the user confirms or corrects them; `record-review.sh`
+persists the decision as `record-answer.sh`'s `parameters` kind and refuses a literal that looks like a credential,
+so a credential is never written into the recording.
+
+`emit-workflow.sh` turns the confirmed parameters of the included steps into the definition's `inputs`
+(`{name, description}`, in order of first appearance, with no `default`: a captured value belongs to the project it
+was captured in, and a credential is never stored, so the run asks for every input). Every occurrence of a
+confirmed literal in the steps' substitutable strings becomes `${inputs.<name>}` (longer literals first, in one
+pass), and a credential's name replaces its step's redaction marker (with no marker it is still declared). A name
+standing for two values, one value under two names, or a literal that occurs in no included step exits `12` with
+nothing emitted. A recording without confirmed
+parameters (every live recording) emits exactly what it did before. The contracts are the two scripts' headers;
+`tests/workflow-capture-parameters.bats` pins detection, substitution, the credential rule and an emitted
+definition that passes `validate-workflow.sh`.
+
+### Command-to-step mapping and wrapper scripts (`E103_S04`)
+
+A captured process is mostly shell commands. `skills/j-workflow-capture/scripts/classify-command.sh` proposes a step
+type for each one (`E103_S04_T01`): a non-interactive, deterministic command is `compute`; a login is a `skill` step
+running `j.connect` when a descriptor exists for the service, else `confirm`; an `export VAR=...` is a `confirm` that
+names the variable (never its value); dashboard and browser actions, interactive and destructive commands are
+`confirm`; anything it cannot place is `confirm`, marked uncertain.
+
+A compute step can only run a script under an allow-listed root, so a captured command such as `npm install
+@vendor/sdk` becomes a wrapper script `<workflows>/scripts/<workflow-id>/<step_id>.sh` (`E103_S04_T02`), written by
+`skills/j-workflow-capture/scripts/generate-wrapper.sh`:
+
+- **The command verbatim, inputs as arguments.** The script is `set -euo pipefail`, an argument-count check and the
+  command. A confirmed parameter in the command becomes a positional argument, always expanded inside double quotes
+  (`"${1}"`, or `${1}` inside an existing double-quoted string), never interpolated into the body and never
+  `eval`ed. A command using `eval`, a positional parameter of its own, more than one line or an undeclared input gets
+  no wrapper.
+- **Seen, then confirmed, then written.** `show` prints the exact file and its sha256; `write --confirm <sha256>`
+  writes only that content (mode 755, atomically), checks it resolves through
+  `scripts/workflow/resolve-compute-command.sh` with exit 0, and records the decision in the recording as
+  `record-answer.sh`'s `wrapper` kind. `decline` records the refusal and makes the step a `confirm` step. `pending`
+  lists compute steps still undecided, or whose confirmed file is missing, edited or stale.
+- **A confirm before every generated compute step.** `emit-workflow.sh` emits a step with a confirmed wrapper as a
+  `confirm` step (`<step_id>_confirm`) directly followed by the `compute` step, whose `command` is the wrapper path,
+  whose `args` are the inputs in positional order and which carries `timeout_seconds` when the command is known to
+  run long (600 seconds for package installs, builds, `git clone` and the like). Emission verifies the file is the
+  confirmed content and resolves before writing the definition, else exit `10`.
+
+**Why wrappers, and why nothing in `E80` changed.** Epic `E103` was scoped to change nothing in the workflow service
+area: not the definition format, the loader, the step types or the compute confinement of
+`scripts/workflow/resolve-compute-command.sh`, which only runs scripts under allow-listed roots. A third-party
+command cannot be a compute step's `command` directly, and widening the allow-list to arbitrary commands would make
+every workflow able to run anything. The wrapper directory `<workflows>/scripts/<workflow-id>/` is already under an
+allow-listed root, so writing the command into a reviewed script there makes it runnable by the unchanged executor.
+The safety the allow-list would otherwise give comes from three places instead: the user reads every byte of the
+script and confirms its sha256 before it is written, emission re-verifies that hash, and a `confirm` step stands
+before every generated `compute` step so the run asks again each time. Commands that need a person (interactive
+ones, logins, `export VAR=...`, dashboard actions) never become wrappers at all: they are `confirm` steps, or a
+`skill` step running `j.connect` when a descriptor for the service exists.
+
+The wrapper directory is the one `export-package.sh` packages and `import-package.sh` installs, whose command rewrite
+keeps the paths valid under another id. Nothing under `scripts/workflow/` changed. `tests/workflow-capture-wrappers.bats`
+pins the wrapper body, the confirmation, the decline, the emitted pairs and the package round trip.
+
+### The portability check (`E103_S05_T01`)
+
+Parametrisation turns the values it recognises into run inputs; the portability check, run at emission, reports what
+is left in the definition that would not run in another project. After `write-capture.sh emit` succeeds the skill
+runs `skills/j-workflow-capture/scripts/check-portability.sh check --recording <recording> <definition>`, which scans
+every string of every step (except `id` and `type`; a `${inputs.x}` reference matches nothing) and prints one line
+per finding, `<step-id> TAB <kind> TAB <text> TAB open|accepted`:
+
+| Kind | What it means |
+|------|---------------|
+| `unshipped-skill` | a skill the step names (a skill step's `skill`, a `j.<x>` or `/j-<x>` token, a `skills/<dir>/` reference) that a consumer of the framework does not have. The shipped set is derived, never listed: `shipped-skills` reads the skill catalog and, in this private repository, keeps only what `.publicignore` lets through |
+| `absolute-path` | an absolute or `~/` path that was not made a parameter |
+| `project-name` | the project root's name, the repository name or its owner/name slug, as a whole word |
+
+The check decides nothing. Each open finding is offered as a parameter (`record-review.sh decide ... params ...
+--replace`, then emit again), as a fix, or as accepted, which `check-portability.sh accept --recording <recording>
+<step-id> <kind> <text>` records through `record-answer.sh` as a `portability` annotation; the emitter does not read
+that kind, so an acceptance never changes the definition. The skill repeats the check until it exits `0` (no open
+finding; accepted ones may still be listed), and `export` offers to run it first on a captured workflow that never
+passed it. `tests/workflow-capture-portability.bats` pins the three kinds and the acceptance.
+
+### What a captured definition looks like
+
+An illustrative definition emitted from a capture of a vendor's setup guide: the confirmed value `eu-west-1`
+became the input `region`, a redacted key became the credential input `stripe_secret_key` (no value, no default:
+the run asks for both), the install command became a confirmed wrapper script and so a `confirm` step directly
+followed by its `compute` step, and the `export` line became a `confirm` step that names the variable. `provenance`
+and `source_recording` are additive keys the validator ignores. This example deliberately sits outside the
+`workflow-example` markers, which `tests/workflow-doc-sections.bats` reserves for the one example of the
+"Definition format" section; a separate test in the same file extracts the first `json` fence under this heading
+and checks that it passes `scripts/workflow/validate-workflow.sh` as written.
+
+```json
+{
+  "id": "vendor-sdk-setup",
+  "name": "vendor sdk setup",
+  "description": "Replay of the recorded process \"vendor sdk setup\" (3 steps), emitted from vendor-sdk-setup_RECORDING.md.",
+  "source_recording": "vendor-sdk-setup_RECORDING.md",
+  "provenance": {
+    "source": "external-url",
+    "source_ref": "https://vendor.example/guide fetched_at=2026-11-20T10:00:00Z sha256=0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0"
+  },
+  "inputs": [
+    {
+      "name": "region",
+      "description": "A project-specific value, first seen in step_001. Supply this project's value when the workflow is run."
+    },
+    {
+      "name": "stripe_secret_key",
+      "description": "A value that was not recorded: it looked like a credential (or was redacted) and is never stored. Supply it when the workflow is run."
+    }
+  ],
+  "steps": [
+    {
+      "id": "step_001_confirm",
+      "type": "confirm",
+      "prompt": "Run step_001, the generated script project/.workflows/scripts/vendor-sdk-setup/step_001.sh: npm install @vendor/sdk --region ${inputs.region}",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "description": "Install the vendor SDK"
+    },
+    {
+      "id": "step_001",
+      "type": "compute",
+      "command": "project/.workflows/scripts/vendor-sdk-setup/step_001.sh",
+      "args": [
+        "${inputs.region}"
+      ],
+      "timeout_seconds": 600,
+      "description": "Install the vendor SDK"
+    },
+    {
+      "id": "step_002",
+      "type": "confirm",
+      "prompt": "export STRIPE_SECRET_KEY=${inputs.stripe_secret_key}",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "description": "Set the secret key in your shell"
+    }
+  ]
+}
+```
+
+### Export and import: moving a workflow between projects (`E103_S05`)
+
+`j.workflow-capture export <id>` runs `skills/j-workflow-capture/scripts/export-package.sh`, which writes one
+package (`jenga-workflow-package`, version 1, a gzip tar): the project definition, its wrapper scripts under
+`<workflows>/scripts/<id>/` and every render template it references, plus a `manifest.json` with each file's sha256.
+`j.workflow-capture import <package>` runs `skills/j-workflow-capture/scripts/import-package.sh` in the other project:
+
+- `inspect` unpacks into an empty temporary directory only after refusing links, unsafe names and anything outside
+  `manifest.json`, `definition/`, `scripts/` and `templates/`, verifies every sha256 and size against the manifest,
+  and prints the destinations, the id collision state and every file verbatim. It writes nothing.
+- `install --confirm` writes; without `--confirm` it writes nothing. An id held by a project workflow needs
+  `--rename <new-id>` or `--replace`; a builtin id always wins (the loader's collision rule), so only rename works.
+  A compute command that names a packaged script is rewritten to this project's `<workflows>/scripts/<id>/`.
+- Success is reported only after `validate-workflow.sh`, `resolve-compute-command.sh` (every compute command) and
+  `load-workflows.sh lookup` pass in the target project; otherwise everything written is rolled back, a replaced
+  workflow included.
+
+Neither script runs a packaged script or changes the loader or the compute allow-list. The contracts are the two
+scripts' headers; `tests/workflow-capture-export.bats` and `tests/workflow-capture-import.bats` pin them, including
+an export-to-import round trip whose compute commands resolve in the importing project.
 
 ## Public mirror
 

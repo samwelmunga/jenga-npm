@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for skills/j-conventions/scripts/detect-conventions.sh (E69_S02_T04).
 #

@@ -18,7 +18,8 @@
 # OUTPUT CONTRACT (normative)
 #
 #   {"suites":[{"id":"bats:tests","name":"bats tests","type":"unit",
-#               "ecosystem":"bats","command":"bats tests/*.bats",
+#               "ecosystem":"bats",
+#               "command":"bats --filter-tags !tier:manual tests/*.bats",
 #               "paths":["tests/*.bats"]}],"warnings":[]}
 #
 #   suites     array sorted by `id` ascending in byte (LC_ALL=C-equivalent)
@@ -77,6 +78,14 @@
 #               ^test[:-]. Suffix -> type: unit, integration, e2e, coverage are
 #               recognised, anything else is `unknown`, bare `test` is `unit`.
 #   bats        one suite per directory holding *.bats files (not per file).
+#               Its command excludes manual tests: `bats --filter-tags
+#               !tier:manual <dir>/*.bats` (E95_S02_T04). A manual test
+#               (tier:manual, see skills/j-test/scripts/manual-only.sh) runs only
+#               when named, never in j.test's "all" or a gate. The `!` is
+#               deliberately unquoted: commands run under non-interactive
+#               `bash -c` (no history expansion), and narrow-suites.sh only
+#               rebuilds commands that hold no quote character. `paths` still
+#               names every *.bats file. Needs bats >= 1.8 (`--filter-tags`).
 #   linter      one `shellcheck:all` suite when shellcheck is on PATH; nothing,
 #               and no warning, when it is absent (an optional linter that is
 #               not installed is not a problem).
@@ -315,6 +324,11 @@ $keys
 EOF
 }
 
+# The bats option that leaves tier:manual files out of a discovered suite. Kept
+# byte-identical with build-catalog.sh and narrow-suites.sh, which strip or keep
+# exactly this text.
+BATS_EXCLUDE_MANUAL='--filter-tags !tier:manual'
+
 # bats: one suite per directory that holds *.bats files. The files are only
 # located, never executed.
 detect_bats() {
@@ -323,7 +337,7 @@ detect_bats() {
   while IFS= read -r dir; do
     [ -n "$dir" ] || continue
     rel="${dir#./}"
-    add_suite "bats:$rel" "bats $rel" "unit" "bats" "bats $(shell_word "$rel")/*.bats" \
+    add_suite "bats:$rel" "bats $rel" "unit" "bats" "bats $BATS_EXCLUDE_MANUAL $(shell_word "$rel")/*.bats" \
       "$(dir_glob "$rel" '*.bats')"
   done <<EOF
 $dirs

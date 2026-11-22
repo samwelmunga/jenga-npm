@@ -1,4 +1,4 @@
-import { FIELDS, NOT_MEASURED, TOKEN_UNIT, buildBudgetRows, formatTokens, hasUsageData } from './budgetModel'
+import { COST_UNIT_NAME, FIELDS, NOT_MEASURED, NOT_PRICED, TOKEN_UNIT, buildBudgetRows, formatTokens, hasUsageData } from './budgetModel'
 import './budget-view.css'
 
 /**
@@ -15,6 +15,11 @@ import './budget-view.css'
  * so nothing at all is rendered (no heading, no empty placeholder). The tab that hosts it is not offered
  * in that case either (App.jsx), so this is the second line of defence.
  *
+ * Derived view (E90_S01_T09, part of the shipped contract since E90 decision 6): one more column always sits
+ * after Total, labelled as a derived cost-equivalent unit (a relative unit, not a currency amount). An item
+ * with raw counts but no such number shows "not priced" there, never 0; an item with nothing measured says
+ * "not measured".
+ *
  * Plain table, no chart: exact budgeting numbers across four fields with cache reads dominating the
  * scale are read, not eyeballed, and a chart would hide the small fields.
  */
@@ -30,12 +35,27 @@ function Num({ value, field }) {
   return <td className="budget-cell budget-num" data-field={field}>{formatTokens(value)}</td>
 }
 
+/** The derived column's cell: the number, or "not priced" when raw counts exist, else "not measured". */
+function CostCell({ value, rawMeasured }) {
+  if (value !== null && value !== undefined) {
+    return <td className="budget-cell budget-num budget-derived" data-field="costUnits">{formatTokens(value)}</td>
+  }
+  return rawMeasured
+    ? <td className="budget-cell budget-derived budget-not-priced" data-field="costUnits">{NOT_PRICED}</td>
+    : <td className="budget-cell budget-derived budget-not-measured" data-field="costUnits">{NOT_MEASURED}</td>
+}
+
 function FieldCells({ part }) {
-  if (!part.measured) return <NotMeasured colSpan={FIELD_COUNT + 1} />
+  const cost = <CostCell value={part.cost} rawMeasured={part.measured} />
+  if (!part.measured) {
+    if (part.cost !== null) return <><NotMeasured colSpan={FIELD_COUNT + 1} />{cost}</>
+    return <NotMeasured colSpan={FIELD_COUNT + 2} />
+  }
   return (
     <>
       {FIELDS.map(f => <Num key={f.id} value={part.fields[f.id]} field={f.id} />)}
       <Num value={part.total} field="total" />
+      {cost}
     </>
   )
 }
@@ -48,7 +68,7 @@ function StoryBlock({ story }) {
   return (
     <tbody className="budget-story" data-testid="budget-story" data-id={story.id}>
       <tr className="budget-story-head" data-row="story">
-        <th scope="rowgroup" colSpan={FIELD_COUNT + 2}>
+        <th scope="rowgroup" colSpan={FIELD_COUNT + 3}>
           <span className="budget-id">{story.id}</span> {story.title} <Flag on={story.possiblyIncomplete} />
         </th>
       </tr>
@@ -63,11 +83,14 @@ function StoryBlock({ story }) {
       <tr data-row="story-total" className="budget-story-total">
         <th scope="row" className="budget-label">Story total</th>
         {story.total === null
-          ? <NotMeasured colSpan={FIELD_COUNT + 1} />
+          ? (story.cost !== null
+            ? <><NotMeasured colSpan={FIELD_COUNT + 1} /><CostCell value={story.cost} rawMeasured={false} /></>
+            : <NotMeasured colSpan={FIELD_COUNT + 2} />)
           : (
             <>
               <td className="budget-cell budget-na" colSpan={FIELD_COUNT}>tasks plus overhead</td>
               <Num value={story.total} field="total" />
+              <CostCell value={story.cost} rawMeasured />
             </>
           )}
       </tr>
@@ -93,6 +116,9 @@ export default function BudgetView({ epics }) {
         Token usage per story and per task. Every figure is in {TOKEN_UNIT}; a story's total is its tasks
         plus its allocated overhead, shown as separate numbers. &quot;{NOT_MEASURED}&quot; means no
         measurement was recorded, not zero.
+        {' '}The last column is a derived view: a cost-equivalent unit computed from the four counts with
+        per-model ratios. It is a relative unit, not a currency amount, and replaces none of the counts;
+        &quot;{NOT_PRICED}&quot; means counts were recorded but no derived number could be given.
       </p>
       <div className="budget-scroll">
         <table className="budget-table">
@@ -102,6 +128,7 @@ export default function BudgetView({ epics }) {
               <th scope="col">Item</th>
               {FIELDS.map(f => <th scope="col" key={f.id} className="budget-num">{f.label}</th>)}
               <th scope="col" className="budget-num">Total</th>
+              <th scope="col" className="budget-num budget-derived" data-field="costUnits">Derived: {COST_UNIT_NAME}</th>
             </tr>
           </thead>
           {stories.map(s => <StoryBlock key={s.id} story={s} />)}

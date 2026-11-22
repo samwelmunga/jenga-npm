@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for skills/j-test/scripts/discover-tests.sh (E72_S01_T03).
 #
@@ -185,11 +186,11 @@ fixture_matches() {
   [ "$status" -eq 0 ]
   # Three files in two directories.
   json_check '[.suites[] | select(.ecosystem == "bats") | .id] == ["bats:integration/deep","bats:unit"]'
-  json_check '.suites[] | select(.id == "bats:unit") | .command == "bats unit/*.bats"'
+  json_check '.suites[] | select(.id == "bats:unit") | .command == "bats --filter-tags !tier:manual unit/*.bats"'
   # The repo's own pattern: bats listed as unit and integration. The integration entry is a config suite carrying the
   # first detected bats command, and it is not a warning.
   json_check '.suites[] | select(.id == "config:bats:integration")
-              | .ecosystem == "config" and .type == "integration" and .command == "bats integration/deep/*.bats"'
+              | .ecosystem == "config" and .type == "integration" and .command == "bats --filter-tags !tier:manual integration/deep/*.bats"'
   json_check '.warnings == []'
 }
 
@@ -412,13 +413,13 @@ fixture_matches() {
 # Shapes of command and id the contract leaves to the detectors
 # ===================================================================================================================
 
-@test "a bats directory at the root is bats:. with command bats ./*.bats" {
+@test "a bats directory at the root is bats:. with command bats --filter-tags !tier:manual ./*.bats" {
   local proj="$BATS_TEST_TMPDIR/rootbats"
   mkdir -p "$proj"
   printf '# inert\n' > "$proj/a.bats"
   discover --root "$proj"
   [ "$status" -eq 0 ]
-  json_check '.suites == [{"id":"bats:.","name":"bats .","type":"unit","ecosystem":"bats","command":"bats ./*.bats","paths":["*.bats"]}]'
+  json_check '.suites == [{"id":"bats:.","name":"bats .","type":"unit","ecosystem":"bats","command":"bats --filter-tags !tier:manual ./*.bats","paths":["*.bats"]}]'
 }
 
 @test "a directory name with a space is shell-quoted in the command, never split" {
@@ -427,7 +428,7 @@ fixture_matches() {
   printf '# inert\n' > "$proj/my dir/b.bats"
   discover --root "$proj"
   [ "$status" -eq 0 ]
-  json_check '.suites[0] | .id == "bats:my dir" and .command == "bats my\\ dir/*.bats"'
+  json_check '.suites[0] | .id == "bats:my dir" and .command == "bats --filter-tags !tier:manual my\\ dir/*.bats"'
 }
 
 @test "dot-directories and node_modules are not scanned" {

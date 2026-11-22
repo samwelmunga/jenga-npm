@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S04_T02: add_trivial_task.sh and write-backfilled-epics.sh obtain the next board number from the one allocator
 # (scripts/next-board-id.sh, formatted by scripts/lib/board-ids.sh) instead of carrying their own copy of the

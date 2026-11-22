@@ -15,6 +15,7 @@ examples:
   - "j.workflow-recorder stop"
   - "record what we are doing now so it can be replayed"
   - "am I still recording"
+  - "record from now on, as I go"
 ---
 
 # Workflow Recorder — Follow and Document a Session As It Happens
@@ -90,14 +91,65 @@ captured steps while a recording is active, whatever the user happened to type. 
 
 ### 0. Bare invocation
 
+First apply section 0.1 to what the user typed. Only when it does not route away:
+
 Run `active-recording.sh status --field active`. It prints `true` or `false` and exits 0 either way.
 
 - `true` — behave as `status` (section 2). Do **not** start a second recording.
 - `false` — behave as `start` (section 1).
 
+### 0.1 A process that is already done belongs to `j.workflow-capture`
+
+This skill follows a process **while** it happens. Before a bare invocation or `start` creates
+anything, check whether the user is plainly referring to something already finished: "make a workflow
+from what we just did", "turn this session into a workflow", a session UUID or link, a transcript
+`.jsonl` path, "session X", a guide URL, a pasted block of steps, "these instructions". That is a request
+for `j.workflow-capture`, which builds the same `_RECORDING.md` document from a finished process.
+
+Only a plain reference counts. A `<name>` that merely describes the process about to be performed
+("set up the release pipeline"), or no wording at all, is not one: continue as normal. When unsure,
+continue as normal rather than asking.
+
+When it does count, start nothing (no `recording-path.sh`, no `create`, no `set`) and ask:
+
+```
+That sounds like a process that is already finished. This skill records a process as it happens.
+What would you like to do?
+1. Build the workflow from the finished process with j.workflow-capture
+2. Start a live recording now instead — only what happens from here on is captured
+3. Other (describe below)
+```
+
+- **1** — hand off to `j.workflow-capture`, passing the user's own wording as its source so it does not
+  ask for the source again. Do not set a recording pointer.
+- **2** — continue with section 0's status check (bare) or section 1 (`start`), unchanged.
+- **3** — follow what the user says. Free text is never read as option 1 or 2 unless it plainly names one.
+
+This routing changes nothing about the two tiers: the hook still owns step capture, and you still never
+call `recording-file.sh append` to record a user interaction.
+
 ### 1. `start [<name>]`
 
-**Your judgment first, then three script calls in order.**
+**Apply section 0.1 first.** If it routes away, stop here.
+
+**Check the hook first, then your judgment, then three script calls in order.**
+
+**0. The hook.** First run the advisory settings preflight, which prints a notice once per session and never fails:
+`bash "$([ -f scripts/settings-doctor-once.sh ] && echo scripts/settings-doctor-once.sh || echo node_modules/@jenga-ai/agent/scripts/settings-doctor-once.sh)" j-workflow-recorder`.
+Then run `check-recorder-hook.sh`, which stays the blocking guard for this skill: a shim over `scripts/settings-doctor.sh --fragment workflow-recorder`. Exit 0 (prints `registered: <file>`) means capture can
+work — continue to **a**. Exit 1 means the `UserPromptSubmit` recorder hook is registered in none of
+`.claude/settings.json`, `.claude/settings.local.json` and `~/.claude/settings.json`, so a recording
+started now would capture nothing. Print the script's message verbatim (it names what was checked, the fix
+`npx jenga sync`, that Claude Code must be restarted, and that the restart loses this session's recording
+pointer) and ask:
+
+```
+1. Stop — I'll run npx jenga sync, restart Claude Code and start again
+2. Record anyway — I understand no steps will be captured automatically
+3. Other (describe below)
+```
+
+Never carry on to **a** without an answer, and never report a recording as working after choosing **2**.
 
 **a. The name.** With `<name>` given, use it. With no `<name>`, derive a short descriptive name from
 the user's opening interaction — what process is about to be performed, in a handful of words, as the
@@ -117,7 +169,7 @@ one sentence describing what they are about to do rather than inventing a name.
 
 **c. The document.** `recording-file.sh create <path> <title...>` — pass the path from **b** and the
 descriptive name from **a** as the title. Exit 4 means something was created at that path in the
-meantime: go back to **b** for a fresh path and try once more. Exit 2, 5 or 6 is a real failure —
+meantime: go back to **b** for a fresh path and try once more. Exit 2 or 6 is a real failure —
 surface stderr verbatim and halt without setting the pointer.
 
 **d. The pointer.** `active-recording.sh set <path> --title <name>` prints a token on stdout. Keep that

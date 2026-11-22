@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # Regression coverage for the idea_manager.sh / todo_manager.sh TEMPLATE=
 # path-resolution fix (E46_S06_T01).

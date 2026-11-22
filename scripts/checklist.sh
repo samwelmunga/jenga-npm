@@ -21,6 +21,7 @@
 #   scripts/checklist.sh pending
 #   scripts/checklist.sh rejected [--id <item-id>]
 #   scripts/checklist.sh resolve <rapport> accepted|rejected [--reason <text>] [--by <actor>]
+#   scripts/checklist.sh registry                 print the selected registry path (read-only)
 #   scripts/checklist.sh -h | --help | help       print this usage on stdout, exit 0
 #
 # <situation> is a lifecycle phase: one of the base vocabulary (pre-commit, pre-task, pre-release,
@@ -142,6 +143,13 @@
 #   registry cannot prevent un-ticking. --note and --by are rejected with --clear. The file-level alternative
 #   (delete one run file, or the whole tick-state directory) is always safe: the worst outcome is that items are
 #   evaluated again.
+#
+# registry   (no arguments)   IMPLEMENTED (E99_S04_T03)
+#   Prints the path of the registry file every other subcommand reads (select_registry, see "Combining the two files"
+#   in the documentation: the project instance when it exists, else the shipped default, whole file, never merged),
+#   with no trailing newline, and exits 0. Prints nothing and exits 0 when neither file exists. Exits 1 when the
+#   configs directory cannot be resolved. It is read-only and does NOT validate the file: it only names it. It exists
+#   so another script (scripts/checklist-required-check.sh) uses this selection instead of a copy of it.
 #
 # ---------------------------------------------------------------------------
 # SUGGESTIONS (E67_S05_T02): suggest, pending, rejected, resolve
@@ -467,6 +475,7 @@ usage:
   checklist.sh pending
   checklist.sh rejected [--id <item-id>]
   checklist.sh resolve <rapport> accepted|rejected [--reason <text>] [--by <actor>]
+  checklist.sh registry
   checklist.sh -h | --help | help
 
 situations: pre-commit, pre-task, pre-release, pre-reconcile, plus any the registry declares.
@@ -2087,6 +2096,16 @@ case "$SUBCOMMAND" in
     ;;
   resolve)
     cmd_resolve "$@"
+    exit $?
+    ;;
+  registry)
+    # Read-only: names the file select_registry chooses, so no caller needs its own copy of that rule.
+    if [ "$#" -ne 0 ]; then
+      printf '%s: registry takes no arguments\n' "$SELF" >&2
+      usage >&2
+      exit 2
+    fi
+    select_registry
     exit $?
     ;;
   *)

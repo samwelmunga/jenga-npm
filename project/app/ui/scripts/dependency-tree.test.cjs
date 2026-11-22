@@ -5,6 +5,11 @@
 // `react` swapped, for the component sources only, for a tiny hook runtime (technique of epic-overlay-tree.test.cjs) so
 // hover, focus, click and Enter can be driven through the handlers the component really sets, and the result is
 // rendered to markup. The CSS and the JSX are parsed as text for the reduced-motion and no-colour-literal rules.
+// E92_S13_T02: the citadel is now the DEFAULT goal design. The tests written for the star (halo, ring, sparks, the goal edge
+// inset, the star's text positions) pin the star: they render with a star-only registry and a model laid out for the star's
+// fixed disc area ({ goalArea: 'disc' }), which is byte-identical to the layout they were written against. The citadel's own
+// tests (its states, stacking, bridge, roof and battlements, lean, foundation, labels, edges, pure SVG) are at the end, and
+// render with the real registry and the castle layout.
 // Run: node project/app/ui/scripts/dependency-tree.test.cjs
 const assert = require('assert')
 const fs = require('fs')
@@ -24,6 +29,9 @@ const entry = `
   import { renderToStaticMarkup } from 'react-dom/server'
   export { default as DependencyTree } from './src/components/progress/DependencyTree.jsx'
   export { buildDependencyTreeModel, unfoldGroups, FOLD_THRESHOLD, GOAL_NODE_ID, LAYOUT } from './src/components/progress/dependencyTreeModel.js'
+  export { default as StarGoal } from './src/components/progress/StarGoal.jsx'
+  export { GOAL_RENDERERS } from './src/components/progress/goalDesigns.js'
+  export * as dayNight from './src/components/progress/dayNightModel.js'
   export { React, renderToStaticMarkup }
 `
 const build = (fn, outfile, plugins) => fn({
@@ -48,7 +56,13 @@ const hookBuilt = build(esbuild.build, outHook, [{
   name: 'react-hook-shim',
   setup(b) { b.onResolve({ filter: /^react$/ }, a => (a.importer.includes(path.sep + 'src' + path.sep) ? { path: shim } : null)) },
 }])
-const { React, renderToStaticMarkup, DependencyTree, buildDependencyTreeModel, unfoldGroups, FOLD_THRESHOLD, LAYOUT } = require(outReal)
+const REAL = require(outReal)
+const { React, renderToStaticMarkup, unfoldGroups, FOLD_THRESHOLD, LAYOUT, StarGoal, GOAL_RENDERERS, dayNight } = REAL
+const STAR_ONLY = Object.freeze({ star: StarGoal })
+const CitadelTree = REAL.DependencyTree // the real registry: the citadel is the default design
+const buildCastleModelOf = REAL.buildDependencyTreeModel // the castle layout (the default goal area)
+const DependencyTree = props => CitadelTree({ renderers: STAR_ONLY, ...props })
+const buildDependencyTreeModel = (g, id, l, o) => REAL.buildDependencyTreeModel(g, id, l, { goalArea: 'disc', ...o })
 let hook // set once the hook bundle is built
 
 /** Minimal hook runtime: one component instance, state slots; a setter re-renders the component. */
@@ -135,7 +149,7 @@ const GROUPED = [
 ]
 const GROUP = 'group:E01_S01|1|done'
 const model = (g, labels) => buildDependencyTreeModel(g, 'E01', labels)
-const mountTree = (g, labels) => mount(hook.DependencyTree, { model: hook.buildDependencyTreeModel(g, 'E01', labels), labels })
+const mountTree = (g, labels) => mount(props => hook.DependencyTree({ renderers: STAR_ONLY, ...props }), { model: hook.buildDependencyTreeModel(g, 'E01', labels, { goalArea: 'disc' }), labels })
 const render = (g, labels) => renderToStaticMarkup(React.createElement(DependencyTree, { model: model(g, labels), labels }))
 
 /** The markup of one card: from its data-node attribute to the next card, the goal or the next collapse header. */
@@ -805,7 +819,7 @@ const stripComments = s => s.replace(/\/\*[\s\S]*?\*\//g, '')
       }
       assert.ok(!motion.test(b.body), `motion declaration outside the reduced-motion guard: ${b.head}`)
     }
-    assert.deepStrictEqual([...names].sort(), ['dt-blink', 'dt-breathe', 'dt-flow', 'dt-ring-pulse', 'dt-shimmer', 'dt-twinkle'])
+    assert.deepStrictEqual([...names].sort(), ['dn-drift', 'dn-flap', 'dt-blink', 'dt-breathe', 'dt-flow', 'dt-ring-pulse', 'dt-shimmer', 'dt-twinkle'])
     for (const k of names) assert.ok(new RegExp(`@keyframes\\s+${k}\\b`).test(css), 'keyframes ' + k)
     assert.ok(css.includes(':root:not([data-motion="off"])'))
   })
@@ -820,7 +834,10 @@ const stripComments = s => s.replace(/\/\*[\s\S]*?\*\//g, '')
   test('every var(--...) token exists in tokens.css for the light and the dark theme', () => {
     const tokens = fs.readFileSync(path.join(uiDir, 'src', 'tokens.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
     const local = new Set(['--goal-c', '--dt-shine', '--goal-halo-opacity', '--goal-halo-scale'])
-    const used = [...new Set([...css.matchAll(/var\((--[a-z0-9-]+)/g)].map(m => m[1]))].filter(t => !local.has(t))
+    // E92_S13_T02: the --cc-* custom properties are the citadel's palette hook, defined in the .dt-castle rule from tokens
+    // (the next test) and the --dn-* custom properties are the shared day and night hook of .dn-scene (E92_S13_T04, mapped from
+    // --color-sky-* tokens, tested there); every other var() must be a token of tokens.css for both themes
+    const used = [...new Set([...css.matchAll(/var\((--[a-z0-9-]+)/g)].map(m => m[1]))].filter(t => !local.has(t) && !t.startsWith('--cc-') && !t.startsWith('--dn-'))
     assert.ok(used.length >= 8, 'tokens used')
     assert.ok(used.some(t => t.startsWith('--color-progress-')))
     const blocks = topLevel(tokens)
@@ -838,6 +855,786 @@ const stripComments = s => s.replace(/\/\*[\s\S]*?\*\//g, '')
     // JSX text nodes between tags that contain a letter would be a hard-coded word
     const text = [...src.matchAll(/<[A-Za-z][^<>]*>([^<>{}\n]*[A-Za-z][^<>{}\n]*)<\//g)].map(m => m[1].trim()).filter(Boolean)
     assert.deepStrictEqual(text, [], 'hard-coded JSX text: ' + text.join(' | '))
+  })
+
+  // ===================== E92_S13_T02: the citadel, the default goal design =====================
+  const CEN = { ...EN, castle_tower: '%s: %d of %d done', castle_tower_failed: '%s: %d of %d done, %d failed', castle_tower_undecomposed: '%s: not broken down yet', story_undecomposed: 'Not broken down yet', story_undecomposed_aria: '%s - not broken down into tasks yet' }
+  const CSV = { ...SV, castle_tower: '%s: %d av %d klara', castle_tower_failed: '%s: %d av %d klara, misslyckade: %d', castle_tower_undecomposed: '%s: inte nedbruten ännu' }
+  const SID = i => `E01_S${String(i).padStart(2, '0')}`
+  // spec: one entry per story { states: [...task states], deps: [story numbers], undec }. The payload facts a real script states
+  // (story `complete`, `decomposed`, epic_progress) are written here as the script would; the view derives none of them.
+  const castleGraph = (spec, labels, percent = 40, reached = false) => {
+    const stories = []
+    const tasks = []
+    spec.forEach((st, k) => {
+      const sid = SID(k + 1)
+      const states = st.undec ? [] : st.states
+      stories.push({ id: sid, epic_id: 'E01', title: 'Story ' + (k + 1), depends_on: (st.deps || []).map(SID), decomposed: !st.undec, complete: !st.undec && states.length > 0 && states.every(x => x === 'done') })
+      states.forEach((state, i) => tasks.push(T(`${sid}_T${String(i + 1).padStart(2, '0')}`, sid, state, [])))
+    })
+    const g = graph(tasks, labels, stories)
+    return withProgress(g, ep(spec.length, spec.filter(x => !x.undec).length, tasks.filter(t => t.state === 'done').length, tasks.filter(t => t.state !== 'rejected').length, percent, reached))
+  }
+  const citadelModel = (g, labels) => buildCastleModelOf(g, 'E01', labels)
+  const renderCitadel = (g, labels) => renderToStaticMarkup(React.createElement(CitadelTree, { model: citadelModel(g, labels), labels }))
+  const goalHtml = html => { const a = html.indexOf('class="dt-node dt-goal'); return html.slice(a, html.indexOf('</svg>', a)) }
+  // the towers only: the bastions of the wall are small towers of layers too
+  const towersHtml = html => html.slice(html.indexOf('class="cc-towers"'), html.indexOf('class="cc-wall-front"'))
+  const towerOf = (html, sid) => {
+    const a = html.indexOf(`data-tower="${sid}"`)
+    assert.ok(a > 0, 'tower ' + sid)
+    // the tower's own markup ends where the next tower, stack, bridge or the front wall begins
+    const ends = ['data-bridge="', 'data-stack="', 'data-tower="', 'class="cc-wall-front"'].map(k => html.indexOf(k, a + 1)).filter(x => x > 0)
+    return html.slice(html.lastIndexOf('<g ', a), Math.min(...ends))
+  }
+  const D = 'done', P = 'in_progress', R = 'ready', F = 'failed', X = 'rejected'
+  // S1 is the base (all done); S2 and S3 stand on it; S4 stands on a bridge between S2 and S3; S5 is not broken down and S6 stands on it;
+  // S3 has a failed task and a rejected one; S2 has every other state
+  const MIXED = [
+    { states: [D, D, D] },
+    { states: [D, P, R, R], deps: [1] },
+    { states: [D, F, R, X], deps: [1] },
+    { states: [R, R], deps: [2, 3] },
+    { undec: true },
+    { states: [D, D], deps: [5] },
+  ]
+
+  test('E92_S13_T02: the citadel is the default design: it draws the castle and no star, ring, disc, halo or spark; the text under it is the old goal text', () => {
+    const html = renderCitadel(castleGraph(MIXED, CEN, 61), CEN)
+    const goal = goalHtml(html)
+    assert.ok(goal.includes('data-goal-design="citadel"') && goal.includes('data-castle="citadel"'))
+    for (const star of ['dt-star-outline', 'dt-star-fill', 'dt-goal-ring', 'dt-goal-disc', 'dt-halo', 'dt-shimmer', 'dt-spark']) assert.ok(!goal.includes(star), star)
+    assert.ok(goal.includes('>Goal<') && goal.includes('>Goal epic<') && /class="dt-goal-count"[^>]*>\d+ \/ \d+ done · 61 %</.test(goal), 'goal name, title and count unchanged')
+    assert.ok(/dt-goal-decomposed"[^>]*>5\/6 stories decomposed</.test(goal), 'decomposed line unchanged')
+    // the text lines are under the castle box, in the same order and spacing as before (18, 36 and 52 under the name line)
+    const m = citadelModel(castleGraph(MIXED, CEN, 61), CEN)
+    const y = c => Number(goal.match(new RegExp(`class="${c}"[^>]* y="([\\d.]+)"`))[1])
+    const top = m.castle.text.top
+    assert.deepStrictEqual([y('dt-goal-name'), y('dt-goal-title'), y('dt-goal-count')], [top, top + 18, top + 36])
+    assert.ok(top >= m.castle.box.bottom, 'the text starts under the castle')
+    assert.ok(!/<canvas|<foreignObject|<image|<script|<img/.test(html), 'pure SVG')
+  })
+
+  test('E92_S13_T02: the star and the citadel are both registered; the selector shows both, the citadel is chosen without a stored choice, the star is drawn when chosen', () => {
+    assert.deepStrictEqual(Object.keys(GOAL_RENDERERS), ['star', 'citadel', 'facade', 'tree']) // E92_S13_T07 registered the seasons tree
+    const html = renderCitadel(castleGraph(MIXED, CEN, 61), CEN)
+    assert.ok(html.includes('data-testid="dt-goal-design"') && html.includes('data-goal-design="star"') && html.includes('data-goal-design="citadel"'))
+    const was = globalThis.window
+    try {
+      globalThis.window = { localStorage: { getItem: () => 'star', setItem() {} } }
+      const star = renderToStaticMarkup(React.createElement(CitadelTree, { model: citadelModel(castleGraph(MIXED, CEN, 61), CEN), labels: CEN }))
+      assert.ok(goalHtml(star).includes('dt-star-outline') && !goalHtml(star).includes('data-castle="citadel"'), 'a stored star draws the star')
+      globalThis.window = { localStorage: { getItem: () => 'nonsense', setItem() {} } }
+      assert.ok(renderCitadel(castleGraph(MIXED, CEN, 61), CEN).includes('data-castle="citadel"'), 'an unknown stored value falls back to the citadel')
+      globalThis.window = { get localStorage() { throw new Error('blocked') } }
+      assert.ok(renderCitadel(castleGraph(MIXED, CEN, 61), CEN).includes('data-castle="citadel"'), 'blocked storage falls back to the citadel')
+    } finally {
+      if (was === undefined) delete globalThis.window
+      else globalThis.window = was
+    }
+  })
+
+  test('E92_S13_T02: every layer state has its own shape: grain, hatch and a pulled-out block, wireframe, crack; no state is colour alone', () => {
+    const html = renderCitadel(castleGraph(MIXED, CEN, 40), CEN)
+    const layerStates = [...towersHtml(html).matchAll(/class="cc-layer" data-state="([a-z_]+)"/g)].map(m => m[1])
+    // 3 + 4 + 3 + 2 counted tasks of S1..S4, none for the foundation, 2 on the foundation's story: one layer per counted task
+    assert.strictEqual(layerStates.length, 3 + 4 + 3 + 2 + 2)
+    assert.strictEqual(count(towersHtml(html), /class="cc-layer" data-state="done"/g), 3 + 1 + 1 + 2)
+    const s1 = towerOf(html, SID(1))
+    const s2 = towerOf(html, SID(2))
+    const s3 = towerOf(html, SID(3))
+    assert.ok(s1.includes('class="cc-grain"') && !s1.includes('cc-crack') && !s1.includes('cc-pull') && !/cc-pend/.test(s1), 'done: wood grain only')
+    assert.ok(s2.includes('class="cc-pull"') && s2.includes('url(#dt-castle-hatch-E01)'), 'in progress: a pulled-out block, hatched')
+    assert.ok(count(s2, /class="cc-layer" data-state="pending"/g) === 2 && s2.includes('cc-pend'), 'pending: wireframe')
+    assert.ok(s3.includes('class="cc-crack"') && s3.includes('class="cc-layer" data-state="failed"'), 'failed: cracked')
+    assert.ok(html.includes('<pattern id="dt-castle-hatch-E01"'), 'the hatch pattern is defined')
+    // the shapes are separate from the colour: each state has markup of its own in the drawing (the css only paints them)
+    const cssCastle = css.slice(css.indexOf('goal: the citadel'))
+    for (const cls of ['cc-grain', 'cc-pull-side', 'cc-pend', 'cc-crack', 'cc-found-p']) assert.ok(cssCastle.includes('.' + cls), cls)
+    assert.ok(/\.cc-pend \{[^}]*stroke-dasharray/.test(cssCastle) && /\.cc-found-p \{[^}]*stroke-dasharray: 11 4/.test(cssCastle), 'dashes carry pending and the foundation')
+  })
+
+  test('E92_S13_T02: a rejected task is a block lying beside the tower and is not a layer; an undecomposed story is a dashed foundation with "?", with no layer, roof or battlements', () => {
+    const html = renderCitadel(castleGraph(MIXED, CEN, 40), CEN)
+    const s3 = towerOf(html, SID(3))
+    assert.strictEqual(count(s3, /class="cc-layer"/g), 3, 'three counted tasks, the rejected one is no layer')
+    assert.strictEqual(count(s3, /class="cc-loose-block"/g), 1)
+    const s5 = towerOf(html, SID(5))
+    assert.ok(s5.includes('data-undecomposed="true"') && s5.includes('class="cc-foundation"') && s5.includes('>?</text>'))
+    assert.ok(count(s5, /class="cc-p cc-found-p"/g) >= 6 && !s5.includes('cc-layer') && !s5.includes('cc-roof') && !s5.includes('cc-battlements'))
+    assert.ok(s5.includes('data-status="pending"'), 'the status base is still drawn for it')
+  })
+
+  test('E92_S13_T02: stacking on one tower, a bridge, roof versus battlements, and a leaning tower', () => {
+    const html = renderCitadel(castleGraph(MIXED, CEN, 40), CEN)
+    const m = citadelModel(castleGraph(MIXED, CEN, 40), CEN)
+    const t = Object.fromEntries(m.castle.towers.map(x => [x.storyId, x]))
+    // S2 and S3 stand on S1's top; S1 is on the table
+    assert.deepStrictEqual([t[SID(1)].stacking, t[SID(2)].stacking, t[SID(3)].stacking, t[SID(4)].stacking], ['ground', 'tower', 'tower', 'bridge'])
+    assert.strictEqual(t[SID(2)].base, t[SID(1)].topY, 'S2 stands on the top of S1')
+    assert.strictEqual(t[SID(3)].base, t[SID(1)].topY)
+    assert.ok(html.indexOf(`data-stack="${SID(1)}"`) < html.indexOf(`data-stack="${SID(2)}"`) && html.indexOf(`data-stack="${SID(2)}"`) < html.indexOf(`data-stack="${SID(3)}"`), 'drawn bottom to top, inside the tower they stand on')
+    // S4 has two supports: a bridge deck (S2 and S3 are the ends), data-bridge in the markup
+    assert.ok(html.includes(`data-bridge="${SID(4)}"`) && html.includes('class="cc-p cc-deck-front"') && towerOf(html, SID(4)).includes('data-stacking="bridge"'))
+    // a finished leaf tower has a roof with a flag, a finished tower that carries others battlements, an unfinished one neither
+    const done = castleGraph([{ states: [D, D] }, { states: [D, D], deps: [1] }, { states: [D], deps: [1] }, { states: [D, R] }], CEN, 80)
+    const dh = renderCitadel(done, CEN)
+    assert.ok(towerOf(dh, SID(1)).includes('data-top="battlements"') && dh.includes('class="cc-battlements"'), 'a finished tower that carries others: battlements')
+    assert.strictEqual(count(dh.slice(0, dh.indexOf('class="cc-wall-front"')), /class="cc-roof"/g), 2, 'the two finished leaf towers have a roof')
+    assert.ok(towerOf(dh, SID(2)).includes('data-top="roof"') && dh.includes('class="cc-flag'), 'finished leaf: roof and flag')
+    assert.ok(towerOf(dh, SID(4)).includes('data-top="none"'), 'unfinished: neither')
+    assert.ok(!towerOf(dh, SID(1)).includes('cc-roof"'), 'no roof where there are battlements')
+    // a tower with a failed task leans, with what stands on it: skewX on its stack
+    assert.ok(towerOf(html, SID(3)).includes('cc-lean'))
+    const stack3 = html.slice(html.lastIndexOf('<g ', html.indexOf(`data-stack="${SID(3)}"`)), html.indexOf(`data-stack="${SID(3)}"`) + 200)
+    assert.ok(/skewX\(-7\)/.test(stack3), 'the failed tower is sheared: ' + stack3)
+    assert.ok(!/skewX/.test(html.slice(html.lastIndexOf('<g ', html.indexOf(`data-stack="${SID(2)}"`)), html.indexOf(`data-stack="${SID(2)}"`) + 200)), 'a tower with no failed task stands upright')
+  })
+
+  test('E92_S13_T02: the curtain wall is built from the gate by the wall share; the gate, bastions and table are drawn; the effects group is empty', () => {
+    const none = renderCitadel(castleGraph(MIXED, CEN, 0), CEN)
+    const half = renderCitadel(castleGraph(MIXED, CEN, 50), CEN)
+    const all = renderCitadel(castleGraph([{ states: [D, D] }], CEN, 100, true), CEN)
+    const built = h => count(h, /class="cc-wall-block" data-built="true"/g)
+    const total = h => count(h, /class="cc-wall-block"/g)
+    const m = citadelModel(castleGraph(MIXED, CEN, 50), CEN)
+    assert.strictEqual(built(none), 0)
+    assert.strictEqual(built(half), Math.round(m.castle.wall.count * 0.5), 'the share comes from the model')
+    assert.strictEqual(built(all), total(all))
+    assert.strictEqual(total(half), m.castle.wall.count)
+    assert.ok(half.includes('class="cc-gate"') && count(half, /class="cc-bastion"/g) === 4 && half.includes('class="cc-table"'))
+    assert.ok(half.includes('data-castle-effects="goal-reached" aria-hidden="true"></g>'), 'the goal-reached effects group exists and is empty')
+    assert.ok(all.includes('cc-flag-reached'), 'the finished castle flies the done flag')
+  })
+
+  test('E92_S13_T02: each tower and the castle have labels and tooltips from the payload, English and Swedish; a payload without them falls back to English', () => {
+    const g = castleGraph(MIXED, CEN, 40)
+    const en = renderCitadel(g, CEN)
+    assert.ok(en.includes('aria-label="E01_S02: 1 of 4 done"') && en.includes('<title>E01_S02: 1 of 4 done</title>'))
+    assert.ok(en.includes('aria-label="E01_S03: 1 of 3 done, 1 failed"') && en.includes('<title>E01_S03: 1 of 3 done, 1 failed</title>'), 'the failed count is added')
+    assert.ok(en.includes('aria-label="E01_S05 Story 5: not broken down yet"'), 'an undecomposed story says so')
+    const sv = renderCitadel(castleGraph(MIXED, CSV, 40), CSV)
+    assert.ok(sv.includes('aria-label="E01_S02: 1 av 4 klara"') && sv.includes('aria-label="E01_S03: 1 av 3 klara, misslyckade: 1"') && sv.includes('inte nedbruten ännu'))
+    const bare = renderCitadel(castleGraph(MIXED, {}, 40), {})
+    assert.ok(bare.includes('aria-label="E01_S02: 1 of 4 done"'), 'English fallback words')
+    // a tower is an image of its own inside the goal group, so a screen reader reaches it; the castle keeps the goal label
+    assert.strictEqual(count(goalHtml(en), /data-tower="/g), 6)
+    assert.ok(/<g class="dt-node dt-goal[^>]*role="group" aria-label="Goal: E01 Goal epic · /.test(en) && count(en, /role="img"/g) >= 6)
+  })
+
+  test('E92_S13_T02: the goal edges end at the castle, spread over several points, and never at the old inset', () => {
+    const g = castleGraph([{ states: [D, D] }, { states: [D, R], deps: [1] }, { states: [R], deps: [1] }, { states: [D, D, D] }, { undec: true }], CEN, 50)
+    const m = citadelModel(g, CEN)
+    const html = renderCitadel(g, CEN)
+    const ends = [...html.matchAll(/data-to="goal"[^>]* d="M[^"]* ([\d.-]+) ([\d.-]+)"/g)].map(x => [Number(x[1]), Number(x[2])])
+    const sources = [...html.matchAll(/data-to="goal"/g)].length
+    assert.ok(sources >= 4 && ends.length === sources, 'one end per goal edge')
+    assert.strictEqual(new Set(ends.map(e => e.join(','))).size, ends.length, 'no two edges end on one point')
+    const { box } = m.castle
+    for (const [x, y] of ends) {
+      assert.notStrictEqual(x, m.goal.x - 46, 'not the star inset')
+      assert.ok(x >= m.goal.x + box.left - 1 && x <= m.goal.x + 1, `x ${x} is at the castle`)
+      assert.ok(y >= m.goal.y + box.top && y <= m.goal.y + box.bottom, `y ${y} is within the castle height`)
+    }
+    // sorted by the height of their sources, so none crosses another: the ends go down as the sources do
+    const startsY = [...html.matchAll(/data-to="goal"[^>]* d="M[^ ]* ([\d.-]+) /g)].map(x => Number(x[1]))
+    const order = ends.map((e, i) => i).sort((a, b) => startsY[a] - startsY[b] || a - b)
+    for (let i = 1; i < order.length; i++) assert.ok(ends[order[i]][1] >= ends[order[i - 1]][1], 'ends are in order of their sources')
+    assert.ok(!/GOAL_EDGE_INSET/.test(fs.readFileSync(path.join(compDir, 'CitadelGoal.jsx'), 'utf8') + jsx), 'GOAL_EDGE_INSET is not used for the goal')
+  })
+
+  test('E92_S13_T02: the citadel source has no colour literal, no hard-coded word and no animation; its css has one palette hook', () => {
+    const src = stripComments(fs.readFileSync(path.join(compDir, 'CitadelGoal.jsx'), 'utf8'))
+    assert.ok(!/#[0-9a-fA-F]{3,8}\b/.test(src) && !/\b(rgb|rgba|hsl|hsla|oklch|color-mix)\(/.test(src), 'no colour literal')
+    const text = [...src.matchAll(/<[A-Za-z][^<>]*>([^<>{}\n]*[A-Za-z][^<>{}\n]*)<\//g)].map(x => x[1].trim()).filter(Boolean)
+    assert.deepStrictEqual(text, [], 'hard-coded JSX text: ' + text.join(' | '))
+    assert.ok(!/animation|<animate|setInterval|requestAnimationFrame/.test(src), 'nothing moves, so reduced motion has nothing to stop')
+    const cs = css.slice(css.indexOf('goal: the citadel'), css.indexOf('/* day and night (E92_S13_T04)')) // the day and night section has the only movement, tested in E92_S13_T04
+    const hook = cs.slice(cs.indexOf('.dt-castle {'), cs.indexOf('}', cs.indexOf('.dt-castle {')))
+    const defined = [...hook.matchAll(/(--cc-[a-z-]+):\s*var\((--color-castle-[a-z-]+)\)/g)]
+    const used = new Set([...cs.matchAll(/var\((--cc-[a-z-]+)\)/g)].map(x => x[1]))
+    assert.ok(defined.length >= 20 && [...used].every(u => defined.some(d => d[1] === u)), 'every --cc-* in use is defined once, from a token, in the hook')
+    const tokens = fs.readFileSync(path.join(uiDir, 'src', 'tokens.css'), 'utf8')
+    for (const d of defined) assert.strictEqual(count(tokens, new RegExp(d[2] + '\\s*:', 'g')), 3, `${d[2]} is defined for light and for dark (two blocks)`)
+    assert.ok(!/@keyframes|animation\s*:/.test(cs), 'no animation in the citadel rules')
+  })
+
+  // ===================== E92_S13_T03: the facade, the flat design of the same castle model =====================
+  const withFacadeChoice = fn => {
+    const was = globalThis.window
+    try {
+      globalThis.window = { localStorage: { getItem: () => 'facade', setItem() {} } }
+      return fn()
+    } finally {
+      if (was === undefined) delete globalThis.window
+      else globalThis.window = was
+    }
+  }
+  const renderFacade = (g, labels) => withFacadeChoice(() => renderToStaticMarkup(React.createElement(CitadelTree, { model: citadelModel(g, labels), labels })))
+  const facadeTowerOf = (html, sid) => {
+    const a = html.indexOf(`data-tower="${sid}"`)
+    assert.ok(a > 0, 'facade tower ' + sid)
+    const ends = ['data-bridge="', 'data-stack="', 'data-tower="', 'class="cf-gate"'].map(k => html.indexOf(k, a + 1)).filter(x => x > 0)
+    return html.slice(html.lastIndexOf('<g ', a), Math.min(...ends))
+  }
+  const facadeTowers = html => html.slice(html.indexOf('class="cc-towers cf-towers"'), html.indexOf('class="cf-gate"'))
+  const FMIX = [
+    { states: [D, D, P, R, R] },
+    { states: [D, D, F, X], deps: [1] },
+    { states: [D, D], deps: [1] },
+    { states: [R, R], deps: [2, 3] },
+    { undec: true },
+    { states: [D, D], deps: [5] },
+  ]
+
+  test('E92_S13_T03: the facade is registered as one entry, drawn when chosen and never by default; the text under it is the old goal text under the facade box', () => {
+    assert.ok('facade' in GOAL_RENDERERS && GOAL_RENDERERS.facade.goalArea === 'facade' && GOAL_RENDERERS.star && GOAL_RENDERERS.citadel, 'the star and the citadel are still registered')
+    assert.ok(renderCitadel(castleGraph(FMIX, CEN, 61), CEN).includes('data-castle="citadel"'), 'the citadel is still the default')
+    const html = renderFacade(castleGraph(FMIX, CEN, 61), CEN)
+    const goal = goalHtml(html)
+    assert.ok(goal.includes('data-goal-design="facade"') && goal.includes('data-castle="facade"') && !goal.includes('data-castle="citadel"'))
+    for (const x of ['dt-star-outline', 'dt-goal-ring', 'dt-goal-disc', 'dt-halo', 'dt-shimmer', 'dt-spark', 'cc-table', 'cc-wall-block']) assert.ok(!goal.includes(x), x)
+    assert.ok(html.includes('data-goal-design="facade"') && /data-testid="dt-goal-design"/.test(html), 'the selector offers it')
+    assert.ok(goal.includes('>Goal<') && goal.includes('>Goal epic<') && /class="dt-goal-count"[^>]*>\d+ \/ \d+ done · 61 %</.test(goal) && /dt-goal-decomposed"[^>]*>5\/6 stories decomposed</.test(goal), 'the text lines are unchanged')
+    const m = unfoldGroups(citadelModel(castleGraph(FMIX, CEN, 61), CEN), new Set(), { goalArea: 'facade' })
+    const y = c => Number(goal.match(new RegExp(`class="${c}"[^>]* y="([\\d.]+)"`))[1])
+    const top = m.castle.facade.text.top
+    assert.deepStrictEqual([y('dt-goal-name'), y('dt-goal-title'), y('dt-goal-count')], [top, top + 18, top + 36])
+    assert.ok(top >= m.castle.facade.box.bottom && m.layout.goalArea === 'facade', 'the text starts under the facade, in the facade area')
+    assert.ok(!/<canvas|<foreignObject|<image|<script|<img/.test(html), 'pure SVG')
+  })
+
+  test('E92_S13_T03: the citadel and the facade are drawn from the SAME model object, and agree on every tower, layer, stacking and the wall share', () => {
+    const m = citadelModel(castleGraph(FMIX, CEN, 61), CEN)
+    assert.ok(m.castle.source && m.castle.source === m.castle.facade.source, 'one castle model object for both geometries')
+    assert.ok(m.castle.source.towers.length === 6 && m.castle.source.wall.percent === 61)
+    const pick = t => ({ id: t.storyId, status: t.status, stacking: t.stacking, supports: t.supports, top: t.top, lean: t.lean, undecomposed: t.undecomposed, layers: t.layers.map(l => [l.direction, l.state, l.blockStates.join()]), loose: t.looseCount })
+    assert.deepStrictEqual(m.castle.facade.towers.map(pick), m.castle.towers.map(pick), 'every tower is the same in both')
+    assert.deepStrictEqual(m.castle.facade.roots, m.castle.roots)
+    assert.strictEqual(m.castle.facade.wall.share, m.castle.wall.share)
+    // the facade layout counts nothing: its towers are the model's towers, one layer per model layer
+    for (const t of m.castle.facade.towers) assert.strictEqual(t.layers.length, m.castle.source.towers.find(x => x.storyId === t.storyId).layers.length)
+    // changing the model changes both: the same input gives the same output, so two builds agree
+    assert.deepStrictEqual(citadelModel(castleGraph(FMIX, CEN, 61), CEN).castle.facade, m.castle.facade)
+    const facade = renderFacade(castleGraph(FMIX, CEN, 61), CEN)
+    const citadel = renderCitadel(castleGraph(FMIX, CEN, 61), CEN)
+    for (let i = 1; i <= 6; i++) assert.strictEqual(count(facade, new RegExp(`data-tower="${SID(i)}"`, 'g')), count(citadel, new RegExp(`data-tower="${SID(i)}"`, 'g')), 'one tower per story in both')
+    assert.strictEqual(count(facadeTowers(facade), /class="cf-layer"/g), count(towersHtml(citadel), /class="cc-layer"/g), 'the same number of layers in both (bastions excluded)')
+  })
+
+  test('E92_S13_T03: every layer state has its own shape in the facade: block ends or a long block, grain, hatch with a dashed slot and a pulled-out block, wireframe, crack; no state is colour alone', () => {
+    const html = renderFacade(castleGraph(FMIX, CEN, 40), CEN)
+    const s1 = facadeTowerOf(html, SID(1))
+    const s2 = facadeTowerOf(html, SID(2))
+    assert.deepStrictEqual([...s1.matchAll(/class="cf-layer" data-state="([a-z_]+)" data-form="([a-z]+)"/g)].map(x => `${x[1]}:${x[2]}`), ['done:ends', 'done:long', 'in_progress:ends', 'pending:long', 'pending:ends'], 'layers alternate: block ends, then one long block')
+    assert.strictEqual(count(s1, /class="cf-blk cc-done"/g), 3, 'done: three block ends')
+    assert.strictEqual(count(s1, /class="cf-blk cf-long cc-done"/g), 1, 'done: one long block')
+    assert.ok(s1.includes('class="cf-grain"') && s1.includes('class="cc-grain"'), 'done: end grain arcs on a block end, grain lines on a long block')
+    assert.strictEqual(count(s1, /class="cf-slot"/g), 1, 'in progress: a dashed slot behind the pulled-out middle block')
+    assert.strictEqual(count(s1, /class="cf-pull"/g), 1)
+    assert.ok(s1.includes('url(#dt-facade-hatch-E01)') && html.includes('<pattern id="dt-facade-hatch-E01"'), 'in progress: hatched, the pattern is defined')
+    assert.strictEqual(count(s1, /class="cf-blk cc-pend"/g) + count(s1, /class="cf-blk cf-long cc-pend"/g), 1 + 3, 'pending: wireframe blocks')
+    assert.ok(!s1.includes('cc-crack') && !s1.includes('cc-fail'), 'no crack on a tower with no failed task')
+    assert.strictEqual(count(s2, /class="cc-crack"/g), 3, 'failed: every block of the failed layer is cracked')
+    assert.strictEqual(count(s2, /class="cf-blk cc-fail"/g), 3)
+    // a long block in progress juts out at its end
+    const long = renderFacade(castleGraph([{ states: [D, P] }], CEN, 40), CEN)
+    assert.ok(facadeTowerOf(long, SID(1)).includes('cf-pull cf-stub'), 'in progress, long block: a hatched stub')
+    // the shapes are separate from the colour: the css only paints them
+    const cssFacade = css.slice(css.indexOf('goal: the facade'))
+    for (const cls of ['cf-grain', 'cf-slot', 'cf-pull', 'cf-found']) assert.ok(cssFacade.includes('.' + cls), cls)
+    assert.ok(/\.cf-blk\.cc-pend \{[^}]*stroke-dasharray/.test(cssFacade) && /\.cf-found \{[^}]*stroke-dasharray/.test(cssFacade), 'dashes carry pending and the foundation')
+  })
+
+  test('E92_S13_T03: a rejected task is a block lying beside the tower and not a layer; an undecomposed story is a sparsely dashed foundation with "?" and no layer, roof or battlements', () => {
+    const html = renderFacade(castleGraph(FMIX, CEN, 40), CEN)
+    const s2 = facadeTowerOf(html, SID(2))
+    assert.strictEqual(count(s2, /class="cf-layer"/g), 3, 'three counted tasks, the rejected one is no layer')
+    assert.strictEqual(count(s2, /class="cc-loose-block"/g), 1)
+    const s5 = facadeTowerOf(html, SID(5))
+    assert.ok(s5.includes('data-undecomposed="true"') && s5.includes('class="cc-foundation"') && s5.includes('>?</text>'))
+    assert.ok(count(s5, /class="cf-found/g) >= 2 && !s5.includes('cf-layer') && !s5.includes('cc-roof') && !s5.includes('cc-battlements'))
+    assert.ok(s5.includes('data-status="pending"'))
+  })
+
+  test('E92_S13_T03: stacking on one tower, a bridge, roof versus battlements, a leaning tower and a dashed foundation, in the facade', () => {
+    const g = castleGraph(FMIX, CEN, 40)
+    const html = renderFacade(g, CEN)
+    const m = citadelModel(g, CEN)
+    const t = Object.fromEntries(m.castle.facade.towers.map(x => [x.storyId, x]))
+    assert.deepStrictEqual([t[SID(1)].stacking, t[SID(2)].stacking, t[SID(3)].stacking, t[SID(4)].stacking], ['ground', 'tower', 'tower', 'bridge'])
+    assert.strictEqual(t[SID(2)].base, t[SID(1)].topY, 'S2 stands on the top of S1')
+    assert.strictEqual(t[SID(3)].base, t[SID(1)].topY)
+    assert.ok(html.indexOf(`data-stack="${SID(1)}"`) < html.indexOf(`data-stack="${SID(2)}"`), 'drawn inside the tower they stand on')
+    assert.ok(html.includes(`data-bridge="${SID(4)}"`) && html.includes('class="cc-p cc-deck-front"') && facadeTowerOf(html, SID(4)).includes('data-stacking="bridge"'), 'a bridge deck for two supports')
+    assert.ok(t[SID(4)].deck.x2 > t[SID(4)].deck.x1 && t[SID(4)].base === Math.min(t[SID(2)].topY, t[SID(3)].topY))
+    const done = castleGraph([{ states: [D, D] }, { states: [D, D], deps: [1] }, { states: [D], deps: [1] }, { states: [D, R] }], CEN, 80)
+    const dh = renderFacade(done, CEN)
+    assert.ok(facadeTowerOf(dh, SID(1)).includes('data-top="battlements"') && facadeTowerOf(dh, SID(1)).includes('class="cc-battlements"') && !facadeTowerOf(dh, SID(1)).includes('cc-roof"'), 'a finished tower that carries others: battlements, no roof')
+    assert.strictEqual(count(facadeTowers(dh), /class="cc-roof"/g), 2, 'the two finished leaf towers have a roof')
+    assert.ok(facadeTowerOf(dh, SID(2)).includes('data-top="roof"') && facadeTowerOf(dh, SID(2)).includes('class="cc-flag'), 'roof and flag')
+    assert.ok(facadeTowerOf(dh, SID(4)).includes('data-top="none"'))
+    // the failed tower leans with what stands on it
+    assert.ok(facadeTowerOf(html, SID(2)).includes('cc-lean'))
+    const stackOf = sid => html.slice(html.lastIndexOf('<g ', html.indexOf(`data-stack="${sid}"`)), html.indexOf(`data-stack="${sid}"`) + 200)
+    assert.ok(/skewX\(-4\)/.test(stackOf(SID(2))), 'the failed tower is sheared: ' + stackOf(SID(2)))
+    assert.ok(!/skewX/.test(stackOf(SID(3))), 'a tower with no failed task stands upright')
+  })
+
+  test('E92_S13_T03: the curtain wall grows outward from the main building in BOTH directions by the model\'s wall share; the gate is a pulled-out block; the effects group is empty', () => {
+    const wallOf = pct => citadelModel(castleGraph(FMIX, CEN, pct), CEN).castle.facade.wall
+    for (const pct of [0, 20, 33, 50, 75, 89, 100]) {
+      const w = wallOf(pct)
+      assert.strictEqual(w.built, Math.round(w.count * pct / 100), 'built is the model share of the segments and bastions: ' + pct)
+      const parts = [...w.segments, ...w.bastions]
+      assert.strictEqual(parts.filter(x => x.built).length, w.built)
+      const side = sd => w.segments.filter(x => x.side === sd).sort((a, b) => a.k - b.k)
+      for (const sd of ['left', 'right']) {
+        const ks = side(sd).map(x => x.built)
+        assert.deepStrictEqual(ks, [...ks].sort((a, b) => b - a), `${sd}: the built segments are the ones nearest the building`)
+      }
+      const l = side('left').filter(x => x.built).length
+      const r = side('right').filter(x => x.built).length
+      assert.ok(Math.abs(l - r) <= 1 && (w.built < 2 || (l > 0 && r > 0) || w.built > w.segments.length), `both directions grow together at ${pct} % (${l} left, ${r} right)`)
+      for (const sg of side('left')) assert.ok(sg.x2 <= -w.rowHalf, 'left segments lie left of the building')
+      for (const sg of side('right')) assert.ok(sg.x1 >= w.rowHalf, 'right segments lie right of the building')
+    }
+    const none = renderFacade(castleGraph(FMIX, CEN, 0), CEN)
+    const half = renderFacade(castleGraph(FMIX, CEN, 50), CEN)
+    const all = renderFacade(castleGraph([{ states: [D, D] }], CEN, 100, true), CEN)
+    const built = h => count(h, /class="cf-wall-block" data-built="true"/g)
+    assert.strictEqual(built(none), 0)
+    assert.strictEqual(built(half), wallOf(50).segments.filter(x => x.built).length)
+    assert.strictEqual(built(all), count(all, /class="cf-wall-block"/g), 'a finished castle has its whole wall')
+    assert.ok(half.includes('data-side="left"') && half.includes('data-side="right"'))
+    assert.ok(/class="cf-gate" data-gate-built="true"/.test(half) && /class="cf-gate" data-gate-built="false"/.test(none), 'the gate is a dark block once the wall has started, a slot before')
+    assert.ok(half.includes('class="cc-p cf-gate-door"') && !none.includes('cf-gate-door'))
+    assert.strictEqual(count(half, /class="cf-bastion"/g), 2, 'a bastion at each end')
+    assert.ok(half.includes('class="cf-ground"') && half.includes('class="cf-ground-line"'), 'the drawing-board ground')
+    assert.ok(half.includes('data-castle-effects="goal-reached" aria-hidden="true"></g>'), 'the goal-reached effects group exists and is empty')
+    assert.ok(all.includes('cc-flag-reached'), 'the finished castle flies the done flag')
+  })
+
+  test('E92_S13_T03: each tower has the same aria label and tooltip as in the citadel, English and Swedish; a payload without them falls back to English', () => {
+    const g = castleGraph(FMIX, CEN, 40)
+    const labelsOf = html => [...html.matchAll(/data-tower="([^"]+)"[^>]* aria-label="([^"]*)"/g)].map(x => [x[1], x[2]])
+    assert.deepStrictEqual(labelsOf(renderFacade(g, CEN)), labelsOf(renderCitadel(g, CEN)), 'the same label for every tower')
+    const en = renderFacade(g, CEN)
+    assert.ok(en.includes('aria-label="E01_S02: 2 of 3 done, 1 failed"') && en.includes('<title>E01_S02: 2 of 3 done, 1 failed</title>') && en.includes('aria-label="E01_S05 Story 5: not broken down yet"'))
+    const sv = renderFacade(castleGraph(FMIX, CSV, 40), CSV)
+    assert.ok(sv.includes('aria-label="E01_S01: 2 av 5 klara"') && sv.includes('inte nedbruten ännu'))
+    assert.ok(renderFacade(castleGraph(FMIX, {}, 40), {}).includes('aria-label="E01_S01: 2 of 5 done"'), 'English fallback words')
+    assert.strictEqual(count(goalHtml(en), /data-tower="/g), 6)
+    assert.ok(/<g class="dt-node dt-goal[^>]*role="group" aria-label="Goal: E01 Goal epic · /.test(en))
+  })
+
+  test('E92_S13_T03: the goal edges end down the left edge of the facade, spread over several points, and never at the old inset', () => {
+    const g = castleGraph([{ states: [D, D] }, { states: [D, R], deps: [1] }, { states: [R], deps: [1] }, { states: [D, D, D] }, { undec: true }], CEN, 50)
+    const html = renderFacade(g, CEN)
+    const m = unfoldGroups(citadelModel(g, CEN), new Set(), { goalArea: 'facade' })
+    const ends = [...html.matchAll(/data-to="goal"[^>]* d="M[^"]* ([\d.-]+) ([\d.-]+)"/g)].map(x => [Number(x[1]), Number(x[2])])
+    assert.ok(ends.length >= 4 && ends.length === count(html, /data-to="goal"/g))
+    assert.strictEqual(new Set(ends.map(e => e.join(','))).size, ends.length, 'no two edges end on one point')
+    const { box } = m.castle.facade
+    for (const [x, y] of ends) {
+      assert.notStrictEqual(x, m.goal.x - 46, 'not the star inset')
+      assert.ok(x >= m.goal.x + box.left - 1 && x <= m.goal.x + 1, `x ${x} is at the facade`)
+      assert.ok(y >= m.goal.y + box.top && y <= m.goal.y + box.bottom, `y ${y} is within the facade height`)
+    }
+    const startsY = [...html.matchAll(/data-to="goal"[^>]* d="M[^ ]* ([\d.-]+) /g)].map(x => Number(x[1]))
+    const order = ends.map((e, i) => i).sort((a, b) => startsY[a] - startsY[b] || a - b)
+    for (let i = 1; i < order.length; i++) assert.ok(ends[order[i]][1] >= ends[order[i - 1]][1], 'ends are in order of their sources')
+  })
+
+  test('E92_S13_T03: the facade source has no colour literal, no hard-coded word and no animation; its css uses the citadel\'s one palette hook and no token of its own', () => {
+    const src = stripComments(fs.readFileSync(path.join(compDir, 'FacadeGoal.jsx'), 'utf8'))
+    assert.ok(!/#[0-9a-fA-F]{3,8}\b/.test(src) && !/\b(rgb|rgba|hsl|hsla|oklch|color-mix)\(/.test(src), 'no colour literal')
+    const text = [...src.matchAll(/<[A-Za-z][^<>]*>([^<>{}\n]*[A-Za-z][^<>{}\n]*)<\//g)].map(x => x[1].trim()).filter(Boolean)
+    assert.deepStrictEqual(text, [], 'hard-coded JSX text: ' + text.join(' | '))
+    assert.ok(!/animation|<animate|setInterval|requestAnimationFrame/.test(src), 'nothing moves')
+    assert.ok(!/<canvas|<foreignObject|<image|<script|<img/.test(src), 'pure SVG')
+    const cf = css.slice(css.indexOf('goal: the facade'), css.indexOf('/* day and night (E92_S13_T04)'))
+    assert.ok(!/@keyframes|animation\s*:/.test(cf) && !/#[0-9a-fA-F]{3,8}\b/.test(stripComments(cf)))
+    const hook = css.slice(css.indexOf('.dt-castle {'), css.indexOf('}', css.indexOf('.dt-castle {')))
+    const defined = new Set([...hook.matchAll(/(--cc-[a-z-]+):/g)].map(x => x[1]))
+    const used = [...new Set([...stripComments(cf).matchAll(/var\((--[a-z0-9-]+)/g)].map(x => x[1]))]
+    assert.ok(used.length >= 8 && used.every(u => defined.has(u) || u === '--color-progress-failed'), 'every colour of the facade is a --cc-* of the hook (or the failed colour): ' + used.join(' '))
+    const cap = stripComments(fs.readFileSync(path.join(compDir, 'castleCaption.js'), 'utf8'))
+    assert.ok(/castle_tower_undecomposed/.test(cap) && /castle_tower_failed/.test(cap) && /castleCaption/.test(fs.readFileSync(path.join(compDir, 'CitadelGoal.jsx'), 'utf8')) && /towerCaption/.test(src), 'one caption function for both designs')
+  })
+
+  // ===================== E92_S13_T04: day and night for the citadel and the facade =====================
+  const DN_START = css.indexOf('/* day and night (E92_S13_T04)')
+  const DN_END = css.indexOf('/* end E92_S13_T04 */')
+  const dnCss = css.slice(DN_START, DN_END)
+  const tokensText = fs.readFileSync(path.join(uiDir, 'src', 'tokens.css'), 'utf8')
+  const DN_SRC = ['DayNightScene.jsx', 'CitadelGoal.jsx', 'FacadeGoal.jsx'].map(f => [f, stripComments(fs.readFileSync(path.join(compDir, f), 'utf8'))])
+  const StarGoalSource = () => fs.readFileSync(path.join(compDir, 'StarGoal.jsx'), 'utf8')
+  const REACHED = [{ states: [D, D, D] }, { states: [D, D], deps: [1] }]
+  const designHtml = {
+    citadel: (g, l) => renderCitadel(g, l),
+    facade: (g, l) => renderFacade(g, l),
+  }
+  const layoutOf = (design, g) => (design === 'citadel' ? citadelModel(g, CEN).castle : citadelModel(g, CEN).castle.facade)
+  const sunOf = html => {
+    const m = html.match(/class="dn-sun" data-percent="(\d+)" transform="translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+)\)"/)
+    assert.ok(m, 'the sun is drawn')
+    return { percent: Number(m[1]), x: Number(m[2]), y: Number(m[3]), k: Number(m[4]) }
+  }
+
+  test('E92_S13_T04: day and night are the theme, read by CSS alone: both halves are in the markup of both designs, the theme tokens say which one shows, and there is no control of its own', () => {
+    for (const design of ['citadel', 'facade']) {
+      const html = designHtml[design](castleGraph(MIXED, CEN, 61), CEN)
+      const goal = goalHtml(html)
+      assert.ok(goal.includes('class="dt-castle dn-scene"') && goal.includes('class="dn-sky') && goal.includes('class="dn-day"') && goal.includes('class="dn-night"'), design + ': a scene with both halves')
+      assert.ok(!/data-theme|prefers-color-scheme|matchMedia/.test(goal), design + ': the markup does not read the theme')
+      assert.ok(!/<script|<button|role="switch"|aria-label="[^"]*(day|night)/i.test(goal), design + ': no separate day and night control')
+    }
+    // the two display tokens carry the theme: day shows in the light theme, night in the dark one (the media block, the attribute block)
+    assert.ok(/\.dep-tree \.dn-day \{ display: var\(--theme-day-display\); \}/.test(dnCss) && /\.dep-tree \.dn-night \{ display: var\(--theme-night-display\); \}/.test(dnCss))
+    const tok = stripComments(tokensText)
+    assert.strictEqual(count(tok, /--theme-day-display:\s*inline;/g), 1, 'the day half shows in the light block only')
+    assert.strictEqual(count(tok, /--theme-day-display:\s*none;/g), 2, 'and is hidden in the two dark blocks')
+    assert.strictEqual(count(tok, /--theme-night-display:\s*none;/g), 1)
+    assert.strictEqual(count(tok, /--theme-night-display:\s*inline;/g), 2)
+    // what the light and the dark block say, in order: light first, then the media block, then the attribute block
+    const order = [...tok.matchAll(/--theme-day-display:\s*(inline|none)/g)].map(m => m[1])
+    assert.deepStrictEqual(order, ['inline', 'none', 'none'])
+    assert.ok(!/\[data-day\]|data-night|\.is-night|\.is-day/.test(dnCss + css), 'no class or attribute of its own switches day and night')
+  })
+
+  test('E92_S13_T04: the sun\'s height follows the epic percent the payload states, in both designs; it is not recomputed', () => {
+    for (const design of ['citadel', 'facade']) {
+      let last = Infinity
+      for (const pct of [0, 25, 50, 75, 100]) {
+        const g = castleGraph(MIXED, CEN, pct)
+        const frame = dayNight.skyFrame(layoutOf(design, g))
+        const sun = sunOf(designHtml[design](g, CEN))
+        const want = dayNight.sunPosition(frame, pct)
+        assert.strictEqual(sun.percent, pct)
+        assert.ok(Math.abs(sun.x - want.x) < 0.02 && Math.abs(sun.y - want.y) < 0.02, `${design} ${pct} %: the sun stands where the model says (${sun.y} vs ${want.y})`)
+        assert.ok(sun.y < last, `${design}: the sun rises with the percent`)
+        last = sun.y
+      }
+    }
+    // a percent the payload does not state is zero: the sun is low, nothing is derived from the tasks
+    const noProgress = { ...castleGraph(MIXED, CEN, 61), epics: castleGraph(MIXED, CEN, 61).epics.map(e => ({ ...e, epic_progress: undefined })) }
+    assert.strictEqual(sunOf(designHtml.citadel(noProgress, CEN)).percent, 0)
+  })
+
+  test('E92_S13_T04: birds fly only when the goal is reached: an epic that has not reached it (failed or undecomposed story included) shows none; sparks are gone', () => {
+    for (const design of ['citadel', 'facade']) {
+      const flocks = dayNight.BIRD_FLOCKS
+      const birds = flocks.reduce((a, f) => a + f.length, 0)
+      for (const [name, spec, pct] of [['in progress', MIXED, 61], ['a failed story', FMIX, 99], ['an undecomposed story', [{ states: [D, D] }, { undec: true }], 50], ['percent 100 but the goal not stated', REACHED, 100]]) {
+        const goal = goalHtml(designHtml[design](castleGraph(spec, CEN, pct, false), CEN))
+        assert.strictEqual(count(goal, /class="dn-bird"/g), 0, `${design}, ${name}: no birds`)
+        assert.strictEqual(count(goal, /class="dn-star"/g), 0, `${design}, ${name}: no twinkling stars`)
+        assert.ok(goal.includes('data-castle-effects="goal-reached" aria-hidden="true"></g>'), `${design}, ${name}: the effects group is empty`)
+      }
+      const goal = goalHtml(designHtml[design](castleGraph(REACHED, CEN, 100, true), CEN))
+      assert.strictEqual(count(goal, /class="dn-bird"/g), birds, design + ': the flocks fly when the goal is reached')
+      assert.strictEqual(count(goal, /class="dn-flock"/g), flocks.length)
+      assert.strictEqual(count(goal, /class="dn-star"/g), dayNight.TWINKLE_STARS.length, design + ': the stars twinkle when the goal is reached')
+      const fx = goal.slice(goal.indexOf('data-castle-effects'))
+      assert.ok(fx.includes('class="dn-day dn-birds"') && fx.includes('class="dn-night dn-stars"'), 'birds belong to the day half and stars to the night half')
+      for (const old of ['dt-spark', 'dt-twinkles', 'dt-shimmer', 'dt-halo']) assert.ok(!goal.includes(old), `${design}: ${old} is gone from the goal`)
+    }
+  })
+
+  test('E92_S13_T04: night: every finished layer shows a lit window (shown by night only), the gate is lit, and nothing else gets one', () => {
+    const g = castleGraph(MIXED, CEN, 40)
+    const cit = towersHtml(renderCitadel(g, CEN))
+    assert.strictEqual(count(cit, /class="cc-win cc-win-[lr] dn-night"/g), count(cit, /class="cc-layer" data-state="done"/g), 'citadel: one window per finished layer')
+    assert.ok(count(cit, /class="cc-win /g) === 3 + 1 + 1 + 2)
+    assert.ok(!/cc-win/.test(towerOf(renderCitadel(g, CEN), SID(4))), 'a tower with no finished layer has no window')
+    const fac = facadeTowers(renderFacade(castleGraph(FMIX, CEN, 40), CEN))
+    assert.strictEqual(count(fac, /class="cf-win dn-night"/g), count(fac, /data-state="done" data-form="ends"/g), 'facade: one window per finished block-end layer')
+    assert.ok(count(fac, /class="cf-win /g) > 0)
+    for (const rule of ['.cc-win-l', '.cc-win-r', '.cf-win']) assert.ok(dnCss.includes(rule), rule + ' is painted')
+    // the gate is lit by night through the same token the day uses for a dark gate; the guard checks it against the wall
+    const lum = hex => parseInt(hex.slice(1, 3), 16) + parseInt(hex.slice(3, 5), 16) + parseInt(hex.slice(5, 7), 16)
+    const gate = [...stripComments(tokensText).matchAll(/--color-castle-gate:\s*(#[0-9a-fA-F]{6})/g)].map(m => lum(m[1]))
+    assert.strictEqual(gate.length, 3)
+    assert.ok(gate[1] > gate[0] + 300 && gate[2] === gate[1], 'the gate token is dark by day and lit by night')
+    assert.ok(/class="cc-p cc-gate-door"/.test(renderCitadel(castleGraph(REACHED, CEN, 100, true), CEN)), 'the citadel gate of a built wall is drawn with the gate token')
+  })
+
+  test('E92_S13_T04: reduced motion: every castle movement is declared inside prefers-reduced-motion: no-preference for a root without data-motion="off"; the base drawing is the final, readable state', () => {
+    const blocks = topLevel(dnCss)
+    const motion = /(^|[\s;{])(animation|transition)(-[a-z-]+)?\s*:/
+    const guard = blocks.filter(b => /^@media\s*\(prefers-reduced-motion:\s*no-preference\)$/.test(b.head))
+    assert.strictEqual(guard.length, 1, 'one guard')
+    const names = new Set()
+    let rules = 0
+    for (const rule of guard[0].body.split('}').map(r => r.trim()).filter(Boolean)) {
+      const [sel, decl] = rule.split('{')
+      for (const one of sel.split(',')) assert.ok(one.trim().startsWith(':root:not([data-motion="off"]) .dep-tree '), 'gated by data-motion and scoped to the tree: ' + one.trim())
+      const m = decl.match(/animation:\s*([a-z-]+)/)
+      if (m) names.add(m[1])
+      rules++
+    }
+    assert.deepStrictEqual([...names].sort(), ['dn-drift', 'dn-flap', 'dt-twinkle'], 'birds flap and drift, the stars reuse dt-twinkle')
+    assert.ok(rules >= 8)
+    for (const b of blocks) if (b !== guard[0]) assert.ok(!motion.test(b.body), 'movement outside the guard: ' + b.head)
+    // no second twinkle: one keyframes rule with that word, the existing dt-twinkle, and the section's keyframes are the two bird ones
+    assert.strictEqual(count(css, /@keyframes\s+[a-z-]*twinkle/g), 1, 'one twinkle keyframes rule')
+    assert.ok(/@keyframes dt-twinkle \{/.test(css.slice(0, DN_START)), 'the twinkle is the existing one, declared before the section')
+    assert.deepStrictEqual([...dnCss.matchAll(/@keyframes\s+([a-z-]+)/g)].map(m => m[1]).sort(), ['dn-drift', 'dn-flap'])
+    // the still state: the base rules do not hide anything and set no opacity of zero or of a keyframe's start
+    const base = blocks.filter(b => !b.head.startsWith('@'))
+    for (const b of base) assert.ok(!/(^|[;\s])opacity\s*:\s*0(\.\d+)?\s*(;|$)/.test(b.body), 'a base rule hides an element: ' + b.head)
+    assert.ok(/\.dn-bird \{[^}]*stroke: var\(--dn-bird\)/.test(dnCss) && /\.dn-star \{[^}]*fill: var\(--dn-twinkle\)/.test(dnCss), 'birds and stars are painted in the still state')
+    assert.ok(!/@media[^{]*prefers-reduced-motion:\s*reduce/.test(dnCss), 'no reduce-only branch: the base state is the final state')
+    for (const [f, src] of DN_SRC) assert.ok(!/animation|<animate|setInterval|requestAnimationFrame|style=/.test(src), f + ': nothing moves in the markup')
+  })
+
+  test('E92_S13_T04: every new colour is a token for light and dark, no component has a colour literal or a word, and the old star-disc shimmer is out of the castle goals', () => {
+    const tok = stripComments(tokensText)
+    const sky = ['sky-top', 'sky-bottom', 'sky-sun', 'sky-sun-ray', 'sky-moon', 'sky-star', 'sky-twinkle', 'sky-bird', 'castle-win-l', 'castle-win-r']
+    for (const t of sky) assert.strictEqual(count(tok, new RegExp('--color-' + t + '\\s*:', 'g')), 3, `--color-${t} defined for light and dark (two blocks)`)
+    for (const [f, src] of DN_SRC) {
+      assert.ok(!/#[0-9a-fA-F]{3,8}\b/.test(src) && !/\b(rgb|rgba|hsl|hsla|oklch|color-mix)\(/.test(src), f + ': no colour literal')
+      const text = [...src.matchAll(/<[A-Za-z][^<>]*>([^<>{}\n]*[A-Za-z][^<>{}\n]*)<\//g)].map(x => x[1].trim()).filter(Boolean)
+      assert.deepStrictEqual(text, [], f + ': hard-coded JSX text')
+      assert.ok(!/<canvas|<foreignObject|<image|<script|<img/.test(src), f + ': pure SVG')
+    }
+    assert.ok(!/#[0-9a-fA-F]{3,8}\b/.test(stripComments(dnCss)) && !/\b(rgb|rgba|hsl|hsla|oklch|color-mix)\(/.test(dnCss), 'no colour literal in the section')
+    const used = [...new Set([...stripComments(dnCss).matchAll(/var\((--[a-z0-9-]+)/g)].map(m => m[1]))]
+    assert.ok(used.every(u => u.startsWith('--dn-') || u.startsWith('--cc-') || ['--theme-day-display', '--theme-night-display', '--color-sky-top', '--color-sky-bottom', '--color-sky-sun', '--color-sky-sun-ray', '--color-sky-moon', '--color-sky-star', '--color-sky-twinkle', '--color-sky-bird'].includes(u)), 'only the two hooks and the theme tokens: ' + used.join(' '))
+    // the star design keeps its own shimmer (it is the star-disc goal and still a selectable design); neither castle uses it
+    assert.ok(/\.dt-shimmer \{/.test(css) && /dt-shimmer 3\.4s/.test(css) && StarGoalSource().includes('dt-shimmer'), 'the shimmer is still the star design\'s')
+    for (const design of ['citadel', 'facade']) assert.ok(!goalHtml(designHtml[design](castleGraph(REACHED, CEN, 100, true), CEN)).includes('dt-shimmer'), design + ': no shimmer sweep in the goal')
+    for (const [f, src] of DN_SRC) assert.ok(!src.includes('dt-shimmer'), f)
+  })
+
+  test('E92_S13_T04: the theme reading, the token palette hook and the reduced-motion rules are one shared piece a third design reuses: both castles use it, it names no castle class, and no tree colour is added', () => {
+    const cit = goalHtml(renderCitadel(castleGraph(MIXED, CEN, 61), CEN))
+    const fac = goalHtml(renderFacade(castleGraph(FMIX, CEN, 61), CEN))
+    for (const html of [cit, fac]) assert.ok(html.includes('dn-scene') && html.includes('class="dn-sky') && html.includes('class="dn-sun"'))
+    for (const [f, src] of DN_SRC.slice(1)) assert.ok(/from '\.\/DayNightScene'/.test(src) && /DaySky/.test(src) && /DayNightEffects/.test(src), f + ' draws the shared scene')
+    const shared = dnCss.slice(0, dnCss.indexOf("/* the castle's lit windows"))
+    assert.ok(shared.length > 1500 && !/castle|cc-|cf-/.test(stripComments(shared)), 'the shared rules name no castle class')
+    const hook = shared.slice(shared.indexOf('.dep-tree .dn-scene {'), shared.indexOf('}', shared.indexOf('.dep-tree .dn-scene {')))
+    const defined = [...hook.matchAll(/(--dn-[a-z-]+):\s*var\((--color-sky-[a-z-]+)\)/g)]
+    const usedHook = new Set([...stripComments(dnCss).matchAll(/var\((--dn-[a-z-]+)\)/g)].map(m => m[1]))
+    assert.ok(defined.length === 8 && [...usedHook].every(u => defined.some(d => d[1] === u)), 'every --dn-* in use is defined once, from a --color-sky-* token, in the hook')
+    // E92_S13_T07 added the --color-tree-* tokens to tokens.css (its own section, its own stylesheet); what stays true is that the SHARED
+    // day and night section carries no tree colour and no tree rule, which is why the tree reuses it instead of editing it
+    assert.ok(!/tree|season|foliage/i.test(stripComments(dnCss).replace(/\.dep-tree|dep-tree|dependency tree|the tree|seasons tree/gi, '')), 'no tree colour or tree rule in the shared section')
+    assert.ok(/\.dn-line \.dn-sun-core/.test(dnCss), 'the drawing-board variant is a modifier of the same classes')
+  })
+
+  // ===================== E92_S13_T07: the seasons tree, the third goal design =====================
+  // The tree has a stylesheet of its own (seasons-tree.css, loaded by TreeGoal.jsx), so no section of dependency-tree.css the tests
+  // above slice to the end of the file is touched; these tests read that stylesheet.
+  const treeCss = fs.readFileSync(path.join(compDir, 'seasons-tree.css'), 'utf8')
+  const treeSrc = stripComments(fs.readFileSync(path.join(compDir, 'TreeGoal.jsx'), 'utf8'))
+  const treeLayoutSrc = fs.readFileSync(path.join(compDir, 'treeLayout.js'), 'utf8')
+  const withTreeChoice = fn => {
+    const was = globalThis.window
+    try {
+      globalThis.window = { localStorage: { getItem: () => 'tree', setItem() {} } }
+      return fn()
+    } finally {
+      if (was === undefined) delete globalThis.window
+      else globalThis.window = was
+    }
+  }
+  const TEN = { ...CEN, tree_stage_sprout: 'Sprout', tree_stage_seedling: 'Seedling', tree_stage_sapling: 'Sapling', tree_stage_young: 'Young tree', tree_stage_mature: 'Mature tree', tree_stage_majestic: 'Majestic tree', tree_stage_track: 'Growth stage: %s' }
+  const renderTree = (g, labels = TEN) => withTreeChoice(() => renderToStaticMarkup(React.createElement(CitadelTree, { model: citadelModel(g, labels), labels })))
+  const treeModelOf = g => unfoldGroups(citadelModel(g, TEN), new Set(), { goalArea: 'tree' })
+  const attrCount = (html, re) => (html.match(re) || []).length
+  const TMIX = [
+    { states: [D, D, D] },
+    { states: [D, P, R, R], deps: [1] },
+    { states: [D, F, R, X], deps: [1] },
+    { states: [R, R], deps: [2, 3] },
+    { undec: true, deps: [1] },
+    { states: [D, D], deps: [1] },
+  ]
+
+  test('E92_S13_T08: the citadel paints no sky backdrop panel, yet keeps the sun, the moon and the stars; the seasons tree keeps its own backdrop', () => {
+    for (const reached of [false, true]) {
+      const cit = goalHtml(renderCitadel(castleGraph(reached ? REACHED : MIXED, CEN, reached ? 100 : 61, reached), CEN))
+      assert.ok(!cit.includes('dn-backdrop') && !cit.includes('dn-sky-top') && !/<linearGradient id="dt-sky-/.test(cit), 'no sky panel in the citadel (reached ' + reached + ')')
+      assert.ok(cit.includes('class="dn-sky') && cit.includes('class="dn-sun"') && cit.includes('class="dn-moon"') && cit.includes('class="dn-night"'), 'the sun and the moon are still drawn')
+    }
+    assert.ok(goalHtml(renderCitadel(castleGraph(REACHED, CEN, 100, true), CEN)).includes('data-effect="birds"'), 'the birds still fly at goal reached')
+    assert.ok(goalHtml(renderTree(castleGraph(TMIX, TEN, 61))).includes('dn-backdrop'), 'the seasons tree keeps its sky panel')
+    assert.ok(!/<DaySky[^>]*\bbackdrop\b/.test(fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'progress', 'CitadelGoal.jsx'), 'utf8')), 'the citadel source passes no backdrop prop')
+  })
+
+  test('E92_S13_T07: the seasons tree is one more entry of the goal design list: registered, offered by the selector, drawn when chosen, never by default; the star, the citadel and the facade stay', () => {
+    assert.ok('tree' in GOAL_RENDERERS && GOAL_RENDERERS.tree.goalArea === 'tree' && GOAL_RENDERERS.star && GOAL_RENDERERS.citadel && GOAL_RENDERERS.facade)
+    assert.strictEqual(Object.keys(GOAL_RENDERERS).filter(k => k === 'tree').length, 1, 'one entry')
+    assert.ok(renderCitadel(castleGraph(TMIX, TEN, 61), TEN).includes('data-castle="citadel"'), 'the citadel is still the default')
+    const html = renderTree(castleGraph(TMIX, TEN, 61))
+    const goal = goalHtml(html)
+    assert.ok(goal.includes('data-goal-design="tree"') && goal.includes('data-castle="tree"') && !goal.includes('data-castle="citadel"') && !goal.includes('data-castle="facade"'))
+    for (const x of ['dt-star-outline', 'dt-goal-ring', 'dt-goal-disc', 'dt-halo', 'dt-shimmer', 'dt-spark', 'cc-table', 'cc-wall-block', 'cc-tower', 'cf-tower']) assert.ok(!goal.includes(x), x)
+    assert.ok(/data-testid="dt-goal-design"/.test(html) && html.includes('data-goal-design="tree"'), 'the selector offers it')
+    assert.ok(!/<canvas|<foreignObject|<image|<script|<img/.test(html), 'pure SVG')
+  })
+
+  test('E92_S13_T07: the text under the node is unchanged and not duplicated inside the drawing; the edges to the goal end at the tree, spread over several points', () => {
+    const html = renderTree(castleGraph(TMIX, TEN, 61))
+    const goal = goalHtml(html)
+    assert.ok(goal.includes('>Goal<') && goal.includes('>Goal epic<') && /class="dt-goal-count"[^>]*>\d+ \/ \d+ done · 61 %</.test(goal) && /dt-goal-decomposed"[^>]*>5\/6 stories decomposed</.test(goal), 'the text lines are unchanged')
+    const drawing = goal.slice(goal.indexOf('class="dt-tree dn-scene"'), goal.indexOf('class="dt-goal-name"'))
+    assert.ok(!drawing.includes('Goal epic') && !drawing.includes('stories decomposed') && !/ done · 61 %/.test(drawing), 'the goal text is not inside the drawing')
+    assert.strictEqual(attrCount(goal, /class="dt-goal-(name|title|count)"/g), 3, 'the three text lines once each')
+    const m = treeModelOf(castleGraph(TMIX, TEN, 61))
+    const y = c => Number(goal.match(new RegExp(`class="${c}"[^>]* y="([\\d.]+)"`))[1])
+    const top = m.castle.tree.text.top
+    assert.deepStrictEqual([y('dt-goal-name'), y('dt-goal-title'), y('dt-goal-count')], [top, top + 18, top + 36])
+    assert.ok(top >= m.castle.tree.box.bottom, 'the text starts under the tree')
+    // goal edges: one end per end task, none on top of another, all on the left of the goal and inside its area
+    const goalEdges = [...html.matchAll(/<path class="dt-edge[^"]*dt-edge-goal[^"]*"[^>]*\sd="([^"]+)"/g)].map(x => x[1])
+    assert.ok(goalEdges.length >= 2, 'the tree has several end stories: ' + goalEdges.length)
+    const last = d => d.split(/[ ,]/).filter(Boolean).slice(-2).map(Number)
+    const stops = goalEdges.map(last)
+    assert.strictEqual(new Set(stops.map(p => p.join())).size, stops.length, 'each edge ends at its own point')
+    assert.ok(stops.every(p => p[0] < m.goal.x), 'the edges end on the left of the goal')
+  })
+
+  test('E92_S13_T07: the worked example (16 tasks, 12 done, 11 stories, 9 decomposed) is drawn as 11 branches, 2 stubs, 12 done clumps; every state has its own shape and a branch its own aria label', () => {
+    const WORKED = [
+      { states: [D, D] }, { states: [D, D], deps: [1] }, { states: [D, D], deps: [1] }, { states: [D, D], deps: [2] }, { states: [D, D], deps: [3] },
+      { states: [D, D], deps: [1] }, { states: [P, R], deps: [4] }, { states: [R], deps: [5] }, { states: [R], deps: [6] }, { undec: true, deps: [7] }, { undec: true, deps: [8] },
+    ]
+    const html = renderTree(castleGraph(WORKED, TEN, 61))
+    const goal = goalHtml(html)
+    assert.strictEqual(attrCount(goal, /class="tr-branch[^"]*" data-branch="/g), 11)
+    assert.strictEqual(attrCount(goal, /data-stub="/g), 2)
+    assert.strictEqual(attrCount(goal, /data-state="done"/g), 12)
+    assert.strictEqual(attrCount(goal, /data-state="in_progress"/g), 1)
+    assert.strictEqual(attrCount(goal, /data-state="pending"/g), 3)
+    assert.strictEqual(attrCount(goal, /data-undecomposed="true"/g), 2)
+    assert.ok(goal.includes('aria-label="E01_S01: 2 of 2 done"') && goal.includes('aria-label="E01_S10 Story 10: not broken down yet"'), 'the castle tower words, per branch: ' + (goal.match(/aria-label="E01_S1?[01][^"]*"/g) || []).join(' | '))
+    assert.ok(attrCount(goal, /data-ribbon="/g) === 11, 'a status ribbon on every branch base')
+  })
+
+  test('E92_S13_T07: shapes, not colour alone: blossom and flowers for in progress, a bare snowy twig for to do, a withered clump with fallen leaves for failed, a "?" pill and a dashed stub for a story not broken down, snow along a branch that has not started, a vine and lantern for a finished leaf', () => {
+    const html = renderTree(castleGraph(TMIX, TEN, 61))
+    const goal = goalHtml(html)
+    const wip = goal.slice(goal.indexOf('data-state="in_progress"'), goal.indexOf('data-state="pending"'))
+    assert.ok(wip.includes('tr-tone-bloom') || goal.includes('class="tr-wip tr-tone-bloom"'), 'blossom')
+    assert.ok(attrCount(goal, /class="tr-flower"/g) >= 5, 'flowers on the blossom clump')
+    const twig = goal.slice(goal.indexOf('data-state="pending"'))
+    assert.ok(twig.includes('class="tr-twig"') && twig.includes('class="tr-snow"'), 'a twig with snow')
+    const failed = goal.slice(goal.indexOf('class="tr-failed'))
+    assert.ok(failed.includes('tr-tone-dead') && failed.includes('class="tr-crack"') && failed.includes('tr-fallen'), 'a withered clump shedding dead leaves')
+    assert.ok(goal.includes('data-stub="E01_S05"') && goal.includes('class="tr-stub-ring"') && goal.includes('>E01_S05 ?<'), 'a stub and the "?"')
+    assert.ok(goal.includes('class="tr-branch tr-droop"') && goal.includes('data-branch="E01_S03"'), 'a failed story\'s branch droops')
+    assert.ok(/class="tr-snow-line" data-snow="E01_S04"/.test(goal), 'snow along the branch where nothing has started')
+    assert.ok(!goal.includes('data-snow="E01_S01"') && !goal.includes('data-snow="E01_S02"'), 'but not on a started one')
+    const vined = renderTree(castleGraph([{ states: [D, D, D] }, { states: [D, D], deps: [1] }, { states: [D, P], deps: [1] }], TEN, 61))
+    assert.ok(/data-vine="E01_S02"/.test(vined) && !/data-vine="E01_S01"|data-vine="E01_S03"/.test(vined), 'a vine on the finished story nothing depends on')
+    assert.ok(/class="tr-lantern-glow dn-night"/.test(vined) && /class="tr-lantern"/.test(vined), 'the lantern is lit by night (its glow is a night element)')
+    assert.ok(goal.includes('class="tr-mass"') && goal.includes('class="tr-contour"') && goal.includes('class="tr-line-c tr-edge"') && goal.includes('class="tr-leaf"'), 'a detailed crown body: contour lines, light edges, leaves, shade')
+    assert.ok(goal.includes('tr-shade'), 'with shade')
+    assert.ok(goal.includes('class="tr-pill"') && goal.includes('class="tr-dot tr-st-'), 'labels are pills with a status dot')
+  })
+
+  test('E92_S13_T07: the stage track shows the six stages and names the current one from the labels (Sprout 0, Seedling 10, Sapling 25, Young tree 45, Mature tree 70, Majestic tree only at goal reached)', () => {
+    const stageAt = (percent, reached) => { const g = castleGraph(TMIX.slice(0, 2), TEN, percent, reached); const goal = goalHtml(renderTree(g)); return [goal.match(/class="tr-track" data-stage="(\w+)"/)[1], goal.match(/class="tr-stage-name"[^>]*>([^<]+)</)[1], attrCount(goal, /class="tr-stage-dot/g)] }
+    assert.deepStrictEqual(stageAt(0, false), ['sprout', 'Sprout', 6])
+    assert.deepStrictEqual(stageAt(10, false).slice(0, 2), ['seedling', 'Seedling'])
+    assert.deepStrictEqual(stageAt(25, false).slice(0, 2), ['sapling', 'Sapling'])
+    assert.deepStrictEqual(stageAt(45, false).slice(0, 2), ['young', 'Young tree'])
+    assert.deepStrictEqual(stageAt(70, false).slice(0, 2), ['mature', 'Mature tree'])
+    assert.deepStrictEqual(stageAt(99, false).slice(0, 2), ['mature', 'Mature tree'])
+    assert.deepStrictEqual(stageAt(100, true).slice(0, 2), ['majestic', 'Majestic tree'])
+    const sv = renderTree(castleGraph(TMIX.slice(0, 2), { ...TEN, tree_stage_young: 'Ungt träd' }, 45), { ...TEN, tree_stage_young: 'Ungt träd' })
+    assert.ok(sv.includes('>Ungt träd<'), 'the stage names come from the labels payload')
+    const bare = renderTree(castleGraph(TMIX.slice(0, 2), EN, 45), EN)
+    assert.ok(bare.includes('>Young tree<'), 'and fall back to English when the payload lacks them')
+  })
+
+  test('E92_S13_T07: the surroundings read the percent only: stones lift out at 24/25, 44/45, 64/65 and 84/85 percent, mushrooms from 55, the same for any tree', () => {
+    const stones = pct => attrCount(goalHtml(renderTree(castleGraph(TMIX, TEN, pct))), /class="tr-stone"/g)
+    assert.deepStrictEqual([0, 24, 25, 44, 45, 64, 65, 84, 85, 99].map(stones), [0, 0, 1, 1, 2, 2, 3, 3, 4, 4])
+    const mush = pct => attrCount(goalHtml(renderTree(castleGraph(TMIX, TEN, pct))), /data-mushroom=/g)
+    assert.deepStrictEqual([54, 55].map(mush), [0, 2])
+    const other = pct => attrCount(goalHtml(renderTree(castleGraph([{ states: [D] }, { states: [R, R, R], deps: [1] }], TEN, pct))), /class="tr-stone"/g)
+    assert.deepStrictEqual([24, 25, 44, 45, 64, 65, 84, 85].map(other), [0, 1, 1, 2, 2, 3, 3, 4], 'another tree, the same stones')
+  })
+
+  test('E92_S13_T07: goal reached: rays, motes, falling petals, a swing, two forest spirits, birds (day) and twinkling stars (night, the shared dt-twinkle); an epic with a failed or an undecomposed story shows none', () => {
+    const reached = goalHtml(renderTree(castleGraph(REACHED, TEN, 100, true)))
+    for (const e of ['data-effect="swing"', 'data-effect="petals"', 'data-effect="birds"', 'data-effect="stars"']) assert.ok(reached.includes(e), e)
+    assert.strictEqual(attrCount(reached, /data-effect="spirit"/g), 2)
+    assert.ok(attrCount(reached, /class="tr-mote"/g) > 10 && reached.includes('class="tr-rays dn-day"') && reached.includes('class="tr-rays dn-night"'))
+    assert.ok(/class="tr-tone-0"|class="tr-done tr-tone-0"/.test(reached) && reached.includes('tr-tone-1'), 'each crown section has its own season tone')
+    assert.ok(reached.includes('class="tr-tree tr-sway"'), 'the whole crown sways')
+    for (const g of [castleGraph([{ states: [D, D] }, { states: [D, F], deps: [1] }], TEN, 99, false), castleGraph([{ states: [D, D] }, { undec: true, deps: [1] }], TEN, 99, false)]) {
+      const html = goalHtml(renderTree(g))
+      for (const e of ['data-effect="swing"', 'data-effect="petals"', 'data-effect="birds"', 'data-effect="stars"', 'data-effect="spirit"', 'tr-sway']) assert.ok(!html.includes(e), 'not reached: ' + e)
+      assert.ok(!/class="tr-tone-[1-6]"/.test(html), 'not an all-seasons tree')
+    }
+    assert.ok(attrCount(goalHtml(renderTree(castleGraph(TMIX, TEN, 20))), /class="tr-mote"/g) < attrCount(reached, /class="tr-mote"/g), 'the motes strengthen with the percent')
+  })
+
+  test('E92_S13_T07: day and night are the theme, through the shared scene: both halves in the markup, the tree adds tokens of its own, no colour literal, no word, no movement in the component, every tree colour is a token for light and dark', () => {
+    const goal = goalHtml(renderTree(castleGraph(TMIX, TEN, 61)))
+    assert.ok(goal.includes('class="dt-tree dn-scene"') && goal.includes('class="dn-sky') && goal.includes('class="dn-sun"') && goal.includes('class="dn-night"'), 'the shared day and night scene')
+    assert.ok(!/data-theme|prefers-color-scheme|matchMedia/.test(goal) && !/<button|role="switch"/.test(goal), 'no separate control')
+    assert.ok(!/#[0-9a-fA-F]{3,8}\b/.test(treeSrc) && !/\b(rgb|rgba|hsl|hsla|oklch|color-mix)\(/.test(treeSrc), 'no colour literal in the component')
+    assert.ok(!/#[0-9a-fA-F]{3,8}\b/.test(treeLayoutSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')), 'none in the layout either')
+    const words = [...treeSrc.matchAll(/<[A-Za-z][^<>]*>([^<>{}\n]*[A-Za-z][^<>{}\n]*)<\//g)].map(x => x[1].trim()).filter(Boolean)
+    assert.deepStrictEqual(words, [], 'no hard-coded JSX text')
+    assert.ok(!/animation|<animate|setInterval|requestAnimationFrame/.test(treeSrc), 'nothing moves in the component')
+    assert.ok(/from '\.\/DayNightScene'/.test(treeSrc) && /DaySky/.test(treeSrc) && /DayNightEffects/.test(treeSrc), 'it draws the shared scene')
+    const tok = stripComments(tokensText)
+    const names = [...new Set([...tok.matchAll(/--color-tree-([a-z-]+)\s*:/g)].map(m => m[1]))]
+    assert.ok(names.length > 60)
+    for (const n of names) assert.strictEqual(count(tok, new RegExp('--color-tree-' + n + '\\s*:', 'g')), 3, `--color-tree-${n}: light, dark media block, dark attribute block`)
+    const usedCss = [...new Set([...stripComments(treeCss).matchAll(/var\((--[a-z0-9-]+)/g)].map(m => m[1]))]
+    for (const u of usedCss) assert.ok(u.startsWith('--tr-') || u.startsWith('--color-tree-') || u.startsWith('--color-progress-'), 'only tree and E92 tokens in the stylesheet: ' + u)
+    for (const u of usedCss.filter(x => x.startsWith('--color-'))) assert.ok(count(tok, new RegExp(u + '\\s*:', 'g')) === 3, u + ' is defined for light and dark')
+    assert.ok(!/#[0-9a-fA-F]{3,8}\b/.test(stripComments(treeCss)) && !/\b(rgb|rgba|hsl|hsla|oklch|color-mix)\(/.test(treeCss), 'no colour literal in the stylesheet')
+    assert.ok(/--dn-sky-top:\s*var\(--color-tree-sky-top\)/.test(treeCss), 'the shared sky takes the tree\'s own sky tokens')
+    assert.ok(treeSrc.includes("import './seasons-tree.css'"), 'the component loads its stylesheet')
+    const ribbon = ['done', 'in-progress', 'failed', 'pending']
+    for (const r of ribbon) assert.ok(treeCss.includes(`var(--color-progress-${r})`), 'the status ribbon keeps the E92 colour ' + r)
+  })
+
+  test('E92_S13_T07: every movement is stopped by :root[data-motion="off"] and by prefers-reduced-motion: reduce; the goal-reached state rests visible; the twinkle is the existing dt-twinkle', () => {
+    const text = stripComments(treeCss)
+    const blocks = []
+    let depth = 0, start = 0, head = ''
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i]
+      if (c === '{') { if (depth === 0) { head = text.slice(start, i).trim(); start = i + 1 } depth++ }
+      else if (c === '}') { depth--; if (depth === 0) { blocks.push({ head, body: text.slice(start, i) }); start = i + 1 } }
+    }
+    const MOTION = /(^|[\s;{])(animation|transition)(-[a-z-]+)?\s*:/
+    for (const b of blocks) {
+      if (/^@media\s*\(prefers-reduced-motion:\s*no-preference\)$/.test(b.head) || b.head.startsWith('@keyframes')) continue
+      assert.ok(!MOTION.test(b.body), 'motion outside the guard: ' + b.head)
+    }
+    const guard = blocks.find(b => /^@media\s*\(prefers-reduced-motion:\s*no-preference\)$/.test(b.head))
+    assert.ok(guard, 'one no-preference block')
+    const rules = guard.body.split('}').map(r => r.trim()).filter(Boolean).map(r => r.split('{'))
+    assert.ok(rules.length >= 7 && rules.every(([sel]) => sel.startsWith(':root:not([data-motion="off"]) .dep-tree ')), 'every animated rule says it is off with the toggle: ' + rules.map(r => r[0]).join(' | '))
+    const names = new Set(rules.map(([, d]) => (d.match(/animation:\s*([a-z-]+)/) || [])[1]))
+    for (const k of ['tr-sway', 'tr-swing', 'tr-fall', 'tr-mote', 'tr-drip', 'tr-bob']) assert.ok(names.has(k) && new RegExp('@keyframes\\s+' + k + '\\b').test(treeCss), k)
+    assert.ok(!/@media[^{]*prefers-reduced-motion:\s*reduce/.test(treeCss), 'no reduce-only branch: the base state is the final state')
+    // reduced motion shows the goal-reached state: the effects are in the markup whatever the preference, and nothing is hidden at rest
+    const rest = text.replace(guard.body, '')
+    assert.ok(!/\.tr-(fall|mote|drip|stone|swing|sway|vine)[^{]*\{[^}]*(display:\s*none|opacity:\s*0(?![.\d])|visibility:\s*hidden)/.test(rest), 'what moves is visible at rest')
+    assert.ok(goalHtml(renderTree(castleGraph(REACHED, TEN, 100, true))).includes('data-effect="spirit"'), 'the goal-reached condition draws its effects with no script and no preference')
+    // the twinkle is the shared one (dt-twinkle), the flap the shared dn-flap; the tree declares neither
+    assert.ok(!/@keyframes\s+(tr-twinkle|tr-flap|dt-twinkle|dn-flap)/.test(treeCss), 'no second twinkle or flap')
+    assert.ok(/\.dn-star \{ animation: dt-twinkle/.test(css.replace(/:root:not\(\[data-motion="off"\]\) \.dep-tree /g, '')), 'the stars of the shared scene use dt-twinkle')
+  })
+
+  test('E92_S13_T07: the tree\'s stylesheet is separate and the files that tests slice to the end are untouched: the tree section is bounded and dependency-tree.css has no tree rule', () => {
+    assert.ok(!/\.dt-tree|\.tr-|--color-tree/.test(css), 'dependency-tree.css holds no tree rule')
+    assert.ok(/\/\* end E92_S13_T07 \*\/\s*$/.test(treeCss), 'the stylesheet ends at its marker')
+    const imports = [...fs.readFileSync(path.join(compDir, 'TreeGoal.jsx'), 'utf8').matchAll(/^import '([^']+\.css)'/gm)].map(m => m[1])
+    assert.deepStrictEqual(imports, ['./seasons-tree.css'])
   })
 
   console.log(`\n${n} tests passed`)

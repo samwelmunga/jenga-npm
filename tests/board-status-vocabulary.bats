@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # E42_S01 regression coverage: the status vocabulary a skill instructs agents to write
 # to a board file must be one scripts/validate-board.sh accepts.

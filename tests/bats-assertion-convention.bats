@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Meta-test: the suite's own assertion convention (E50_S07_T08).
 #

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S02_T06: skills/j-publish/scripts/generate_release_notes.sh lists the "Completed tasks" bullets in NUMERIC task-ID
 # order.

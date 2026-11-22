@@ -6,7 +6,7 @@
 # absent from every consumer install. A shipped file must not point at one. This script is the single place that
 # knows (a) which skills those are, (b) how to recognise a reference to one, and (c) how serious a given hit is.
 # Two consumers share it so they cannot disagree:
-#   - the catalog smoke test, check 6 (skills/j-smoke-test/scripts/smoke-test-skills.sh)
+#   - the catalog smoke test, check 6 (maintainer-only, not shipped)
 #   - the mirror-time reference guard (skills/j-mirror-public/scripts/mirror.sh, added by E28_S19_T02)
 #
 # USAGE

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E80_S06_T06: failure paths of a workflow run, end to end, on the all-step-types fixture (E80_S06_T03).
 #

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for scripts/resolve-tools.sh (E66_S02_T03).
 #

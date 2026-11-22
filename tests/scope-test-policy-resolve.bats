@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for skills/j-test/scripts/scope-policy.sh (E72_S06_T02).
 #

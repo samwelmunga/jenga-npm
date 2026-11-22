@@ -3,7 +3,6 @@ import { readFileSync, writeFileSync, existsSync, appendFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { validateConfig } from "../config-schema.js";
-import { injectSettings } from "../inject-settings.js";
 import { generateAgentContext } from "../generate-agent-context.js";
 import { generateCopilotInstructions } from "../generate-copilot-instructions.js";
 import { generateCopilotHooks } from "../generate-copilot-hooks.js";
@@ -120,12 +119,9 @@ export async function runInit(args, projectRoot = process.cwd()) {
       appendFileSync(gitignorePath, `${prefix}${gitignoreEntry}\n`, "utf8");
     }
 
-    try {
-      await injectSettings(projectRoot);
-    } catch (e) {
-      console.warn(`Warning: Could not register hook in settings.json — ${e.message}`);
-      console.warn("You can register it manually later by running jenga init again.");
-    }
+    // The UserPromptSubmit prompt_router hook is no longer registered (E89_S06_T07): its stdout was
+    // injected into model context on every prompt and the Router it fronted is being retired.
+    // lib/inject-settings.js is kept but unused; see hooks/prompt_router_helper.js.
 
     // Generate .github/copilot-instructions.md from template, via the shared generator
     // (lib/generate-copilot-instructions.js) also used unconditionally by scripts/postinstall.js

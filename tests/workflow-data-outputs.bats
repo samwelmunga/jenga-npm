@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E80_S04_T09: scripts/workflow/complete-step.sh publishes the declared outputs of a passed step to the workflow
 # output registry (scripts/workflow/artifacts.sh register). kind data outputs are registered with the declared

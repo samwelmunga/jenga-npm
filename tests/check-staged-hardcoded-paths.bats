@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # scripts/check-staged-hardcoded-paths.sh against a throwaway git repository. The real repository is only read
 # (the last test runs the script over this repository's own staged diff and asserts only that it can run).

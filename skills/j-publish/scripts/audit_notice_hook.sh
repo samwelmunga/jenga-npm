@@ -15,6 +15,7 @@
 # variable is set.
 #
 # Compatible with macOS bash 3.2.
+# smoke-invoke:
 
 set -u
 

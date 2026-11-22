@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E80_S02_T03: scripts/workflow/run-state.sh core - state file format v1, the locked atomic writer
 # (run_state_update), corrupt-file detection, and the read-only commands status and list.

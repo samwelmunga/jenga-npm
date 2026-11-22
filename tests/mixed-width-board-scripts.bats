@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E86_S06_T02: the board scripts run against the mixed-width synthetic board (tests/helpers/mixed-width-board.sh, E86_S06_T01).
 #

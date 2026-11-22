@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Fixture-based coverage for load-playbooks.sh's PROJECT-LOCAL playbook search path
 # (E53_S09_T01): a second source directory, `project/.playbooks/`, merged into the same catalog

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # Fixture-based coverage for render-playbook-confirmation.sh's nested/depth-label grouping
 # display (E53_S05_T03) -- the optional 5th <json-origins> start-mode argument, its indentation +

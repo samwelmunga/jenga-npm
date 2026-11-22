@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# smoke-invoke:
 # ---------------------------------------------------------------------------
 # skills/j-reconcile/scripts/resolve-reconcile-scope.sh
 #

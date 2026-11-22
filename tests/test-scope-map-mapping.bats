@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for what skills/j-test/scripts/map-scope.sh MAPS (E72_S03_T03).
 #

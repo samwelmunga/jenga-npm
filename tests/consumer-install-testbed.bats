@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Consumer-install testbed scenarios (E54_S03). Each test installs the packed tarball into a throwaway
 # consumer project (helpers/consumer-testbed.bash) and runs framework commands from that consumer's root,
@@ -90,9 +91,12 @@ setup_file() {
 # --- the documented staged-release verification (README "Verifying a Staged Release...") --------------------
 
 @test "staged-release procedure: skill smoke test against the package root exits 0" {
+  # j-smoke-test is private (not in the package): run the checkout's copy against the installed package root.
+  local st="$TESTBED_REPO_ROOT/skills/j-smoke-test/scripts/smoke-test-skills.sh"
+  [ -f "$st" ] || skip "j-smoke-test is not shipped"
   testbed_consumer "$BATS_TEST_TMPDIR/c" clean
   cd "$BATS_TEST_TMPDIR/c"
-  run -0 bash node_modules/@jenga-ai/agent/skills/j-smoke-test/scripts/smoke-test-skills.sh --no-exec --root node_modules/@jenga-ai/agent
+  run -0 bash "$st" --no-exec --root node_modules/@jenga-ai/agent
 }
 
 @test "staged-release procedure: the package's own populate-knowledge-graph tests pass from a consumer" {
@@ -141,6 +145,8 @@ setup_file() {
 @test "real consumer copy: j.status step 6.5 and the skill smoke test pass from a copy of TESTBED_ST_TEST" {
   [ -n "${TESTBED_ST_TEST:-}" ] || skip "TESTBED_ST_TEST not set"
   [ -d "$TESTBED_ST_TEST" ] || skip "TESTBED_ST_TEST is not a directory: $TESTBED_ST_TEST"
+  local st="$TESTBED_REPO_ROOT/skills/j-smoke-test/scripts/smoke-test-skills.sh"
+  [ -f "$st" ] || skip "j-smoke-test is not shipped"
   local c="$BATS_TEST_TMPDIR/real"
   testbed_consumer_from "$TESTBED_ST_TEST" "$c"
   cd "$c"
@@ -148,7 +154,7 @@ setup_file() {
   cmd="$(testbed_skill_command j-status mark-deployed.sh)"
   run -0 bash -c "$cmd"
   [[ "$output" != *"expected script not found"* ]]
-  run -0 bash node_modules/@jenga-ai/agent/skills/j-smoke-test/scripts/smoke-test-skills.sh --no-exec --root node_modules/@jenga-ai/agent
+  run -0 bash "$st" --no-exec --root node_modules/@jenga-ai/agent
   run testbed_sweep_package_root_paths "$c/node_modules/@jenga-ai/agent" \
     "$TESTBED_REPO_ROOT/tests/fixtures/package-root-derived-paths.allowlist"
   [ "$status" -eq 0 ]

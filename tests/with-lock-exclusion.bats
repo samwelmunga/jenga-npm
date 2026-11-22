@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Regression coverage for E77_S05_T02: scripts/with-lock.sh must stay exclusive when `mkdir` lies.
 #

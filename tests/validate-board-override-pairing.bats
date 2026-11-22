@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # Regression coverage for validate-board.sh's jenga_assigned / override_justification
 # pairing rule.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E80_S06_T04: end-to-end proof that the shipped workflow scripts, driven the way skills/j-workflow/SKILL.md drives
 # them, run the example workflow and a workflow with all five step types.

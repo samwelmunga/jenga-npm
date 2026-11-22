@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E80_S01_T04: scripts/workflow/validate-workflow.sh, the semantic half of the workflow definition validator.
 # Covers: an output type that is (and is not) a key of `types` in templates/playbook-types.json, an invalid output

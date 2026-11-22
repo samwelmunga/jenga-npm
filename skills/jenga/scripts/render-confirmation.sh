@@ -210,6 +210,24 @@
 
 set -euo pipefail
 
+# -h / --help: print the usage on stdout and exit 0 before anything is parsed, read or written (E99_S01_T01).
+case "${1:-}" in
+  -h|--help)
+    cat <<'USAGE'
+Usage: render-confirmation.sh "<comma-separated-ids>"     # start a new confirmation session
+       render-confirmation.sh <state_file> "<raw_reply>"   # continue an existing session
+       render-confirmation.sh -h|--help
+
+Render /jenga's nested Epic > Story > Task confirmation tree for already-resolved
+board IDs (via cascade-resolve.sh) and interpret the user's reply. Start mode
+creates a state file under TMPDIR and prints its path on stderr.
+
+Exit codes: 0 rendered; 2 usage error or setup failure.
+USAGE
+    exit 0
+    ;;
+esac
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CASCADE_RESOLVE="$SCRIPT_DIR/cascade-resolve.sh"
 

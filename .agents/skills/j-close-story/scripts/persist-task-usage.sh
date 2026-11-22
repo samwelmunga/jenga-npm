@@ -16,13 +16,19 @@
 #   2. Runs `task-usage.sh --persist --story <story-id>`. The arithmetic, the locking and every frontmatter write
 #      stay in that script; this one writes nothing to the board.
 #   3. Prints the "Usage:" block of the Step 5 report: per task of the story, the persisted totals read back from
-#      the task's frontmatter, or "not measured: <reason>" (never a zero for an unmeasured task), a
+#      the task's frontmatter (plus usage_cost_units, labelled derived, when the task has one), or "not measured: <reason>" (never a zero for an unmeasured task), a
 #      usage_possibly_incomplete flag, and a WARNING line naming the task and the reason for anything that failed.
 #
 # NON-BLOCKING
-#   A non-zero exit of task-usage.sh (layout drift 4-7, nothing measured 8, a task that failed to persist 9, no jq 3)
-#   is reported in the block and never propagated: this script exits 0, so the close proceeds and no task status
+#   A non-zero exit of task-usage.sh (layout drift 4-7, nothing measured 8, a task that failed to persist 9, no jq 3,
+#   price-ratio loader or config missing 10) is reported in the block and never propagated: this script exits 0, so the close proceeds and no task status
 #   is touched. The only non-zero exit is 2, for a missing or malformed <story-id> (a caller bug).
+#
+# PRICE-RATIO DEPENDENCY (E90_S02_T02)
+#   The price-ratio loader and config are a direct dependency of task-usage.sh. When they are missing it exits 10 before
+#   writing anything; this script then prints one WARNING naming the missing file and NO per-task lines, so values
+#   persisted earlier are never shown as if a measurement had just succeeded (no raw-only output). The "task-usage.sh
+#   itself is absent" no-op above is a different case and is unchanged.
 #
 # Compatible with macOS bash 3.2. No jq on the failure paths.
 # ---------------------------------------------------------------------------
@@ -81,6 +87,11 @@ first_err_line() { grep . "$TMP/err" 2>/dev/null | head -n 1; }
 
 printf 'Usage (task-usage.sh --persist --story %s):\n' "$STORY"
 
+if [ "$rc" -eq 10 ]; then
+  printf '  WARNING: price-ratio dependency missing (task-usage.sh exit 10): nothing was measured or written; the close continues and no task status was changed.\n'
+  grep . "$TMP/err" 2>/dev/null | head -n 3 | sed 's/^/    /'
+  exit 0
+fi
 if [ "$rc" -ne 0 ]; then
   printf '  WARNING: usage measurement exited %s; the close continues and no task status was changed.\n' "$rc"
   grep . "$TMP/err" 2>/dev/null | head -n 3 | sed 's/^/    /'
@@ -96,6 +107,9 @@ for f in "$TASKS_DIR/$STORY"_T*_*.md; do
   total="$(fm_get "$f" usage_total_tokens)"
   if [ -n "$total" ]; then
     line="  $id: total=$total tokens (input=$(fm_get "$f" usage_input_tokens), output=$(fm_get "$f" usage_output_tokens), cache_write=$(fm_get "$f" usage_cache_write_tokens), cache_read=$(fm_get "$f" usage_cache_read_tokens)), transcripts=$(fm_get "$f" usage_transcripts)"
+    # E90_S01_T07: the derived cost-equivalent unit next to the raw counts, only when the task carries one
+    cu="$(fm_get "$f" usage_cost_units)"
+    case "$cu" in ''|*[!0-9]*) ;; *) line="$line, cost_units=$cu (derived cost-equivalent unit)" ;; esac
     if [ "$(fm_get "$f" usage_possibly_incomplete)" = true ]; then
       line="$line [usage_possibly_incomplete: the transcripts looked partly pruned]"
     fi

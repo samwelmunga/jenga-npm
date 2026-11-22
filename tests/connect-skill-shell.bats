@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Fixture-driven verification of the j.connect skill shell (E65_S02_T05):
 # SKILL.md conformance and router discoverability, registration, and the four

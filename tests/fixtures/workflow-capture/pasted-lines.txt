@@ -1,0 +1,5 @@
+- Open the project settings
+* Turn on branch protection for main
+
+[x] Add the CI status check as required
+Invite the release team as reviewers

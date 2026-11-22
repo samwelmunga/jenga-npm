@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for templates/workflow-schema.json (E80_S01_T01), the v1 (linear) workflow definition contract.
 #

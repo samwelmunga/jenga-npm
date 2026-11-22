@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for scripts/workflow/verify-output.sh (E80_S03_T02): the thin wrapper that checks a step output
 # against its templates/playbook-types.json type by calling scripts/validate-typed-object.sh.

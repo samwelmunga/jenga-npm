@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E79_S03_T06: scripts/commit-settings.sh is the one place that decides whether a project is opted in to the
 # commit-format convention and what its effective commit settings are.

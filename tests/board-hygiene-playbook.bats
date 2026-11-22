@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for the board-hygiene playbook (E53_S11_T02) -- the first PUBLIC playbook that uses
 # `forward_from` and `conditional` rather than being a flat bare-string chain:

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Groups 4 and 6b of the E86_S05 audit (E86_S05_T05): events, rapports and the lifecycle-status scripts with three- and
 # four-digit board IDs.

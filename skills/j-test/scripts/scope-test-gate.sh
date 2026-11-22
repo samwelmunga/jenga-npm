@@ -353,6 +353,28 @@
 #                   "no-commits", where no map is consulted at all and so no
 #                   declaration exists to supersede.
 #
+# KNOWN-RED BASELINE (E89_S06_T10)
+#   A scoped (or full) run exits 1 when any suite fails. A case that was already red before the scope under test
+#   began, and has nothing to do with it, used to block every story the run covered. The gate now decides this
+#   MECHANICALLY, from a recorded baseline, never from judgment at gate time:
+#     <root>/project/configs/test-known-red.json   (override: --known-red <file>)
+#       {"version":1,"cases":[{"file":"tests/x.bats","case":"<exact test name>","reason":"...",
+#                              "recorded":"YYYY-MM-DD","follow_up":"<id or path>"}]}
+#   When a run fails, the gate reads the suite output: each `not ok N <name>` is paired with the
+#   `# (in test file <file>, line N)` line that follows it, and attributed to the suite section (`==> [i/n]`) it
+#   appeared in. The failure is DOWNGRADED (exit 0, reported loudly as known-red, never as a pass) only when EVERY
+#   failed suite is fully accounted for by baselined (file, case) pairs. Anything else stays exit 1: a case that is
+#   not in the baseline, a failed suite with no parseable `not ok` line (a non-bats suite, a crash), a malformed
+#   baseline, or no baseline at all. A genuine regression therefore always blocks. A baseline entry is matched on the
+#   exact file and the exact case name, so renaming the case drops it out of the baseline.
+#   --json appends `known_red_failures` (the downgraded cases), `new_failures` (the cases that were not baselined)
+#   and `slow_machine`.
+#
+# SLOWNESS IS NOT A FAILURE (E89_S06_T10). run-suites.sh prints a note when its slowness probe finds the machine slow
+#   (wall time far above CPU time). That is a statement about timing, never about the tests, and it changes neither the
+#   verdict nor the exit code. The gate now says so on its own line after the verdict, and carries `slow_machine` in
+#   --json, so a slow machine and a failing test can no longer be read as the same thing.
+#
 # EXIT CODES
 #   0    gate satisfied: policy none, or every suite that ran passed
 #   1    at least one suite failed; the caller must not close the scope. Reserved
@@ -410,7 +432,7 @@ usage() {
   cat <<'EOF'
 Usage: scope-test-gate.sh --scope <task|story|epic> --id <E##[_S##[_T##]]>
                           [--range <a..b> | --rev <commit>] [--root <dir>]
-                          [--config <file>] [--json]
+                          [--config <file>] [--known-red <file>] [--json]
        scope-test-gate.sh --help
 
 Run the test-run policy of a board scope before it is closed: none (run nothing),
@@ -423,6 +445,7 @@ catalog). Never writes board status or any board file.
   --rev <commit>   scoped policy: use this commit as the changed files
   --root <dir>     project root (default: the resolved root)
   --config <file>  read the policy from this file instead of test-config.json
+  --known-red <f>  known-red baseline (default: <root>/project/configs/test-known-red.json)
   --json           one JSON object on stdout; human text goes to stderr
   --help           show this help and exit 0
 
@@ -456,6 +479,7 @@ RANGE_ARG=""
 REV_ARG=""
 ROOT_ARG=""
 CONFIG_ARG=""
+KNOWN_RED_ARG=""
 JSON=0
 
 while [ "$#" -gt 0 ]; do
@@ -484,6 +508,9 @@ while [ "$#" -gt 0 ]; do
     --config)
       [ "$#" -ge 2 ] && [ -n "$2" ] || die_usage "--config needs a file argument"
       CONFIG_ARG="$2"; shift 2 ;;
+    --known-red)
+      [ "$#" -ge 2 ] && [ -n "$2" ] || die_usage "--known-red needs a file argument"
+      KNOWN_RED_ARG="$2"; shift 2 ;;
     --json)
       JSON=1; shift ;;
     *)
@@ -591,6 +618,11 @@ REFUSAL=""
 # not for --range/--rev, which map-scope.sh resolves itself). Only used to word
 # the cause of a refusal; nothing decides on it.
 CHANGED_FILES_LIST=""
+# E89_S06_T10. KNOWN_RED_JSON / NEW_FAILURES_JSON: arrays of {file, case}; SLOW_MACHINE: 1 when run-suites.sh printed
+# its slowness note.
+KNOWN_RED_JSON="[]"
+NEW_FAILURES_JSON="[]"
+SLOW_MACHINE=0
 
 # Human text: stdout normally, stderr with --json.
 say() {
@@ -615,6 +647,7 @@ finish() {
       --arg disabled "$DISABLED_SUITES" \
       --argjson mapexcl "$MAP_EXCLUDED_JSON" --arg mapconf "$MAP_EXCLUSION_CONFLICTS" \
       --argjson mapsup "$MAP_SUPERSEDED_JSON" --arg refusal "$REFUSAL" \
+      --argjson knownred "$KNOWN_RED_JSON" --argjson newfail "$NEW_FAILURES_JSON" --argjson slow "$SLOW_MACHINE" \
       '{scope: $scope, id: $id, mode: $mode, effective_mode: $eff,
         fallback_reason: (if $fr == "" then null else $fr end),
         suites_run: $run, passed: $passed, failed: $failed,
@@ -628,7 +661,8 @@ finish() {
         map_excluded_test_files: $mapexcl,
         map_exclusion_conflicts: ($mapconf | split("\n") | map(select(length > 0))),
         map_exclusions_superseded: $mapsup,
-        refusal: (if $refusal == "" then null else $refusal end)}'
+        refusal: (if $refusal == "" then null else $refusal end),
+        known_red_failures: $knownred, new_failures: $newfail, slow_machine: ($slow == 1)}'
   fi
   exit "$code"
 }
@@ -940,6 +974,55 @@ assert_scoped_is_bounded() {
   finish 3
 }
 
+# classify_failures <run output file>: E89_S06_T10. Decide, mechanically, whether a failing run failed ONLY on
+# baselined cases. Sets KNOWN_RED_JSON and NEW_FAILURES_JSON; returns 0 only when every failed suite is fully
+# accounted for by baselined (file, case) pairs, and 1 otherwise (no baseline, a malformed one, an unparseable
+# failure, or any case outside the baseline). Reads nothing but the suite output and the baseline file.
+classify_failures() {
+  local out="$1" baseline records failed_secs sec n_known=0 n_new=0 unaccounted=0
+  local known_tmp="$TMP_DIR/known-red.tsv" new_tmp="$TMP_DIR/new-failures.tsv"
+  baseline="${KNOWN_RED_ARG:-$ROOT/project/configs/test-known-red.json}"
+  [ -f "$baseline" ] || return 1
+  if ! jq -e '(.version == 1) and (.cases | type == "array")
+              and all(.cases[]; (.file | type == "string") and (.case | type == "string"))' "$baseline" >/dev/null 2>&1; then
+    note "known-red baseline $baseline is malformed (expected {\"version\":1,\"cases\":[{\"file\",\"case\"}]}); ignoring it"
+    return 1
+  fi
+  # section<TAB>file<TAB>case, one line per `not ok`. The file is the one named by the `in test file` line that follows
+  # the failure; "?" when none follows (the failure is then never baselined).
+  records="$(awk '
+    function flush() { if (pending) { printf "%d\t%s\t%s\n", sec, "?", pname; pending = 0 } }
+    /^==> \[[0-9]+\/[0-9]+\] / { flush(); sec++; next }
+    /^not ok [0-9]+ / { flush(); pname = $0; sub(/^not ok [0-9]+ /, "", pname); sub(/ # (skip|SKIP|todo|TODO).*$/, "", pname); pending = 1; next }
+    /^ok [0-9]+ / { flush(); next }
+    pending && /in test file / { f = $0; sub(/^.*in test file /, "", f); sub(/, line [0-9]+.*$/, "", f); printf "%d\t%s\t%s\n", sec, f, pname; pending = 0; next }
+    END { flush() }
+  ' "$out")"
+  # The 1-based positions of the failed suites in the summary, which lists suites in run order.
+  failed_secs="$(awk '/^Test Results$/ { s = 1; next } s && /^(✓|✗|- )/ { n++; if ($0 ~ /^✗/) print n }' "$out")"
+  [ -n "$failed_secs" ] || return 1
+  : > "$known_tmp"; : > "$new_tmp"
+  for sec in $failed_secs; do
+    n="$(printf '%s\n' "$records" | awk -F'\t' -v s="$sec" '$1 == s' | grep -c . || true)"
+    if [ "$n" -eq 0 ]; then
+      unaccounted=1   # a failed suite with no `not ok` line: not a bats case failure, so never baselined
+      continue
+    fi
+    printf '%s\n' "$records" | awk -F'\t' -v s="$sec" '$1 == s { print $2 "\t" $3 }' | while IFS="$(printf '\t')" read -r f c; do
+      if jq -e --arg f "$f" --arg c "$c" 'any(.cases[]; .file == $f and .case == $c)' "$baseline" >/dev/null 2>&1; then
+        printf '%s\t%s\n' "$f" "$c" >> "$known_tmp"
+      else
+        printf '%s\t%s\n' "$f" "$c" >> "$new_tmp"
+      fi
+    done
+  done
+  n_known="$(grep -c . "$known_tmp" || true)"
+  n_new="$(grep -c . "$new_tmp" || true)"
+  KNOWN_RED_JSON="$(jq -Rsc 'split("\n") | map(select(length > 0) | split("\t") | {file: .[0], case: (.[1:] | join("\t"))})' "$known_tmp")"
+  NEW_FAILURES_JSON="$(jq -Rsc 'split("\n") | map(select(length > 0) | split("\t") | {file: .[0], case: (.[1:] | join("\t"))})' "$new_tmp")"
+  [ "$unaccounted" -eq 0 ] && [ "$n_new" -eq 0 ] && [ "$n_known" -gt 0 ]
+}
+
 # run_catalog <catalog file>: run every runnable suite of the catalog; sets
 # RUN_COUNT, PASSED, FAILED, SUITE_LABELS and finishes with the exit code.
 run_catalog() {
@@ -979,12 +1062,34 @@ run_catalog() {
     PASSED=0; FAILED=0
   fi
 
+  if grep -q '^Note: the slowness probe found this machine slow' "$out" 2>/dev/null; then
+    SLOW_MACHINE=1
+  fi
+  slow_line() {
+    if [ "$SLOW_MACHINE" -eq 1 ]; then
+      say "environment: the slowness probe found this machine slow (wall time far above CPU time). That describes timing only, not the tests; it changed neither the verdict nor the exit code"
+    fi
+  }
+
   case "$rc" in
     0)
       say "scope test gate: satisfied ($SCOPE $ID, policy $MODE, ran $EFFECTIVE: $PASSED passed, $FAILED failed)"
+      slow_line
       finish 0
       ;;
     1)
+      if classify_failures "$out"; then
+        say "known-red cases failed (recorded in the known-red baseline; they were red before this scope and are NOT passes):"
+        printf '%s' "$KNOWN_RED_JSON" | jq -r '.[] | "  " + .file + ": " + .case' | while IFS= read -r l; do say "$l"; done
+        say "scope test gate: satisfied with known-red ($SCOPE $ID, policy $MODE, ran $EFFECTIVE: only baselined cases failed; no new failure)"
+        slow_line
+        finish 0
+      fi
+      if [ "$NEW_FAILURES_JSON" != "[]" ]; then
+        say "failing cases NOT in the known-red baseline (these block closure):"
+        printf '%s' "$NEW_FAILURES_JSON" | jq -r '.[] | "  " + .file + ": " + .case' | while IFS= read -r l; do say "$l"; done
+      fi
+      slow_line
       say "scope test gate: FAILED ($SCOPE $ID, policy $MODE, ran $EFFECTIVE: $PASSED passed, $FAILED failed); do not close $SCOPE $ID"
       finish 1
       ;;

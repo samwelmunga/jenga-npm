@@ -1,11 +1,12 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for task worktrees cut from the session's perceived branch (E78_S02_T06).
 #
 # Contract under test:
 #   - scripts/create-task-worktree.sh   header comment: USAGE, BEHAVIOUR (three cases), EXIT CODES (E78_S02_T02)
 #   - scripts/perceived-branch.sh       the per-session state the script reads (E78_S01_T02)
-#   - settings.json and templates/permission-levels/level-*.json
+#   - settings.json (and the absence of hooks from templates/permission-levels/level-*.json, E100_S04_T05)
 #                                       the WorktreeCreate hook command that calls the script (E78_S02_T03)
 #
 # Isolation. Every test builds its own throwaway git repository ($PROJ, under $BATS_TEST_TMPDIR) on branch "main", with
@@ -467,7 +468,7 @@ no_path() {
   assert_main_untouched
 }
 
-# --- AC: the WorktreeCreate hook command in settings.json and the permission-level templates ----------------------------------
+# --- AC: the WorktreeCreate hook command in settings.json; the permission-level templates carry no hooks ----------------------------------
 
 # hook_command <file>: prints the WorktreeCreate command(s) of a settings file, one per hook entry.
 hook_command() {
@@ -475,35 +476,28 @@ hook_command() {
 }
 
 @test "the WorktreeCreate hook command calls create-task-worktree.sh, still installs the commit guard, and has no bare git worktree add" {
-  local f cmd n=0
-  for f in "$REPO_ROOT/settings.json" "$REPO_ROOT"/templates/permission-levels/level-*.json; do
-    [ -f "$f" ] || skip "$f is not in this tree"
-    [ "$(jq -r '.hooks.WorktreeCreate | length' "$f")" -eq 1 ]
-    [ "$(jq -r '.hooks.WorktreeCreate[0].hooks | length' "$f")" -eq 1 ]
-    cmd="$(hook_command "$f")"
-    [ -n "$cmd" ]
-    assert_contains "$cmd" "scripts/create-task-worktree.sh"
-    assert_contains "$cmd" "install-worktree-commit-guard.sh"
-    assert_not_contains "$cmd" "git worktree add"
-    n=$((n + 1))
-  done
-  # settings.json plus all five templates; a missing template would otherwise shrink the loop without a trace.
-  [ "$n" -eq 6 ]
+  local f="$REPO_ROOT/settings.json" cmd
+  [ -f "$f" ] || skip "$f is not in this tree"
+  [ "$(jq -r '.hooks.WorktreeCreate | length' "$f")" -eq 1 ]
+  [ "$(jq -r '.hooks.WorktreeCreate[0].hooks | length' "$f")" -eq 1 ]
+  cmd="$(hook_command "$f")"
+  [ -n "$cmd" ]
+  assert_contains "$cmd" "scripts/create-task-worktree.sh"
+  assert_contains "$cmd" "install-worktree-commit-guard.sh"
+  assert_not_contains "$cmd" "git worktree add"
 }
 
-@test "the WorktreeCreate hook command is byte-identical across settings.json and all five permission-level templates" {
-  local f cmd n=0 first_sum="" sum
-  for f in "$REPO_ROOT/settings.json" "$REPO_ROOT"/templates/permission-levels/level-*.json; do
+@test "no permission-level template carries a hooks block, so a level switch cannot copy a different WorktreeCreate command" {
+  # E100_S04_T05: the byte-identity loop over the five templates is replaced by this. The templates hold only
+  # defaultMode, permissions.deny and autoMode; the registration that must survive a switch is covered by
+  # E100_S04_T03 and E100_S04_T04.
+  local f n=0
+  for f in "$REPO_ROOT"/templates/permission-levels/level-*.json; do
     [ -f "$f" ] || skip "$f is not in this tree"
-    # The command is compared as raw bytes (jq -j prints no trailing newline).
-    sum="$(jq -j '.hooks.WorktreeCreate[0].hooks[0].command' "$f" | cksum)"
-    if [ -z "$first_sum" ]; then
-      first_sum="$sum"
-    fi
-    [ "$sum" = "$first_sum" ]
+    [ "$(jq 'has("hooks")' "$f")" = "false" ] || { echo "$f carries hooks" >&2; return 1; }
     n=$((n + 1))
   done
-  [ "$n" -eq 6 ]
+  [ "$n" -eq 5 ]
 }
 
 # --- the hook command itself, run end to end ---------------------------------------------------------------------------------

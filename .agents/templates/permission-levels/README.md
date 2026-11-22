@@ -2,9 +2,9 @@
 
 > **Distribution note:** This directory is mirrored automatically — no additional wiring is needed. The self-sync skill (its script's `COPY_SET`) and the distribute flow (`distribute.config.json`, `distribute.include`) both already list `templates` as a top-level entry, and both copy that directory recursively, so `templates/permission-levels/` (including this README and all five level JSON files) rides along automatically with every sync/distribute run.
 
-This directory holds the five canonical `settings.json` permission templates that back the `/jenga-permission-level` session-switchable permission system: **Locked (1)**, **Guarded (2)**, **Standard (3)**, **Elevated (4)**, and **Unrestricted (5)**.
+This directory holds the five canonical permission-level templates that back the `/jenga-permission-level` session-switchable permission system: **Locked (1)**, **Guarded (2)**, **Standard (3)**, **Elevated (4)**, and **Unrestricted (5)**.
 
-Each level is a full `settings.json` file — `level-1-locked.json` through `level-5-unrestricted.json`. Two fields vary between them: `permissions.deny` and `autoMode.allow`. This table exists so a maintainer can see, at a glance, what each level allows and denies without diffing all 5 JSON files by hand.
+Each template is **level policy only**, not a complete `settings.json` document: `level-1-locked.json` through `level-5-unrestricted.json` carry exactly the keys the switch owns, `defaultMode`, `permissions.deny`, `permissions.ask` (no level sets it today) and `autoMode`. Two fields vary between levels: `permissions.deny` and `autoMode.allow`. The switch writes only those keys into `.claude/settings.json` and `.agents/settings.json` and leaves everything else untouched. `hooks`, `permissions.allow` and `env` are not in the templates; they come from the root `settings.json` and are merged into a project by the settings merge from `E100_S03`. This table exists so a maintainer can see, at a glance, what each level allows and denies without diffing all 5 JSON files by hand.
 
 ## Level Matrix
 
@@ -38,7 +38,7 @@ Levels 1–3 deny `git push *` and `git reset --hard *`. Auto-approving `mirror.
 
 ### Every template must carry an `autoMode` key
 
-Even the levels that only grant `$defaults` declare the block explicitly. A level switch is a **whole-file overwrite** of `.claude/settings.json` and `.agents/settings.json` — any top-level key present in the destination but absent from the template is silently dropped. A template that omitted `autoMode` would wipe the destination's block on every switch.
+Even the levels that only grant `$defaults` declare the block explicitly. The switch replaces each owned key from the template and deletes it from the destination when the template lacks it, so a template that omitted `autoMode` would remove the destination's block on every switch.
 
 ## Always Blocked
 
@@ -58,10 +58,9 @@ These are disk-destructive or privilege-escalation commands with no legitimate u
 Across all 5 templates:
 
 - `defaultMode` stays `"acceptEdits"` at every level.
-- `permissions.allow` stays `["Bash(*)"]` at every level.
-- `env` and `hooks` (`WorktreeCreate`, `WorktreeRemove`, `SessionEnd`) are identical across all 5 files.
+- No template carries `hooks`, `env` or `permissions.allow`; those are not level policy.
 
-**Only `permissions.deny` and `autoMode.allow` vary between levels.** Every template is otherwise byte-identical to root `settings.json`, and root `settings.json` matches `level-2-guarded.json` exactly — Guarded being the permanent default.
+**Only `permissions.deny` and `autoMode.allow` vary between levels.** The owned keys of `level-2-guarded.json` match the same keys in root `settings.json`, Guarded being the permanent default.
 
 > **Superseded (2026-08-23):** epic E33 originally settled on "`autoMode` is never used at any level" and "only `permissions.deny` varies". That decision was revisited after it emerged that auto-approving `mirror.sh` by script name bypasses the `git push *` deny at levels 1–3 (see the section above). `autoMode.allow` is now a second, deliberately tiered axis.
 
@@ -70,4 +69,4 @@ Across all 5 templates:
 There is no separate "default level" config number. Level 2 (Guarded) is conceptually always the project's permanent default.
 
 - To change the **permanent, project-wide default**, a maintainer edits `templates/permission-levels/level-2-guarded.json` directly.
-- Running `/jenga-permission-level <n>` only changes the **current session's** active level (by copying the matching template into `.claude/settings.json` and `.agents/settings.json` and recording the level in `.jenga-permission-level.json`) — it does not modify the permanent default, and the scrum-master resets a session back to Guarded at the start of every session it starts.
+- Running `/jenga-permission-level <n>` only changes the **current session's** active level (by writing the matching template's owned keys into `.claude/settings.json` and `.agents/settings.json` and recording the level in `.jenga-permission-level.json`) — it does not modify the permanent default, and the scrum-master resets a session back to Guarded at the start of every session it starts.

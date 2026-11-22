@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for scripts/foreground-preflight.sh (E67_S11_T01): mint, gate, verify.
 #

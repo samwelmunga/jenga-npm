@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E92_S04_T01: scripts/pipeline-stage.sh, the derivation of which pipeline stages (todo, do, test, rollup) have work.
 # Every test builds its own throwaway root under $BATS_TEST_TMPDIR (a registry of `{}`, so the conventional

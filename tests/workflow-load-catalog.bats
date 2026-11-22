@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E80_S01_T05: scripts/workflow/load-workflows.sh, the merged builtin + project workflow catalog.
 # Covers: the script is present, executable and bash -n clean; a builtin and a project definition both load with the

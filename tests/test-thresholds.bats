@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # Coverage for skills/j-test/scripts/test-thresholds.sh, the one reader of the two
 # long-running test thresholds (E77_S06_T02), written by E77_S06_T08.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E71_S02_T01: scripts/atlassian-configured.sh is the single "is Atlassian configured?" gate.
 #

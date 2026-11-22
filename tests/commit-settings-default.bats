@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:unit
 #
 # E79_S04_T01: the read-only `default <field>` subcommand of scripts/commit-settings.sh. It prints the schema's default
 # for a field whether or not the project is opted in, so a caller that must work for a project that has not opted in

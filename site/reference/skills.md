@@ -584,6 +584,39 @@ See [workflows](project/documentation/workflows.md) for the definition format an
 
 ---
 
+#### `/j-workflow-capture`
+
+**Description:** Build a workflow from a process that is already finished — the current session, another session, or external instructions — into the same `_RECORDING.md` document `/j-workflow-recorder` produces, with its source recorded. The sub-commands `export` and `import` move a workflow between projects as a verified portable package.
+
+**Output type:** `any`
+
+**Invokes:** none (runs in your session, since picking a source and reviewing steps are conversations with you); the work is done by shell scripts
+
+**When to use:** When you already did a process by hand, in this session, another session or by following a vendor's guide, and want it as a replayable workflow without doing it again under `/j-workflow-recorder`.
+
+**What it does:**
+- Bare `/j-workflow-capture` asks where to capture from, as a numbered list: the current session, another session, external instructions (a link or pasted text), start a live recording instead (hands off to `/j-workflow-recorder`), or other
+- Accepts a local session UUID, a transcript `.jsonl` path, a text file or pasted text; a claude.ai/code session URL or a desktop `local_...` id is best effort only, so you are offered to export it to a file, paste it, or give a path
+- External instructions are treated as data: nothing in them is run while they are analysed, and every step is confirmed by you
+- You pick the range of prompts that make up the process; each becomes a candidate step, shown in a review table, and only the uncertain ones are asked about one at a time
+- Project-specific values (paths, names, regions) become run inputs, and credentials become named inputs with no value: a secret is never written to the recording or the workflow
+- A shell command becomes a generated wrapper script that you read in full and confirm before it is written, run by a `compute` step with a `confirm` step before it; logins, `export VAR=...` and dashboard actions become `confirm` steps
+- A portability check at the end warns about what would not run in another project (an unshipped skill, an absolute path, the project's name)
+- `export [<id>]` — bundles a project workflow, its wrapper scripts and its render templates into one package file with a checksum manifest
+- `import <package>` — verifies the package, shows every file in full, and installs only after you confirm; an id that already exists can be renamed or replaced, and the import is rolled back if the workflow does not validate here
+
+**Example:**
+```
+/j-workflow-capture
+→ Where should the workflow be captured from? 1. The current session …
+/j-workflow-capture from session 3f2a9c1e-0b7d-4e55-9a61-2c8f0d4b7e13
+/j-workflow-capture export release-notes
+→ ./release-notes.workflow.tar.gz
+/j-workflow-capture import release-notes.workflow.tar.gz
+```
+
+---
+
 ### Status & Review
 
 ---
@@ -852,22 +885,6 @@ Queue depth: 2 triggers pending
 
 ---
 
-#### `/j-smoke-test`
-
-**Description:** Structural smoke test of every skill in the catalog — frontmatter parses, `name` matches the directory, `metadata.prefered_agent` resolves, and referenced scripts and assets exist with scripts passing `bash -n`.
-
-**Output type:** `any`
-
-**Invokes:** none
-
-**When to use:** After authoring or restructuring skills, and before a release or mirror, to catch a skill that no longer loads.
-
-**What it reports:** Findings classified as **critical** or **minor**, plus a pass/fail summary. Exits `1` when any critical finding exists.
-
-**Notes:** Structural and read-only — it does not replace `tests/*.bats`, and it does not execute skill logic.
-
----
-
 #### `/j-commit`
 
 **Description:** Commit implemented epic, story, or task work using the EST naming convention. Also handles user-action prerequisites and new-epic boundaries.
@@ -906,55 +923,6 @@ Queue depth: 2 triggers pending
 → /j-commit (creates EST commit)
 → /j-continue (identifies next task)
 → "Next: E01_S02_T02 — Refresh token rotation. Start? [yes/no]"
-```
-
----
-
-#### `/j-distribute`
-
-**Description:** Distribute Jenga AI framework files from this private monorepo to one or more consuming projects via the local filesystem — release type selection, version bumping, a dry-run preview, per-target file copy, and a post-distribution git commit.
-
-**Output type:** `any`
-
-**Invokes:** none
-
-**What it is:** `/j-distribute` treats this repository as the master copy of your Jenga AI framework and each registered consumer project as a versioned snapshot of it. Consumer projects are registered in `distribute.config.json` at the repo root (not `.jenga_paths`/`jenga.config.json` — that mechanism has been retired), as entries in a `targets` array:
-
-```json
-{
-  "name": "my-project",
-  "path": "/absolute/or/relative/path/to/project",
-  "active": true
-}
-```
-
-Passing a path argument (e.g. `/j-distribute /path/to/project`) adds a new entry to `distribute.config.json` automatically, deriving `name` from the target directory's name. Schema reference: `skills/j-distribute/CONFIG_SCHEMA.md`.
-
-**When to use:** Use `major`, `minor`, or `patch` after making framework changes that should become a versioned upgrade for every active target — these bump the version in `package.json` (via `npm version`) and distribute to every active, path-valid target. Use `amend` when quietly onboarding a new consumer project or fixing files missed in a previous release; it keeps the version unchanged and only updates targets whose config reports they're behind. Every release type stops at a dry-run preview (`distribute-changes.sh --dry-run`) and requires explicit confirmation before any file is copied.
-
-**Release types:**
-- `major` / `minor` / `patch` — bumps `package.json`'s version via `npm version`, distributes to all active targets
-- `amend` — no version bump; distributes only to targets that are behind or have no prior config, via `check-version.sh`
-
-**What it does:**
-- Validates each target's `active` flag and on-disk `path` before including it in the run
-- Runs a dry-run preview per target and waits for `y` confirmation before touching anything
-- Copies files via `skills/j-distribute/scripts/distribute-changes.sh`, never inline
-- Commits the version bump via `scripts/commit-version-bump.sh` (skipped for `amend`)
-- Never invokes `/j-self-sync` or `/j-mirror-public` — those are separate distribution surfaces with separate triggers
-
-**Example:**
-```
-/j-distribute
-Release type? → minor
-→ Version bumped to 1.3.0
-→ Scanning distribute.config.json...
-→ Eligible targets: my-app-1, my-app-2
-→ Dry-run preview for my-app-1 ... my-app-2 ...
-Proceed with distribution to the above targets? [y/N] → y
-→ Syncing my-app-1: ✅ succeeded
-→ Syncing my-app-2: ✅ succeeded
-→ Committed version bump: chore(release): bump to 1.3.0
 ```
 
 ---
@@ -1188,7 +1156,7 @@ How far should I take the untracking? → 2 (commit locally)
 
 #### `/j-self-sync`
 
-**Description:** Mirror this repo's root-level framework directories into its own `.claude/` and `.agents/` sub-trees so edits to `skills/`, `agents/`, `hooks/`, `scripts/`, `templates/`, and `settings.json` take effect in the current session — the in-repo replacement for the retired `/j-distribute` self-sync loop.
+**Description:** Mirror this repo's root-level framework directories into its own `.claude/` and `.agents/` sub-trees so edits to `skills/`, `agents/`, `hooks/`, `scripts/`, `templates/`, and `settings.json` take effect in the current session — the in-repo way to apply local framework edits to a session.
 
 **Output type:** `any`
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for scripts/conventions-digest.sh (E69_S05_T01/T02): the compact conventions digest that the developer,
 # tester, scrum-master and j-commit consume instead of parsing conventions.json themselves.

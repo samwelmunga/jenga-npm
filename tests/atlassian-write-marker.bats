@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # E71_S02_T02: scripts/atlassian-write-marker.sh is the only writer of the Atlassian marker, and it never records
 # a claim the gate (scripts/atlassian-configured.sh) cannot confirm.

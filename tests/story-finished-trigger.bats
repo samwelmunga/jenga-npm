@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Coverage for the after-story line (E92_S06_T23): skills/j-break/scripts/story-finished.sh (the trigger) reached through
 # `run-progress.sh --scope story --task <ids> --after-story`.

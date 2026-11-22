@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:integration
 #
 # Standing guard against bundled skill scripts READING credential values (E85_S02_T05).
 #

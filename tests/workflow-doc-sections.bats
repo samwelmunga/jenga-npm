@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=tier:fast
 #
 # E80_S01_T09: project/documentation/workflows.md keeps its seven required sections (in order; other sections may be added), and the one complete
 # example definition in it (between the workflow-example:begin / :end markers, in a ```json fence) passes
@@ -80,5 +81,32 @@ Public mirror'
 @test "negative: extraction fails on a doc with no example, so the check cannot pass by matching nothing" {
   printf '# No example here\n\n## Overview\n' > "$BATS_TEST_TMPDIR/empty.md"
   run extract_example "$BATS_TEST_TMPDIR/empty.md" "$BATS_TEST_TMPDIR/none.json"
+  [ "$status" -ne 0 ]
+}
+
+# extract_capture_example <doc> <out>: the first ```json fence under "### What a captured definition looks like"
+# (the j.workflow-capture section, E103_S06_T02), up to the next heading. Fails when it is absent.
+extract_capture_example() {
+  awk '
+    /^### What a captured definition looks like[[:space:]]*$/ { insec = 1; next }
+    insec && /^#{1,3} /                     { insec = 0 }
+    insec && !done && /^```json[[:space:]]*$/ { infence = 1; next }
+    infence && /^```[[:space:]]*$/          { infence = 0; done = 1; next }
+    infence                                 { print }
+  ' "$1" > "$2"
+  [ -s "$2" ]
+}
+
+@test "the j.workflow-capture example definition passes validate-workflow.sh with no output (E103_S06_T02 rapport)" {
+  extract_capture_example "$DOC" "$BATS_TEST_TMPDIR/capture-example.json"
+  jq -e . "$BATS_TEST_TMPDIR/capture-example.json" >/dev/null
+  run bash "$VALIDATOR" "$BATS_TEST_TMPDIR/capture-example.json"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "negative: capture-example extraction fails when the section has no json fence" {
+  printf '### What a captured definition looks like\n\nNo example.\n\n### Next\n\n```json\n{}\n```\n' > "$BATS_TEST_TMPDIR/nocap.md"
+  run extract_capture_example "$BATS_TEST_TMPDIR/nocap.md" "$BATS_TEST_TMPDIR/nocap.json"
   [ "$status" -ne 0 ]
 }
