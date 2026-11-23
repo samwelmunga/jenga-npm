@@ -1182,5 +1182,21 @@
     "dist_tag": null,
     "result": "fail",
     "reason": "ST-Test: 8 passed, 1 failed (consumer npm test: 23 failed, 107 passed); download, shasum, install, rebuild and .jenga-version passed"
+  },
+  {
+    "id": "7051dd37-dc3c-47ab-a890-691f3623cb82",
+    "version": "v5.3.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-11-23T06:59:07Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "approved",
+    "git_tag": "v5.3.0",
+    "commit_sha": "dfef256c920882bf3e27c420e7f59de88e154d28",
+    "stage_id": "33dca8c2-bbaf-4413-8d79-909463a6869e",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": "approved outside this session (not observed); verified @jenga-ai/agent@5.3.0 is dist-tag latest on the npm registry after the stage was dispatched in run 45080758376"
   }
 ]
