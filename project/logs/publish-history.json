@@ -1150,5 +1150,37 @@
     "dist_tag": "latest",
     "result": null,
     "reason": "Approved manually by the user outside this session (stage approve with 2FA). Verified afterwards on the registry: @jenga-ai/agent@5.2.0 published 2026-11-17T15:51:50Z, dist-tag latest, shasum c29b76017183843e82b9e9f4bc5b1c7590c02e1f identical to the staged tarball. Preceding stage_tested entry is result fail (consumer npm test: 23 failures from missing gitignored project/data/kallor in st-test, unrelated to the package)."
+  },
+  {
+    "id": "b083c8bc-702b-4012-b454-23d02034ed0c",
+    "version": "v5.3.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-11-22T23:00:21Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "staged",
+    "git_tag": "v5.3.0",
+    "commit_sha": "a462814edd163ff71a9b7d7e28b836f1e0b0c7b5",
+    "stage_id": "33dca8c2-bbaf-4413-8d79-909463a6869e",
+    "dist_tag": "latest",
+    "result": null,
+    "reason": "staged via direct gh workflow dispatch (run 45080758376); j.publish stage blocked by red public test gate"
+  },
+  {
+    "id": "da8e4a6a-c1b5-4470-90d5-09c2582eef56",
+    "version": "v5.3.0",
+    "target": "npm-jenga",
+    "adapter": "npm-ci",
+    "timestamp": "2026-11-22T23:03:48Z",
+    "released_by": "Samwel Munga",
+    "release_notes_path": null,
+    "platform_state": "stage_tested",
+    "git_tag": "v5.3.0",
+    "commit_sha": "a462814edd163ff71a9b7d7e28b836f1e0b0c7b5",
+    "stage_id": "33dca8c2-bbaf-4413-8d79-909463a6869e",
+    "dist_tag": null,
+    "result": "fail",
+    "reason": "ST-Test: 8 passed, 1 failed (consumer npm test: 23 failed, 107 passed); download, shasum, install, rebuild and .jenga-version passed"
   }
 ]
